@@ -12,7 +12,28 @@
   --tier-avg:#c9d15a; --tier-avg-ink:#1c2007;
   --tier-weak:#f2c14e; --tier-weak-ink:#2b1d02;
   --tier-flat:#e0524d; --tier-flat-ink:#fff;
+  /* D70 (Adam, 2026-09-15): "not all the categories should have the same yellow colour; differentiate
+     the groups." One fixed hue per POSITION GROUP (band), not per team — the same ten colours on every
+     team's column labels everywhere a band label prints (team, matchup, side, group views). CB and NB
+     share one hue (both read as "the men on the outside/slot receiver", D70's own pairing); every other
+     band gets its own. Muted/desaturated on purpose so the bright green-to-red rating pills stay the
+     loudest colour on screen (D43). */
+  --band-QB:#8b6dd1; --band-BACKFIELD:#caa053; --band-WR:#5ea8d8; --band-TE:#4fada0; --band-OL:#6b7fb0;
+  --band-DL:#b8623f; --band-EDGE:#cc8a3d; --band-LB:#8a9150; --band-CB:#b25b93; --band-S:#6a63b0;
 }
+/* D70: maps a column's data-band attribute to the one band hue it should use. One indirection (--band-
+   color) so the two consumers below (.column-label, .zoom-stack-label in zoom.css) each need only one
+   rule instead of ten. */
+[data-band="QB"] { --band-color: var(--band-QB); }
+[data-band="RB"], [data-band="BACKFIELD"] { --band-color: var(--band-BACKFIELD); }
+[data-band="WR"] { --band-color: var(--band-WR); }
+[data-band="TE"] { --band-color: var(--band-TE); }
+[data-band="OL"] { --band-color: var(--band-OL); }
+[data-band="DL"] { --band-color: var(--band-DL); }
+[data-band="EDGE"] { --band-color: var(--band-EDGE); }
+[data-band="LB"] { --band-color: var(--band-LB); }
+[data-band="CB"], [data-band="NB"] { --band-color: var(--band-CB); }
+[data-band="S"] { --band-color: var(--band-S); }
 * { box-sizing:border-box; }
 html,body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.4 "Segoe UI", system-ui, sans-serif; }
 .topbar { display:flex; align-items:center; gap:24px; padding:10px 28px; background:var(--panel); border-bottom:1px solid #22282f; position:sticky; top:0; z-index:5; }
@@ -175,9 +196,10 @@ a.back { color:var(--muted); }
 /* 🎨 Polish (2026-09-11, round 2, item 3): a full-width, team-tinted wash spanning the whole level so the
    eye reads "this is one group" before it even parses the label text — alternating alpha (field.js) keeps
    consecutive levels visually distinct from each other. */
-/* Final 👁 pass (item 4, 2026-09-12): left/width are now always set inline per-segment (field.js's
-   renderLevelLabels) — the offense's merged line row splits into a RECEIVERS segment and a LINE segment
-   side by side instead of one full-width stripe, so no CSS default spans the whole row any more. */
+/* Final 👁 pass (item 4, 2026-09-12): left/width are set inline per level (field.js's renderLevelLabels).
+   D69 (2026-09-15) replaced the old segment-within-a-row idea with a plain extra ROW — PASS CATCHERS,
+   LINE and BACKFIELD are each a normal full-width level/stripe/label like every defensive one, so no
+   segment-splitting default is needed here either. */
 .level-stripe { position:absolute; background:color-mix(in srgb, var(--team-secondary,#777) var(--stripe-alpha,7%), transparent); }
 .level-label { position:absolute; font-size:12.5px; font-weight:900; line-height:1.1;
   letter-spacing:.13em; text-transform:uppercase; color:rgba(255,255,255,.82); text-shadow:0 1px 3px rgba(0,0,0,.7); white-space:nowrap; }
@@ -190,6 +212,12 @@ a.back { color:var(--muted); }
   background:color-mix(in srgb, var(--team-secondary,#777) 55%, transparent); text-shadow:0 1px 2px rgba(0,0,0,.8);
   white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .column-label:hover { background:color-mix(in srgb, var(--team-secondary,#777) 80%, transparent); }
+/* D70: a column that carries a real band (every one field.js lays out does) swaps the team tint above for
+   its band's own hue, mixed ~45% over a fixed dark base so it reads the same on the green field wash and
+   the dark side-view background alike, instead of washing out on a pale team secondary colour (the same
+   problem 👁 QA's earlier fix on the heat tints, C6a below, ran into). */
+.column-label[data-band] { background:color-mix(in srgb, var(--band-color,#777) 45%, #12161b 55%); }
+.column-label[data-band]:hover { background:color-mix(in srgb, var(--band-color,#777) 65%, #12161b 35%); }
 /* RULING B (Adam, 2026-09-13): "put the backup boxes under the starters." Every column now reads
    top-down — label, starter, backups — on BOTH sides of the ball, so the old `.column-stack.stack-reverse`
    (flex-direction:column-reverse, which used to flip the defensive columns so the starter sat nearest the

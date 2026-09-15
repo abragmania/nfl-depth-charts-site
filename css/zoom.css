@@ -228,6 +228,11 @@
    below are harmless no-ops on a div. */
 .zoom-stack-label { display:inline-block; font-size:12.5px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; color:rgba(255,255,255,.75); text-align:center; text-decoration:none; padding:2px 8px; border-radius:6px; }
 a.zoom-stack-label:hover { color:#ffd54a; text-decoration:underline; }
+/* D70 (Adam, 2026-09-15): the same fixed band hue as the main field's .column-label (styles.css), mixed
+   over the same dark base so it reads on this view's own dark background too. --band-color is set by
+   styles.css's [data-band="..."] rules, shared across both stylesheets. Placed before the heat-* overrides
+   below so a thin/clustered band's heat tint still wins over the plain band colour, same as the main field. */
+.zoom-stack-label[data-band] { background:color-mix(in srgb, var(--band-color,#777) 45%, #12161b 55%); color:#fff; }
 .zoom-stack-body { display:flex; flex-direction:column; gap:6px; }
 /* 👁 QA round 3 item 1: EVERY rank row is one column box of the same width with the same left edge.
    A pair block (an out starter above his fill-in, or two co-starters) used to be a differently-sized

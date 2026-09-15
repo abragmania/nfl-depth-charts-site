@@ -28,7 +28,7 @@ const DEF_BAND_ORDER = ["DL", "EDGE", "LB", "CB", "NB", "S"];
 const BAND_UNIT = {};
 for (const b of OFF_BAND_ORDER) BAND_UNIT[b] = "OFF";
 for (const b of DEF_BAND_ORDER) BAND_UNIT[b] = "DEF";
-const BAND_LABEL = { QB: "QB", BACKFIELD: "Backfield", WR: "WR", TE: "Tight ends", OL: "OL", DL: "DL", EDGE: "EDGE", LB: "LB", CB: "CB", NB: "NB", S: "Safety" };
+const BAND_LABEL = { QB: "QB", BACKFIELD: "Backfield", WR: "WR", TE: "Tight ends", OL: "OL", DL: "DL", EDGE: "EDGE", LB: "LB", CB: "CB", NB: "CB · Nickel", S: "Safety" };
 const OFF_BAND_LEVEL = { WR: "RECEIVERS", QB: "BACKFIELD", BACKFIELD: "BACKFIELD", OL: "LINE", TE: "RECEIVERS" };
 // D63 / 👁 QA (2026-09-15, item 4): there is no band caption any more. The tight ends used to get a
 // "TIGHT ENDS" line over their block; D63 retired that label on the team and matchup views, and here it
@@ -379,8 +379,10 @@ function renderSideStack(slot, teamAbbr, view, unit, slotLookup) {
   const bandTitle = bandHeatTitle(view, unit, band);
   const labelHref = `#/team/${esc(teamAbbr)}/group/${esc((band || "").toLowerCase())}`;
   const labelTitleAttr = bandTitle || ` title="See the whole ${esc(BAND_LABEL[band] || band)} group"`;
+  // D70: same band-hue pill as the main field (styles.css's [data-band] rules), so the group a column
+  // belongs to reads the same colour on this side view as it does everywhere else.
   return `<div class="zoom-side-stack${hatched}${stackHeatClass(slot)}" data-slot-id="${esc(slot.slotId)}"${stackHeatTitle(slot)}>
-    <a class="zoom-stack-label${bandHeatClass(view, unit, band)}" href="${labelHref}"${labelTitleAttr}>${esc(labelText)}</a>
+    <a class="zoom-stack-label${bandHeatClass(view, unit, band)}" data-band="${esc(band || "")}" href="${labelHref}"${labelTitleAttr}>${esc(labelText)}</a>
     ${body}
   </div>`;
 }
@@ -557,8 +559,10 @@ function renderGroupStack(slot, teamAbbr, wide = false) {
   const rowsHtml = hiddenRows.length
     ? `${visible.join("")}<button type="button" class="depth-more" aria-expanded="false">+${hiddenRows.length} more</button><span class="depth-extra">${hiddenRows.join("")}</span>`
     : visible.join("");
+  // D70: same band-hue pill as the main field and the side view — every slot on a group page shares one
+  // band, so the tint is uniform here, but it stays the same colour a viewer just saw on the team page.
   return `<div class="zoom-stack${hatched}${stackHeatClass(slot)}" data-slot-id="${esc(slot.slotId)}"${stackHeatTitle(slot)}>
-    <div class="zoom-stack-label">${esc(labelText)}</div>
+    <div class="zoom-stack-label" data-band="${esc(slot.band || "")}">${esc(labelText)}</div>
     <div class="zoom-stack-body">${rowsHtml}</div>
   </div>`;
 }

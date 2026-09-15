@@ -457,11 +457,15 @@ export function renderColumn(col, teamAbbr, opts = {}) {
   // rankings — the column label says so directly instead of leaving it to be inferred from two adjacent
   // STARTER tags.
   // D63: the LAYOUT may override what a column calls itself — the receiver it places in the slot reads
-  // "WR3 · Slot" (or "WR1 · Slot"), since which man plays inside is the question that row answers. The
-  // slot's own label is still the identity everywhere else (the group link, the "also listed at" chips).
+  // "WR · Slot" regardless of his rank (D70: the rank moved into the tooltip, see slotReason in field.js's
+  // pickSlotColumn), since which man plays inside is the question that row answers. The slot's own label
+  // is still the identity everywhere else (the group link, the "also listed at" chips).
   const baseLabel = col.displayLabel || slot.label;
   const labelText = pair ? `${baseLabel} · co-starters` : baseLabel;
-  const label = `<a class="column-label${heatCls}" href="${labelHref}" title="${labelTitle}">${esc(labelText)}</a>`;
+  // D70: the band hue on the pill comes from data-band (styles.css maps it to --band-color), one fixed
+  // colour per position group across every team and every view — not the team tint the rest of the pill
+  // used to carry alone.
+  const label = `<a class="column-label${heatCls}" data-band="${esc(slot.band || "")}" href="${labelHref}" title="${labelTitle}">${esc(labelText)}</a>`;
 
   // ownLabel (🎨 Polish, round 3, item 1): the raw slot label (never the "· co-starters" suffixed
   // labelText above) — it's compared against slotLookup's own return value in alsoListedChips, which

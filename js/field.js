@@ -36,14 +36,25 @@
 // (one tight WR cluster, a deliberate gap, then the TE block under its own "TIGHT ENDS" label).
 //
 // D63 (Adam, 2026-09-15), which supersedes ruling D's third row — the receivers belong ON the line,
-// where they actually line up. The LINE row now reads, left to right: outside WR, slot WR, LT LG C RG RT,
-// TE, outside WR, every column one pitch from the next (so the slot really is the midpoint between the
+// where they actually line up. Left to right the comb reads: outside WR, slot WR, LT LG C RG RT, TE,
+// outside WR, every column one pitch from the next (so the slot really is the midpoint between the
 // left tackle and the outside receiver, and the right side mirrors that distance). A second tight-end
-// column stacks directly UNDER the first instead of taking a second x — the row is already as wide as the
-// canvas allows. The RECEIVERS row and the TIGHT ENDS label are gone; BACKFIELD keeps QB/RB/FB.
+// column stacks directly UNDER the first instead of taking a second x. The RECEIVERS row and the TIGHT
+// ENDS label are gone; BACKFIELD keeps QB/RB/FB.
 // The pay-off is on the other side of the ball: the secondary can mirror the REAL receiver positions
 // again (corners over the outside receivers, nickel over the slot) instead of the "two pitches outside
 // the tackles" approximation ruling D forced on it.
+//
+// D69 (Adam, 2026-09-15) — "the offense takes up so little of the screen and the defense so much" plus
+// "make a pass catchers section... visually separate from the linemen." First cut kept D63's single LINE
+// row and carved it into two labelled SEGMENTS (receivers left/right of the line). Adam's refinement,
+// given while that cut was already in progress, overrode it: "the pass catchers get their OWN ROW placed
+// ABOVE the offensive line... even though it technically isn't how they line up, it's easier visually." So
+// PASS CATCHERS is now a normal third offensive row — full width, its own stripe and label, exactly like
+// LINE and BACKFIELD — sitting BETWEEN the line of scrimmage and the LINE row rather than sharing a row
+// with it. layoutPassCatchers() below still computes the receivers' x's off the OL comb (D63's pitches,
+// unchanged) and still writes back the landmarks the defense mirrors; only which ROW those columns land in
+// changed. Top-down from the LOS the offense now reads PASS CATCHERS, LINE, BACKFIELD (OFF_ROW_GROUPS).
 
 const REFERENCE_WIDTH = 1600; // the OFF_BANDS anchors below were tuned against this width
 export const LAYOUT_WIDTH = 1800;
@@ -92,16 +103,18 @@ const DEF_ROW_BANDS = { LINE: ["DL"], EDGE: ["EDGE"], LB: ["LB"], CB_NB: ["CB", 
 const DEF_ROW_LEVEL = { LINE: "LINE", EDGE: "EDGE", LB: "LB", CB_NB: "SEC", S: "SEC" };
 const DEF_LEVEL_LABEL = { LINE: "LINE", EDGE: "EDGE", LB: "LINEBACKERS", SEC: "SECONDARY" };
 
-// D63: TWO offensive rows now, listed here nearest-the-LOS first. This IS the one constant Adam asked to
+// D69: THREE offensive rows now, listed here nearest-the-LOS first. This IS the one constant Adam asked to
 // be able to flip — reorder these entries and the whole offensive half reorders with them (levels,
-// stripes, labels and gaps all fall out of it). The receivers and tight ends ride in the LINE row, which
-// is exactly where they line up, so the old third RECEIVERS row is gone.
+// stripes, labels and gaps all fall out of it). PASS CATCHERS (WR+TE) sits above LINE (OL alone) — not
+// real formation depth, a deliberate visual choice (D69) — so it prints its own full-width stripe and
+// label instead of sharing LINE's.
 const OFF_ROW_GROUPS = [
-  { key: "LINE", bands: ["OL", "WR", "TE"] },       // outside WR, slot WR, LT LG C RG RT, TE, outside WR
+  { key: "PASS_CATCHERS", bands: ["WR", "TE"] }, // outside WR, slot WR, TE(s), outside WR
+  { key: "LINE", bands: ["OL"] },                // LT LG C RG RT
   { key: "BACKFIELD", bands: ["QB", "BACKFIELD"] }, // QB centred on the centre, RB/FB flanking him
 ];
-const OFF_ROW_LEVEL = { LINE: "LINE", BACKFIELD: "BACKFIELD" };
-const OFF_LEVEL_LABEL = { LINE: "LINE", BACKFIELD: "BACKFIELD" };
+const OFF_ROW_LEVEL = { PASS_CATCHERS: "PASS_CATCHERS", LINE: "LINE", BACKFIELD: "BACKFIELD" };
+const OFF_LEVEL_LABEL = { PASS_CATCHERS: "PASS CATCHERS", LINE: "LINE", BACKFIELD: "BACKFIELD" };
 
 // D63 spacing, all in multiples of the offensive line's own pitch, so the whole row is one even comb and
 // the slot receiver is exactly the midpoint between the left tackle and the outside receiver.
@@ -285,10 +298,14 @@ function isSlotArchetype(player) {
 // The chosen column is tagged with `slotReason`, the plain-English sentence the label's tooltip shows, so
 // the man's placement can always be explained. Returns the column, or null when the team does not carry
 // three receiver columns to choose between.
+// D70 (Adam, 2026-09-15): the on-field pill drops the rank ("WR · Slot", not "WR1 · Slot" — see
+// layoutPassCatchers below), so slotReason carries it instead: prefixed with the column's own rank label
+// ("WR1 · Slot: 51.2% of snaps (2025)"), it is the whole tooltip text (cards.js prints slotReason verbatim),
+// so the rank a viewer lost off the pill is still one hover away.
 export function pickSlotColumn(wrColumns) {
   if (wrColumns.length < 3) return null;
   const top3 = wrColumns.slice(0, 3);
-  const pick = (col, reason) => { col.slotReason = reason; return col; };
+  const pick = (col, reason) => { col.slotReason = `${col.slot.label} · ${reason}`; return col; };
   // The man who decides a column's alignment is the one actually playing it: when the starter of record sits on
   // line one as STARTER_OUT (D56/D61), his ACTIVE fill-in's rate and archetype count, not the injured man's.
   const playing = (col) => {
@@ -315,11 +332,14 @@ export function pickSlotColumn(wrColumns) {
   return pick(top3[2], "Slot by default (WR3)"); // D19: WR3 is the slot until something better says otherwise
 }
 
-// The LINE row (D63): outside WR, slot WR, LT LG C RG RT, TE, outside WR, one pitch apart the whole way
-// across. It also WRITES BACK the three receiver landmarks the defense mirrors (lm.OUTER_WR_L/R,
-// lm.SLOT_WR) — before D63 those were guesses derived from the tackles, and now they are the real
-// receiver positions, which is the whole point of putting the receivers on the line.
-function layoutLineRow(offSlots, olCols, lm) {
+// The PASS CATCHERS row (D63's x-maths, D69's own row): outside WR, slot WR, TE, outside WR, one pitch
+// apart, measured off the OL comb exactly as D63 set it up. D69 lifted these columns out of the LINE row
+// into their own row ABOVE it, but the x positions are untouched — the slot is still the midpoint between
+// the left tackle and the outside receiver, the right side still mirrors that distance. This function also
+// WRITES BACK the three receiver landmarks the defense mirrors (lm.OUTER_WR_L/R, lm.SLOT_WR) — before D63
+// those were guesses derived from the tackles, and now they are the real receiver positions, which is the
+// whole point of computing them off the line before the secondary is placed.
+function layoutPassCatchers(offSlots, lm) {
   const col = (slot, x, band) => ({ slot, x, height: slotContentHeight(slot), width: colWidth(), band });
   const pitch = lm.pitch;
   const wrCols = offSlots.filter((s) => s.band === "WR").slice().sort(byColumnOrder).map((s) => col(s, lm.C, "WR"));
@@ -329,9 +349,10 @@ function layoutLineRow(offSlots, olCols, lm) {
   const slotCol = pickSlotColumn(wrCols);
   if (slotCol) {
     slotCol.x = lm.LT - SLOT_WR_PITCHES * pitch;
-    // The column says so out loud, since which man is the slot is the question this whole row answers:
-    // "WR3 · Slot", or "WR1 · Slot" when the archetype says the team's best receiver plays inside.
-    slotCol.displayLabel = `${slotCol.slot.label} · Slot`;
+    // D70: the pill reads "WR · Slot" regardless of which rank plays there (matching the defense's
+    // "CB · Nickel" pill) — the rank moved into slotReason's tooltip text (see pickSlotColumn above)
+    // instead of crowding the on-field label.
+    slotCol.displayLabel = "WR · Slot";
   }
   // Everything else goes wide: the first to the left end of the row, the second to the right end. A rare
   // fourth receiver column has nowhere left to stand at this width, so he stacks under the left one the
@@ -346,7 +367,7 @@ function layoutLineRow(offSlots, olCols, lm) {
   lm.SLOT_WR = slotCol ? slotCol.x : lm.C;
   lm.OUTER_WR_L = outsideL ? outsideL.x + CB_INSET_PITCHES * pitch : lm.LT - CB_PITCH_OUT * pitch;
   lm.OUTER_WR_R = outsideR ? outsideR.x - CB_INSET_PITCHES * pitch : lm.RT + CB_PITCH_OUT * pitch;
-  return [...olCols, ...wrCols, ...teCols];
+  return [...wrCols, ...teCols];
 }
 
 // The BACKFIELD row: the quarterback stays centred on the centre (Adam: "QB centred behind C as now")
@@ -479,10 +500,10 @@ function unlistedByBand(unlisted, unit) {
 }
 
 // A level label prints at the left edge of its span. When the level's own first row has a column close
-// to that edge (D63's outside receiver, at the very end of the line row, is the real case), the label would otherwise land
-// straight on top of that column's own label pill now that ruling B puts every column's pill at the top
-// of its box. Lifting the label into the empty gap above the row — the same trick the old merged line
-// row used — keeps both readable without moving either the stripe or the cards.
+// to that edge (D69's outside receiver, at the very end of the PASS CATCHERS row, is the real case), the
+// label would otherwise land straight on top of that column's own label pill now that ruling B puts every
+// column's pill at the top of its box. Lifting the label into the empty gap above the row — the same trick
+// the old merged line row used — keeps both readable without moving either the stripe or the cards.
 const LABEL_CLEAR_X = 190; // roughly the widest level label ("LINEBACKERS") plus its left inset
 // Enough to clear the column pill below it AND leave visible air: the gap above any row is at least
 // BAND_GAP, and at a level boundary BAND_GAP + LEVEL_GAP_EXTRA, so a 22-unit lift always lands the label
@@ -501,13 +522,14 @@ export function computeLayout(teamView, opts = {}) {
   const offSlots = teamView.units?.OFF || [];
   const unlisted = teamView.unlisted || {};
 
-  // The OFF line row is computed first — every defensive x below mirrors its tackle/guard/centre grid,
-  // and the backfield row hangs off the same centre. D63: layoutLineRow also hangs the receivers and the
+  // The OL row is computed first — every defensive x below mirrors its tackle/guard/centre grid, and the
+  // backfield row hangs off the same centre. D63/D69: layoutPassCatchers also hangs the receivers and the
   // tight ends off that same comb and writes the real receiver landmarks back into `lm`, so it has to run
-  // BEFORE any defensive column is placed (the corners and the nickel read those landmarks).
+  // BEFORE any defensive column is placed (the corners and the nickel read those landmarks) even though
+  // its columns render in their own row above LINE, not inside it.
   const olCols = layoutOlColumns(offSlots);
   const lm = mirrorLandmarks(olCols);
-  const lineCols = layoutLineRow(offSlots, olCols, lm);
+  const passCatcherCols = layoutPassCatchers(offSlots, lm);
   const backfieldCols = layoutBackfieldRow(offSlots, lm);
 
   // A row is built with its columns only. Its tray height is decided afterwards by planTrays(), because a
@@ -541,8 +563,9 @@ export function computeLayout(teamView, opts = {}) {
     return buildRow(key, bands, "DEF", DEF_ROW_LEVEL[key], cols);
   }).filter((row) => row.cols.length);
 
+  const offRowCols = { PASS_CATCHERS: passCatcherCols, LINE: olCols, BACKFIELD: backfieldCols };
   const offRowsTopDown = OFF_ROW_GROUPS.map(({ key, bands }) =>
-    buildRow(key, bands, "OFF", OFF_ROW_LEVEL[key], key === "LINE" ? lineCols : backfieldCols)
+    buildRow(key, bands, "OFF", OFF_ROW_LEVEL[key], offRowCols[key])
   ).filter((row) => row.cols.length);
 
   planTrays([...defRowsTopDown, ...offRowsTopDown], unlisted);
