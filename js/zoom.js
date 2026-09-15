@@ -313,7 +313,9 @@ function unitView(view, unit) {
 //   cardWidth     which it pays for out of a wider column, not out of the player's name;
 //   maxDepthRows  and one more backup before the "+N more" tail.
 const SIDE_LAYOUT = {
-  crop: true, fillHeight: true, headshot: true, cardWidth: SIDE_CARD_W, maxDepthRows: SIDE_MAX_DEPTH_ROWS,
+  // D75 (Adam, 2026-09-15): no horizontal crop, so offense and defense pages share one scale instead of the
+  // narrower offense cluster zooming to ~1.5x; spare height becomes air between rows (fillHeight).
+  crop: false, fillHeight: true, headshot: true, cardWidth: SIDE_CARD_W, maxDepthRows: SIDE_MAX_DEPTH_ROWS,
 };
 
 export async function renderZoomSide(root, search, abbr, unit) {

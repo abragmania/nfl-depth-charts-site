@@ -165,7 +165,7 @@ const CROP_MARGIN = 26;
 // D72: the most spare height one gap between two rows may absorb on a single-unit page. Enough to turn a
 // four-row defense on a 1700x900 screen into a full page; beyond it the rows would start reading as
 // unrelated islands rather than as levels of one chart.
-const MAX_EXTRA_GAP = 80;
+const MAX_EXTRA_GAP = 220; // D75: a three-row offense page spreads its rows to fill the height rather than zooming
 
 function offBandRange(band) {
   const cfg = OFF_BANDS[band] || { x: [REFERENCE_WIDTH / 2, REFERENCE_WIDTH / 2], n: 1 };
