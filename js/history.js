@@ -36,6 +36,11 @@ const CSS = `
 .hist-ovr.tier-weak { color:var(--tier-weak,#f2c14e); }
 .hist-ovr.tier-flat { color:var(--tier-flat,#e0524d); }
 .hist-ovr .hist-star { color:#6b7480; font-weight:400; font-size:11px; margin-left:1px; }
+/* D87: "launch → now" on the current season's row — the arrow stays muted so the two ratings, each in its own
+   tier colour, are what the eye lands on. */
+.hist-ovrpair { display:inline-flex; align-items:baseline; gap:3px; }
+.hist-arrow { color:var(--muted,#8a94a0); font-size:11px; font-weight:400; }
+.hist-ovr.hist-now { font-size:12px; }
 .hist-tag { display:inline-block; font-size:9.5px; text-transform:uppercase; letter-spacing:.06em; padding:1px 5px; border-radius:8px; margin-left:5px; background:#2a323b; color:#c6ccd3; }
 .hist-tag.launch { background:#3a3320; color:#ffd54a; }
 .hist-pos.changed { color:#ffd54a; font-weight:600; }
@@ -143,7 +148,17 @@ function rowHtml(r, teams) {
   const teamHtml = stints.length ? `<span class="hist-team">${logos}${old}</span>` : dash;
   const star = r.ovr != null && r.matchConfidence !== "id" ? `<span class="hist-star" title="matched by ${esc(r.matchMethod)}, not by player id">*</span>` : "";
   const tag = r.ovr != null && r.ratingKind === "LAUNCH" ? `<span class="hist-tag launch" title="Only the launch rating exists for this season">launch</span>` : "";
-  const ovr = r.ovr == null ? dash : `<span class="hist-ovr ${tierOf(r.ovr)}">${r.ovr}${star}</span>${tag}`;
+  // D87: the season being played right now carries this year's Madden LAUNCH rating in r.ovr and, when the live
+  // EA rating on the card has since moved off it, that live number in r.ovrCurrent - printed "99 → 97", launch
+  // first then now. The server only ever sets r.ovrCurrent when it differs from r.ovr (server/history/index.js),
+  // so an unchanged rating stays a single number and every completed season is untouched by this.
+  const ed = String(r.season + 1).slice(-2); // Madden edition of a season, same rule as server/lib/seasons.js
+  const now = r.ovr != null && r.ovrCurrent != null && r.ovrCurrent !== r.ovr
+    ? `<span class="hist-arrow">→</span><span class="hist-ovr hist-now ${tierOf(r.ovrCurrent)}">${r.ovrCurrent}</span>` : "";
+  const ovrNum = `<span class="hist-ovr ${tierOf(r.ovr)}">${r.ovr}${star}</span>`;
+  const ovr = r.ovr == null ? dash
+    : now ? `<span class="hist-ovrpair" title="Madden ${ed} launch ${r.ovr}, now ${r.ovrCurrent}">${ovrNum}${now}</span>${tag}`
+    : `${ovrNum}${tag}`;
   const empty = !r.team && r.ovr == null && !r.positionOfRecord;
   const pos = r.positionOfRecord ? `<span class="hist-pos ${r.positionChanged ? "changed" : ""}" title="position of record: ${esc(r.positionSource || "")}">${esc(r.positionOfRecord)}</span>` : dash;
   return `<tr class="${empty ? "empty" : ""}"><td>${r.season}</td><td>${teamHtml}</td><td>${pos}</td><td>${ovr}</td><td class="hist-stats">${empty ? dash : esc(statText(r.statFamily, r.stats, r))}</td></tr>`;

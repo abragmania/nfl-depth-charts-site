@@ -125,21 +125,25 @@ const shortTime = (iso) => new Date(iso).toLocaleTimeString([], { hour: "numeric
 function cadenceChipText(cadence) {
   const football = cadence?.classes?.weekly;
   const injuries = cadence?.classes?.injury;
-  if (!football?.at && !injuries?.at) return null;
+  const ratings = cadence?.classes?.daily; // D88: Madden ratings, absent entirely on a pre-D88 last_run.json
+  if (!football?.at && !injuries?.at && !ratings?.at) return null;
   const parts = [];
   const week = football?.week ?? cadence?.week;
   if (football?.at) parts.push(`football: ${Number.isInteger(week) ? `wk ${week}` : new Date(football.at).toLocaleDateString()}`);
   if (injuries?.at) parts.push(`injuries: ${shortTime(injuries.at)}`);
+  if (ratings?.at) parts.push(`ratings: ${shortTime(ratings.at)}`);
   return parts.join(" · ");
 }
 
-// The same two facts spelled out in full for the tooltip.
+// The same facts spelled out in full for the tooltip.
 function cadenceLines(cadence) {
   const out = [];
   const football = cadence?.classes?.weekly;
   const injuries = cadence?.classes?.injury;
+  const ratings = cadence?.classes?.daily; // D88
   if (football?.at) out.push(`Football data: week ${football.week ?? cadence?.week ?? "?"} (fetched ${new Date(football.at).toLocaleString()})`);
   if (injuries?.at) out.push(`Injuries: ${new Date(injuries.at).toLocaleString()}`);
+  if (ratings?.at) out.push(`Madden ratings: ${new Date(ratings.at).toLocaleString()}`);
   return out;
 }
 
