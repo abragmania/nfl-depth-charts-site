@@ -496,7 +496,7 @@ function keepOutRowsVisible(depth, n) {
 const RESERVE_CODES = new Set(["IR", "PUP", "NFI", "SUSP", "EXEMPT"]);
 // D77 (Adam): "Slot" describes the man, not only the column — a player who lines up inside often enough
 // wears a small Slot tag wherever he sits.
-// D83 (Adam, 2026-09-15): for RECEIVERS that tag is now redundant and gone. Every receiver over the bar
+// D83/D85 (Adam, 2026-09-15): for RECEIVERS that tag is now redundant and gone. Every receiver who qualifies
 // stands in the real WR · Slot column (field.js's regroupSlotReceivers), so tagging him there — or
 // anywhere else, since he is nowhere else any more — would print the same fact twice. TIGHT ENDS have no
 // slot column to move into, so theirs stays, at Adam's 20% bar; no other position carries a rate at all.

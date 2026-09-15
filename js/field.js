@@ -165,9 +165,9 @@ const CROP_MARGIN = 26;
 // D72: the most spare height one gap between two rows may absorb on a single-unit page. Enough to turn a
 // four-row defense on a 1700x900 screen into a full page; beyond it the rows would start reading as
 // unrelated islands rather than as levels of one chart.
-const MAX_EXTRA_GAP = 220;
+const MAX_EXTRA_GAP = 220; // D75: a three-row offense page spreads its rows to fill the height rather than zooming
 const PASS_CATCHER_PITCH = 1.3; // D76: receivers/TE cluster pitch as a multiple of MIN_PITCH
-const SLOT_COLUMN_MIN_SHARE = 0.25; // D85: share of the team's WR slot snaps a receiver must take to stand in the WR · Slot column // D75: a three-row offense page spreads its rows to fill the height rather than zooming
+const SLOT_COLUMN_MIN_SHARE = 0.25; // D85: share of the team's WR slot snaps a receiver must take to stand in the WR · Slot column
 
 function offBandRange(band) {
   const cfg = OFF_BANDS[band] || { x: [REFERENCE_WIDTH / 2, REFERENCE_WIDTH / 2], n: 1 };
@@ -344,21 +344,32 @@ function stackColumns(cols) {
 // out.
 //
 // D85 (Adam, 2026-09-15) amends D83: membership is decided by VOLUME, not by each man's own rate. A
-// receiver belongs in the column when his measured slot snaps (D64/D77 — PlayerProfiler, pooled across
-// this season and last) are at least SLOT_COLUMN_MIN_SHARE of the TEAM's slot snaps, counting only the
-// charted wide receivers passed in here (tight ends are not in the denominator and never join the column),
-// and the column is ordered by slot snaps with the biggest inside workload on line one. A man with no
-// slot-snap number at all is in neither the numerator nor the denominator. The rate rule it replaces put
-// the Rams' Xavier Smith — a backup with a high rate on a handful of snaps — on line one ahead of Puka
-// Nacua, who plays inside far more often but over a much bigger snap count.
+// receiver belongs in the column when his measured slot snaps (D64/D77 — PlayerProfiler) are at least
+// SLOT_COLUMN_MIN_SHARE of the TEAM's slot snaps, counting only the charted wide receivers passed in here
+// (tight ends are not in the denominator and never join the column), and the column is ordered by slot
+// snaps with the biggest inside workload on line one. A man with no slot-snap number at all is in neither
+// the numerator nor the denominator. The rate rule it replaces put the Rams' Xavier Smith — a backup with
+// a high rate on a handful of snaps — on line one ahead of Puka Nacua, who plays inside far more often but
+// over a much bigger snap count.
+//
+// Every man's share is measured over the SAME window: the pooled 2025+2026 count (slotSnapsPooled), so the
+// team total is one number rather than a mix of windows. The headline slotSnaps must not be used here —
+// D77 switches a man to his current season alone the week his own snaps pass SLOT_SAMPLE_MIN, and
+// receivers cross that line in different weeks, so a team total built from it would add 2026-only counts
+// to pooled ones and shrink whoever had crossed over (the Rams' Nacua, on a small 2026-only count, would
+// drop out of his own column while pooled backups stayed in it).
 //
 // This is a DISPLAY regrouping and nothing more: the compiled TeamView is the club's own chart and stays
 // untouched, which is why every slot object is shallow-cloned before its player list is trimmed. The
 // player cards themselves are carried across by reference, so the man in the Slot column is the very same
 // card object the club column held — his role, banner, badges and heat ride along unchanged.
-// A card's measured slot snaps, or null when PlayerProfiler has no number for him (D85: a null keeps him
-// out of the team total as well as out of the column — he is not evidence of anything either way).
-const slotSnapsOf = (p) => (typeof p?.slotSnaps === "number" && Number.isFinite(p.slotSnaps) && p.slotSnaps >= 0 ? p.slotSnaps : null);
+// A card's measured slot snaps over the pooled 2025+2026 window, or null when PlayerProfiler has no number
+// for him (D85: a null keeps him out of the team total as well as out of the column — he is not evidence of
+// anything either way). slotSnapsPooled is the one window every man is measured on; the headline slotSnaps
+// is the fallback only for a card that carries no pooled count at all (an older compiled file, or a season
+// whose total snaps could not be worked out so it never joined the pool).
+const snapCount = (v) => (typeof v === "number" && Number.isFinite(v) && v >= 0 ? v : null);
+const slotSnapsOf = (p) => snapCount(p?.slotSnapsPooled) ?? snapCount(p?.slotSnaps);
 
 // "Puka Nacua" -> "Nacua" for the Slot column's tooltip. A generational suffix is not a surname, so
 // "Marvin Harrison Jr." reads as "Harrison" rather than "Jr.".
@@ -413,11 +424,17 @@ export function regroupSlotReceivers(wrSlots) {
     slotId: "OFF-WR-SLOT", unit: "OFF", band: "WR", ordinal: 0, columnOrder: 0,
     label: "WR · Slot", derived: true, players: men,
   };
-  // The tooltip still names each man and how much of HIS OWN season he spent inside — that is the fact a
-  // reader wants on the card. A man PlayerProfiler counted snaps for but published no rate for reads as
-  // his snap count instead of "null%".
-  const rateOf = (p) => (typeof p.slotRate === "number" && Number.isFinite(p.slotRate) ? `${p.slotRate}%` : `${slotSnapsOf(p)} slot snaps`);
-  const reason = `Slot receivers by snaps: ${men.map((p) => `${lastName(p.name)} ${rateOf(p)}`).join(", ")}`;
+  // The tooltip leads with the number the column is ordered by — his slot snaps — and carries how much of
+  // his own season he spent inside in brackets behind it, so it reads in the same direction as its heading
+  // ("Nacua 27.9%, Robinson 41%" under "by snaps" said one thing and showed another). Snaps and rate always
+  // come from the same window, so the man measured on the pooled count shows the pooled rate; a man
+  // PlayerProfiler published no rate for shows his snap count alone rather than "(null%)".
+  const asRate = (v) => (typeof v === "number" && Number.isFinite(v) ? `${v}%` : null);
+  const entryOf = (p) => {
+    const r = asRate(snapCount(p?.slotSnapsPooled) != null ? p.slotRatePooled : p.slotRate);
+    return `${lastName(p.name)} ${slotSnapsOf(p)} slot snaps${r ? ` (${r})` : ""}`;
+  };
+  const reason = `Slot receivers by snaps: ${men.map(entryOf).join(", ")}`;
   return { slot, kept, reason };
 }
 
