@@ -216,6 +216,9 @@ export async function autoRefreshIfStale({ maxAgeHours = 6 } = {}) {
 function renderPublishedStatus(el, body) {
   const at = body?.published ?? body?.lastRun?.finishedAt ?? null;
   el.textContent = at ? `published ${new Date(at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}` : "published snapshot";
+  // The header chip ships hidden (index.html) because the live app shows the same fact in the team header.
+  // On the published copy it is the only place that says how old the whole snapshot is, so show it.
+  el.hidden = false;
   el.classList.remove("amber");
   el.style.background = ""; el.style.color = "";
   el.title = [at ? `Published ${new Date(at).toLocaleString()}` : "", ...cadenceLines(body?.cadence), "This is a published copy; it updates only when a new snapshot is published."].filter(Boolean).join("\n");

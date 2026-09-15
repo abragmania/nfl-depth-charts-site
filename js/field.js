@@ -263,31 +263,56 @@ function stackColumns(cols) {
   for (const c of cols.slice(1)) c.stackUnder = cols[0];
 }
 
-// D63 step (1): the Madden archetype is the only free signal that says a receiver plays the slot — EA
-// tags him "Slot - WR" (ESPN publishes no slot label at all, D19). ratings.js carries EA's own
-// {id,label} object through untouched, and a hand-built fixture may carry a plain string, so both read.
+// EA tags a receiver "Slot - WR" (ESPN publishes no slot label at all, D19). Since D64 this is the
+// FALLBACK signal, behind PlayerProfiler's measured slot rate, and it is still what decides the men
+// PlayerProfiler has no page for. ratings.js carries EA's own {id,label} object through untouched, and a
+// hand-built fixture may carry a plain string, so both read.
 function isSlotArchetype(player) {
   const a = player?.rating?.archetype;
   const label = typeof a === "string" ? a : (a?.label ?? a?.id ?? "");
   return /slot/i.test(String(label));
 }
 
-// WHICH RECEIVER PLAYS THE SLOT — deliberately the only place that decision is made (D63), because the
-// signal is expected to change: the moment a slot snap-share source exists, the compile step can set
-// `slot.isSlot` on the WR slot itself and step (1) below picks it up with nothing else in the front end
-// changing. Until then it is derived here from the Madden archetype of each candidate column's line-one
-// man, and only when EXACTLY ONE of the top three columns carries it — two slot archetypes (Kansas
-// City's Rice and Royals, though Royals is a backup and so never a candidate) or none is not an answer,
-// and D19's default of WR3 is the honest fallback. Returns the column, or null when the team does not
-// carry three receiver columns to choose between.
+// WHICH RECEIVER PLAYS THE SLOT — deliberately the only place that decision is made (D63). The candidates
+// are the line-one men of the team's top three receiver columns, and the signals are tried best first:
+//   1. the chart itself says so (`slot.isSlot`), for a source that ever labels the slot outright;
+//   2. D64: PlayerProfiler's slot rate, the share of his snaps the man actually took from inside — the
+//      highest of the three wins, and it is the real answer rather than a proxy for one;
+//   3. the Madden "Slot — WR" archetype, EA's own opinion, and only when EXACTLY ONE of the three carries
+//      it — two slot archetypes or none is not an answer;
+//   4. D19's default: WR3.
+// A tie at the top of (2) is no answer either and falls through to (3), the same way two archetypes do.
+// The chosen column is tagged with `slotReason`, the plain-English sentence the label's tooltip shows, so
+// the man's placement can always be explained. Returns the column, or null when the team does not carry
+// three receiver columns to choose between.
 export function pickSlotColumn(wrColumns) {
   if (wrColumns.length < 3) return null;
   const top3 = wrColumns.slice(0, 3);
+  const pick = (col, reason) => { col.slotReason = reason; return col; };
+  // The man who decides a column's alignment is the one actually playing it: when the starter of record sits on
+  // line one as STARTER_OUT (D56/D61), his ACTIVE fill-in's rate and archetype count, not the injured man's.
+  const playing = (col) => {
+    const ps = col.slot?.players || [];
+    return ps.find((p) => p.role === "STARTER" || p.role === "ACTIVE") ?? ps[0];
+  };
+
   const flagged = top3.filter((c) => c.slot?.isSlot);
-  if (flagged.length === 1) return flagged[0];
-  const byArchetype = top3.filter((c) => isSlotArchetype(c.slot?.players?.[0]));
-  if (byArchetype.length === 1) return byArchetype[0];
-  return top3[2]; // D19: WR3 is the slot until something better says otherwise
+  if (flagged.length === 1) return pick(flagged[0], "Slot by depth-chart label");
+
+  // D64: rates come off the card as a percentage number (51.2) or null. At least one real rate decides it;
+  // an exact tie for the highest does not.
+  const rated = top3.map((c) => ({ c, p: playing(c) }))
+    .filter((x) => typeof x.p?.slotRate === "number" && Number.isFinite(x.p.slotRate))
+    .sort((a, b) => b.p.slotRate - a.p.slotRate);
+  if (rated.length && (rated.length === 1 || rated[0].p.slotRate > rated[1].p.slotRate)) {
+    const { c, p } = rated[0];
+    const season = p.slotSeason ? ` (${p.slotSeason})` : "";
+    return pick(c, `Slot: ${p.slotRate}% of snaps${season}`);
+  }
+
+  const byArchetype = top3.filter((c) => isSlotArchetype(playing(c)));
+  if (byArchetype.length === 1) return pick(byArchetype[0], "Slot by Madden archetype");
+  return pick(top3[2], "Slot by default (WR3)"); // D19: WR3 is the slot until something better says otherwise
 }
 
 // The LINE row (D63): outside WR, slot WR, LT LG C RG RT, TE, outside WR, one pitch apart the whole way

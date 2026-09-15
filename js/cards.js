@@ -133,10 +133,30 @@ function mapEspnSlotToBand(espnSlot, scheme) {
   return ESPN_POS_BAND[key] || null;
 }
 
-function espnDisagrees(p, slotBand, scheme) {
+// D66: an end code describes the end of the line, which is the same physical spot whether this app calls the
+// column DL or EDGE - the difference between those two bands is a judgement about the man's BODY, which ESPN's
+// position code does not carry. Treating de/lde/rde as compatible with both keeps the dashed ring meaning what
+// it says: ESPN puts this man somewhere else.
+const ESPN_END_CODES = new Set(["de", "lde", "rde"]);
+const FRONT_BANDS = new Set(["DL", "EDGE"]);
+// ...and when the column's own band came from the man rather than from the club's label (D66's two rules:
+// "roster-body" reads the man standing there, "starter-of-record" the man who owns the spot), there is nothing
+// for ESPN's label to disagree WITH - the band is already an answer to the same question, reached from better
+// evidence. Only the rank comparison survives.
+const BODY_DERIVED = new Set(["roster-body", "starter-of-record"]);
+
+function espnDisagrees(p, slotBand, scheme, labelSource) {
   if (!p.espnSlot) return false;
+  // A tier of 0 is not a rank: it is the sentinel starters.js stamps on a man it INSERTED onto line one from
+  // the roster because today's chart does not list him at all (D61), and a null tier is the same for a reserve
+  // second-stringer appended at the bottom. Neither number came from a chart, so neither can disagree with
+  // ESPN's; comparing them rang the dashed ring on every out starter in the league (ATL's Walker and Pearce,
+  // ATL's Tua, and so on) to report a difference that was an artefact of our own bookkeeping.
+  const rankDiffers = p.espnRank != null && p.tier > 0 && p.espnRank !== p.tier;
+  if (BODY_DERIVED.has(labelSource)) return rankDiffers;
+  const key = String(p.espnSlot).toLowerCase();
+  if (ESPN_END_CODES.has(key) && FRONT_BANDS.has(slotBand)) return rankDiffers;
   const mapped = mapEspnSlotToBand(p.espnSlot, scheme);
-  const rankDiffers = p.espnRank != null && p.tier != null && p.espnRank !== p.tier;
   if (mapped) return mapped !== slotBand || rankDiffers;
   return rankDiffers; // can't map this ESPN code to a band -> fall back to the rank comparison alone
 }
@@ -225,7 +245,7 @@ function overviewClasses(p, base) {
 // BANNER_H field.js reserves for it — so "who is out, and how good is the man replacing him" still reads
 // straight down the column, just in two lines of text instead of two photographs.
 function overviewLineOne(p, teamAbbr, opts = {}) {
-  const disagrees = espnDisagrees(p, opts.band, opts.scheme);
+  const disagrees = espnDisagrees(p, opts.band, opts.scheme, opts.labelSource);
   const espnRing = disagrees ? " espn-flag" : "";
   // No role tag here: on the overview the bold top row IS the starter, and an out or filling-in player
   // says so on his own banner. (It used to be rendered and then hidden in CSS — blue review.)
@@ -428,7 +448,10 @@ export function renderColumn(col, teamAbbr, opts = {}) {
   const heatCls = slot.injury?.level && HEAT_CLASS[slot.injury.level] ? ` ${HEAT_CLASS[slot.injury.level]}` : "";
   const heatTitleText = heatCls ? heatTitle(slot.injury) : "";
   const labelHref = `#/team/${esc(teamAbbr)}/group/${esc((slot.band || "").toLowerCase())}`;
-  const labelTitle = esc([slot.labelSource ? `source: ${slot.labelSource}` : "", heatTitleText].filter(Boolean).join(" · "));
+  // col.slotReason (D64): why THIS receiver is the one standing in the slot — his measured slot rate, the
+  // Madden archetype, or the WR3 default. It leads the tooltip because on the slot column it is the thing a
+  // reader actually questions; every other column has no reason and reads exactly as before.
+  const labelTitle = esc([col.slotReason || "", slot.labelSource ? `source: ${slot.labelSource}` : "", heatTitleText].filter(Boolean).join(" · "));
   const pair = players.length >= 2 && players[0].coStarter && players[1].coStarter;
   // Lead ruling (2026-09-11): a co-starter pair is ONE slot with two names on it, not two separate
   // rankings — the column label says so directly instead of leaving it to be inferred from two adjacent
@@ -443,7 +466,7 @@ export function renderColumn(col, teamAbbr, opts = {}) {
   // ownLabel (🎨 Polish, round 3, item 1): the raw slot label (never the "· co-starters" suffixed
   // labelText above) — it's compared against slotLookup's own return value in alsoListedChips, which
   // resolves OTHER slots' plain labels the same way, so the two must use the identical un-suffixed form.
-  const colOpts = { ...opts, band: slot.band, ownLabel: slot.label };
+  const colOpts = { ...opts, band: slot.band, ownLabel: slot.label, labelSource: slot.labelSource };
 
   // Ruling E: bold line-one row(s) — one starter normally, two for a co-starter pair or for D44's
   // OUT-starter-plus-ACTIVE-fill-in — then up to MAX_DEPTH_ROWS slim rows, the last of which becomes a
