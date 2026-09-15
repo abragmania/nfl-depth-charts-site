@@ -168,6 +168,7 @@ const CROP_MARGIN = 26;
 const MAX_EXTRA_GAP = 220; // D75: a three-row offense page spreads its rows to fill the height rather than zooming
 const PASS_CATCHER_PITCH = 1.3; // D76: receivers/TE cluster pitch as a multiple of MIN_PITCH
 const SLOT_COLUMN_MIN_RATE = 50; // D86: share of his OWN snaps a receiver must take inside to stand in the WR · Slot column
+const SLOT_COLUMN_MIN_SNAPS = 100; // D89: inside snaps that rate must have been measured over before it counts
 
 function offBandRange(band) {
   const cfg = OFF_BANDS[band] || { x: [REFERENCE_WIDTH / 2, REFERENCE_WIDTH / 2], n: 1 };
@@ -351,11 +352,26 @@ function stackColumns(cols) {
 // lines up inside on 17% of his snaps and still takes the biggest share of his team's slot work — and,
 // ordering purely by snaps, could seat a club's number-one receiver underneath a lesser man.
 //
-// Ordering is therefore the club's own chart first and the workload second: club rank (the ordinal
-// position of the receiver column he came from — the first column in wrSlots is rank 1), then his tier
-// inside that column, then slot snaps, most first. A man on tier 2 of WR-1 stands above the tier-1 man of
-// WR-2, because Adam's principle is that a man listed number one on the club's depth chart is never shown
-// under anyone.
+// D89 (Adam, 2026-09-15) AMENDS D86's membership rule: a rate only counts once it has been measured over
+// at least SLOT_COLUMN_MIN_SNAPS inside snaps (slotSnapsPooled, else the headline slotSnaps). Below that
+// floor a receiver stays in his club column whatever his rate says. D86's rate-only bar read a handful of
+// snaps as a career: LaJohntay Wester was standing ALONE in Baltimore's Slot column on 24 inside snaps at
+// 53.3%, Tom Kennedy held Detroit's on 26, and Jimmy Horn Jr. sat in Carolina's on 75 — three thin samples
+// that each invented a column, and in Baltimore's case hid Zay Flowers's own WR1 pill behind a fourth-
+// stringer. A man the source measured but published no snap count for is a different thing from a thin
+// sample — nothing is known about his window at all — so he is still judged on his rate alone, exactly as
+// D86 left him.
+//
+// Ordering is the club's own chart, read tier first — D90 (Adam, 2026-09-15), amending D86's ordering: the
+// tier a man is listed on inside his column (tier 0, a listed-OUT starter, then tier 1, then tier 2 and so
+// on, a card with no tier at all last), then the rank of the column he came from (the ordinal position in
+// wrSlots — the first receiver column is rank 1), then slot snaps, most first, then the row the club
+// printed him on. D86 read the column before the tier, which put a BACKUP above a STARTER whenever the
+// backup happened to be listed in an earlier column: in Tennessee, Chimere Dike (the WR1 column's tier-2
+// man) stood above Wan'Dale Robinson (the WR2 column's tier-1 starter). Adam's principle is about the
+// depth of the chart, not the left-to-right order of its boxes, so tier now leads and a backup is never
+// shown above a starter; club rank still settles two men on the same tier, which is what keeps a club's
+// number-one receiver above an equally-listed team-mate.
 //
 // Every man is judged on the SAME window: the pooled 2025+2026 rate (slotRatePooled) when his card carries
 // one, otherwise the headline slotRate. The headline rate alone must not decide it — D77 switches a man to
@@ -369,9 +385,10 @@ function stackColumns(cols) {
 // A card's measured slot snaps over the pooled 2025+2026 window, or null when PlayerProfiler has no number
 // for him. slotSnapsPooled is the window every man is read on; the headline slotSnaps is the fallback only
 // for a card that carries no pooled count at all (an older compiled file, or a season whose total snaps
-// could not be worked out so it never joined the pool). D86 uses this to ORDER the column and to fill the
-// tooltip's bracket — membership itself is decided by the rate below, so a man with a measured rate but no
-// snap count still stands in the column.
+// could not be worked out so it never joined the pool). This count ORDERS the column, fills the tooltip's
+// bracket, and since D89 gates membership too: a man counted below SLOT_COLUMN_MIN_SNAPS is out whatever
+// his rate. A card with no count at all is the one exception — an unmeasured window is not a thin one, so
+// he is still judged on his rate alone.
 const snapCount = (v) => (typeof v === "number" && Number.isFinite(v) && v >= 0 ? v : null);
 const slotSnapsOf = (p) => snapCount(p?.slotSnapsPooled) ?? snapCount(p?.slotSnaps);
 // D86: the one rate window every man is judged on — the pooled 2025+2026 rate when the card carries one,
@@ -422,12 +439,14 @@ export function regroupSlotReceivers(wrSlots) {
     });
   });
 
-  // Pass two: the men who play at least SLOT_COLUMN_MIN_RATE of their own snaps inside, in club order —
-  // column rank, then tier within that column, then slot snaps with the bigger workload first (the club's
-  // own printed order settles anything still tied).
+  // Pass two: the men who play at least SLOT_COLUMN_MIN_RATE of their own snaps inside, over a window of at
+  // least SLOT_COLUMN_MIN_SNAPS inside snaps (D89 — a card with no count at all is unmeasured rather than
+  // thin, and is still judged on its rate). Ordered tier first so a backup never sits above a starter
+  // (D90), then the rank of the club column he came from, then slot snaps with the bigger workload first,
+  // and the club's own printed order settles anything still tied.
   const men = charted
-    .filter((c) => c.rate >= SLOT_COLUMN_MIN_RATE)
-    .sort((a, b) => a.rank - b.rank || a.tier - b.tier || (b.snaps ?? -1) - (a.snaps ?? -1) || a.row - b.row)
+    .filter((c) => c.rate >= SLOT_COLUMN_MIN_RATE && (c.snaps == null || c.snaps >= SLOT_COLUMN_MIN_SNAPS))
+    .sort((a, b) => a.tier - b.tier || a.rank - b.rank || (b.snaps ?? -1) - (a.snaps ?? -1) || a.row - b.row)
     .map((c) => c.p);
   if (!men.length) return null;
 
