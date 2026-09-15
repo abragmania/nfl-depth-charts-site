@@ -18,7 +18,7 @@
 // card-banner, banner-out, banner-active, badge*, rating-pill, column-shaded, tray-label/tray-chip)
 // rather than inventing parallel styles.
 import { getTeams, getTeam, invalidateTeam } from "./api.js";
-import { esc, BAND_DISPLAY, headshotHtml, wireDepthToggles, isFullyOut, psBadge } from "./cards.js";
+import { esc, BAND_DISPLAY, headshotHtml, wireDepthToggles, isFullyOut, isScratch, psBadge } from "./cards.js";
 import { headerHtml, mountTeamField, teamBodyHtml } from "./team.js";
 import { SIDE_CARD_W, SIDE_MAX_DEPTH_ROWS } from "./field.js";
 import { fitToViewport, disposeCurrentView } from "./viewfit.js";
@@ -91,7 +91,13 @@ function outBannerText(status) {
   return ret ? `OUT · back ~${ret}` : "OUT · out indefinitely";
 }
 
+// D60 (Adam, approved 2026-09-15): a healthy game-day scratch gets a neutral grey banner and no return
+// date - he is not hurt, he is simply not dressing. Same words as cards.js's whole-team row so the two
+// views never describe the same man differently. A genuine OUT keeps the red banner.
+const SCRATCH_BANNER = "INACTIVE · coach's decision";
+
 function bannerHtml(p) {
+  if (isScratch(p)) return `<div class="card-banner banner-inactive">${esc(SCRATCH_BANNER)}</div>`;
   if (isFullyOut(p)) return `<div class="card-banner banner-out">${esc(outBannerText(p.status))}</div>`;
   if (p.role === "ACTIVE") return `<div class="card-banner banner-active">ACTIVE · FILLING IN</div>`;
   return "";
@@ -114,6 +120,8 @@ function jerseyCrest(p) {
 // is a LABEL change only: D56 still says a healthy co-starter means nobody behind him is promoted, and
 // the compile step is what decides that (server/compile/starters.js's promoteFillIns).
 function roleTagHtml(p) {
+  // D60: a scratch reads INACTIVE, not OUT - the tag must agree with the grey banner directly above it.
+  if (isScratch(p)) return `<span class="role-tag role-tag-inactive">INACTIVE</span>`;
   if (isFullyOut(p)) return `<span class="role-tag role-tag-out">OUT</span>`;
   if (p.role === "ACTIVE") return "";
   if (p.coStarter) return `<span class="role-tag">STARTER</span>`;

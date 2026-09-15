@@ -9,11 +9,11 @@
 // rating-tier surface colours all survive the shrink. The SIDE, GROUP and MATCHUP views keep their big
 // headshot cards and their own renderers (zoom.js's fullCard, matchup.js's matchupCard) — they come
 // through renderSlotBody below, which is deliberately untouched by this ruling.
-import { lineOneCount, lineOneHeight, visibleDepthRows, OUT_STATUS_CODES, isFullyOut } from "./field.js";
+import { lineOneCount, lineOneHeight, visibleDepthRows, OUT_STATUS_CODES, isFullyOut, isScratch } from "./field.js";
 // Re-exported so zoom.js and matchup.js can share the single definition rather than keeping their own
 // copies, which had all drifted from it (blue review: every copy was missing INACTIVE and EXEMPT, so a
-// game-day inactive starter got no red banner in any view).
-export { OUT_STATUS_CODES, isFullyOut };
+// game-day inactive starter got no red banner in any view). D60's isScratch rides the same route.
+export { OUT_STATUS_CODES, isFullyOut, isScratch };
 
 const ESC = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ESC[c]);
@@ -127,7 +127,13 @@ function outBannerText(status) {
   return ret ? `OUT${codePart} · back ~${ret}` : `OUT${codePart} · out indefinitely`;
 }
 
+// D60 (Adam, approved 2026-09-15): a healthy game-day scratch is not an injury, so he never wears the red
+// banner. Grey, neutral, and no "back ~date" — there is nothing to come back from; he is simply not dressing
+// for this game. A genuine OUT (any named injury, including one who also made the inactive list) stays red.
+const SCRATCH_BANNER = "INACTIVE · coach's decision";
+
 function bannerHtml(p) {
+  if (isScratch(p)) return `<div class="card-banner banner-inactive">${esc(SCRATCH_BANNER)}</div>`;
   if (isFullyOut(p)) return `<div class="card-banner banner-out">${esc(outBannerText(p.status))}</div>`;
   if (p.role === "ACTIVE") return `<div class="card-banner banner-active">ACTIVE · FILLING IN</div>`;
   return "";

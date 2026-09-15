@@ -166,7 +166,8 @@ const CROP_MARGIN = 26;
 // four-row defense on a 1700x900 screen into a full page; beyond it the rows would start reading as
 // unrelated islands rather than as levels of one chart.
 const MAX_EXTRA_GAP = 220;
-const PASS_CATCHER_PITCH = 1.3; // D76: receivers/TE cluster pitch as a multiple of MIN_PITCH // D75: a three-row offense page spreads its rows to fill the height rather than zooming
+const PASS_CATCHER_PITCH = 1.3; // D76: receivers/TE cluster pitch as a multiple of MIN_PITCH
+const SLOT_COLUMN_MIN_RATE = 30; // a WR · Slot column exists only when the top man is at or above this (matches the Slot tag bar) // D75: a three-row offense page spreads its rows to fill the height rather than zooming
 
 function offBandRange(band) {
   const cfg = OFF_BANDS[band] || { x: [REFERENCE_WIDTH / 2, REFERENCE_WIDTH / 2], n: 1 };
@@ -236,6 +237,15 @@ function placeOuterInner(count, outerMin, outerMax, innerMin, innerMax) {
 export const OUT_STATUS_CODES = new Set(["OUT", "IR", "PUP", "NFI", "SUSP", "INACTIVE", "EXEMPT"]);
 export function isFullyOut(p) {
   return p.role === "STARTER_OUT" || OUT_STATUS_CODES.has(p.status?.code);
+}
+
+// D60 (Adam, approved 2026-09-15): a healthy game-day scratch - server/compile/status.js sets status.scratch
+// on him - is still "fully out" for layout purposes (he cannot play, so he keeps the banner and the strip of
+// height reserved for it), but the banner reads grey "INACTIVE · coach's decision" instead of the red
+// "OUT · back ~date": nobody is hurt and there is no return date to wait for. One definition, imported by
+// cards.js/zoom.js the same way isFullyOut is, so the three views cannot drift apart again.
+export function isScratch(p) {
+  return p.status?.code === "INACTIVE" && p.status?.scratch === true;
 }
 
 // The per-view drawing options a layout was computed with, normalised once in computeLayout and then
@@ -366,20 +376,18 @@ export function pickSlotColumn(wrColumns) {
   const flagged = top3.filter((c) => c.slot?.isSlot);
   if (flagged.length === 1) return pick(flagged[0], "Slot by depth-chart label");
 
-  // D64: rates come off the card as a percentage number (51.2) or null. At least one real rate decides it;
-  // an exact tie for the highest does not.
+  // Adam (2026-09-15): a slot column exists only when someone EARNS it — the highest measured rate among the
+  // top three is at or above SLOT_COLUMN_MIN_RATE (the same bar as the Slot tag) and beats the next man.
+  // No archetype or "last receiver" guesses: a team whose receivers all play outside shows plain WR1/2/3,
+  // and the Slot tag (cards.js) handles anyone who crosses the bar later.
   const rated = top3.map((c) => ({ c, p: playing(c) }))
     .filter((x) => typeof x.p?.slotRate === "number" && Number.isFinite(x.p.slotRate))
     .sort((a, b) => b.p.slotRate - a.p.slotRate);
-  if (rated.length && (rated.length === 1 || rated[0].p.slotRate > rated[1].p.slotRate)) {
-    const { c, p } = rated[0];
-    const season = p.slotSeason ? ` (${p.slotSeason})` : "";
-    return pick(c, `Slot: ${p.slotRate}% of snaps${season}`);
-  }
-
-  const byArchetype = top3.filter((c) => isSlotArchetype(playing(c)));
-  if (byArchetype.length === 1) return pick(byArchetype[0], "Slot by Madden archetype");
-  return pick(top3[top3.length - 1], `Slot by default (${top3[top3.length - 1].slot.label})`); // D19: the last charted WR is the slot until something better says otherwise
+  if (!rated.length || rated[0].p.slotRate < SLOT_COLUMN_MIN_RATE) return null;
+  if (rated.length > 1 && rated[0].p.slotRate === rated[1].p.slotRate) return null;
+  const { c, p } = rated[0];
+  const season = p.slotSeason ? ` (${p.slotSeason})` : "";
+  return pick(c, `Slot: ${p.slotRate}% of snaps${season}`);
 }
 
 // The PASS CATCHERS row (D69's own row, D71's x-maths). D63 hung these columns off the ends of the

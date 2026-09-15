@@ -325,6 +325,11 @@ a.back { color:var(--muted); }
   border-radius:3px; padding:0 3px; margin:2px 2px 1px; }
 .prow-one:has(.banner-out) { border-color:#c23b36; background-image:linear-gradient(rgba(194,59,54,.14), rgba(194,59,54,.14)); }
 .prow-one:has(.banner-active) { border-color:#2f9e63; background-image:linear-gradient(rgba(47,158,99,.14), rgba(47,158,99,.14)); }
+/* D60 (Adam, approved 2026-09-15): a healthy game-day scratch is not an injury, so his row must not shout
+   in the injury colour. The same neutral grey as the INACTIVE badge (.badge-inactive below), with the same
+   quiet tint treatment the other two banners get, so "not dressing today" reads as a different fact from
+   "hurt and out". */
+.prow-one:has(.banner-inactive) { border-color:#8a94a0; background-image:linear-gradient(rgba(138,148,160,.12), rgba(138,148,160,.12)); }
 /* 👁 QA C6b: the dim used to cover the whole line, including the rating. But the rating is the entire
    reason the out man is still on screen — D44 keeps him there so his number can be compared with his
    replacement's, and a muted 93 above a bright 72 reads as if the bright one were the better player.
@@ -370,6 +375,9 @@ a.back { color:var(--muted); }
   border-radius:8px 8px 0 0; /* now that .card is overflow:visible, the banner rounds its own top corners */ }
 .banner-out { background:#c23b36; }
 .banner-active { background:#2f9e63; }
+/* D60: grey, with dark ink - the same pairing the INACTIVE badge uses, and the only banner that carries no
+   return date (there is nothing to come back from). */
+.banner-inactive { background:#8a94a0; color:#1a1a1a; }
 .card:has(.card-banner) .card-body { margin-top:22px; }
 
 /* STARTER_OUT dims only the body (photo/name/label/pill) — never .card-badges or .card-banner, which
