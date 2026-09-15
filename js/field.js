@@ -52,9 +52,25 @@
 // ABOVE the offensive line... even though it technically isn't how they line up, it's easier visually." So
 // PASS CATCHERS is now a normal third offensive row — full width, its own stripe and label, exactly like
 // LINE and BACKFIELD — sitting BETWEEN the line of scrimmage and the LINE row rather than sharing a row
-// with it. layoutPassCatchers() below still computes the receivers' x's off the OL comb (D63's pitches,
-// unchanged) and still writes back the landmarks the defense mirrors; only which ROW those columns land in
-// changed. Top-down from the LOS the offense now reads PASS CATCHERS, LINE, BACKFIELD (OFF_ROW_GROUPS).
+// with it. Top-down from the LOS the offense now reads PASS CATCHERS, LINE, BACKFIELD (OFF_ROW_GROUPS).
+//
+// D71 (Adam, 2026-09-15), which supersedes D63's field-accurate receiver x's — "the pass catchers row is a
+// normal centred cluster, not spread to the sidelines". layoutPassCatchers no longer hangs the receivers
+// off the ends of the offensive-line comb: it places them as one evenly-pitched block centred on the
+// field's centre line, reading left to right as outside WR, WR · Slot (always INSIDE the outside man),
+// any further receivers, then the tight ends (TE2 still stacked under TE1 on one x). The knock-on is that
+// the receivers no longer tell the defense where to stand: the corners go back to a fixed 1.4 pitches
+// outside the tackles and the nickel to the gap between the left corner and the box, both computed once in
+// mirrorLandmarks, so a defensive row's shape no longer changes with how many receivers a club charts.
+//
+// D72 (Adam, 2026-09-15) — the OFFENSE and DEFENSE pages are this same engine drawing ONE unit (zoom.js
+// hands computeLayout a TeamView carrying only that unit, the way matchup.js already hands it a synthetic
+// two-team one). Three things change for a half-field, all driven by `opts` rather than by a second engine:
+// there is no line of scrimmage (losY is null and the canvas carries a single "OFFENSE"/"DEFENSE" caption
+// instead of one per half), the canvas is CROPPED to the columns actually on it so the fit engine can scale
+// a short chart up instead of being pinned by a full-width canvas it is not using, and the rows are drawn
+// at the bigger `style` a 1.3-1.8x scale affords — a small headshot on each line-one row and one more depth
+// row before the "+N" tail.
 
 const REFERENCE_WIDTH = 1600; // the OFF_BANDS anchors below were tuned against this width
 export const LAYOUT_WIDTH = 1800;
@@ -68,8 +84,23 @@ const CARD_H1 = 27;  // the starter's bold row
 const ROW_H = 18;    // a slim backup row
 const CARD_GAP = 2;  // vertical gap between rows inside a column
 const BANNER_H = 13; // extra strip on a line-one row carrying the red OUT / green FILLING IN banner
-const LABEL_RESERVE = 17; // the column's own label pill, which lives inside the reserved box
+// The column's own label pill, which lives inside the reserved box. 18, not 17: the pill really is 17.6
+// tall in styles.css (10.5px text at 1.2 line-height, 1px of padding each side, 3px margin under it), and
+// rounding that down is what pushed every column a fraction over its own box.
+const LABEL_RESERVE = 18;
 export const MAX_DEPTH_ROWS = 3; // ruling E: at most three depth rows, the third becoming "+N more"
+// D72: the single-unit (offense / defense) pages draw half as many rows, so the fit engine scales them to
+// roughly 1.3-1.8x. At that size a line-one row has room for a small headshot at its left edge — the SAME
+// row renderer as everywhere else, widened by an option (cards.js's overviewLineOne), never a second card
+// type. HEADSHOT_PAD is the vertical air above and below it, so the row grows from CARD_H1 to 34.
+const HEADSHOT_SIZE = 28;
+const HEADSHOT_PAD = 6;
+export const SIDE_MAX_DEPTH_ROWS = 4; // D72: one more depth row than the whole-team overview's cap
+// D72: a headshot eats ~28 of a 156-unit row, and it eats it out of the one thing worth reading — the
+// name. ("Riq Woolen" came out as "R. Wo…" on the first defense render.) A single-unit page has half the
+// columns, so it can afford a wider one, and 180 is the widest that costs nothing: two 180-wide cards plus
+// MIN_CARD_GAP still fit inside MIN_PITCH, so the columns keep exactly the pitch D71 places them at.
+export const SIDE_CARD_W = 180;
 
 const BAND_GAP = 10; // vertical gap between adjacent rows inside one level
 const LEVEL_GAP_EXTRA = 20; // on top of BAND_GAP, only between two rows in DIFFERENT levels
@@ -116,24 +147,25 @@ const OFF_ROW_GROUPS = [
 const OFF_ROW_LEVEL = { PASS_CATCHERS: "PASS_CATCHERS", LINE: "LINE", BACKFIELD: "BACKFIELD" };
 const OFF_LEVEL_LABEL = { PASS_CATCHERS: "PASS CATCHERS", LINE: "LINE", BACKFIELD: "BACKFIELD" };
 
-// D63 spacing, all in multiples of the offensive line's own pitch, so the whole row is one even comb and
-// the slot receiver is exactly the midpoint between the left tackle and the outside receiver.
-const SLOT_WR_PITCHES = 1;     // slot WR, one pitch outside the left tackle
-const OUTSIDE_WR_PITCHES = 2;  // outside WRs, one pitch further out again (both ends of the row)
-const TE_PITCHES = 1;          // TE1, one pitch outside the right tackle
-// How far INSIDE his receiver the corner sits. Adam's 2026-09-15 tightening ("corners sat too far out")
-// is already paid for by D63 itself: the corner is measured against the receiver he covers now, not
-// against the tackle, and the outside receiver is the outermost thing on the field. Zero, therefore —
-// the corner sits squarely on his man, which is the pairing D63 asks the eye to read. It stays a named
-// constant because anything above ~0 is self-defeating at this width: the columns are already exactly
-// MIN_PITCH apart, so pulling a corner in pushes the NICKEL off the slot receiver (enforceNoOverlap
-// moves whichever column it finds too close), which trades a real alignment for a cosmetic one.
-const CB_INSET_PITCHES = 0;
-// Fallback only: a chart with no outside receiver column at all (the odd club page that lists none) keeps
-// the pre-D63 placement — 1.4 pitches outside the tackle.
+// D71: the corners keep the placement they have always had — 1.4 pitches outside the tackles — and they
+// keep it whatever the receivers do, because the receivers are now a centred cluster that would drag the
+// secondary into the middle of the field if the corners still mirrored it.
 const CB_PITCH_OUT = 1.4;
+// D71: "the nickel sits between the corner and the box." Nominally one pitch outside the left tackle,
+// which is what Adam described; the floor below it is arithmetic, not taste — two columns closer than
+// MIN_PITCH overlap, and the corner is already at 1.4 pitches, so a literal one-pitch nickel would be
+// drawn through him and then shoved clear by enforceNoOverlap anyway. Taking the max here puts him at the
+// same place deliberately instead of by accident, and still reads as "inside the corner, outside the box".
+const NB_PITCH_OUT = 1;
 // Vertical air between two columns stacked on the same x (TE2 under TE1).
 const STACK_GAP = 8;
+// D72: the margin left on each side of a cropped single-unit canvas, so the outermost column is not flush
+// against the sideline the field SVG draws.
+const CROP_MARGIN = 26;
+// D72: the most spare height one gap between two rows may absorb on a single-unit page. Enough to turn a
+// four-row defense on a 1700x900 screen into a full page; beyond it the rows would start reading as
+// unrelated islands rather than as levels of one chart.
+const MAX_EXTRA_GAP = 80;
 
 function offBandRange(band) {
   const cfg = OFF_BANDS[band] || { x: [REFERENCE_WIDTH / 2, REFERENCE_WIDTH / 2], n: 1 };
@@ -205,11 +237,25 @@ export function isFullyOut(p) {
   return p.role === "STARTER_OUT" || OUT_STATUS_CODES.has(p.status?.code);
 }
 
+// The per-view drawing options a layout was computed with, normalised once in computeLayout and then
+// stamped onto every column it produces (D72). cards.js reads it back off the column rather than being
+// told separately, so the markup it draws and the box this module reserved for it cannot disagree — the
+// same contract lineOneCount/visibleDepthRows already had.
+export function layoutStyle(opts = {}) {
+  return {
+    headshot: opts.headshot ? HEADSHOT_SIZE : 0,
+    maxDepthRows: opts.maxDepthRows ?? MAX_DEPTH_ROWS,
+    cardWidth: opts.cardWidth ?? CARD_W,
+  };
+}
+
 // A line-one row is CARD_H1 tall normally, plus BANNER_H when it carries a banner — red for a fully-out
-// player, green "ACTIVE · FILLING IN" for role ACTIVE (D44). cards.js imports this same geometry so the
-// rendered row is never taller than the box this module reserves.
-function lineOneHeight(p) {
-  return CARD_H1 + (isFullyOut(p) || p.role === "ACTIVE" ? BANNER_H : 0);
+// player, green "ACTIVE · FILLING IN" for role ACTIVE (D44). D72: a row carrying a headshot is as tall as
+// the headshot plus its air. cards.js imports this function (rather than keeping its own copy of the sum,
+// which is how the two used to drift) so the rendered row is never taller than the box reserved for it.
+export function lineOneHeight(p, style = {}) {
+  const base = style.headshot ? Math.max(CARD_H1, style.headshot + HEADSHOT_PAD) : CARD_H1;
+  return base + (isFullyOut(p) || p.role === "ACTIVE" ? BANNER_H : 0);
 }
 
 // How many leading players render as BOLD line-one rows rather than slim depth rows: a co-starter pair
@@ -226,20 +272,20 @@ export function lineOneCount(players) {
 // Ruling E: at most MAX_DEPTH_ROWS slim rows are drawn behind the line-one row(s). When more players
 // exist than that, the LAST visible slim row is replaced by a "+N more" tail, so the row count (and
 // therefore the reserved height) never exceeds the cap however deep a real chart runs.
-export function visibleDepthRows(players) {
-  return Math.min(Math.max(players.length - lineOneCount(players), 0), MAX_DEPTH_ROWS);
+export function visibleDepthRows(players, maxRows = MAX_DEPTH_ROWS) {
+  return Math.min(Math.max(players.length - lineOneCount(players), 0), maxRows);
 }
 
 // A slot's real rendered content height: the column's own label pill (which lives inside this box —
 // 🎨 Polish round 3 item 3: leaving it out made the deepest column in a row overflow the shared bottom
 // edge), plus each bold line-one row, plus the visible slim rows.
-function slotContentHeight(slot) {
+function slotContentHeight(slot, style) {
   const players = slot.players;
   if (!players.length) return CARD_H1 + LABEL_RESERVE;
   const bold = lineOneCount(players);
   let h = LABEL_RESERVE;
-  for (let i = 0; i < bold; i++) h += lineOneHeight(players[i]) + (i ? CARD_GAP : 0);
-  h += visibleDepthRows(players) * (ROW_H + CARD_GAP);
+  for (let i = 0; i < bold; i++) h += lineOneHeight(players[i], style) + (i ? CARD_GAP : 0);
+  h += visibleDepthRows(players, style.maxDepthRows) * (ROW_H + CARD_GAP);
   return h;
 }
 
@@ -247,22 +293,23 @@ const byColumnOrder = (a, b) => a.columnOrder - b.columnOrder;
 
 // Ruling E made every player a text row, so a co-starter pair no longer needs a double-wide column to
 // hold two photo cards side by side — both names simply stack as two bold rows in one normal column.
-// Every column is therefore exactly CARD_W wide, which is why this is a constant rather than a lookup.
-const colWidth = () => CARD_W;
+// Every column in one layout is therefore the same width; only the VIEW changes it (D72's single-unit
+// pages run wider to pay for their headshot without eating the name).
+const colWidth = (style) => style.cardWidth;
 
 // Assigns x positions to every slot in an OFFENSE band that still uses a fixed canonical range (OL).
-function layoutOffBandColumns(offSlots, band) {
+function layoutOffBandColumns(offSlots, band, style) {
   const slots = offSlots.filter((s) => s.band === band).slice().sort(byColumnOrder);
   if (!slots.length) return [];
   const xs = distributeX(offBandRange(band), slots.length);
-  return slots.map((slot, i) => ({ slot, x: xs[i], height: slotContentHeight(slot), width: colWidth(), band }));
+  return slots.map((slot, i) => ({ slot, x: xs[i], height: slotContentHeight(slot, style), width: colWidth(style), band }));
 }
 
 // ---- the offensive rows --------------------------------------------------------------------------
 
 // The five linemen, which are the reference grid the whole defensive front and secondary mirror
 // (mirrorLandmarks below) and the comb the receivers are then hung off — so they are computed first.
-const layoutOlColumns = (offSlots) => layoutOffBandColumns(offSlots, "OL");
+const layoutOlColumns = (offSlots, style) => layoutOffBandColumns(offSlots, "OL", style);
 
 // Stacks a set of columns on ONE x, top to bottom, instead of giving each its own place in the row
 // (D63: "a second TE column stacks directly under the TE1 column"). The leader keeps its own natural
@@ -332,51 +379,48 @@ export function pickSlotColumn(wrColumns) {
   return pick(top3[2], "Slot by default (WR3)"); // D19: WR3 is the slot until something better says otherwise
 }
 
-// The PASS CATCHERS row (D63's x-maths, D69's own row): outside WR, slot WR, TE, outside WR, one pitch
-// apart, measured off the OL comb exactly as D63 set it up. D69 lifted these columns out of the LINE row
-// into their own row ABOVE it, but the x positions are untouched — the slot is still the midpoint between
-// the left tackle and the outside receiver, the right side still mirrors that distance. This function also
-// WRITES BACK the three receiver landmarks the defense mirrors (lm.OUTER_WR_L/R, lm.SLOT_WR) — before D63
-// those were guesses derived from the tackles, and now they are the real receiver positions, which is the
-// whole point of computing them off the line before the secondary is placed.
-function layoutPassCatchers(offSlots, lm) {
-  const col = (slot, x, band) => ({ slot, x, height: slotContentHeight(slot), width: colWidth(), band });
-  const pitch = lm.pitch;
-  const wrCols = offSlots.filter((s) => s.band === "WR").slice().sort(byColumnOrder).map((s) => col(s, lm.C, "WR"));
-  const teCols = offSlots.filter((s) => s.band === "TE").slice().sort(byColumnOrder)
-    .map((s) => col(s, lm.RT + TE_PITCHES * pitch, "TE"));
+// The PASS CATCHERS row (D69's own row, D71's x-maths). D63 hung these columns off the ends of the
+// offensive-line comb so the receivers stood where they really line up, two pitches outside the tackles;
+// D71 replaced that with what Adam actually wants to read — ONE evenly-pitched cluster centred on the
+// field's centre line, at the same MIN_PITCH every other row uses. Left to right it reads:
+//   outside WR · WR · Slot · any further WRs · TE(s)
+// so the slot man is always drawn INSIDE (to the right of) the outside receiver, which is the one spatial
+// fact the row is there to carry. A second tight end still stacks directly under the first on one x, so a
+// two-TE club takes no more width than a one-TE club.
+// Nothing is written back into `lm` any more: with the receivers in a cluster there is no receiver
+// position for the secondary to mirror, so the corners and the nickel are fixed off the tackles in
+// mirrorLandmarks instead (D71).
+function layoutPassCatchers(offSlots, lm, style) {
+  const col = (slot, band) => ({ slot, x: lm.C, height: slotContentHeight(slot, style), width: colWidth(style), band });
+  const wrCols = offSlots.filter((s) => s.band === "WR").slice().sort(byColumnOrder).map((s) => col(s, "WR"));
+  const teCols = offSlots.filter((s) => s.band === "TE").slice().sort(byColumnOrder).map((s) => col(s, "TE"));
 
   const slotCol = pickSlotColumn(wrCols);
-  if (slotCol) {
-    slotCol.x = lm.LT - SLOT_WR_PITCHES * pitch;
-    // D70: the pill reads "WR · Slot" regardless of which rank plays there (matching the defense's
-    // "CB · Nickel" pill) — the rank moved into slotReason's tooltip text (see pickSlotColumn above)
-    // instead of crowding the on-field label.
-    slotCol.displayLabel = "WR · Slot";
-  }
-  // Everything else goes wide: the first to the left end of the row, the second to the right end. A rare
-  // fourth receiver column has nowhere left to stand at this width, so he stacks under the left one the
-  // same way TE2 stacks under TE1.
-  const outside = wrCols.filter((c) => c !== slotCol);
-  const [outsideL, outsideR] = outside;
-  if (outsideL) outsideL.x = lm.LT - OUTSIDE_WR_PITCHES * pitch;
-  if (outsideR) outsideR.x = lm.RT + OUTSIDE_WR_PITCHES * pitch;
-  stackColumns([outsideL, ...outside.slice(2)].filter(Boolean));
-  stackColumns(teCols);
+  // D70: the pill reads "WR · Slot" regardless of which rank plays there (matching the defense's
+  // "CB · Nickel" pill) — the rank moved into slotReason's tooltip text (see pickSlotColumn above)
+  // instead of crowding the on-field label.
+  if (slotCol) slotCol.displayLabel = "WR · Slot";
 
-  lm.SLOT_WR = slotCol ? slotCol.x : lm.C;
-  lm.OUTER_WR_L = outsideL ? outsideL.x + CB_INSET_PITCHES * pitch : lm.LT - CB_PITCH_OUT * pitch;
-  lm.OUTER_WR_R = outsideR ? outsideR.x - CB_INSET_PITCHES * pitch : lm.RT + CB_PITCH_OUT * pitch;
+  // The slot man is lifted out of his chart position and re-inserted immediately after the outermost
+  // receiver; everyone else keeps the chart's own order around him.
+  const outside = wrCols.filter((c) => c !== slotCol);
+  const ordered = slotCol ? [outside[0], slotCol, ...outside.slice(1)].filter(Boolean) : wrCols.slice();
+  stackColumns(teCols); // TE2 under TE1: the stack takes ONE place in the cluster, not two
+  const placed = teCols.length ? [...ordered, teCols[0]] : ordered;
+  // spanPoints on a zero-width range is the centred-cluster case: pitch falls back to MIN_PITCH and the
+  // whole block is centred on lm.C, which is the centre of the offensive line and so of the field.
+  const xs = spanPoints(lm.C, lm.C, placed.length);
+  placed.forEach((c, i) => { c.x = xs[i]; });
   return [...wrCols, ...teCols];
 }
 
 // The BACKFIELD row: the quarterback stays centred on the centre (Adam: "QB centred behind C as now")
 // and the backs flank him, alternating right then left, so a lone running back sits just off-centre and
 // a RB+FB pair straddles the QB rather than crowding one shoulder.
-function layoutBackfieldRow(offSlots, lm) {
+function layoutBackfieldRow(offSlots, lm, style) {
   const qb = offSlots.filter((s) => s.band === "QB").slice().sort(byColumnOrder);
   const backs = offSlots.filter((s) => s.band === "BACKFIELD").slice().sort(byColumnOrder);
-  const col = (slot, x, band) => ({ slot, x, height: slotContentHeight(slot), width: colWidth(), band });
+  const col = (slot, x, band) => ({ slot, x, height: slotContentHeight(slot, style), width: colWidth(style), band });
   const cols = [];
   const qbXs = spanPoints(lm.C, lm.C, qb.length);
   qb.forEach((slot, i) => cols.push(col(slot, qbXs[i], "QB")));
@@ -397,13 +441,13 @@ function layoutBackfieldRow(offSlots, lm) {
 // line row the five linemen alone, so the tackle/guard/centre landmarks are exact rather than being read
 // out of a ten-column mixed row.
 //
-// The WIDE landmarks (the outside corners and the nickel) are only PLACEHOLDERS here: ruling D had packed
-// every receiver into a readability cluster in its own row, so mirroring that cluster would have dragged
-// the secondary off to one side of the field for no football reason (it did exactly that on the first
-// render: PHI's two corners sat over the left hash while the safeties stayed centred), and the corners
-// were placed off the tackles instead. D63 put the receivers back on the line, so layoutLineRow above
-// overwrites OUTER_WR_L/OUTER_WR_R/SLOT_WR with the real receiver x's and the corners cover the men they
-// are actually covering again. What is left here is the fallback for a chart with no receivers on it.
+// D71: the WIDE landmarks (the two corners and the nickel) are decided HERE and nowhere else. D63 had
+// them overwritten further down by whatever x the receivers landed on, so a corner stood on the man he
+// covers; D71's centred receiver cluster killed that pairing — mirroring a cluster would drag the whole
+// secondary into the middle of the field, which is the failure ruling D hit once already (PHI's two
+// corners over the left hash with the safeties still centred). So the corners go back to a fixed 1.4
+// pitches outside the tackles, the nickel to the gap between the left corner and the box, and a defensive
+// row's shape no longer depends on how many receivers the club happens to chart.
 function mirrorLandmarks(olCols) {
   const olXs = olCols.map((c) => c.x).sort((a, b) => a - b);
 
@@ -418,10 +462,10 @@ function mirrorLandmarks(olCols) {
   const pitch = Math.max(LG - LT, MIN_PITCH);
   const OUTSIDE_L = LT - pitch;
   const OUTSIDE_R = RT + pitch;
-  const OUTER_WR_L = LT - CB_PITCH_OUT * pitch;
-  const OUTER_WR_R = RT + CB_PITCH_OUT * pitch;
-  const SLOT_WR = C;
-  return { LT, LG, C, RG, RT, pitch, OUTSIDE_L, OUTSIDE_R, OUTER_WR_L, OUTER_WR_R, SLOT_WR };
+  const CB_L = LT - CB_PITCH_OUT * pitch;
+  const CB_R = RT + CB_PITCH_OUT * pitch;
+  const NB_X = Math.max(LT - NB_PITCH_OUT * pitch, CB_L + MIN_PITCH);
+  return { LT, LG, C, RG, RT, pitch, OUTSIDE_L, OUTSIDE_R, CB_L, CB_R, NB_X };
 }
 
 // Ruling A: the LINE row places by LABEL, not by count, because it can now hold 3-5 columns of two
@@ -447,8 +491,9 @@ function placeLineColumns(slots, scheme, lm) {
 
 // The per-band mirroring rule (Adam, 2026-09-11), as amended by ruling A: the LINE row places by label
 // (above); a 3-4's outside linebackers sit just outside the tackles and any other stand-up edge label
-// spreads between them; MLB over the centre, OLB/ILB over the guards; CB over the outside receivers,
-// NB over the slot receiver; safeties deepest but still centred over the guards.
+// spreads between them; MLB over the centre, OLB/ILB over the guards; CB wide of the tackles, NB inside
+// the left corner (D71 — both fixed off the line, no longer mirrored off the receivers); safeties deepest
+// but still centred over the guards.
 function mirrorDefXs(band, slots, scheme, lm) {
   const count = slots.length;
   if (count <= 0) return [];
@@ -465,8 +510,8 @@ function mirrorDefXs(band, slots, scheme, lm) {
     // empty — the opposite of how a defensive backfield actually lines up. A lone CB now takes the same
     // outside spot spanPoints(...,2) would give its first of two, so it still reads as "a corner", not
     // "a second nickel". (D48/D57: which specific side is not football-important, only that it is wide.)
-    case "CB": return count === 1 ? [spanPoints(lm.OUTER_WR_L, lm.OUTER_WR_R, 2)[0]] : spanPoints(lm.OUTER_WR_L, lm.OUTER_WR_R, count);
-    case "NB": return spanPoints(lm.SLOT_WR, lm.SLOT_WR, count);
+    case "CB": return count === 1 ? [spanPoints(lm.CB_L, lm.CB_R, 2)[0]] : spanPoints(lm.CB_L, lm.CB_R, count);
+    case "NB": return spanPoints(lm.NB_X, lm.NB_X, count);
     case "S": return spanPoints(lm.LG, lm.RG, count);
     default: return spanPoints(lm.C, lm.C, count);
   }
@@ -477,14 +522,18 @@ function mirrorDefXs(band, slots, scheme, lm) {
 // independently, can coincide in ways no single band's own placement function can see coming). This
 // sorts a row's columns by x, pushes any pair closer than their two half widths plus a small clearance
 // apart, then re-centres the group on its original midpoint so a rare fix-up doesn't drift the row.
-const MIN_CLEARANCE = MIN_PITCH - CARD_W;
+// The bare minimum turf between two adjacent cards, used only as the floor when a view's cards are wide
+// enough that MIN_PITCH alone would let them touch. At the standard 156 (and at D72's 180) two cards plus
+// this gap still fit inside MIN_PITCH, so the Math.max below resolves to MIN_PITCH and every row keeps
+// exactly the pitch its own placement function chose — which is what D71 depends on.
+const MIN_CARD_GAP = 12;
 function enforceNoOverlap(cols) {
   if (cols.length < 2) return;
   const originalMin = Math.min(...cols.map((c) => c.x));
   const originalMax = Math.max(...cols.map((c) => c.x));
   const sorted = cols.slice().sort((a, b) => a.x - b.x);
   for (let i = 1; i < sorted.length; i++) {
-    const minDist = sorted[i - 1].width / 2 + sorted[i].width / 2 + MIN_CLEARANCE;
+    const minDist = Math.max(sorted[i - 1].width / 2 + sorted[i].width / 2 + MIN_CARD_GAP, MIN_PITCH);
     if (sorted[i].x - sorted[i - 1].x < minDist) sorted[i].x = sorted[i - 1].x + minDist;
   }
   const shift = (originalMin + originalMax) / 2 - (sorted[0].x + sorted[sorted.length - 1].x) / 2;
@@ -521,16 +570,17 @@ export function computeLayout(teamView, opts = {}) {
   const defSlots = teamView.units?.DEF || [];
   const offSlots = teamView.units?.OFF || [];
   const unlisted = teamView.unlisted || {};
+  const style = layoutStyle(opts);
 
-  // The OL row is computed first — every defensive x below mirrors its tackle/guard/centre grid, and the
-  // backfield row hangs off the same centre. D63/D69: layoutPassCatchers also hangs the receivers and the
-  // tight ends off that same comb and writes the real receiver landmarks back into `lm`, so it has to run
-  // BEFORE any defensive column is placed (the corners and the nickel read those landmarks) even though
-  // its columns render in their own row above LINE, not inside it.
-  const olCols = layoutOlColumns(offSlots);
+  // The OL row is computed first — every defensive x below mirrors its tackle/guard/centre grid, the
+  // backfield row hangs off the same centre, and D71's receiver cluster is centred on it. A view carrying
+  // no offense at all (D72's defense page) simply takes mirrorLandmarks' own fallback comb, which is the
+  // same centred five-column grid a real offensive line produces — so a defense is drawn identically
+  // whether or not the offense is on screen beside it.
+  const olCols = layoutOlColumns(offSlots, style);
   const lm = mirrorLandmarks(olCols);
-  const passCatcherCols = layoutPassCatchers(offSlots, lm);
-  const backfieldCols = layoutBackfieldRow(offSlots, lm);
+  const passCatcherCols = layoutPassCatchers(offSlots, lm, style);
+  const backfieldCols = layoutBackfieldRow(offSlots, lm, style);
 
   // A row is built with its columns only. Its tray height is decided afterwards by planTrays(), because a
   // tray whose own band has no columns has to be re-homed onto some OTHER row, and that row's height must
@@ -558,7 +608,7 @@ export function computeLayout(teamView, opts = {}) {
     const cols = bands.flatMap((band) => {
       const slots = defSlots.filter((s) => s.band === band).slice().sort(byColumnOrder);
       const xs = mirrorDefXs(band, slots, scheme, lm);
-      return slots.map((slot, i) => ({ slot, x: xs[i], height: slotContentHeight(slot), band, width: colWidth() }));
+      return slots.map((slot, i) => ({ slot, x: xs[i], height: slotContentHeight(slot, style), band, width: colWidth(style) }));
     });
     return buildRow(key, bands, "DEF", DEF_ROW_LEVEL[key], cols);
   }).filter((row) => row.cols.length);
@@ -570,46 +620,104 @@ export function computeLayout(teamView, opts = {}) {
 
   planTrays([...defRowsTopDown, ...offRowsTopDown], unlisted);
 
-  // --- DEF rows, farthest-from-LOS first (top of canvas) down to nearest (LINE, bottom of the half) ---
-  let y = MARGIN_TOP;
-  let prevDefLevel = null;
-  for (const row of defRowsTopDown) {
-    // Adam: "generous vertical separation" between LEVELS — rows that share a level (CB/NB and S, both
-    // "secondary") keep the normal BAND_GAP between them.
-    if (prevDefLevel !== null && row.level !== prevDefLevel) y += LEVEL_GAP_EXTRA;
-    placeRow(row, y);
-    y = row.bottom + BAND_GAP;
-    prevDefLevel = row.level;
-  }
-  const defEnd = defRowsTopDown.length ? y - BAND_GAP : MARGIN_TOP;
-  const losY = defEnd + LOS_HALF_GAP;
-  const offStart = losY + LOS_HALF_GAP; // same gap as the defensive side: a consistent gutter both ways
+  // D72: a line of scrimmage is the boundary BETWEEN two units, so a single-unit page has none — no yellow
+  // line, no "LINE OF SCRIMMAGE" captions, and no gutter reserved for them. Instead the canvas carries one
+  // caption naming the unit it is showing, where the whole-team field labels its two halves.
+  const bothSides = defRowsTopDown.length > 0 && offRowsTopDown.length > 0;
 
-  // --- OFF rows, nearest-LOS first down to farthest (D63: LINE, then BACKFIELD) ---
-  y = offStart;
-  let prevOffLevel = null;
-  for (const row of offRowsTopDown) {
-    if (prevOffLevel !== null && row.level !== prevOffLevel) y += LEVEL_GAP_EXTRA;
-    placeRow(row, y);
-    y = row.bottom + BAND_GAP;
-    prevOffLevel = row.level;
+  // The y-pass, as one function so it can be run twice (see the fill pass below). `extraGap` is spare
+  // height handed back to the rows: on a single-unit page the canvas is usually WIDER than tall for the
+  // window it has to fit, so the scale is pinned by the width and the leftover height would otherwise be
+  // a black band under the last row (D58 asks for both axes to be used). Sharing it out between the rows
+  // spends it as air rather than shrinking or stretching anything — every column keeps its own box, so
+  // the page is the same chart with more room around it.
+  const placeAll = (extraGap) => {
+    // --- DEF rows, farthest-from-LOS first (top of canvas) down to nearest (LINE, bottom of the half) ---
+    let y = MARGIN_TOP;
+    let prevDefLevel = null;
+    for (const row of defRowsTopDown) {
+      // Adam: "generous vertical separation" between LEVELS — rows that share a level (CB/NB and S, both
+      // "secondary") keep the normal BAND_GAP between them.
+      if (prevDefLevel !== null) y += extraGap + (row.level !== prevDefLevel ? LEVEL_GAP_EXTRA : 0);
+      placeRow(row, y);
+      y = row.bottom + BAND_GAP;
+      prevDefLevel = row.level;
+    }
+    const defEnd = defRowsTopDown.length ? y - BAND_GAP : MARGIN_TOP;
+    const los = bothSides ? defEnd + LOS_HALF_GAP : null;
+    const offStart = bothSides ? los + LOS_HALF_GAP : MARGIN_TOP; // the same gutter both ways when there is one
+
+    // --- OFF rows, nearest-LOS first down to farthest (D69: PASS CATCHERS, LINE, BACKFIELD) ---
+    y = offStart;
+    let prevOffLevel = null;
+    for (const row of offRowsTopDown) {
+      if (prevOffLevel !== null) y += extraGap + (row.level !== prevOffLevel ? LEVEL_GAP_EXTRA : 0);
+      placeRow(row, y);
+      y = row.bottom + BAND_GAP;
+      prevOffLevel = row.level;
+    }
+    const offEnd = offRowsTopDown.length ? y - BAND_GAP : defEnd;
+    return { losY: los, layoutHeight: offEnd + MARGIN_BOTTOM };
+  };
+
+  let { losY, layoutHeight } = placeAll(0);
+  // The fill pass. `opts.minHeight` is the height this canvas would have to be to reach the bottom of the
+  // window at the scale its width already dictates — viewfit.js measures the box and works it out, since
+  // this module never sees a viewport. Only ever set on a single-unit page, and capped so a very sparse
+  // unit ends up airy rather than adrift.
+  const gapCount = defRowsTopDown.length + offRowsTopDown.length - 1;
+  if (opts.minHeight > layoutHeight && gapCount > 0) {
+    const extra = Math.min((opts.minHeight - layoutHeight) / gapCount, MAX_EXTRA_GAP);
+    ({ losY, layoutHeight } = placeAll(extra));
   }
-  const offEnd = offRowsTopDown.length ? y - BAND_GAP : offStart;
-  const layoutHeight = offEnd + MARGIN_BOTTOM;
 
   const allRows = [...defRowsTopDown, ...offRowsTopDown];
   const columns = allRows.flatMap((r) => r.cols);
+  for (const c of columns) c.style = style; // D72: the box and the markup read the same options
   // The offensive labels may not be lifted above the line of scrimmage: D63's LINE row starts one
   // LOS_HALF_GAP below it, which is less than LABEL_LIFT, so an unclamped lift would print "LINE" on top
-  // of the yellow line and its own "LINE OF SCRIMMAGE" captions.
-  const levels = [...summarizeLevels(defRowsTopDown, DEF_LEVEL_LABEL), ...summarizeLevels(offRowsTopDown, OFF_LEVEL_LABEL, losY + 3)];
+  // of the yellow line and its own "LINE OF SCRIMMAGE" captions. With no line of scrimmage (D72) there is
+  // nothing above the first offensive row to protect, so the clamp is simply off.
+  const levels = [...summarizeLevels(defRowsTopDown, DEF_LEVEL_LABEL), ...summarizeLevels(offRowsTopDown, OFF_LEVEL_LABEL, bothSides ? losY + 3 : -Infinity)];
   const trays = allRows.flatMap((row) => row.trays.map((t, i) => {
     const top = row.trayTop + i * (TRAY_H + TRAY_STACK_GAP);
     return { ...t, top, bottom: top + TRAY_H, ...fitTrayWidth(trayBounds(row, t.band), trayNaturalWidth(t)) };
   }));
 
-  const layout = { layoutWidth: LAYOUT_WIDTH, layoutHeight, losY, columns, trays, levels, cardWidth: CARD_W, fieldMarginX: FIELD_MARGIN_X };
+  // D72: the caption the field SVG prints when there is no line of scrimmage to divide two halves.
+  const caption = bothSides ? null : offRowsTopDown.length ? "OFFENSE" : defRowsTopDown.length ? "DEFENSE" : null;
+  const layout = { layoutWidth: LAYOUT_WIDTH, layoutHeight, losY, caption, columns, trays, levels, cardWidth: style.cardWidth, fieldMarginX: FIELD_MARGIN_X };
+  if (opts.crop) cropLayout(layout);
   return opts.spread && opts.spread !== 1 ? spreadLayout(layout, opts.spread) : layout;
+}
+
+// D72: shrink-wraps the canvas around the columns actually on it. The full-width canvas exists because the
+// whole-team field really does use it — the corners reach both sidelines — but ONE unit does not: an
+// offense spans a little over half of it, so a canvas that stayed 1800 wide would make every single-unit
+// page width-bound in the fit engine and leave a deep black gutter under the last row (D58 asks for the
+// height to be used, not just the width). Cropping keeps every card the same size in layout units and only
+// moves the canvas edges in, so the fit engine's own spread/scale arithmetic then does the enlarging.
+function cropLayout(layout) {
+  let min = Infinity;
+  let max = -Infinity;
+  for (const c of layout.columns) {
+    min = Math.min(min, c.x - c.width / 2);
+    max = Math.max(max, c.x + c.width / 2);
+  }
+  if (!Number.isFinite(min) || max <= min) return layout;
+  const dx = CROP_MARGIN - min;
+  const width = max - min + CROP_MARGIN * 2;
+  for (const c of layout.columns) c.x += dx;
+  for (const lv of layout.levels) { if (lv.left != null) lv.left += dx; if (lv.right != null) lv.right += dx; }
+  // Trays were fitted against the uncropped canvas, so one that had grown rightwards to hold its own text
+  // has to be re-clamped to the narrower one rather than hanging off the new sideline.
+  for (const t of layout.trays) {
+    const w = Math.min(t.right - t.left, width);
+    t.left = Math.min(Math.max(t.left + dx, 0), width - w);
+    t.right = t.left + w;
+  }
+  layout.layoutWidth = width;
+  return layout;
 }
 
 // Gives one row its y geometry. Ruling B: the column content sits at the row's TOP (label, starter, then
@@ -694,8 +802,11 @@ function fitTrayWidth({ left, right }, natural) {
 // A tray spans its own band's columns where the band has any, else the whole row it borrowed.
 function trayBounds(row, band) {
   const bandCols = row.cols.filter((c) => c.band === band);
-  const xs = (bandCols.length ? bandCols : row.cols).map((c) => c.x);
-  return { left: Math.min(...xs) - CARD_W / 2, right: Math.max(...xs) + CARD_W / 2 };
+  const cols = bandCols.length ? bandCols : row.cols;
+  return {
+    left: Math.min(...cols.map((c) => c.x - c.width / 2)),
+    right: Math.max(...cols.map((c) => c.x + c.width / 2)),
+  };
 }
 
 // One label per LEVEL (not per row) — consecutive rows sharing a level merge into a single span, so
@@ -766,7 +877,10 @@ export function renderLevelLabels(levels, layoutWidth = LAYOUT_WIDTH) {
 // Builds the field's vector dressing (yard lines, hashes, highlighted line of scrimmage). Turf itself is
 // a CSS repeating-gradient on the wrapper; this SVG only draws the thin vector marks on top of it, sized
 // to exactly match the layout canvas so it scales together with the cards under the one shared transform.
-export function renderFieldSvg(layoutHeight, losY, layoutWidth = LAYOUT_WIDTH) {
+// D72: `losY` is null on a single-unit canvas — no yellow line, no LINE OF SCRIMMAGE captions and no
+// DEFENSE-above/OFFENSE-below pair; `caption` ("OFFENSE" / "DEFENSE", which computeLayout supplies) prints
+// once at the top right instead, in exactly the type the whole-team field labels its halves with.
+export function renderFieldSvg(layoutHeight, losY, layoutWidth = LAYOUT_WIDTH, caption = null) {
   const w = layoutWidth;
   const lines = [];
   // 👁 QA item 6: the hash-mark ticks used to sit at fixed 32%/68% canvas positions regardless of where
@@ -779,16 +893,22 @@ export function renderFieldSvg(layoutHeight, losY, layoutWidth = LAYOUT_WIDTH) {
   }
   const sidelineTop = `<line x1="12" y1="0" x2="12" y2="${layoutHeight}" stroke="rgba(255,255,255,.35)" stroke-width="4"/>`;
   const sidelineBottom = `<line x1="${w - 12}" y1="0" x2="${w - 12}" y2="${layoutHeight}" stroke="rgba(255,255,255,.35)" stroke-width="4"/>`;
+  const unitLabel = (text, y) => `<text x="${w - 26}" y="${y}" fill="rgba(255,255,255,.45)" font-size="14" font-weight="800" letter-spacing="3" text-anchor="end">${text}</text>`;
+  if (losY == null) {
+    // One unit on the canvas: the only dressing is the turf, the sidelines and the unit's own caption.
+    const cap = /^[A-Z ]{1,20}$/.test(String(caption ?? "")) ? unitLabel(caption, 20) : "";
+    return `<svg viewBox="0 0 ${w} ${layoutHeight}" width="${w}" height="${layoutHeight}" xmlns="http://www.w3.org/2000/svg" style="position:absolute;top:0;left:0;pointer-events:none;">
+      ${sidelineTop}${sidelineBottom}${lines.join("")}${cap}
+    </svg>`;
+  }
   const los = `<line x1="20" y1="${losY}" x2="${w - 20}" y2="${losY}" stroke="#ffdd00" stroke-width="3"/>`;
   // 👁 review: a single centred caption sat directly over the NT/DT column and was hidden behind it. Two
   // shorter captions flanking the ends of the line never overlap any column.
   const losLabelLeft = `<text x="30" y="${losY - 5}" fill="#ffdd00" font-size="11" font-weight="700" text-anchor="start" letter-spacing="1.2">LINE OF SCRIMMAGE</text>`;
   const losLabelRight = `<text x="${w - 30}" y="${losY - 5}" fill="#ffdd00" font-size="11" font-weight="700" text-anchor="end" letter-spacing="1.2">LINE OF SCRIMMAGE</text>`;
-  const defLabel = `<text x="${w - 26}" y="20" fill="rgba(255,255,255,.45)" font-size="14" font-weight="800" letter-spacing="3" text-anchor="end">DEFENSE</text>`;
-  const offLabel = `<text x="${w - 26}" y="${layoutHeight - 8}" fill="rgba(255,255,255,.45)" font-size="14" font-weight="800" letter-spacing="3" text-anchor="end">OFFENSE</text>`;
   return `<svg viewBox="0 0 ${w} ${layoutHeight}" width="${w}" height="${layoutHeight}" xmlns="http://www.w3.org/2000/svg" style="position:absolute;top:0;left:0;pointer-events:none;">
-    ${sidelineTop}${sidelineBottom}${lines.join("")}${los}${losLabelLeft}${losLabelRight}${defLabel}${offLabel}
+    ${sidelineTop}${sidelineBottom}${lines.join("")}${los}${losLabelLeft}${losLabelRight}${unitLabel("DEFENSE", 20)}${unitLabel("OFFENSE", layoutHeight - 8)}
   </svg>`;
 }
 
-export const geometry = { CARD_W, CARD_H1, ROW_H, CARD_GAP, BANNER_H, LABEL_RESERVE, MAX_DEPTH_ROWS };
+export const geometry = { CARD_W, CARD_H1, ROW_H, CARD_GAP, BANNER_H, LABEL_RESERVE, MAX_DEPTH_ROWS, HEADSHOT_SIZE };

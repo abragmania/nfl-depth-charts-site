@@ -207,7 +207,11 @@ a.back { color:var(--muted); }
 .column { position:absolute; display:flex; flex-direction:column; border-radius:8px; transition:box-shadow .2s; }
 /* Amended D48 (Adam: "colors make it more interesting"): band labels carry the team's secondary colour
    as a tinted bar, not just plain grey text. */
-.column-label { display:block; font-size:10.5px; font-weight:800; letter-spacing:.07em; color:#fff; text-align:center;
+/* flex:none, because a flex item with overflow:hidden has an automatic minimum size of ZERO — so whenever
+   a column's rows came to even a fraction more than the box field.js reserved, the whole shortfall was
+   taken out of this pill and the position name was clipped in half (PHI's LG on the offense page, where
+   D72's scale magnifies it). The rows below it are the content; the label is a fixed-height caption. */
+.column-label { display:block; flex:none; font-size:10.5px; font-weight:800; letter-spacing:.07em; color:#fff; text-align:center;
   text-transform:uppercase; text-decoration:none; margin-bottom:3px; padding:1px 4px; border-radius:4px; line-height:1.2;
   background:color-mix(in srgb, var(--team-secondary,#777) 55%, transparent); text-shadow:0 1px 2px rgba(0,0,0,.8);
   white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
@@ -262,7 +266,14 @@ a.back { color:var(--muted); }
 .prow.selected { outline:2px solid #ffd54a; outline-offset:1px; }
 .prow-line { display:flex; align-items:center; gap:4px; padding:0 4px; min-width:0; }
 .prow-num { flex:none; color:var(--muted); font-variant-numeric:tabular-nums; font-size:9.5px; min-width:15px; text-align:right; }
-.prow-name { flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:11px; }
+/* D73 (Adam, 2026-09-15): "player ratings should appear next to their names, not all the way on the right
+   of the cell." The name used to be the row's one growing element (flex:1 1 auto), which pushed the
+   badges and the rating pill hard against the right edge and left a long empty gutter between a short
+   name and its own number. The name now takes only the width it needs and still SHRINKS first when the
+   row runs out of room (flex:0 1 auto + min-width:0 + the ellipsis below, with cards.js's fitNames
+   swapping in "F. Surname" rather than letting a truncation stand), so the rating sits one small gap
+   after the name — or after the badges, which keep their place between the two. */
+.prow-name { flex:0 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:11px; }
 .prow-badges { flex:none; display:inline-flex; gap:2px; align-items:center; max-width:52px; overflow:hidden; }
 .prow-ovr { flex:none; font-size:10px; font-weight:800; font-variant-numeric:tabular-nums; min-width:19px; text-align:center;
   border-radius:7px; padding:0 3px; background:rgba(255,255,255,.07); color:#c3cad2; }
@@ -272,6 +283,13 @@ a.back { color:var(--muted); }
 /* The starter's row: bigger, bolder, and its OVR is a solid tier-coloured pill rather than a tinted
    number, so the one player who actually starts is unmistakable at a glance down a column. */
 .prow-one { min-height:27px; border-left-width:4px; }
+/* D72: the offense/defense pages draw these same rows for ONE unit at 1.3-1.8x, which is where a line-one
+   row finally has the height for a photo. field.js reserves the extra height (HEADSHOT_SIZE + air) and
+   cards.js draws the circle only on line one, so the row keeps its identity — this is a size option on the
+   overview row, not a second kind of card. The circle itself uses the shared .headshot-box/.headshot-fallback
+   rules further down, so a headshot looks the same here as it does on a group-view card. */
+.prow-one .prow-head { flex:none; display:flex; align-items:center; margin-right:1px; }
+.prow-one .prow-head .headshot-box, .prow-one .prow-head .headshot-fallback { box-shadow:0 0 0 1px rgba(255,255,255,.18); }
 .prow-one .prow-name { font-size:12px; font-weight:700; }
 .prow-one .prow-num { font-size:10.5px; }
 .prow-one .prow-ovr { font-size:11px; padding:1px 5px; min-width:21px; }

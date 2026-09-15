@@ -104,8 +104,12 @@ function availableBox(el, main, panel, backRow) {
 //   onScale(el, layout, k)              optional; called whenever the scale actually changes
 //   panel     optional `.player-panel` to cap to the field's height
 //   observe   extra elements whose height changes should trigger a refit (header, legend, breadcrumb)
+//   fillHeight  D72: also hand the builder a MIN HEIGHT when the canvas is width-bound, so it can spend
+//             the leftover height instead of leaving a black band under the last row. The two levers are
+//             mutually exclusive by construction — a canvas is either too tall for its box (spread it
+//             wider) or too wide for it (fill it taller) — so enabling this never fights the spread.
 // Returns a dispose function; also registers it, so the caller usually needs nothing further.
-export function mountScaledField({ root, probe, build, onDraw, onScale, panel = null, observe = [] }) {
+export function mountScaledField({ root, probe, build, onDraw, onScale, panel = null, observe = [], fillHeight = false }) {
   const mountPoint = root.querySelector(".field-outer");
   if (!mountPoint) return () => {};
   const main = mountPoint.closest("main") ?? document.body;
@@ -118,6 +122,7 @@ export function mountScaledField({ root, probe, build, onDraw, onScale, panel = 
   let lastK = null;
   let rebuilds = 0;
   let spread = 1;
+  let minHeight = 0;
 
   // The single guard every entry point starts with. `document.contains` is what makes an orphaned
   // callback harmless rather than destructive: a disposer that was somehow missed can no longer find its
@@ -134,11 +139,22 @@ export function mountScaledField({ root, probe, build, onDraw, onScale, panel = 
     return kW > kH ? Math.min(kW / kH, MAX_SPREAD) : 1;
   };
 
+  // D72, the other way round: when the canvas is WIDER than the box's aspect, the scale is pinned by the
+  // width (k = kW) and the height the canvas would need in order to reach the bottom of the window at
+  // that scale is simply box height / kW. Handed to the builder as a minimum, it becomes extra air
+  // between the rows. Zero when the canvas is already tall enough — then idealSpread has the job instead.
+  const idealMinHeight = (node) => {
+    if (!fillHeight) return 0;
+    const { width, height } = boxOf(node);
+    const kW = width / probe.layoutWidth;
+    return kW > 0 ? height / kW : 0;
+  };
+
   const draw = () => {
     if (dead) return;
     const target = el ?? mountPoint;
     if (!document.contains(target)) return;
-    const built = build(spread);
+    const built = build(spread, minHeight);
     layout = built.layout;
     target.outerHTML = built.html;
     el = root.querySelector(".field-outer");
@@ -177,7 +193,12 @@ export function mountScaledField({ root, probe, build, onDraw, onScale, panel = 
     if (!alive()) return;
     if (rebuilds < MAX_REBUILDS) {
       const ideal = idealSpread(el);
-      if (Math.abs(ideal - spread) / spread > RESPREAD_TOLERANCE) { rebuilds++; spread = ideal; draw(); }
+      const idealMin = idealMinHeight(el);
+      const spreadOff = Math.abs(ideal - spread) / spread > RESPREAD_TOLERANCE;
+      // The same tolerance on the height lever, measured against the height it is trying to reach so a
+      // canvas that is already the right size is not rebuilt over a pixel.
+      const minOff = fillHeight && Math.abs(idealMin - minHeight) > Math.max(idealMin, 1) * RESPREAD_TOLERANCE;
+      if (spreadOff || minOff) { rebuilds++; spread = ideal; minHeight = idealMin; draw(); }
     }
     apply();
   };
@@ -196,6 +217,7 @@ export function mountScaledField({ root, probe, build, onDraw, onScale, panel = 
   };
 
   spread = idealSpread(mountPoint);
+  minHeight = idealMinHeight(mountPoint);
   draw();
   apply();
 

@@ -9,7 +9,7 @@
 // rating-tier surface colours all survive the shrink. The SIDE, GROUP and MATCHUP views keep their big
 // headshot cards and their own renderers (zoom.js's fullCard, matchup.js's matchupCard) — they come
 // through renderSlotBody below, which is deliberately untouched by this ruling.
-import { geometry, lineOneCount, visibleDepthRows, OUT_STATUS_CODES, isFullyOut } from "./field.js";
+import { lineOneCount, lineOneHeight, visibleDepthRows, OUT_STATUS_CODES, isFullyOut } from "./field.js";
 // Re-exported so zoom.js and matchup.js can share the single definition rather than keeping their own
 // copies, which had all drifted from it (blue review: every copy was missing INACTIVE and EXEMPT, so a
 // game-day inactive starter got no red banner in any view).
@@ -17,6 +17,18 @@ export { OUT_STATUS_CODES, isFullyOut };
 
 const ESC = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ESC[c]);
+
+// D70: "position names must read the same everywhere in the project." A band's internal CODE is not its
+// name — "NB" and "BACKFIELD" are storage, "CB · Nickel" and "Backfield" are what a reader sees — and the
+// two had drifted apart: the tray under a nickel column printed "NOT ON CHART · NB" while the pill over it
+// read "CB · Nickel", and zoom.js kept a second copy of the same table for its group pages. This is the
+// one table; anything that shows a band to a human reads it (renderTray below, zoom.js's group title and
+// nav crumb). An unknown code falls back to itself rather than to a blank.
+export const BAND_DISPLAY = {
+  QB: "QB", BACKFIELD: "Backfield", WR: "WR", TE: "TE", OL: "OL",
+  DL: "DL", EDGE: "EDGE", LB: "LB", CB: "CB", NB: "CB · Nickel", S: "Safety",
+};
+export const bandDisplay = (band) => BAND_DISPLAY[band] || band || "";
 
 const STATUS_CLASS = {
   Q: "badge-q", D: "badge-d", OUT: "badge-out", IR: "badge-out", PUP: "badge-out", NFI: "badge-out",
@@ -44,6 +56,24 @@ function ratingTier(rating) {
   if (v >= 70) return "tier-avg";
   if (v >= 60) return "tier-weak";
   return "tier-flat";
+}
+
+// The one headshot renderer in the front end. zoom.js's group-view cards and D72's line-one overview rows
+// both draw the same circle at different sizes; this used to be a private copy in each file, which is
+// exactly the duplication the OUT_STATUS_CODES review found elsewhere. A player with no photo gets his
+// initials on a plain disc instead, and a photo that 404s swaps itself for the same disc at runtime.
+function initials(p) {
+  const a = (p.first || p.name || "?").trim()[0] || "?";
+  const b = (p.last || "").trim()[0] || "";
+  return (a + b).toUpperCase();
+}
+
+export function headshotHtml(p, size) {
+  const ini = esc(initials(p));
+  const boxStyle = `width:${size}px;height:${size}px`;
+  const fallback = `this.replaceWith(Object.assign(document.createElement('div'),{className:'headshot-fallback',textContent:'${ini}',style:'${boxStyle};font-size:${Math.round(size * 0.34)}px'}))`;
+  if (!p.headshot) return `<div class="headshot-fallback" style="${boxStyle};font-size:${Math.round(size * 0.34)}px">${ini}</div>`;
+  return `<span class="headshot-box" style="${boxStyle}"><img class="headshot" src="${esc(p.headshot)}" alt="" loading="lazy" onerror="${fallback}"></span>`;
 }
 
 function statusBadge(status) {
@@ -95,12 +125,6 @@ function outBannerText(status) {
   if (code === "SUSP") return ret ? `SUSP · back ~${ret}` : "SUSP · out indefinitely";
   const codePart = code !== "OUT" ? ` · ${code}` : "";
   return ret ? `OUT${codePart} · back ~${ret}` : `OUT${codePart} · out indefinitely`;
-}
-
-// Mirrors field.js's identical rule so the rendered card is never taller (or shorter) than the box the
-// layout engine reserved for it — a banner adds geometry.BANNER_H on top of the normal card height.
-function lineOneHeight(p) {
-  return geometry.CARD_H1 + (isFullyOut(p) || p.role === "ACTIVE" ? geometry.BANNER_H : 0);
 }
 
 function bannerHtml(p) {
@@ -244,7 +268,11 @@ function overviewClasses(p, base) {
 // out starter or an ACTIVE fill-in gets D44's banner strip stacked on top of the same row, which is the
 // BANNER_H field.js reserves for it — so "who is out, and how good is the man replacing him" still reads
 // straight down the column, just in two lines of text instead of two photographs.
+// D72: `opts.style.headshot` is the one difference between a whole-team row and an offense/defense-page
+// row — the same renderer, gated by an option, never a second card type. It is only ever set on the line-
+// one row, because that is the man the page is about and the only row with the height to carry a photo.
 function overviewLineOne(p, teamAbbr, opts = {}) {
+  const style = opts.style || {};
   const disagrees = espnDisagrees(p, opts.band, opts.scheme, opts.labelSource);
   const espnRing = disagrees ? " espn-flag" : "";
   // No role tag here: on the overview the bold top row IS the starter, and an out or filling-in player
@@ -259,9 +287,11 @@ function overviewLineOne(p, teamAbbr, opts = {}) {
   // styles.css), and a bannered row takes the banner's own colour on its border, so "OUT · back ~Sep 19"
   // unmistakably belongs to the man underneath it. Before, a full-bleed strip sat in the gap between two
   // rows and read as a divider between them (PHI's EDGE co-starter pair).
-  return `<a class="${overviewClasses(p, "prow prow-one")}${espnRing}" href="#/team/${esc(teamAbbr)}/player/${encodeURIComponent(p.playerKey)}" data-player-key="${esc(p.playerKey)}" title="${overviewTitle(p, disagrees)}" style="min-height:${lineOneHeight(p)}px">
+  const head = style.headshot ? `<span class="prow-head">${headshotHtml(p, style.headshot)}</span>` : "";
+  return `<a class="${overviewClasses(p, "prow prow-one")}${espnRing}" href="#/team/${esc(teamAbbr)}/player/${encodeURIComponent(p.playerKey)}" data-player-key="${esc(p.playerKey)}" title="${overviewTitle(p, disagrees)}" style="min-height:${lineOneHeight(p, style)}px">
     ${bannerHtml(p)}
     <span class="prow-line">
+      ${head}
       <span class="prow-num">${esc(p.number ?? "—")}</span>
       <span class="prow-name" data-short="${esc(shortName(p))}">${esc(p.name)}</span>
       ${signalGlyphs(p)}
@@ -397,12 +427,26 @@ export function wireDepthToggles(root) {
 // Measured rather than guessed from a character count, because the column width now varies with the
 // spread factor field.js chose for that particular team and window. Called after mount and again once
 // the webfonts have settled, since the metrics that decide this change when the real font arrives.
+// D73 follow-up: measured with a Range, not with scrollWidth. scrollWidth is an INTEGER, so a name needing
+// 100.4px inside a 100px box reported 100 > 100 — false — and the abbreviation never fired even though the
+// browser was already drawing an ellipsis ("Cooper DeJe…", "DeVonta Smi…"). A Range over the text reports
+// the true sub-pixel width and is not clipped by the overflow, and comparing it against the element's own
+// rect keeps both numbers in the same coordinate space (the field is inside a CSS transform, which scales
+// rects but not scrollWidth). The scrollWidth test stays as the fallback wherever Range is unavailable.
+function textOverflows(el) {
+  const avail = el.getBoundingClientRect().width;
+  if (typeof document.createRange !== "function" || !avail) return el.scrollWidth > el.clientWidth + 1;
+  const range = document.createRange();
+  range.selectNodeContents(el);
+  return range.getBoundingClientRect().width > avail + 0.5;
+}
+
 export function fitNames(root) {
   for (const el of root.querySelectorAll(".prow-name[data-short]")) {
     const full = el.dataset.full ?? el.textContent;
     el.dataset.full = full;
     el.textContent = full;
-    if (el.scrollWidth > el.clientWidth + 1 && el.dataset.short && el.dataset.short !== full) el.textContent = el.dataset.short;
+    if (el.dataset.short && el.dataset.short !== full && textOverflows(el)) el.textContent = el.dataset.short;
   }
 }
 
@@ -470,14 +514,18 @@ export function renderColumn(col, teamAbbr, opts = {}) {
   // ownLabel (🎨 Polish, round 3, item 1): the raw slot label (never the "· co-starters" suffixed
   // labelText above) — it's compared against slotLookup's own return value in alsoListedChips, which
   // resolves OTHER slots' plain labels the same way, so the two must use the identical un-suffixed form.
-  const colOpts = { ...opts, band: slot.band, ownLabel: slot.label, labelSource: slot.labelSource };
+  // D72: the drawing options travel with the column the layout engine produced (field.js's layoutStyle),
+  // so the markup below can no more disagree about the headshot or the depth cap than it already could
+  // about the row count — both come from the same object the reserved box was measured with.
+  const style = col.style || {};
+  const colOpts = { ...opts, band: slot.band, ownLabel: slot.label, labelSource: slot.labelSource, style };
 
   // Ruling E: bold line-one row(s) — one starter normally, two for a co-starter pair or for D44's
   // OUT-starter-plus-ACTIVE-fill-in — then up to MAX_DEPTH_ROWS slim rows, the last of which becomes a
   // "+N more" tail when the slot runs deeper. lineOneCount/visibleDepthRows come from field.js so the
   // markup below can never disagree with the box height the layout engine reserved for it.
   const bold = lineOneCount(players);
-  const visible = visibleDepthRows(players);
+  const visible = visibleDepthRows(players, style.maxDepthRows);
   const depth = players.slice(bold);
   const hiddenCount = depth.length - visible;
   const shownDepth = hiddenCount > 0 ? keepOutRowsVisible(depth, Math.max(visible - 1, 0)) : depth;
@@ -513,7 +561,9 @@ export function renderTray(tray, teamAbbr) {
   // is obvious, but a band with nothing charted has no row of its own any more (field.js collapses it),
   // and its tray is re-homed onto a neighbouring row — at which point the name is the only thing saying
   // these are, say, the edge rushers rather than more defensive linemen.
-  const label = tray.band ? `not on chart · ${esc(tray.band)}` : "not on chart";
+  // D70: the NAME, not the internal code — this printed "NOT ON CHART · NB" directly under a pill reading
+  // "CB · Nickel", which is the same position called two different things a centimetre apart.
+  const label = tray.band ? `not on chart · ${esc(bandDisplay(tray.band))}` : "not on chart";
   // data-unit so a click on one of these chips can be attributed to the right TEAM: the matchup view
   // draws two teams on one field, and a tray is not inside a `.column`, so it is the only thing that can
   // say which half of the ball it belongs to (🔵 review finding 4).

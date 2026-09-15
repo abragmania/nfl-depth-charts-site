@@ -49,7 +49,6 @@
 /* 👁 QA, 2026-09-11: a card with a top banner (OUT / ACTIVE) must never let the badge cluster (top-right,
    z-index above the banner in styles.css) sit on top of the banner text — push it below instead. Scoped
    to this build's own views so it can't touch a card drawn anywhere else. */
-.zoom-side .card:has(.card-banner) .card-badges,
 .zoom-group .card:has(.card-banner) .card-badges { top:26px; }
 
 /* Tiny quiet D50 signal markers (star-out / promoted / new / low-snaps) — top-left, opposite the
@@ -73,46 +72,6 @@
    label gutter": every band used to get its own full row (with a 120px label column) even when several
    bands share one level (e.g. offense's BACKFIELD = QB + RB/FB) — a level with two thin bands cost two
    rows' worth of padding for almost no content. Clicking into a band's own group view now happens on
-   that band's own slot label (.zoom-stack-label below) instead of a separate sidebar link. */
-/* RULING E (Adam, 2026-09-13): the level caption is now a fixed-width column BESIDE its stacks rather
-   than a full-width bar above them. Four defensive levels each paying ~50px for a header bar is what
-   pushed the bottom two levels off a 900px window; the horizontal space this uses was empty margin
-   before (the stacks always centred themselves and left a wide gutter on both sides), so nothing is
-   lost. It is still one label system — the tinted band, the same wording, the same place in the flow. */
-/* 👁 QA item 5: the level plaque used to be a ~118x200px sidebar stretched to the row's full height for a
-   two-word label — 90% empty box. It is now a compact chip that sizes to its own text and sits at the
-   row's top-left corner (align-items:flex-start, not stretch), with a faint tinted wash across the WHOLE
-   row behind it (the same "this is one band of turf" language the whole-team field's own level-stripe
-   uses, D48) so the empty rectangle disappears but the level still reads as a distinct block at a glance. */
-/* D62 (Adam, 2026-09-15): on the SIDE views both of those are gone — the LINE / BACKFIELD / EDGE chip and
-   the alternating tinted washes behind the rows ("it's not helpful to see... the level divides and washes
-   on those views"). What a level still does is group its bands onto one row; the only thing it needs for
-   that is air around the block, so a row is now a plain flex row with a gap under it. The whole-team
-   field keeps its own level stripes and labels (field.js's renderLevelLabels) — that view was not part of
-   this ruling, and there the stripe is what says where one level ends and the next begins. */
-.zoom-level { position:relative; display:flex; align-items:flex-start; gap:10px; padding:0 2px; }
-/* With the wash and the chip gone this gap is the ONLY thing separating one level from the next, so it is
-   deliberately generous — and the leaner cards freed the height to spend on it. */
-.zoom-level + .zoom-level { margin-top:30px; }
-
-/* ---- side view: every band belonging to one level shares that level's row ---- */
-.zoom-side { display:flex; flex-direction:column; }
-/* 👁 QA fix, 2026-09-11 (still applies): stacks spread across the full row instead of packing left. */
-.zoom-band-stacks { flex:1 1 auto; min-width:0; display:flex; gap:14px; flex-wrap:wrap; justify-content:space-evenly; padding:2px 0 2px; }
-/* A band inside a shared level. (👁 QA 2026-09-15 item 4: the tight ends' own "TIGHT ENDS" caption is
-   gone with the rest of D63's labels — .zoom-band-caption went with it.) */
-.zoom-band-group { display:flex; flex-direction:column; gap:2px; border-radius:8px; flex:1 1 auto; }
-/* 👁 QA item 2: the stacks distribute across the row rather than huddling in a cluster in the middle
-   of it, so a four-man defensive line actually uses the width the page has. */
-.zoom-band-row { display:flex; gap:14px; flex-wrap:wrap; flex:1 1 auto; justify-content:space-evenly; }
-.zoom-side-stack { display:flex; flex-direction:column; gap:2px; align-items:center; }
-/* Ruling E: the side view's depth rows are half the height of the whole-page default — two of them plus
-   a card have to share ~175px of level. Scoped to .zoom-side so the group and matchup views keep theirs. */
-.zoom-side .row { height:20px; font-size:10.5px; padding:0 6px; gap:4px; border-left-width:3px; }
-.zoom-side .row-ovr { font-size:9px; padding:0 5px; }
-.zoom-side .badge { font-size:8.5px; padding:1px 4px; }
-
-/* Ruling E: "+N more" collapses the depth a capped stack is hiding, and expands it in place on click
    (cards.js's renderDepth / wireDepthToggles). display:contents on the open state so the revealed rows
    join the stack's own flex column instead of forming a nested box inside it. */
 .depth-more { align-self:stretch; background:transparent; border:1px dashed #333b45; border-radius:6px; color:var(--muted);
@@ -139,63 +98,14 @@
 .zoom-card-sm .rating-pill { font-size:9px; padding:1px 6px; }
 .zoom-card-sm .zoom-pill-row { margin-top:1px; }
 
-/* 🎨 Polish (2026-09-11, round 2, item 2): the side view's medium card (zoom.js's LINE_ONE/PAIR_ONE)
-   still inherited styles.css's generic 118px `.card-name` max-width — barely narrower than the card's
-   own content box, so real names ("Quinyon Mitchell", "Landon Dickerson") truncated almost immediately.
-   Scoped wider here without touching the base rule other views rely on.
-   RULING E (Adam, 2026-09-13): the rest of this block is the side view's height budget. zoom.js's
-   LINE_ONE only sets a MIN-height — a card is as tall as its own content, and at the old type sizes that
-   content came to ~145px, which is why shrinking the constant alone did nothing and the secondary still
-   ran off the bottom of a 900px window. These rules shrink the content itself, scoped to .zoom-side so
-   the group view's big cards (D49: bigger headshot, an extra bio line) are untouched. */
-/* D62 (Adam, 2026-09-15): "the cards are too big and bulky" — leaner, at roughly 70% of the height they
-   were. zoom.js shrank the headshot (26 -> 18) and the reserved box (88 -> 62); the rest of the bulk was
-   here: the padding around the card, the thickness of its border, the size of the crest, name and pill,
-   and the tier glow, which at this size read as a halo around every good player rather than as a hint.
-   Nothing is dropped from the card — same photo, crest, name, role tag and rating pill, same colours. */
-.zoom-side .card-name { max-width:126px; font-size:11px; }
-.zoom-side .card { padding:2px 4px 3px; border-width:1px; box-shadow:0 1px 3px rgba(0,0,0,.35); }
-.zoom-side .card.tier-elite { box-shadow:0 0 0 1px rgba(255,255,255,.22) inset, 0 0 9px rgba(52,211,153,.35), 0 1px 3px rgba(0,0,0,.35); }
-.zoom-side .card.tier-strong { box-shadow:0 0 0 1px rgba(255,255,255,.1) inset, 0 0 6px rgba(46,196,124,.22), 0 1px 3px rgba(0,0,0,.35); }
-.zoom-side .card-body { gap:0; }
-/* 👁 QA item 1: at the side view's own scale-down (viewfit.js fitToViewport), the base 9px crest number
-   rendered near-illegible with colour fringing off a sub-pixel transform. A bigger, bolder glyph on a
-   near-solid dark plate (the gradient darkened toward its low end rather than the team's raw secondary
-   colour, which is too pale for some clubs) reads clearly regardless of the scale factor in play. */
-/* 👁 QA (2026-09-15, item 2): the shield is a clip-path, so its top 12% and its shoulders are cut away —
-   a 14px-tall plate left the 9.5px digits half-eaten. Back to a shield tall enough to hold its own number,
-   with the glyph small and tight (line-height 1) so the number reads on every card at every fit scale. */
-.zoom-side .jersey-crest { width:26px; height:20px; font-size:9px; line-height:1; font-weight:900; margin-top:0;
-  background:linear-gradient(160deg, var(--team-primary,#333) 0%, color-mix(in srgb, var(--team-primary,#333) 55%, #000) 100%);
-  text-shadow:0 1px 1px rgba(0,0,0,.9); }
-/* The stack's own label directly above the card already says the position, and a card's displayLabel IS
-   its slot label (server/compile/chart.js's makeCard), so in this view the two are the same word twice.
-   Hiding the in-card one buys back a line of height per card - and a level whose tallest stack draws two
-   cards (an out starter and his fill-in) pays for it twice. Only the side view: the group view has no
-   per-slot label above the card, and the matchup view keeps its own. */
-.zoom-side .card-label { display:none; }
-.zoom-side .role-tag { font-size:7px; line-height:1.2; }
-/* 👁 QA: a card showing a red OUT banner used to say "STARTER" underneath it — two opposite statements on
-   one card. It now reads OUT, in the banner's own colour so the two agree at a glance. */
-/* 👁 QA round 3 item 5: dark brick-red on a dark card was the lowest-contrast text on the page. The tag
+/* 👁 QA: a card showing a red OUT banner used to say "STARTER" underneath it — two opposite statements
+   on one card. It reads OUT instead, in the banner's own colour, so the two agree at a glance.
+   👁 QA round 3 item 5: dark brick-red on a dark card was the lowest-contrast text on the page. The tag
    now uses the banner's own light-on-red treatment, so the two read as the same statement; the dimmed
    body under it is lifted at the same time so the bio line stays legible rather than merely present. */
 .role-tag-out { color:#fff; font-weight:800; background:#c23b36; border-radius:3px; padding:0 6px; letter-spacing:.05em; }
 .card.card-out .card-body { opacity:.78; filter:grayscale(.3); }
 .card.card-out .card-name { color:#c9d1d9; }
-/* "NR" where a player has no Madden entry: present and legible, but clearly not a rating. */
-.rating-pill.tier-none { background:#2a323b; color:var(--muted); font-weight:700; }
-.zoom-side .rating-pill { font-size:9px; padding:1px 7px; margin-top:0; }
-.zoom-side .card-banner { height:13px; line-height:13px; font-size:8px; }
-.zoom-side .card:has(.card-banner) .card-body { margin-top:13px; }
-.zoom-side .card:has(.card-banner) .card-badges { top:16px; }
-/* The pill row is an inline box, so it was paying for a full line-height's worth of leading (21px) around
-   a 12px pill — 8 of the 18px D62 still had to find. */
-.zoom-side .zoom-pill-row { margin-top:1px; display:flex; justify-content:center; line-height:1; }
-.zoom-side .zoom-stack-label { font-size:11px; padding:0 6px; }
-/* D62: the level washes are gone, so the gap between one band's stacks and the next is the only thing
-   saying where a group ends — give a stack a little room of its own inside the level's row. */
-.zoom-side .zoom-side-stack { gap:1px; }
 
 /* ---- group view: every slot's stack side by side ----
    🎨 Polish (2026-09-11, round 2, item 12): `justify-content:center` (was space-evenly) so a group with
@@ -332,11 +242,11 @@ a.zoom-stack-label:hover { color:#ffd54a; text-decoration:underline; }
    Guarded on the JS side for absence (slot.injury / view.heat / card.signals may not exist yet); these
    rules only ever fire once zoom.js actually applies one of the classes below. heat-low/high/critical
    and sig-star/sig-ps/sig-new/sig-lowsnaps are the step-4 builder's canonical names (defined in
-   styles.css so every view matches) — this is a fallback look, scoped to .zoom-side/.zoom-group so it
+   styles.css so every view matches) — this is a fallback look, scoped to .zoom-group so it
    steps out of the way the moment styles.css defines its own (same pattern as the D43 tier-* classes). */
-.zoom-side-stack.heat-low, .zoom-stack.heat-low { box-shadow:0 0 0 1px rgba(242,193,78,.35), 0 0 14px rgba(242,193,78,.25); border-radius:10px; }
-.zoom-side-stack.heat-high, .zoom-stack.heat-high { box-shadow:0 0 0 1px rgba(242,146,78,.45), 0 0 16px rgba(242,146,78,.32); border-radius:10px; }
-.zoom-side-stack.heat-critical, .zoom-stack.heat-critical { box-shadow:0 0 0 1px rgba(224,82,77,.55), 0 0 18px rgba(224,82,77,.4); border-radius:10px; }
+.zoom-stack.heat-low { box-shadow:0 0 0 1px rgba(242,193,78,.35), 0 0 14px rgba(242,193,78,.25); border-radius:10px; }
+.zoom-stack.heat-high { box-shadow:0 0 0 1px rgba(242,146,78,.45), 0 0 16px rgba(242,146,78,.32); border-radius:10px; }
+.zoom-stack.heat-critical { box-shadow:0 0 0 1px rgba(224,82,77,.55), 0 0 18px rgba(224,82,77,.4); border-radius:10px; }
 
 .zoom-stack-label.heat-low { background:rgba(242,193,78,.16); }
 .zoom-stack-label.heat-high { background:rgba(242,146,78,.18); }

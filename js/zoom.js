@@ -1,51 +1,43 @@
 // D45 zoom levels: team -> Offense/Defense (side view) -> position group (group view).
-// Owns its own BIG-card renderer (fullCard, below) rather than sharing one with the whole-team view —
-// the sizes/shapes differ per zoom level, and since ruling E the whole-team view has no cards at all. Depth below the line-one card reuses cards.js's own compactRow
-// (via the shared renderSlotBody helper, final 👁 pass item 5) so a backup row looks identical wherever
-// it renders. Visual language is kept identical to the main field by reusing the SAME class names
-// cards.js/styles.css already define (card, tier-elite/strong/avg/weak/flat, card-banner, banner-out,
-// banner-active, badge*, rating-pill, column-shaded, tray-label/tray-chip) rather than inventing
-// parallel styles.
+//
+// D72 (Adam, 2026-09-15) rewrote the SIDE view. It used to be this file's own flow layout: a row per
+// level, a flex row of stacks per band, a big photo card per starter and compact rows beneath him. That
+// meant a tight end moved house between the team page and the offense page, the columns carried none of
+// the field's geometry, and two layout engines had to be kept in step with each other by hand. The side
+// view is now the SAME field engine the team and matchup pages use (field.js's computeLayout, cards.js's
+// renderColumn, team.js's mountTeamField), handed a TeamView carrying one unit — the same trick matchup.js
+// already uses to draw two half-teams as one. Everything that page shows therefore comes from the shared
+// engine: levels, stripes, column pills, compact rows, trays, D70's band colours and D61/D56's banners.
+// The only differences are the three options computeLayout takes for it (no line of scrimmage, a canvas
+// cropped to the one unit, and the bigger row style a 1.3-1.8x scale affords).
+//
+// What is left in this file is the GROUP view (one position group, big cards), which keeps its own
+// fullCard renderer below — D49's zoom ladder puts the biggest cards in the app on that page, and it is
+// a grid of ranked cards rather than a field. Visual language is kept identical to the main field by
+// reusing the SAME class names cards.js/styles.css already define (card, tier-elite/strong/avg/weak/flat,
+// card-banner, banner-out, banner-active, badge*, rating-pill, column-shaded, tray-label/tray-chip)
+// rather than inventing parallel styles.
 import { getTeams, getTeam, invalidateTeam } from "./api.js";
-import { esc, renderSlotBody, wireDepthToggles, isFullyOut, psBadge } from "./cards.js";
-import { headerHtml } from "./team.js";
+import { esc, BAND_DISPLAY, headshotHtml, wireDepthToggles, isFullyOut, psBadge } from "./cards.js";
+import { headerHtml, mountTeamField } from "./team.js";
+import { SIDE_CARD_W, SIDE_MAX_DEPTH_ROWS } from "./field.js";
 import { fitToViewport, disposeCurrentView } from "./viewfit.js";
 import { navStripHtml, wireNav } from "./nav.js";
 
-// Final 👁 pass (item 4, 2026-09-12): ONE canonical level order everywhere, mirrored off the line of
-// scrimmage — offense farthest-to-nearest is RECEIVERS (WR) → BACKFIELD (QB, RB/FB) → LINE (OL, with TE
-// riding at the end of it); defense nearest-to-farthest is LINE → EDGE → LINEBACKERS → SECONDARY
-// (CB/NB/S together, D14's EDGE kept its own level between the line and the linebackers). WR used to
-// share the "LINE" level with OL/TE (true-formation alignment on the whole-team field put them on the
-// same row) — it's now its own RECEIVERS level here, same canonical order the matchup view's two facing
-// lines rely on (matchup.js: A's offense RECEIVERS→BACKFIELD→LINE, then the LOS divider, then B's defense
-// LINE→EDGE→LINEBACKERS→SECONDARY). Band order is reordered here so bands sharing a level render
-// adjacently within that level's shared row.
-// Ruling D/D57: TE belongs with the receivers, not on the line — the same grouping the whole-team
-// field uses, so a tight end does not move house when you zoom in (👁 QA item 7).
+// Which unit a #/team/X/group/BAND route belongs to, and what each band is called in prose. D72 retired
+// this file's own level tables (OFF_BAND_LEVEL / DEF_LEVEL_SEQUENCE and friends): a side page's levels,
+// their order and their labels now come from field.js, which is the single place that decision is made
+// for the team, matchup and side pages alike.
 const OFF_BAND_ORDER = ["OL", "QB", "BACKFIELD", "WR", "TE"];
 const DEF_BAND_ORDER = ["DL", "EDGE", "LB", "CB", "NB", "S"];
 const BAND_UNIT = {};
 for (const b of OFF_BAND_ORDER) BAND_UNIT[b] = "OFF";
 for (const b of DEF_BAND_ORDER) BAND_UNIT[b] = "DEF";
-const BAND_LABEL = { QB: "QB", BACKFIELD: "Backfield", WR: "WR", TE: "Tight ends", OL: "OL", DL: "DL", EDGE: "EDGE", LB: "LB", CB: "CB", NB: "CB · Nickel", S: "Safety" };
-const OFF_BAND_LEVEL = { WR: "RECEIVERS", QB: "BACKFIELD", BACKFIELD: "BACKFIELD", OL: "LINE", TE: "RECEIVERS" };
-// D63 / 👁 QA (2026-09-15, item 4): there is no band caption any more. The tight ends used to get a
-// "TIGHT ENDS" line over their block; D63 retired that label on the team and matchup views, and here it
-// was the last one left - a lone caption floating between ATL's two TE stacks, and a second word directly
-// above PHI's single "TE" pill saying the same thing twice. Each stack's own label is the label.
-const DEF_BAND_LEVEL = { DL: "LINE", EDGE: "EDGE", LB: "LB", CB: "SEC", NB: "SEC", S: "SEC" };
-// D62 (Adam, 2026-09-15): the side views no longer PRINT a level name — the LINE / BACKFIELD / EDGE
-// chips and the alternating row washes are gone ("they were not helpful there"). A level is still what
-// groups the bands into one row, in the order below; it just reads as a block of cards with air around
-// it now rather than as a captioned band, so there is no label table here any more.
-// 👁 QA item 8: a SIDE view reads from the line of scrimmage downward, the same direction on both sides
-// of the ball — line first, then each level further from the ball. The defense already did; the offense
-// was printed the other way round (receivers at the top, line at the bottom), so flipping between the two
-// tabs turned the picture upside down. The MATCHUP view keeps the facing order instead — its two units
-// meet at a divider, so the offense above it must read bottom-up toward the line (matchup.js).
-const OFF_LEVEL_SEQUENCE = ["LINE", "BACKFIELD", "RECEIVERS"];
-const DEF_LEVEL_SEQUENCE = ["LINE", "EDGE", "LB", "SEC"];
+// D70: the group page's title and its nav crumb name the band, and so does the "not on chart" tray on
+// every field — one table for all of them (cards.js's BAND_DISPLAY), so a position cannot be called one
+// thing on the team page and another on its own group page. This file used to keep its own copy, which is
+// how "TE" became "Tight ends" here and stayed "TE" everywhere else.
+const BAND_LABEL = BAND_DISPLAY;
 
 // ---- shared per-player helpers (deliberately duplicated from cards.js — not exported there) ----
 
@@ -53,20 +45,6 @@ const STATUS_CLASS = {
   Q: "badge-q", D: "badge-d", OUT: "badge-out", IR: "badge-out", PUP: "badge-out", NFI: "badge-out",
   SUSP: "badge-susp", EXEMPT: "badge-susp", INACTIVE: "badge-inactive",
 };
-function initials(p) {
-  const a = (p.first || p.name || "?").trim()[0] || "?";
-  const b = (p.last || "").trim()[0] || "";
-  return (a + b).toUpperCase();
-}
-
-function headshotHtml(p, size) {
-  const ini = esc(initials(p));
-  const boxStyle = `width:${size}px;height:${size}px`;
-  const fallback = `this.replaceWith(Object.assign(document.createElement('div'),{className:'headshot-fallback',textContent:'${ini}',style:'${boxStyle};font-size:${Math.round(size * 0.34)}px'}))`;
-  if (!p.headshot) return `<div class="headshot-fallback" style="${boxStyle};font-size:${Math.round(size * 0.34)}px">${ini}</div>`;
-  return `<span class="headshot-box" style="${boxStyle}"><img class="headshot" src="${esc(p.headshot)}" alt="" loading="lazy" onerror="${fallback}"></span>`;
-}
-
 function statusBadge(status) {
   if (!status) return "";
   const cls = STATUS_CLASS[status.code] || "badge-out";
@@ -180,7 +158,8 @@ function heatDropText(injury) {
 }
 
 // A soft glow class for the whole stack (not just the label) — scaled by slot.injury.level, amber ->
-// orange -> deep red. Applied to both the side view's per-slot stack and the group view's per-slot stack.
+// orange -> deep red. On the group view's per-slot stack; the side view gets the field's own column glow
+// (cards.js's renderColumn) since D72 put it on the shared engine.
 function stackHeatClass(slot) {
   const inj = slot.injury;
   if (!inj?.starterOut || !inj.level || inj.level === "none") return "";
@@ -192,26 +171,6 @@ function stackHeatTitle(slot) {
   const inj = slot.injury;
   if (!inj?.starterOut || !inj.outStarter || !inj.fillIn) return "";
   return ` title="Starter out: ${esc(inj.outStarter.name)} ${esc(String(inj.outStarter.ovr))} → ${esc(inj.fillIn.name)} ${esc(String(inj.fillIn.ovr))}${esc(heatDropText(inj))}"`;
-}
-
-// Side view band header gets a soft tint, not a "N OUT" chip — cluster (multiple injuries in this band)
-// reads stronger than thin (depth just running low), from view.heat[unit][band] = {thin,cluster,starOutCount}.
-function bandHeatClass(view, unit, band) {
-  const h = view.heat?.[unit]?.[band];
-  if (!h) return "";
-  if (h.cluster) return " heat-high";
-  if (h.thin) return " heat-low";
-  return "";
-}
-
-function bandHeatTitle(view, unit, band) {
-  const h = view.heat?.[unit]?.[band];
-  if (!h) return "";
-  const bits = [];
-  if (h.starOutCount) bits.push(`${h.starOutCount} starter${h.starOutCount === 1 ? "" : "s"} out`);
-  if (h.thin) bits.push("depth thin here");
-  if (h.cluster) bits.push("multiple injuries clustered here");
-  return bits.length ? ` title="${esc(bits.join(" · "))}"` : "";
 }
 
 // Tiny quiet per-player markers (star-out glyph, faint "PS"/"new"/"low%") from card.signals.
@@ -324,68 +283,34 @@ function errorHtml(team, e) {
   return `<div class="notfound">Couldn't load ${esc(team.name)}'s depth chart: ${esc(e.message)} <a class="back" href="#/">Back to all teams</a></div>`;
 }
 
-// ---- side view (one band per row) ----
+// ---- side view: ONE unit, drawn on the shared field engine (D72) ----
 
-// 🎨 Polish (2026-09-11, round 2): heights bumped (160->188) — a real line-one card's content (55px
-// headshot + crest + name + label + role tag, plus the rating pill rendered as a sibling below) needs
-// ~170-176px; 160 undershot that consistently, which is what item 1's clipping bug was. Widths bumped too
-// (130->145 / 120->132) so a real name ("Quinyon Mitchell") has room before the ellipsis kicks in (item 2).
-// RULING E (Adam, 2026-09-13): a full defensive side is four levels deep (LINE, EDGE, LINEBACKERS,
-// SECONDARY) and all four have to fit inside a 900px window with the header, breadcrumb and back link
-// still on screen. That leaves roughly 175px per level, so the side view's cards shrink to a 38px
-// headshot and drop the bio line's worth of slack — they are still real photo cards (ruling E: "the side
-// view keeps headshot cards"), just sized for the budget. Depth below them is capped at SIDE_MAX_DEPTH
-// rows with a "+N more" that expands on click (cards.js's renderDepth/wireDepthToggles).
-// D62 (Adam, 2026-09-15): "the cards are too big and bulky" on the side views — the CHROME is what went:
-// padding, border weight, tier glow, crest, type sizes and the leading around the rating pill (all in
-// zoom.css). 👁 QA (2026-09-15, items 1 and 6) then made the view fill the window's height, which changes
-// what these numbers mean: the whole canvas is scaled by one factor now, so what matters is each piece's
-// SHARE of the card, not its pixel value. The headshot takes a much bigger share than it did (26 of ~103
-// before D62, 38 of ~90 now) - it is the one thing on a side card that wants to be big, and the QA note
-// asks for ~40-44px of it on screen, which is what 30 design px comes to once the fit scales the view up.
-const LINE_ONE = { width: 136, height: 86, headSize: 38 };
-const PAIR_ONE = { width: 124, height: 86, headSize: 38 };
-// The scale ceiling for the fill fit (viewfit.js). A three-level offense needs ~1.4 to reach the bottom of
-// a 1700x900 window; beyond ~1.6 a sparse unit stops looking like a chart and starts looking like a poster.
-const SIDE_MAX_GROW = 1.6;
-const SIDE_MAX_DEPTH = 2;
-// A slot drawing two big cards (an out starter above his ACTIVE fill-in, or a co-starter pair) is
-// already the tallest thing in its level, so it shows one backup row instead of two before the tail.
-const SIDE_MAX_DEPTH_PAIRED = 1;
-
-// Final 👁 pass (item 5, 2026-09-12): depth below the line-one card (or the co-starter/fill-in pair) now
-// renders as this file's own SAME compact row cards.js already uses on the whole-team field — not another
-// stacked full card — via the shared renderSlotBody helper (cards.js). That's the fix for the side view
-// running 2,600-3,000px tall: a column of 4-5 backups used to cost ~124px each as a shrunk full card;
-// a compact row is 40px, matching the main field's own convention exactly (same classes, same look).
-function renderSideStack(slot, teamAbbr, view, unit, slotLookup) {
-  const hatched = slot.shadedByDefault ? " column-shaded" : "";
-  const players = slot.players;
-  const isPair = players.length >= 2 && players[0].coStarter && players[1].coStarter;
-  // 👁 QA (2026-09-15, item 5): slotLookup/ownLabel are what turn a depth row's "also listed at" chip
-  // from the raw slot id it was printing here ("OFF-OL-5" under ATL's M. Jerrell) into the human column
-  // name the whole-team field has always shown. cards.js's alsoListedChips falls back to the id when no
-  // lookup is passed, and this view was the one caller not passing one.
-  const body = renderSlotBody(players, teamAbbr, fullCard, { ...LINE_ONE, pairOpts: PAIR_ONE, maxDepth: SIDE_MAX_DEPTH, maxDepthPaired: SIDE_MAX_DEPTH_PAIRED, slotLookup, ownLabel: slot.label });
-  // Lead ruling (2026-09-11, item 8): a co-starter pair is one slot with two names on it — say so on the
-  // label instead of leaving it to be inferred from two adjacent STARTER tags.
-  const labelText = isPair ? `${slot.label} · co-starters` : slot.label;
-  // Final 👁 pass (item 5, 2026-09-12): the old per-band sidebar label (a separate 120px-wide column
-  // reserved on every band row) is gone — "level header is the only label system" now (see
-  // renderZoomSide's level-row grouping below). Its "click through to the whole group" behaviour moves
-  // onto this slot's own label instead, and the D50 band-heat tint/tooltip that used to live on that
-  // sidebar link moves here too (still band-level data — every slot in a thin/clustered band shows it).
-  const band = slot.band;
-  const bandTitle = bandHeatTitle(view, unit, band);
-  const labelHref = `#/team/${esc(teamAbbr)}/group/${esc((band || "").toLowerCase())}`;
-  const labelTitleAttr = bandTitle || ` title="See the whole ${esc(BAND_LABEL[band] || band)} group"`;
-  // D70: same band-hue pill as the main field (styles.css's [data-band] rules), so the group a column
-  // belongs to reads the same colour on this side view as it does everywhere else.
-  return `<div class="zoom-side-stack${hatched}${stackHeatClass(slot)}" data-slot-id="${esc(slot.slotId)}"${stackHeatTitle(slot)}>
-    <a class="zoom-stack-label${bandHeatClass(view, unit, band)}" data-band="${esc(band || "")}" href="${labelHref}"${labelTitleAttr}>${esc(labelText)}</a>
-    ${body}
-  </div>`;
+// The TeamView computeLayout is handed for a side page. Only the requested unit is carried, which is what
+// makes the engine draw half a field: the other unit's rows come out empty and are dropped, the line of
+// scrimmage goes with them, and the canvas is cropped to the columns that remain. The shape is exactly
+// what matchup.js already assembles for its two half-teams, so there is one synthetic-view idiom in the
+// app rather than two. `scheme` still rides along because it decides how a defensive front is placed
+// (3-4 nose tackle on the centre vs 4-3 tackles over the guards).
+function unitView(view, unit) {
+  return {
+    scheme: view.scheme,
+    units: { [unit]: view.units?.[unit] || [] },
+    unlisted: { [unit]: view.unlisted?.[unit] || {} },
+  };
 }
+
+// The ways a single-unit field differs from the whole-team one (D72), all options on the shared engine
+// rather than a second engine:
+//   crop          shrink-wrap the canvas to this unit's own columns, so the fit engine can scale a short
+//                 chart up to fill the window instead of being pinned by a canvas it is not using;
+//   fillHeight    and where the width still pins the scale (a defense, whose corners reach both
+//                 sidelines over only four rows), spend the leftover height as air between the rows;
+//   headshot      at the ~1.3-1.8x scale that produces, a line-one row has room for a small photo;
+//   cardWidth     which it pays for out of a wider column, not out of the player's name;
+//   maxDepthRows  and one more backup before the "+N more" tail.
+const SIDE_LAYOUT = {
+  crop: true, fillHeight: true, headshot: true, cardWidth: SIDE_CARD_W, maxDepthRows: SIDE_MAX_DEPTH_ROWS,
+};
 
 export async function renderZoomSide(root, search, abbr, unit) {
   search.hidden = true;
@@ -409,63 +334,36 @@ export async function renderZoomSide(root, search, abbr, unit) {
     return;
   }
 
-  const bandOrder = unit === "OFF" ? OFF_BAND_ORDER : DEF_BAND_ORDER;
-  const bandLevel = unit === "OFF" ? OFF_BAND_LEVEL : DEF_BAND_LEVEL;
-  const levelSequence = unit === "OFF" ? OFF_LEVEL_SEQUENCE : DEF_LEVEL_SEQUENCE;
-  // Final 👁 pass (item 4/5, 2026-09-12): a LEVEL is now one shared row (a tinted band header, D48,
-  // exactly like the whole-team field's own level-stripe) holding every band that belongs to it, instead
-  // of a separate full row PER BAND under one grey heading line — that dual system was the "300px empty
-  // label gutter" (e.g. offense's BACKFIELD level = QB + RB/FB, two mostly-empty band rows before this).
-  // One id -> label map across both units, the same shape team.js builds for the whole-team field.
-  const slotLabels = new Map();
-  for (const u of ["OFF", "DEF"]) for (const sl of view.units?.[u] || []) slotLabels.set(sl.slotId, sl.label);
-  const slotLookup = (slotId) => slotLabels.get(slotId);
-  const bandsByLevel = new Map();
-  for (const band of bandOrder) {
-    const level = bandLevel[band] || band;
-    if (!bandsByLevel.has(level)) bandsByLevel.set(level, []);
-    bandsByLevel.get(level).push(band);
-  }
-  const rowsHtml = levelSequence.map((level) => {
-    const bandsHere = bandsByLevel.get(level) || [];
-    const groupsHtml = bandsHere.map((band) => {
-      const slots = (view.units?.[unit] || []).filter((s) => s.band === band).slice().sort((a, b) => a.columnOrder - b.columnOrder);
-      if (!slots.length) return "";
-      return `<div class="zoom-band-group"><div class="zoom-band-row">${slots.map((slot) => renderSideStack(slot, A, view, unit, slotLookup)).join("")}</div></div>`;
-    }).join("");
-    if (!groupsHtml) return "";
-    // D62: the level's caption chip is gone (see the note by DEF_BAND_LEVEL above). The wrapper stays —
-    // it is what keeps a level's bands on one row and gives the next level its gap — and each stack still
-    // carries its own position label, which is the label a reader of this view actually uses.
-    return `<div class="zoom-level"><div class="zoom-band-stacks">${groupsHtml}</div></div>`;
-  }).join("");
+  const sideView = unitView(view, unit);
+  const hasSlots = (sideView.units[unit] || []).length > 0;
 
-  // D59: the shared nav strip replaces this view's old breadcrumb — same position, same job (Team/
-  // Offense/Defense/Matchup pills, the current one lit), plus the team switcher it used to borrow from
-  // the header. The D50 heat summary does NOT repeat here (2026-09-14 follow-up) — it already shows once
-  // as the red chip inside headerHtml, right below.
+  // D59: the shared nav strip — same position, same job (Team/Offense/Defense/Matchup pills, the current
+  // one lit), plus the team switcher. The D50 heat summary does NOT repeat here (2026-09-14 follow-up):
+  // it already shows once as the red chip inside headerHtml, right below. The field is mounted EMPTY
+  // first so mountTeamField can measure the real box before deciding how wide a canvas to build — the
+  // same two-phase approach the team and matchup pages use (see viewfit.js's mountScaledField).
   root.innerHTML = `<div class="zoom-page">
     ${navStripHtml({ teams, abbr: A, page: unit === "OFF" ? "off" : "def", primary: team.colourPrimary, secondary: team.colourSecondary })}
     ${headerHtml(team, view, fromFixture, teams)}
-    <div class="fit-outer"><div class="fit-inner"><div class="zoom zoom-side">${rowsHtml || `<div class="placeholder">No ${esc(unitLabel.toLowerCase())} slots on this chart.</div>`}</div></div></div>
+    <div class="team-body">
+      ${hasSlots
+        ? `<div class="field-outer" style="--team-primary:${team.colourPrimary};--team-secondary:${team.colourSecondary}"></div>`
+        : `<div class="placeholder">No ${esc(unitLabel.toLowerCase())} slots on this chart.</div>`}
+    </div>
   </div>`;
-  // 👁 QA (2026-09-15, item 1): the side view fills BOTH axes now (viewfit.js's fill mode, whose
-  // single-correction-pass bug is what used to shrink the cards of a few-level unit - see the note there).
-  // D62's leaner cards left ~190px of black under PHI's offense and defense on a 1700x900 screen; filling
-  // the height spends that on the cards, the headshots and the air between the levels, all at one scale.
-  // SIDE_MAX_GROW caps it: a unit with only two levels (a hypothetical chart with nothing but a line and a
-  // backfield) would otherwise blow its cards up to fill a screen it has no content for.
-  fitToViewport(root, { fill: true, maxGrow: SIDE_MAX_GROW }); // registers its own teardown with viewfit.js
-  wireDepthToggles(root); // ruling E: the "+N more" tails on capped depth stacks
   wireNav(root); // D59: switcher routes to the equivalent page (same side) on the newly picked team
   wireHeaderControls(root, A, view, team, () => renderZoomSide(root, search, A, unit));
+  // mountTeamField registers its own teardown with viewfit.js. It is the team page's own mount: the same
+  // measure/spread/draw/rescale/settle loop, the same delegated card clicks, the same name-fitting pass.
+  if (hasSlots) mountTeamField(root, sideView, team, A, SIDE_LAYOUT);
 }
 
 // ---- group view (one position group, every slot side by side) ----
 
 // D49: the group view is one zoom step in from the side view, so its cards are noticeably bigger — the
-// first (line-one) row biggest of all, the rest a size down. Both are still well above the side view's
-// medium LINE_ONE size above (the side view's own backups are compact rows, not cards — item 5).
+// first (line-one) row biggest of all, the rest a size down. D72 turned the side view into scaled-up
+// overview ROWS with a 28px headshot on line one, so these are now the only real photo cards in the app
+// and the zoom ladder (group > side > whole team) still reads as one step per level.
 // 🎨 Polish (2026-09-11, round 2): widened (180->210, item 12: "bigger headshot") and heightened
 // (230->256 / 198->220, item 1: the group view's big card adds a bio line AND a role tag on top of the
 // same head/crest/name/label stack the side view has, plus a bigger rating pill — 230 undershot that).
@@ -552,8 +450,8 @@ function renderGroupStack(slot, teamAbbr, wide = false) {
     }
     rowIndex++;
   }
-  // Ruling E: rows past the cap collapse behind a "+N more" button that reveals them in place - same
-  // mechanism as the side view's capped depth stacks (cards.js's wireDepthToggles drives both).
+  // Ruling E: rows past the cap collapse behind a "+N more" button that reveals them in place
+  // (cards.js's wireDepthToggles drives it).
   const visible = rows.slice(0, GROUP_MAX_ROWS);
   const hiddenRows = rows.slice(GROUP_MAX_ROWS);
   const rowsHtml = hiddenRows.length

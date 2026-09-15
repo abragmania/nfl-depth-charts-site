@@ -110,15 +110,20 @@ function slotLookupFor(view) {
   return (slotId) => map.get(slotId);
 }
 
-function fieldHtml(view, team, spread) {
+// `layoutOpts` is passed straight through to field.js's computeLayout: the whole-team page passes only
+// the spread, and D72's offense/defense pages add crop/headshot/maxDepthRows so the same engine draws one
+// unit, scaled up, with no line of scrimmage (see zoom.js's SIDE_LAYOUT).
+function fieldHtml(view, team, layoutOpts = {}) {
   const teamAbbr = team.abbr;
-  const layout = computeLayout(view, { spread });
+  const layout = computeLayout(view, layoutOpts);
   const slotLookup = slotLookupFor(view);
   const opts = { slotLookup, scheme: view.scheme };
   const columnsHtml = layout.columns.map((c) => renderColumn(c, teamAbbr, opts)).join("");
   const traysHtml = layout.trays.map((t) => renderTray(t, teamAbbr)).join("");
   const levelsHtml = renderLevelLabels(layout.levels, layout.layoutWidth);
-  const svg = renderFieldSvg(layout.layoutHeight, layout.losY, layout.layoutWidth);
+  // layout.caption is null on a two-sided field (the SVG then labels both halves itself) and "OFFENSE" /
+  // "DEFENSE" on a single-unit one, where it replaces the line of scrimmage as the thing naming the view.
+  const svg = renderFieldSvg(layout.layoutHeight, layout.losY, layout.layoutWidth, layout.caption);
   // D48: a faint, large team-logo watermark centred behind the cards — never competing with them, so
   // it lives in the CSS background (low opacity, no pointer events) rather than as a real <img> element.
   const watermarkUrl = team.logoDark || team.logo || "";
@@ -143,12 +148,16 @@ function fieldHtml(view, team, spread) {
 // mountScaledField, which the matchup view uses too; this function is only the team-page specifics.
 // 🔵 delta review: it used to be a second copy of that logic, which is how the two drifted and how the
 // missing teardown turned into "the team page's observer overwrites the matchup's field".
-function mountField(root, view, team, teamAbbr) {
+// D72: exported, because the offense and defense pages are this same field — zoom.js hands it a TeamView
+// carrying one unit plus the single-unit layout options, and gets the identical measure/spread/draw/
+// rescale/settle loop, delegated card clicks and name-fitting pass rather than a parallel implementation.
+export function mountTeamField(root, view, team, teamAbbr, layoutOpts = {}) {
   const panel = root.querySelector(".player-panel");
   return mountScaledField({
     root,
-    probe: computeLayout(view), // pure and cheap: the natural (unspread) canvas, for the spread maths
-    build: (spread) => fieldHtml(view, team, spread),
+    probe: computeLayout(view, layoutOpts), // pure and cheap: the natural (unspread) canvas, for the spread maths
+    build: (spread, minHeight) => fieldHtml(view, team, { ...layoutOpts, spread, minHeight }),
+    fillHeight: !!layoutOpts.fillHeight, // D72: single-unit pages spend spare height on air between rows
     panel,
     observe: [root.querySelector(".nav-strip"), root.querySelector(".teamhead"), root.querySelector(".legend")],
     onDraw: (el) => { wireFieldClicks(el, teamAbbr); fitNames(el); },
@@ -204,8 +213,8 @@ export async function renderTeam(root, search, abbr, playerKey) {
     return;
   }
 
-  // The field is mounted EMPTY first so mountField can measure the real box (header height, legend
-  // wrapping, the window) before it decides how wide a canvas to ask field.js for — see mountField.
+  // The field is mounted EMPTY first so mountTeamField can measure the real box (header height, legend
+  // wrapping, the window) before it decides how wide a canvas to ask field.js for — see mountTeamField.
   // D59: the shared nav strip renders first, directly under the app bar, on every team-context page.
   root.innerHTML = `
     ${navStripHtml({ teams, abbr: A, page: "team", primary: team.colourPrimary, secondary: team.colourSecondary })}
@@ -241,6 +250,6 @@ export async function renderTeam(root, search, abbr, playerKey) {
   };
   window.addEventListener("nfl:data-refreshed", teamRefreshListener, { once: true });
 
-  mountField(root, view, team, A); // registers its own teardown with viewfit.js
+  mountTeamField(root, view, team, A); // registers its own teardown with viewfit.js
   highlightSelected(root, playerKey);
 }
