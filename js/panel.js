@@ -19,7 +19,7 @@
 // Finding 6: rating, status, and roster designation are already computed on the compiled card and are
 // NEVER refetched here — only bio (draft round, full season/college stats) comes from the network, via
 // GET /api/player/{espnId} (server/api/player.js).
-import { esc } from "./cards.js";
+import { esc, snapHistoryHtml } from "./cards.js";
 import { renderHistory } from "./history.js";
 import { getPlayer } from "./api.js";
 
@@ -74,7 +74,16 @@ function ratingTier(v) {
 // PFF-inspired (Adam, 2026-09-11): "a big rating number in a colour-scaled box, with '#4 of 119 at RB'
 // directly under it and the launch rating as a small delta" — replaces the old flat team-colour bar.
 // D34: season years only, never a Madden edition number.
-function gradeBoxHtml(rating, season) {
+// 🔵 review follow-up (2026-09-15, D91 item 1): the grade box is where Adam's rating pill lives on this
+// view, so the last-three-games snap trio belongs right beside the big number, same as it already sits
+// beside every rating pill on the field/side/group views (cards.js's snapHistoryHtml, reused here rather
+// than duplicated). This panel is only ever handed the resolved `card` (see openPanel's contract in this
+// file's header) and never which side of the ball he's on — team.js's caller (public/js/main.js's
+// openPlayerPanel) passes just the card and the whole TeamView, with no unit alongside it, and the
+// compiled card itself carries no unit of its own (server/compile/chart.js's makeCard never stamps one on
+// it) — so this calls snapHistoryHtml with no `unit` in opts, which cards.js's own D91-item-2 fix (see that
+// file) now renders as "81% of snaps" rather than guessing "offensive".
+function gradeBoxHtml(rating, season, card) {
   if (!rating || rating.current == null) return "";
   const tier = ratingTier(rating.current);
   const rank = rating.posRank && rating.posCount ? `#${esc(rating.posRank)} of ${esc(rating.posCount)} ${esc(rating.maddenPos || "")}` : esc(season ?? "");
@@ -83,10 +92,12 @@ function gradeBoxHtml(rating, season) {
     const diff = rating.current - rating.launch;
     delta = `<div class="panel-grade-delta">launch ${esc(rating.launch)} (${diff >= 0 ? "+" : ""}${diff})</div>`;
   }
+  const snaps = snapHistoryHtml(card, {});
   return `<div class="panel-grade ${tier}">
     <div class="panel-grade-num">${esc(rating.current)}</div>
     <div class="panel-grade-rank">${rank}</div>
     ${delta}
+    ${snaps}
   </div>`;
 }
 
@@ -285,7 +296,7 @@ function panelShellHtml(card, season, teamMeta) {
     <button type="button" class="panel-close" aria-label="Close player panel">&times;</button>
     <div class="panel-head">
       <span class="panel-headshot-backdrop">${headshotHtml(card, 88)}</span>
-      ${gradeBoxHtml(card.rating, season)}
+      ${gradeBoxHtml(card.rating, season, card)}
       <div class="panel-head-main">
         <div class="panel-name">${esc(card.name)} <span class="panel-number">#${esc(card.number ?? dash)}</span></div>
         <div class="panel-label">${esc(card.displayLabel || card.position || "")}</div>

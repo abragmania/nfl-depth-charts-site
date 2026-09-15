@@ -107,9 +107,15 @@ const UNIT_SNAP_WORD = { OFF: "offensive", DEF: "defensive" };
 // compactRow, fed by team.js/matchup.js/zoom.js's side view) simply never sets it, and the sentence is
 // skipped rather than guessed at — only zoom.js's group view (renderGroupStack, which builds its own opts
 // straight from the TeamView it already has in scope) can supply it today.
+// 🔵 review follow-up (2026-09-15, D91 item 2): a caller with no unit at all — the player panel is the one
+// today (public/js/panel.js, D91 follow-up 1): it has the resolved card but nothing tells it which side of
+// the ball the card is on — used to fall back to the WORD "offensive", which is a guess this file has no
+// basis for and is wrong exactly half the time. An unknown unit now prints no side word at all ("81% of
+// snaps"), same as every other genuinely-unknown fact on this card already renders as nothing rather than
+// an invented default.
 function snapHistoryTitle(history, unit, gamesPlayed) {
-  const word = UNIT_SNAP_WORD[unit] || "offensive";
-  const lines = history.map((h) => `Wk ${esc(h.week)} vs ${esc(h.opponent)}: ${esc(h.pct)}% of ${word} snaps`);
+  const word = UNIT_SNAP_WORD[unit] || "";
+  const lines = history.map((h) => `Wk ${esc(h.week)} vs ${esc(h.opponent)}: ${esc(h.pct)}% of ${word ? word + " " : ""}snaps`);
   if (history.length < 3 && typeof gamesPlayed === "number" && gamesPlayed > history.length) lines.push("Games he missed leave a gap");
   return lines.join("\n");
 }

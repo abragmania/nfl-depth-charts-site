@@ -311,6 +311,10 @@ a.back { color:var(--muted); }
    ever wrapping it (D58's fit) — the name still shrinks/abbreviates first (D73's fitNames), this only
    trims what the trio itself costs once that has already happened. */
 .prow-one:not(:has(.prow-head)) .snaps { font-size:8.5px; margin-left:1px; }
+/* 🔵 review follow-up (2026-09-15, D91 item 1): the player panel's grade box (public/css/panel.css's
+   .panel-grade) is a centred vertical stack, not a row, so the base rule's row-only margin-left is wrong
+   here; sized a step up from the base 9.5px to match the box's bigger num/rank/delta scale. */
+.panel-grade .snaps { font-size:12px; margin-left:0; margin-top:4px; }
 .prow-one .prow-ovr { font-size:11px; padding:1px 5px; min-width:21px; }
 .prow-one .prow-ovr.tier-elite { background:var(--tier-elite); color:var(--tier-elite-ink); }
 .prow-one .prow-ovr.tier-strong { background:var(--tier-strong); color:var(--tier-strong-ink); }
