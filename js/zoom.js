@@ -19,7 +19,7 @@
 // rather than inventing parallel styles.
 import { getTeams, getTeam, invalidateTeam } from "./api.js";
 import { esc, BAND_DISPLAY, headshotHtml, wireDepthToggles, isFullyOut, psBadge } from "./cards.js";
-import { headerHtml, mountTeamField } from "./team.js";
+import { headerHtml, mountTeamField, teamBodyHtml } from "./team.js";
 import { SIDE_CARD_W, SIDE_MAX_DEPTH_ROWS } from "./field.js";
 import { fitToViewport, disposeCurrentView } from "./viewfit.js";
 import { navStripHtml, wireNav } from "./nav.js";
@@ -257,9 +257,13 @@ function fullCard(p, teamAbbr, opts = {}) {
 // separately by each render function below) — this function no longer touches it.
 // `onRefresh()` re-renders this exact view in place once a refresh completes — it must be a direct call,
 // not a hash change, since the hash doesn't change on a refresh.
+// `page` (D75, "team"/"off"/"def"/"group") rides along on window.__nflView so main.js's openPlayerPanel
+// knows whether the page it is caching has an `<aside class="player-panel">` it can open the panel into
+// in place — only the side pages (D72) do, via teamBodyHtml; the group view still doesn't, so it keeps
+// falling back to a full re-render exactly as before.
 let zoomRefreshListener = null;
-function wireHeaderControls(root, A, view, team, onRefresh) {
-  window.__nflView = { abbr: A, view, teamMeta: team };
+function wireHeaderControls(root, A, view, team, onRefresh, page) {
+  window.__nflView = { abbr: A, view, teamMeta: team, page };
   root.querySelector(".refresh-btn")?.addEventListener("click", (e) => {
     window.NFLRefresh?.trigger(e.currentTarget);
   });
@@ -342,17 +346,18 @@ export async function renderZoomSide(root, search, abbr, unit) {
   // it already shows once as the red chip inside headerHtml, right below. The field is mounted EMPTY
   // first so mountTeamField can measure the real box before deciding how wide a canvas to build — the
   // same two-phase approach the team and matchup pages use (see viewfit.js's mountScaledField).
+  // D75: hasSlots uses the exact same `<div class="team-body">` (field-outer + aside.player-panel) the
+  // whole-team page renders (team.js's teamBodyHtml) instead of a field-outer-only copy that had nowhere
+  // for the panel to open into — that gap is what forced main.js's openPlayerPanel to always fall back to
+  // re-rendering the whole-team page when a card was clicked here. The no-slots placeholder keeps its own
+  // markup: there is nothing to click, so no panel is needed.
   root.innerHTML = `<div class="zoom-page">
     ${navStripHtml({ teams, abbr: A, page: unit === "OFF" ? "off" : "def", primary: team.colourPrimary, secondary: team.colourSecondary })}
     ${headerHtml(team, view, fromFixture, teams)}
-    <div class="team-body">
-      ${hasSlots
-        ? `<div class="field-outer" style="--team-primary:${team.colourPrimary};--team-secondary:${team.colourSecondary}"></div>`
-        : `<div class="placeholder">No ${esc(unitLabel.toLowerCase())} slots on this chart.</div>`}
-    </div>
+    ${hasSlots ? teamBodyHtml(team) : `<div class="team-body"><div class="placeholder">No ${esc(unitLabel.toLowerCase())} slots on this chart.</div></div>`}
   </div>`;
   wireNav(root); // D59: switcher routes to the equivalent page (same side) on the newly picked team
-  wireHeaderControls(root, A, view, team, () => renderZoomSide(root, search, A, unit));
+  wireHeaderControls(root, A, view, team, () => renderZoomSide(root, search, A, unit), unit === "OFF" ? "off" : "def");
   // mountTeamField registers its own teardown with viewfit.js. It is the team page's own mount: the same
   // measure/spread/draw/rescale/settle loop, the same delegated card clicks, the same name-fitting pass.
   if (hasSlots) mountTeamField(root, sideView, team, A, SIDE_LAYOUT);
@@ -533,5 +538,5 @@ export async function renderZoomGroup(root, search, abbr, bandParam) {
   fitToViewport(root, { fill: true });
   wireDepthToggles(root); // ruling E: the "+N more" tail on a group stack deeper than GROUP_MAX_ROWS
   wireNav(root); // D59: switcher routes to the same band on the newly picked team
-  wireHeaderControls(root, A, view, team, () => renderZoomGroup(root, search, A, bandParam));
+  wireHeaderControls(root, A, view, team, () => renderZoomGroup(root, search, A, bandParam), "group");
 }

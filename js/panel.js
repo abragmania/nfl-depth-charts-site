@@ -227,10 +227,23 @@ if (typeof window !== "undefined") {
   });
 }
 
+// D75: a player panel can now open in place on the whole-team page OR either side page (offense/defense,
+// since D72 put those on the same field-plus-aside shell as team.js's teamBodyHtml) — closing it must
+// return to WHICHEVER of those three the panel was opened from, not always the whole-team page. This used
+// to compare the pre-navigation hash only against `#/team/{abbr}`, so opening a panel from the defense
+// page (`#/team/{abbr}/def`) never matched, cameFromTeamRoute came back false, and closing always dropped
+// back to the whole-team page even though the defense page was what was actually on screen underneath.
+function isTeamContextHash(hash, abbr) {
+  return hash === `#/team/${abbr}` || hash === `#/team/${abbr}/off` || hash === `#/team/${abbr}/def`;
+}
+
 function navigateAwayFromPlayer(asideEl) {
   const abbr = asideEl.dataset.teamAbbr || "";
+  // originHash is the page the panel actually opened from (whole-team, offense or defense) when that's
+  // known; a direct link or an unrecognized origin still falls back to the whole-team page, same as before.
+  const origin = asideEl.dataset.originHash || `#/team/${abbr}`;
   if (asideEl.dataset.cameFromTeamRoute === "true" && history.length > 1) history.back();
-  else location.hash = `#/team/${abbr}`;
+  else location.hash = origin;
 }
 
 // Escape and the close button both call this; wired once per aside element (a fresh <aside> is created
@@ -297,7 +310,9 @@ export function openPanel(asideEl, card, teamView, teamMeta) {
   wireCloseHandlersOnce(asideEl);
   const abbr = teamMeta?.abbr || teamView?.abbr || "";
   asideEl.dataset.teamAbbr = abbr;
-  asideEl.dataset.cameFromTeamRoute = String(lastOldHash === `#/team/${abbr}`);
+  const fromTeamContext = isTeamContextHash(lastOldHash, abbr);
+  asideEl.dataset.cameFromTeamRoute = String(fromTeamContext);
+  asideEl.dataset.originHash = fromTeamContext ? lastOldHash : `#/team/${abbr}`;
 
   asideEl.hidden = false;
   asideEl.innerHTML = panelShellHtml(card, teamView?.season, teamMeta);

@@ -168,6 +168,20 @@ export function mountTeamField(root, view, team, teamAbbr, layoutOpts = {}) {
   });
 }
 
+// D75 (2026-09-15): the field-plus-panel shell every team-context page mounts a field into — the whole-
+// team page and, since D72 put the offense/defense pages on this same engine, those pages too. Exported so
+// zoom.js's renderZoomSide can build the identical `<div class="team-body">` (empty `.field-outer` for
+// mountTeamField to replace, plus the `<aside class="player-panel">` mountTeamField already looks for and
+// panel.js already knows how to fill) instead of a second copy that quietly lacked the aside — which is
+// why clicking a card on the offense/defense pages used to re-render the whole-team page instead of
+// opening the panel in place.
+export function teamBodyHtml(team) {
+  return `<div class="team-body">
+      <div class="field-outer" style="--team-primary:${team.colourPrimary};--team-secondary:${team.colourSecondary}"></div>
+      <aside class="player-panel" hidden></aside>
+    </div>`;
+}
+
 // Single delegated click listener for the whole field (review requirement E) instead of a listener
 // per card — there can be a couple hundred player elements once a roster's full depth is on screen.
 function wireFieldClicks(fieldOuter, teamAbbr) {
@@ -220,16 +234,17 @@ export async function renderTeam(root, search, abbr, playerKey) {
     ${navStripHtml({ teams, abbr: A, page: "team", primary: team.colourPrimary, secondary: team.colourSecondary })}
     ${headerHtml(team, view, fromFixture, teams)}
     ${legendHtml()}
-    <div class="team-body">
-      <div class="field-outer" style="--team-primary:${team.colourPrimary};--team-secondary:${team.colourSecondary}"></div>
-      <aside class="player-panel" hidden></aside>
-    </div>
+    ${teamBodyHtml(team)}
     `;
 
   // Integration task 1 (2026-09-11): the router keys the player panel off whichever view last rendered,
   // not off this module specifically — main.js reads this cache to open/close the panel without
   // re-rendering the view underneath it. zoom.js sets the same shape for its own views.
-  window.__nflView = { abbr: A, view, teamMeta: team };
+  // `page` (D75) tells main.js's openPlayerPanel whether the page currently on screen is one that carries
+  // a `<aside class="player-panel">` it can open the panel into in place ("team"/"off"/"def") — the group
+  // and matchup pages don't set this at all, so main.js's default fallback (re-render the whole-team page)
+  // still applies to them, unchanged.
+  window.__nflView = { abbr: A, view, teamMeta: team, page: "team" };
 
   wireNav(root); // D59: switcher routes to the equivalent page on the newly picked team
 

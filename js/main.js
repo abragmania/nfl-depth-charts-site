@@ -46,18 +46,23 @@ function findCard(view, playerKey) {
 }
 
 // window.__nflView is the shared contract every view-rendering module sets after it loads a team (this
-// file's own renderTeam calls, and zoom.js's renderZoomSide/renderZoomGroup) — {abbr, view, teamMeta}.
-// When the route gains a /player/:id segment for the SAME abbr already cached there, the panel opens
-// directly on the existing <aside class="player-panel"> without re-rendering the view underneath it.
-// If nothing matches yet (a direct link, or a team switch), this falls back to rendering the full field
-// (the one view this file owns outright) so there's always an aside to open the panel on.
+// file's own renderTeam calls, and zoom.js's renderZoomSide/renderZoomGroup) — {abbr, view, teamMeta, page}.
+// `page` ("team" | "off" | "def" | "group") names which page is currently on screen; only "team", "off"
+// and "def" carry the `<aside class="player-panel">` D75 gave the offense/defense pages (team.js's
+// teamBodyHtml, reused by zoom.js's renderZoomSide) for the panel to open into in place. When the route
+// gains a /player/:id segment for the SAME abbr, on one of those three pages, with that aside actually
+// present, the panel opens directly on it without re-rendering the view underneath it — so a defense page
+// stays a defense page (route unchanged: #/team/X/player/Y) with the field re-fitting beside the panel,
+// the same as the whole-team page already did before D72 put the side pages on the same field engine.
+// If nothing matches yet (a direct link, a team switch, or a "group"/matchup page that has no aside at
+// all — 🔵 review finding 5), this falls back to rendering the full team field (the one view this file
+// owns outright) so there's always an aside to open the panel on.
+const KEEPABLE_PANEL_PAGES = new Set(["team", "off", "def"]);
 async function openPlayerPanel(abbr, playerKey) {
   const A = String(abbr || "").toUpperCase();
-  // 🔵 review finding 5: the cached view might be the matchup or a zoom page, which have no
-  // <aside class="player-panel"> at all - matching on the abbreviation alone meant clicking a card there
-  // silently did nothing. Fall back to the full team page whenever there is no panel to open.
   let cached = window.__nflView;
-  if (!cached || cached.abbr !== A || !root.querySelector(".player-panel")) {
+  const canKeepCurrentPage = cached && cached.abbr === A && KEEPABLE_PANEL_PAGES.has(cached.page) && root.querySelector(".player-panel");
+  if (!canKeepCurrentPage) {
     await renderTeam(root, search, A);
     cached = window.__nflView;
   }
