@@ -167,7 +167,7 @@ const CROP_MARGIN = 26;
 // unrelated islands rather than as levels of one chart.
 const MAX_EXTRA_GAP = 220;
 const PASS_CATCHER_PITCH = 1.3; // D76: receivers/TE cluster pitch as a multiple of MIN_PITCH
-const SLOT_COLUMN_MIN_RATE = 30; // a WR · Slot column exists only when the top man is at or above this (matches the Slot tag bar) // D75: a three-row offense page spreads its rows to fill the height rather than zooming
+const SLOT_COLUMN_MIN_RATE = 30; // D83: the bar a receiver's measured slot rate must clear to stand in the WR · Slot column // D75: a three-row offense page spreads its rows to fill the height rather than zooming
 
 function offBandRange(band) {
   const cfg = OFF_BANDS[band] || { x: [REFERENCE_WIDTH / 2, REFERENCE_WIDTH / 2], n: 1 };
@@ -334,60 +334,66 @@ function stackColumns(cols) {
   for (const c of cols.slice(1)) c.stackUnder = cols[0];
 }
 
-// EA tags a receiver "Slot - WR" (ESPN publishes no slot label at all, D19). Since D64 this is the
-// FALLBACK signal, behind PlayerProfiler's measured slot rate, and it is still what decides the men
-// PlayerProfiler has no page for. ratings.js carries EA's own {id,label} object through untouched, and a
-// hand-built fixture may carry a plain string, so both read.
-function isSlotArchetype(player) {
-  const a = player?.rating?.archetype;
-  const label = typeof a === "string" ? a : (a?.label ?? a?.id ?? "");
-  return /slot/i.test(String(label));
+// WR · SLOT IS A REAL COLUMN OF SLOT RECEIVERS — D83 (Adam, 2026-09-15): "if he shows under WR · Slot,
+// don't show him again under WR1 or WR2." Until now the slot was a club column wearing a different pill
+// (D63/D64), so the man standing inside was also still the club's WR2 two boxes away. He is now lifted
+// out: every charted receiver whose MEASURED slot rate (D64/D77 — PlayerProfiler, pooled across this
+// season and last) is at or above SLOT_COLUMN_MIN_RATE moves into one synthetic column, ordered by rate
+// with the top man on line one, and is removed from the club column he came from. Nobody over the bar is
+// left behind and nobody is drawn twice. A team with nobody over the bar has no Slot column at all and
+// keeps WR1/WR2/WR3 exactly as the club prints them — no archetype and no "last receiver" guesses, which
+// is what D64 already ruled out.
+//
+// This is a DISPLAY regrouping and nothing more: the compiled TeamView is the club's own chart and stays
+// untouched, which is why every slot object is shallow-cloned before its player list is trimmed. The
+// player cards themselves are carried across by reference, so the man in the Slot column is the very same
+// card object the club column held — his role, banner, badges and heat ride along unchanged.
+const isSlotMan = (p) => typeof p?.slotRate === "number" && Number.isFinite(p.slotRate) && p.slotRate >= SLOT_COLUMN_MIN_RATE;
+
+// "Puka Nacua" -> "Nacua" for the Slot column's tooltip. A generational suffix is not a surname, so
+// "Marvin Harrison Jr." reads as "Harrison" rather than "Jr.".
+const NAME_SUFFIXES = new Set(["jr", "jr.", "sr", "sr.", "ii", "iii", "iv", "v"]);
+function lastName(name) {
+  const parts = String(name ?? "").trim().split(/\s+/).filter(Boolean);
+  while (parts.length > 1 && NAME_SUFFIXES.has(parts[parts.length - 1].toLowerCase())) parts.pop();
+  return parts[parts.length - 1] || String(name ?? "");
 }
 
-// WHICH RECEIVER PLAYS THE SLOT — deliberately the only place that decision is made (D63). The candidates
-// are the line-one men of the team's top three receiver columns, and the signals are tried best first:
-//   1. the chart itself says so (`slot.isSlot`), for a source that ever labels the slot outright;
-//   2. D64: PlayerProfiler's slot rate, the share of his snaps the man actually took from inside — the
-//      highest of the three wins, and it is the real answer rather than a proxy for one;
-//   3. the Madden "Slot — WR" archetype, EA's own opinion, and only when EXACTLY ONE of the three carries
-//      it — two slot archetypes or none is not an answer;
-//   4. D19's default: WR3.
-// A tie at the top of (2) is no answer either and falls through to (3), the same way two archetypes do.
-// The chosen column is tagged with `slotReason`, the plain-English sentence the label's tooltip shows, so
-// the man's placement can always be explained. Returns the column, or null when the team does not carry
-// three receiver columns to choose between.
-// D70 (Adam, 2026-09-15): the on-field pill drops the rank ("WR · Slot", not "WR1 · Slot" — see
-// layoutPassCatchers below), so slotReason carries it instead: prefixed with the column's own rank label
-// ("WR1 · Slot: 51.2% of snaps (2025)"), it is the whole tooltip text (cards.js prints slotReason verbatim),
-// so the rank a viewer lost off the pill is still one hover away.
-export function pickSlotColumn(wrColumns) {
-  // D76 follow-up (Adam, CHI): a club that charts only two WR columns still has a slot man; pick among
-  // whatever columns exist (two or three), and the default falls to the last of them.
-  if (wrColumns.length < 2) return null;
-  const top3 = wrColumns.slice(0, 3);
-  const pick = (col, reason) => { col.slotReason = `${col.slot.label} · ${reason}`; return col; };
-  // The man who decides a column's alignment is the one actually playing it: when the starter of record sits on
-  // line one as STARTER_OUT (D56/D61), his ACTIVE fill-in's rate and archetype count, not the injured man's.
-  const playing = (col) => {
-    const ps = col.slot?.players || [];
-    return ps.find((p) => p.role === "STARTER" || p.role === "ACTIVE") ?? ps[0];
+// Builds the WR · Slot slot and the club slots that survive it, or null when no receiver clears the bar.
+// Returns { slot, kept, reason }: `slot` is the synthetic column's slot object, `kept` the cloned club
+// slots with their slot men removed (an emptied one is dropped outright, so its column disappears from
+// the row), and `reason` the tooltip sentence naming every man in the column and the rate that put him
+// there. Exported for the tests — nothing else calls it.
+export function regroupSlotReceivers(wrSlots) {
+  const men = [];
+  const seen = new Set();
+  for (const s of wrSlots) {
+    for (const p of s.players || []) {
+      // Belt and braces against a chart that lists one man in two receiver columns (dedupSlots already
+      // resolves that on the server): one card object, and one playerKey, can enter the column once.
+      if (!isSlotMan(p) || seen.has(p) || (p.playerKey != null && seen.has(p.playerKey))) continue;
+      seen.add(p);
+      if (p.playerKey != null) seen.add(p.playerKey);
+      men.push(p);
+    }
+  }
+  if (!men.length) return null;
+  men.sort((a, b) => b.slotRate - a.slotRate);
+
+  const moved = new Set(men);
+  const movedKeys = new Set(men.map((p) => p.playerKey).filter((k) => k != null));
+  const kept = [];
+  for (const s of wrSlots) {
+    const players = (s.players || []).filter((p) => !moved.has(p) && !(p.playerKey != null && movedKeys.has(p.playerKey)));
+    if (players.length) kept.push({ ...s, players });
+  }
+
+  const slot = {
+    slotId: "OFF-WR-SLOT", unit: "OFF", band: "WR", ordinal: 0, columnOrder: 0,
+    label: "WR · Slot", derived: true, players: men,
   };
-
-  const flagged = top3.filter((c) => c.slot?.isSlot);
-  if (flagged.length === 1) return pick(flagged[0], "Slot by depth-chart label");
-
-  // Adam (2026-09-15): a slot column exists only when someone EARNS it — the highest measured rate among the
-  // top three is at or above SLOT_COLUMN_MIN_RATE (the same bar as the Slot tag) and beats the next man.
-  // No archetype or "last receiver" guesses: a team whose receivers all play outside shows plain WR1/2/3,
-  // and the Slot tag (cards.js) handles anyone who crosses the bar later.
-  const rated = top3.map((c) => ({ c, p: playing(c) }))
-    .filter((x) => typeof x.p?.slotRate === "number" && Number.isFinite(x.p.slotRate))
-    .sort((a, b) => b.p.slotRate - a.p.slotRate);
-  if (!rated.length || rated[0].p.slotRate < SLOT_COLUMN_MIN_RATE) return null;
-  if (rated.length > 1 && rated[0].p.slotRate === rated[1].p.slotRate) return null;
-  const { c, p } = rated[0];
-  const season = p.slotSeason ? ` (${p.slotSeason})` : "";
-  return pick(c, `Slot: ${p.slotRate}% of snaps${season}`);
+  const reason = `Slot receivers by snaps: ${men.map((p) => `${lastName(p.name)} ${p.slotRate}%`).join(", ")}`;
+  return { slot, kept, reason };
 }
 
 // The PASS CATCHERS row (D69's own row, D71's x-maths). D63 hung these columns off the ends of the
@@ -402,30 +408,36 @@ export function pickSlotColumn(wrColumns) {
 // position for the secondary to mirror, so the corners and the nickel are fixed off the tackles in
 // mirrorLandmarks instead (D71).
 function layoutPassCatchers(offSlots, lm, style) {
-  const col = (slot, band) => ({ slot, x: lm.C, height: slotContentHeight(slot, style), width: colWidth(style), band });
-  const wrCols = offSlots.filter((s) => s.band === "WR").slice().sort(byColumnOrder).map((s) => col(s, "WR"));
+  const col = (slot, band, extra = {}) => ({ slot, x: lm.C, height: slotContentHeight(slot, style), width: colWidth(style), band, ...extra });
+  const wrSlots = offSlots.filter((s) => s.band === "WR").slice().sort(byColumnOrder);
   const teCols = offSlots.filter((s) => s.band === "TE").slice().sort(byColumnOrder).map((s) => col(s, "TE"));
 
-  const slotCol = pickSlotColumn(wrCols);
-  // D70: the pill reads "WR · Slot" regardless of which rank plays there (matching the defense's
-  // "CB · Nickel" pill) — the rank moved into slotReason's tooltip text (see pickSlotColumn above)
-  // instead of crowding the on-field label.
-  if (slotCol) slotCol.displayLabel = "WR · Slot";
+  // D83: the slot men are regrouped into their own column before any geometry happens, so the cluster is
+  // laid out over the columns that will actually be drawn — an emptied club column is never given a place
+  // in the comb and then hidden, it simply is not there.
+  const grouped = regroupSlotReceivers(wrSlots);
+  const slotCol = grouped ? col(grouped.slot, "WR", { displayLabel: "WR · Slot", derived: true, slotReason: grouped.reason }) : null;
+  // D83 addendum (Adam): with the inside men lifted out, a leftover column's rank no longer describes what
+  // is in the box, so every remaining receiver column reads a plain "WR" and the club's own label moves
+  // into the tooltip. With no Slot column the club's WR1/WR2/WR3 pills stand exactly as before.
+  const wrCols = grouped
+    ? grouped.kept.map((s) => col(s, "WR", { displayLabel: "WR", slotReason: `club lists this column as ${s.label}` }))
+    : wrSlots.map((s) => col(s, "WR"));
 
-  // The slot man is lifted out of his chart position and re-inserted immediately after the outermost
-  // receiver; everyone else keeps the chart's own order around him.
-  // D76 (Adam): the cluster reads outside WR, WR · Slot, any further WRs, TE(s), outside WR — the TE sits
-  // INSIDE the right-side receiver — and it is spread a little wider than the line pitch so the boxes
-  // stop reading as packed together.
-  const outside = wrCols.filter((c) => c !== slotCol);
   stackColumns(teCols); // TE2 under TE1: the stack takes ONE place in the cluster, not two
   const te = teCols.length ? [teCols[0]] : [];
-  const placed = slotCol
-    ? [outside[0], slotCol, ...outside.slice(2), ...te, outside[1]].filter(Boolean)
-    : [wrCols[0], ...wrCols.slice(2), ...te, wrCols[1]].filter(Boolean);
+  // D71/D76 order, now over the surviving columns: outside WR, WR · Slot, any further WRs, TE(s), and the
+  // last club column on the right — so the slot men are always drawn INSIDE the outside receiver and the
+  // tight end inside the right-side receiver. One club column left keeps the left end with the Slot column
+  // inside it; none left (every charted receiver plays inside) leaves the Slot column alone with the TEs.
+  const placed = (slotCol
+    ? (wrCols.length > 1
+      ? [wrCols[0], slotCol, ...wrCols.slice(1, -1), ...te, wrCols[wrCols.length - 1]]
+      : [...wrCols, slotCol, ...te])
+    : [wrCols[0], ...wrCols.slice(2), ...te, wrCols[1]]).filter(Boolean);
   const pitch = MIN_PITCH * PASS_CATCHER_PITCH;
   placed.forEach((c, i) => { c.x = lm.C + (i - (placed.length - 1) / 2) * pitch; });
-  return [...wrCols, ...teCols];
+  return [...(slotCol ? [slotCol] : []), ...wrCols, ...teCols];
 }
 
 // The BACKFIELD row: the quarterback stays centred on the centre (Adam: "QB centred behind C as now")

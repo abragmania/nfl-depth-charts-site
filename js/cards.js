@@ -492,13 +492,16 @@ function keepOutRowsVisible(depth, n) {
 // D61: a man on a reserve list already wears IR / PUP / NFI / SUSP; a second "PS" (off the 53) badge beside it
 // reads as "practice squad", so the PS badge only shows when no reserve badge does.
 const RESERVE_CODES = new Set(["IR", "PUP", "NFI", "SUSP", "EXEMPT"]);
-// D77 (Adam): "Slot" describes the man, not only the column. A receiver who lines up inside on half or more
-// of his snaps wears a small Slot tag wherever he sits, unless his column is already the "WR · Slot" column.
-// Adam (2026-09-15): 30% for wide receivers, 20% for tight ends.
-export const SLOT_TAG_RATE = { WR: 30, TE: 20 };
-const slotTagRate = (p) => SLOT_TAG_RATE[/TE/i.test(p.position || "") ? "TE" : "WR"];
-export const slotBadge = (p, opts = {}) => (typeof p.slotRate === "number" && p.slotRate >= slotTagRate(p) && !opts.isSlotColumn
-  ? `<span class="badge badge-slot" title="Slot: ${esc(String(p.slotRate))}% of snaps${p.slotSeason ? " (" + esc(String(p.slotSeason)) + ")" : ""}">Slot</span>` : "");
+// D77 (Adam): "Slot" describes the man, not only the column — a player who lines up inside often enough
+// wears a small Slot tag wherever he sits.
+// D83 (Adam, 2026-09-15): for RECEIVERS that tag is now redundant and gone. Every receiver over the bar
+// stands in the real WR · Slot column (field.js's regroupSlotReceivers), so tagging him there — or
+// anywhere else, since he is nowhere else any more — would print the same fact twice. TIGHT ENDS have no
+// slot column to move into, so theirs stays, at Adam's 20% bar; no other position carries a rate at all.
+export const SLOT_TAG_RATE = { TE: 20 };
+const slotTagRate = (p) => (/TE/i.test(p.position || "") ? SLOT_TAG_RATE.TE : null);
+export const slotBadge = (p, opts = {}) => { const bar = slotTagRate(p); return (bar != null && typeof p.slotRate === "number" && p.slotRate >= bar && !opts.isSlotColumn
+  ? `<span class="badge badge-slot" title="Slot: ${esc(String(p.slotRate))}% of snaps${p.slotSeason ? " (" + esc(String(p.slotSeason)) + ")" : ""}">Slot</span>` : ""); };
 export const psBadge = (p, title = true) => (p.onActiveRoster === false && !RESERVE_CODES.has(p.status?.code)
   ? `<span class="badge badge-ps"${title ? ' title="Not on the 53-man active roster"' : ""}>PS</span>` : "");
 export function renderColumn(col, teamAbbr, opts = {}) {
@@ -512,7 +515,10 @@ export function renderColumn(col, teamAbbr, opts = {}) {
   // Madden archetype, or the WR3 default. It leads the tooltip because on the slot column it is the thing a
   // reader actually questions; every other column has no reason and reads exactly as before.
   const labelTitle = esc([col.slotReason || "", slot.labelSource ? `source: ${slot.labelSource}` : "", heatTitleText].filter(Boolean).join(" · "));
-  const pair = players.length >= 2 && players[0].coStarter && players[1].coStarter;
+  // D83: `col.derived` marks a column the LAYOUT built rather than one the club charted (the WR · Slot
+  // column). Two men in it may happen to be co-starters of the club columns they came from, but they are
+  // not co-starters of each other, so the "· co-starters" suffix must not follow them into it.
+  const pair = players.length >= 2 && players[0].coStarter && players[1].coStarter && !col.derived;
   // Lead ruling (2026-09-11): a co-starter pair is ONE slot with two names on it, not two separate
   // rankings — the column label says so directly instead of leaving it to be inferred from two adjacent
   // STARTER tags.
