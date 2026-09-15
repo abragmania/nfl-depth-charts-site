@@ -110,7 +110,9 @@ function bioRowHtml(card) {
   const height = heightFromInches(b.height) ?? dash;
   const weight = b.weight != null ? `${esc(b.weight)} lbs` : dash;
   const age = b.age != null ? `${esc(b.age)} yo` : dash;
-  const college = b.college || dash;
+  // An International Player Pathway man never attended a college, so the compile leaves b.college null (it is a
+  // matching field) and states the fact in b.collegeNote. A dash would read as "we don't know" — this is known.
+  const college = b.college || (b.collegeNote === "international" ? "No college (international)" : dash);
   const expNum = Number(b.exp);
   const exp = b.exp == null ? dash : Number.isFinite(expNum) ? `${expNum} yr${expNum === 1 ? "" : "s"}` : esc(b.exp); // "R" for rookies on some sources
   const draft = draftLine(b.draft) || dash;

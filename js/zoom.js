@@ -193,7 +193,10 @@ function bioLineText(p) {
     if (bio.height) bits.push(`${Math.floor(bio.height / 12)}'${bio.height % 12}"`);
     if (bio.weight) bits.push(`${bio.weight} lbs`);
     if (bio.age) bits.push(`${bio.age} yrs`);
+    // See panel.js: a null college with an "international" note is a stated fact, not a missing value. This
+    // one-line summary is tight, so it says the short form.
     if (bio.college) bits.push(bio.college);
+    else if (bio.collegeNote === "international") bits.push("No college");
     if (bits.length) return bits.join(" · ");
   }
   return `#${p.number ?? "—"} · ${p.displayLabel || p.position || ""}`;
