@@ -489,8 +489,10 @@ function keepOutRowsVisible(depth, n) {
   return depth.filter((p) => keep.has(p));
 }
 
-// D61: a man on a reserve list already wears IR / PUP / NFI / SUSP; a second "PS" (off the 53) badge beside it
-// reads as "practice squad", so the PS badge only shows when no reserve badge does.
+// D61/D81: a man on a reserve list already wears IR / PUP / NFI / SUSP; a second "PS" badge beside it reads
+// as "practice squad", so the PS badge only shows when no reserve badge does. It fires for a game-day
+// elevation (off the 53) or for a man who was on any club's practice squad this season and now sits on the
+// active roster (server's practiceSquadPromoted) — the tooltip wording tells the two cases apart.
 const RESERVE_CODES = new Set(["IR", "PUP", "NFI", "SUSP", "EXEMPT"]);
 // D77 (Adam): "Slot" describes the man, not only the column — a player who lines up inside often enough
 // wears a small Slot tag wherever he sits.
@@ -502,8 +504,16 @@ export const SLOT_TAG_RATE = { TE: 20 };
 const slotTagRate = (p) => (/TE/i.test(p.position || "") ? SLOT_TAG_RATE.TE : null);
 export const slotBadge = (p, opts = {}) => { const bar = slotTagRate(p); return (bar != null && typeof p.slotRate === "number" && p.slotRate >= bar && !opts.isSlotColumn
   ? `<span class="badge badge-slot" title="Slot: ${esc(String(p.slotRate))}% of snaps${p.slotSeason ? " (" + esc(String(p.slotSeason)) + ")" : ""}">Slot</span>` : ""); };
-export const psBadge = (p, title = true) => (p.onActiveRoster === false && !RESERVE_CODES.has(p.status?.code)
-  ? `<span class="badge badge-ps"${title ? ' title="Not on the 53-man active roster"' : ""}>PS</span>` : "");
+export const psBadge = (p, title = true) => {
+  if (RESERVE_CODES.has(p.status?.code)) return "";
+  if (p.onActiveRoster === false) {
+    return `<span class="badge badge-ps"${title ? ' title="Practice squad (game-day elevation, not on the 53)"' : ""}>PS</span>`;
+  }
+  if (p.practiceSquadPromoted === true) {
+    return `<span class="badge badge-ps"${title ? ' title="Practice squad this season, now on the active roster"' : ""}>PS</span>`;
+  }
+  return "";
+};
 export function renderColumn(col, teamAbbr, opts = {}) {
   const { slot, x, top, height } = col;
   const players = slot.players;

@@ -167,7 +167,7 @@ const CROP_MARGIN = 26;
 // unrelated islands rather than as levels of one chart.
 const MAX_EXTRA_GAP = 220;
 const PASS_CATCHER_PITCH = 1.3; // D76: receivers/TE cluster pitch as a multiple of MIN_PITCH
-const SLOT_COLUMN_MIN_RATE = 30; // D83: the bar a receiver's measured slot rate must clear to stand in the WR · Slot column // D75: a three-row offense page spreads its rows to fill the height rather than zooming
+const SLOT_COLUMN_MIN_SHARE = 0.25; // D85: share of the team's WR slot snaps a receiver must take to stand in the WR · Slot column // D75: a three-row offense page spreads its rows to fill the height rather than zooming
 
 function offBandRange(band) {
   const cfg = OFF_BANDS[band] || { x: [REFERENCE_WIDTH / 2, REFERENCE_WIDTH / 2], n: 1 };
@@ -337,18 +337,28 @@ function stackColumns(cols) {
 // WR · SLOT IS A REAL COLUMN OF SLOT RECEIVERS — D83 (Adam, 2026-09-15): "if he shows under WR · Slot,
 // don't show him again under WR1 or WR2." Until now the slot was a club column wearing a different pill
 // (D63/D64), so the man standing inside was also still the club's WR2 two boxes away. He is now lifted
-// out: every charted receiver whose MEASURED slot rate (D64/D77 — PlayerProfiler, pooled across this
-// season and last) is at or above SLOT_COLUMN_MIN_RATE moves into one synthetic column, ordered by rate
-// with the top man on line one, and is removed from the club column he came from. Nobody over the bar is
-// left behind and nobody is drawn twice. A team with nobody over the bar has no Slot column at all and
-// keeps WR1/WR2/WR3 exactly as the club prints them — no archetype and no "last receiver" guesses, which
-// is what D64 already ruled out.
+// out: every charted receiver who takes a real share of the team's inside work moves into one synthetic
+// column and is removed from the club column he came from. Nobody over the bar is left behind and nobody
+// is drawn twice. A team with nobody over the bar has no Slot column at all and keeps WR1/WR2/WR3 exactly
+// as the club prints them — no archetype and no "last receiver" guesses, which is what D64 already ruled
+// out.
+//
+// D85 (Adam, 2026-09-15) amends D83: membership is decided by VOLUME, not by each man's own rate. A
+// receiver belongs in the column when his measured slot snaps (D64/D77 — PlayerProfiler, pooled across
+// this season and last) are at least SLOT_COLUMN_MIN_SHARE of the TEAM's slot snaps, counting only the
+// charted wide receivers passed in here (tight ends are not in the denominator and never join the column),
+// and the column is ordered by slot snaps with the biggest inside workload on line one. A man with no
+// slot-snap number at all is in neither the numerator nor the denominator. The rate rule it replaces put
+// the Rams' Xavier Smith — a backup with a high rate on a handful of snaps — on line one ahead of Puka
+// Nacua, who plays inside far more often but over a much bigger snap count.
 //
 // This is a DISPLAY regrouping and nothing more: the compiled TeamView is the club's own chart and stays
 // untouched, which is why every slot object is shallow-cloned before its player list is trimmed. The
 // player cards themselves are carried across by reference, so the man in the Slot column is the very same
 // card object the club column held — his role, banner, badges and heat ride along unchanged.
-const isSlotMan = (p) => typeof p?.slotRate === "number" && Number.isFinite(p.slotRate) && p.slotRate >= SLOT_COLUMN_MIN_RATE;
+// A card's measured slot snaps, or null when PlayerProfiler has no number for him (D85: a null keeps him
+// out of the team total as well as out of the column — he is not evidence of anything either way).
+const slotSnapsOf = (p) => (typeof p?.slotSnaps === "number" && Number.isFinite(p.slotSnaps) && p.slotSnaps >= 0 ? p.slotSnaps : null);
 
 // "Puka Nacua" -> "Nacua" for the Slot column's tooltip. A generational suffix is not a surname, so
 // "Marvin Harrison Jr." reads as "Harrison" rather than "Jr.".
@@ -362,23 +372,34 @@ function lastName(name) {
 // Builds the WR · Slot slot and the club slots that survive it, or null when no receiver clears the bar.
 // Returns { slot, kept, reason }: `slot` is the synthetic column's slot object, `kept` the cloned club
 // slots with their slot men removed (an emptied one is dropped outright, so its column disappears from
-// the row), and `reason` the tooltip sentence naming every man in the column and the rate that put him
-// there. Exported for the tests — nothing else calls it.
+// the row), and `reason` the tooltip sentence naming every man in the column and the rate he plays inside
+// at. Exported for the tests — nothing else calls it.
 export function regroupSlotReceivers(wrSlots) {
-  const men = [];
+  // Pass one: every charted receiver with a measured slot-snap count, deduped. This is the D85 denominator
+  // — the team's own inside workload — so it is gathered before anybody is judged against it.
+  const charted = [];
   const seen = new Set();
   for (const s of wrSlots) {
     for (const p of s.players || []) {
       // Belt and braces against a chart that lists one man in two receiver columns (dedupSlots already
-      // resolves that on the server): one card object, and one playerKey, can enter the column once.
-      if (!isSlotMan(p) || seen.has(p) || (p.playerKey != null && seen.has(p.playerKey))) continue;
+      // resolves that on the server): one card object, and one playerKey, count once.
+      if (seen.has(p) || (p.playerKey != null && seen.has(p.playerKey))) continue;
+      const snaps = slotSnapsOf(p);
+      if (snaps == null) continue;
       seen.add(p);
       if (p.playerKey != null) seen.add(p.playerKey);
-      men.push(p);
+      charted.push({ p, snaps });
     }
   }
+  const teamSlotSnaps = charted.reduce((sum, c) => sum + c.snaps, 0);
+  if (!(teamSlotSnaps > 0)) return null;
+
+  // Pass two: the men who take at least SLOT_COLUMN_MIN_SHARE of that total, biggest workload on line one.
+  const men = charted
+    .filter((c) => c.snaps / teamSlotSnaps >= SLOT_COLUMN_MIN_SHARE)
+    .sort((a, b) => b.snaps - a.snaps)
+    .map((c) => c.p);
   if (!men.length) return null;
-  men.sort((a, b) => b.slotRate - a.slotRate);
 
   const moved = new Set(men);
   const movedKeys = new Set(men.map((p) => p.playerKey).filter((k) => k != null));
@@ -392,7 +413,11 @@ export function regroupSlotReceivers(wrSlots) {
     slotId: "OFF-WR-SLOT", unit: "OFF", band: "WR", ordinal: 0, columnOrder: 0,
     label: "WR · Slot", derived: true, players: men,
   };
-  const reason = `Slot receivers by snaps: ${men.map((p) => `${lastName(p.name)} ${p.slotRate}%`).join(", ")}`;
+  // The tooltip still names each man and how much of HIS OWN season he spent inside — that is the fact a
+  // reader wants on the card. A man PlayerProfiler counted snaps for but published no rate for reads as
+  // his snap count instead of "null%".
+  const rateOf = (p) => (typeof p.slotRate === "number" && Number.isFinite(p.slotRate) ? `${p.slotRate}%` : `${slotSnapsOf(p)} slot snaps`);
+  const reason = `Slot receivers by snaps: ${men.map((p) => `${lastName(p.name)} ${rateOf(p)}`).join(", ")}`;
   return { slot, kept, reason };
 }
 
