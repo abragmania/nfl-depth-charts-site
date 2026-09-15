@@ -521,9 +521,10 @@ export function renderColumn(col, teamAbbr, opts = {}) {
   const heatCls = slot.injury?.level && HEAT_CLASS[slot.injury.level] ? ` ${HEAT_CLASS[slot.injury.level]}` : "";
   const heatTitleText = heatCls ? heatTitle(slot.injury) : "";
   const labelHref = `#/team/${esc(teamAbbr)}/group/${esc((slot.band || "").toLowerCase())}`;
-  // col.slotReason (D64): why THIS receiver is the one standing in the slot — his measured slot rate, the
-  // Madden archetype, or the WR3 default. It leads the tooltip because on the slot column it is the thing a
-  // reader actually questions; every other column has no reason and reads exactly as before.
+  // col.slotReason (D64): why THIS receiver is the one standing in the slot. Under D86 that is the tooltip
+  // sentence naming the men at half or more of their own snaps inside, or, on an unlifted club column, "club
+  // lists this column as WRn". It leads the tooltip because on the slot column it is the thing a reader
+  // actually questions; every other column has no reason and reads exactly as before.
   const labelTitle = esc([col.slotReason || "", slot.labelSource ? `source: ${slot.labelSource}` : "", heatTitleText].filter(Boolean).join(" · "));
   // D83: `col.derived` marks a column the LAYOUT built rather than one the club charted (the WR · Slot
   // column). Two men in it may happen to be co-starters of the club columns they came from, but they are
@@ -534,7 +535,7 @@ export function renderColumn(col, teamAbbr, opts = {}) {
   // STARTER tags.
   // D63: the LAYOUT may override what a column calls itself — the receiver it places in the slot reads
   // "WR · Slot" regardless of his rank (D70: the rank moved into the tooltip, see slotReason in field.js's
-  // pickSlotColumn), since which man plays inside is the question that row answers. The slot's own label
+  // regroupSlotReceivers), since which man plays inside is the question that row answers. The slot's own label
   // is still the identity everywhere else (the group link, the "also listed at" chips).
   const baseLabel = col.displayLabel || slot.label;
   const labelText = pair ? `${baseLabel} · co-starters` : baseLabel;
