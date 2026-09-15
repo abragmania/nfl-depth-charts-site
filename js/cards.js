@@ -488,8 +488,8 @@ function keepOutRowsVisible(depth, n) {
 const RESERVE_CODES = new Set(["IR", "PUP", "NFI", "SUSP", "EXEMPT"]);
 // D77 (Adam): "Slot" describes the man, not only the column. A receiver who lines up inside on half or more
 // of his snaps wears a small Slot tag wherever he sits, unless his column is already the "WR · Slot" column.
-// Adam (2026-09-15): 30% for wide receivers; tight ends keep 50% (their median is 16%, and 30% would tag in-line men).
-export const SLOT_TAG_RATE = { WR: 30, TE: 50 };
+// Adam (2026-09-15): 30% for wide receivers, 20% for tight ends.
+export const SLOT_TAG_RATE = { WR: 30, TE: 20 };
 const slotTagRate = (p) => SLOT_TAG_RATE[/TE/i.test(p.position || "") ? "TE" : "WR"];
 export const slotBadge = (p, opts = {}) => (typeof p.slotRate === "number" && p.slotRate >= slotTagRate(p) && !opts.isSlotColumn
   ? `<span class="badge badge-slot" title="Slot: ${esc(String(p.slotRate))}% of snaps${p.slotSeason ? " (" + esc(String(p.slotSeason)) + ")" : ""}">Slot</span>` : "");
