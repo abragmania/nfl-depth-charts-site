@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- D67: tools/publish.mjs rewrites this to "1" in the published copy. "1" means "there is no server":
+     public/js/api.js reads the pre-rendered files under api/ and refresh.js hides the Refresh control. -->
+<meta name="nfl-static" content="1">
+<title>NFL Depth Charts</title>
+<link rel="stylesheet" href="css/styles.css">
+<link rel="stylesheet" href="css/panel.css">
+<link rel="stylesheet" href="css/zoom.css">
+<link rel="stylesheet" href="css/matchup.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="#/">NFL DEPTH CHARTS</a>
+  <input id="search" class="search" type="search" placeholder="Filter teams" autocomplete="off" hidden>
+  <span id="asof" class="asof" hidden></span>
+</header>
+<main id="app" aria-live="polite"></main>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

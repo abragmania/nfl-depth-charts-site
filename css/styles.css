@@ -1,0 +1,472 @@
+/* Adam (2026-09-11), PFF-inspired: ONE colour scale for a rating NUMBER wherever it appears (card pill,
+   panel grade, table cell) — 90+ deep green, 80s green, 70s yellow-green/neutral, 60s amber, <60
+   red-orange, so a scan of any view reads quality by colour alone. Reuses hues already established
+   elsewhere in this app (elite/strong match the existing row-tier accents; weak/flat match the existing
+   amber/red badge+heat colours) so this isn't a 6th new palette, just the canonical home for one that
+   already existed in pieces. This is distinct from D43's card-surface tiers (tier-elite/strong/avg/weak/
+   flat backgrounds on the big cards) — those stay as the softer background cue; these vars are for the
+   number itself. `-ink` is the paired legible text colour for whichever tier sits on a solid fill. */
+:root { --bg:#0b0d10; --panel:#14181d; --ink:#e8ebef; --muted:#8a94a0; --team-primary:#333; --team-secondary:#777;
+  --tier-elite:#34d399; --tier-elite-ink:#062617;
+  --tier-strong:#22a06b; --tier-strong-ink:#eafff5;
+  --tier-avg:#c9d15a; --tier-avg-ink:#1c2007;
+  --tier-weak:#f2c14e; --tier-weak-ink:#2b1d02;
+  --tier-flat:#e0524d; --tier-flat-ink:#fff;
+}
+* { box-sizing:border-box; }
+html,body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.4 "Segoe UI", system-ui, sans-serif; }
+.topbar { display:flex; align-items:center; gap:24px; padding:10px 28px; background:var(--panel); border-bottom:1px solid #22282f; position:sticky; top:0; z-index:5; }
+.brand { color:var(--ink); text-decoration:none; font-weight:800; letter-spacing:.12em; font-size:18px; }
+.search { margin-left:auto; width:260px; padding:8px 12px; border-radius:6px; border:1px solid #2a323b; background:#0f1317; color:var(--ink); }
+.asof { color:var(--muted); font-size:13px; min-width:110px; text-align:right; }
+/* Ruling E: the team pages have to fit 1700x900 with no scrolling, so the page chrome is trimmed to the
+   minimum that still looks deliberate. The landing grid keeps its old roomier padding (.page-landing). */
+main { padding:8px 14px 8px; width:100%; }
+main.page-landing { padding:10px 20px 12px; }
+
+/* D59 (Adam, 2026-09-14): "never stuck on a page." One shared strip (public/js/nav.js), rendered directly
+   under the app bar on every team-context page (whole-team, offense/defense, position group, matchup) —
+   "All teams", the team switcher, then Team/Offense/Defense/Matchup pills with the current page lit. It
+   replaces team.js's old header pills+switcher and zoom.js's/matchup.js's old breadcrumb rows, so this is
+   the ONE place those controls live now. Team-tinted like the header (--team-primary/--team-secondary,
+   set inline per render) so it still reads as "this team" even before the colourful header below it has
+   rendered. Reuses zoom.css's own .zoom-pill for the pills themselves — same visual language, one pill
+   style app-wide — and styles.css's own .team-switcher for the dropdown, just sized to this row's height. */
+.nav-strip { display:flex; align-items:center; gap:10px; height:34px; padding:0 10px; margin:6px 0 0;
+  border-radius:8px; flex-wrap:nowrap; overflow:hidden;
+  background:color-mix(in srgb, var(--team-primary,#333) 18%, #12161b 82%);
+  border:1px solid color-mix(in srgb, var(--team-primary,#333) 45%, #262d35 55%); }
+.nav-strip-all { flex:none; color:var(--ink); text-decoration:none; font-size:12px; font-weight:800; letter-spacing:.04em; white-space:nowrap; }
+.nav-strip-all:hover { color:#ffd54a; }
+.nav-strip .team-switcher { flex:none; max-width:220px; height:24px; padding:2px 6px; font-size:11.5px; }
+.nav-strip-pills { display:flex; gap:6px; flex:none; }
+.nav-strip-pills .zoom-pill { padding:3px 12px; font-size:11px; }
+.nav-strip-crumb { flex:none; color:var(--ink); font-size:12px; font-weight:700; white-space:nowrap; }
+.nav-strip-crumb .crumb-sep { color:var(--muted); margin-right:4px; }
+.nav-strip-matchlinks { flex:none; display:flex; gap:6px; font-size:11.5px; color:var(--muted); white-space:nowrap; }
+.nav-strip-matchlinks a { color:var(--ink); text-decoration:none; font-weight:700; padding:3px 10px; border-radius:999px; border:1px solid color-mix(in srgb, var(--team-secondary,#888) 45%, #3a424b 55%); background:rgba(255,255,255,.04); }
+.nav-strip-matchlinks a:hover { background:rgba(255,255,255,.12); }
+@media (max-width:1400px) {
+  .nav-strip { gap:6px; padding:0 8px; }
+  .nav-strip .team-switcher { max-width:120px; }
+  .nav-strip-pills .zoom-pill { padding:3px 9px; }
+  .nav-strip-matchlinks { display:none; }
+}
+
+/* landing grid: 8 division rows x 4 tiles, stretching to the full window width (Adam: no wasted real
+   estate). 👁 QA item 11: eight rows of 132px tiles came to ~1200px and needed scrolling — this page has
+   to fit 1700x900 like every other. The tile keeps its shape, its crest and everything it said; it is
+   simply sized so all eight divisions land on one screen. */
+/* 👁 QA round 3 item 6: the eight division rows share whatever height the window leaves, rather than
+   each being its own fixed 78px and stopping ~100px short of the bottom. The tiles stretch with them. */
+.divisions { display:grid; gap:8px; grid-auto-rows:1fr; align-content:stretch;
+  min-height:calc(100vh - var(--landing-chrome, 140px)); }
+.division { display:grid; grid-template-columns:112px repeat(4, minmax(0,1fr)); gap:10px; align-items:stretch; }
+.division h2 { margin:0; align-self:center; font-size:11.5px; letter-spacing:.1em; color:var(--muted); text-transform:uppercase; }
+.tile { position:relative; display:flex; align-items:center; gap:12px; min-height:78px; padding:8px 12px; border-radius:10px; text-decoration:none; color:#fff;
+  background:linear-gradient(135deg, var(--team-primary) 0 55%, var(--team-secondary) 140%); border:1px solid rgba(255,255,255,.08);
+  box-shadow:0 2px 8px rgba(0,0,0,.45); transition:transform .12s ease, box-shadow .12s ease, opacity .15s; }
+.tile:hover, .tile:focus-visible { transform:translateY(-3px); box-shadow:0 10px 22px rgba(0,0,0,.6); outline:none; }
+.tile.dim { opacity:.18; }
+/* Soft light plate behind every logo so a mark never disappears into its own team colour (👁 finding:
+   NYG, LA). 👁 QA item 11: the plate was a soft radial that faded to nothing well inside the crest, which
+   is fine for a mark with light in it but not for the Jets' solid dark-green wordmark on their solid
+   dark-green tile — it simply vanished. The plate is now an opaque disc the full size of the logo box, so
+   EVERY crest sits on light regardless of its own colours, and no team needs a special case. */
+.tile img { width:60px; height:60px; padding:5px; object-fit:contain; flex:none; border-radius:50%;
+  background:radial-gradient(circle at 50% 45%, rgba(255,255,255,.92) 0%, rgba(255,255,255,.82) 62%, rgba(255,255,255,.45) 88%, rgba(255,255,255,0) 100%);
+  filter:drop-shadow(0 2px 4px rgba(0,0,0,.55)); }
+.tile .logo-fallback { width:60px; height:60px; display:grid; place-items:center; font-weight:900; font-size:20px; background:rgba(0,0,0,.3); border-radius:50%; flex:none; }
+.tile .txt { display:flex; flex-direction:column; min-width:0; }
+/* 👁 QA B3 / round 3 item 3: a pale team colour (New Orleans' gold, Pittsburgh's, Las Vegas's silver) is
+   a light wash, and white-on-light fails. landing.js measures the relative luminance of BOTH gradient
+   stops and adds .tile-light. The ink has to be set on the text elements themselves, not only on the
+   tile: .tile sets `color:#fff` directly, so a rule on the parent alone never reached the children that
+   inherit from it - which is why the first attempt at this changed nothing on screen. */
+.tile.tile-light, .tile.tile-light .abbr, .tile.tile-light .nick, .tile.tile-light .rec { color:#14181d; }
+.tile.tile-light .abbr, .tile.tile-light .nick, .tile.tile-light .rec { text-shadow:0 1px 2px rgba(255,255,255,.5); }
+.tile .abbr { font-size:20px; font-weight:900; letter-spacing:.04em; line-height:1.05; text-shadow:0 2px 4px rgba(0,0,0,.6); }
+.tile .nick { font-size:12px; opacity:.92; text-shadow:0 1px 3px rgba(0,0,0,.6); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.tile .rec { margin-top:2px; font-variant-numeric:tabular-nums; font-size:11.5px; opacity:.85; min-width:4ch; }
+@media (max-width:1400px) { .division { grid-template-columns:92px repeat(4, minmax(0,1fr)); } .tile img, .tile .logo-fallback { width:52px; height:52px; } .tile .abbr { font-size:18px; } }
+
+/* team page header.
+   RULING E (Adam, 2026-09-13): "it does not fit on my monitor yet and I have a big monitor." The header
+   collapses to ONE line — logo, name, record, next opponent, bye, scheme, the Offense/Defense pills, the
+   team switcher, Refresh now and the as-of chip all on the same row — because every pixel it used to
+   spend on a 96px crest and a stacked control column came straight out of the field's height budget.
+   Nothing was dropped, only re-flowed; the chips wrap to a second line only when there genuinely are
+   chips (a heat summary, an ESPN-fallback warning), which is the rare case. */
+.teamhead { display:flex; align-items:center; gap:14px; padding:5px 14px; border-radius:10px; color:#fff; flex-wrap:wrap;
+  background:linear-gradient(110deg, var(--team-primary) 0 60%, var(--team-secondary) 160%); }
+.teamhead img { width:38px; height:38px; object-fit:contain; flex:none; }
+.teamhead h1 { margin:0; font-size:19px; white-space:nowrap; }
+.teamhead-main { min-width:0; display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
+.teamhead .meta { display:flex; gap:14px; align-items:center; color:rgba(255,255,255,.88); font-size:12.5px; flex-wrap:wrap; }
+.opp { display:inline-flex; align-items:center; gap:5px; }
+.opp-logo { width:17px !important; height:17px !important; }
+/* Ruling E: these must stay on the header's single line. min-width:0 plus the ellipsis on .chip below
+   lets the widest element (the heat summary chip) give ground instead of pushing the whole control
+   group onto a second row - which is what happened on HOU, whose two chips cost the defensive side
+   view the 42px it needed to fit a 900px window. */
+.teamhead-controls { margin-left:auto; min-width:0; display:flex; flex-direction:row; align-items:center; gap:8px; flex-wrap:nowrap; justify-content:flex-end; }
+.team-switcher { padding:4px 8px; border-radius:6px; border:1px solid rgba(255,255,255,.35); background:rgba(0,0,0,.35); color:#fff; font-size:12px; max-width:160px; flex:0 1 auto; }
+.refresh-btn { padding:4px 11px; border-radius:20px; border:1px solid rgba(255,255,255,.4); background:rgba(255,255,255,.12); color:#fff; font-size:11.5px; font-weight:700; cursor:pointer; white-space:nowrap; }
+.refresh-btn:hover { background:rgba(255,255,255,.22); }
+.refresh-btn:disabled { opacity:.6; cursor:default; }
+.refresh-btn.is-spinning { background:rgba(255,255,255,.12); }
+.asof-chip { font-size:12px; color:rgba(255,255,255,.85); background:rgba(0,0,0,.3); padding:4px 10px; border-radius:20px; white-space:nowrap; }
+.asof-chip.amber { background:#7a4a00; color:#ffd98a; font-weight:700; }
+.chip-row { display:flex; gap:6px; min-width:0; flex-wrap:nowrap; justify-content:flex-end; }
+.chip { font-size:11px; padding:3px 8px; border-radius:20px; white-space:nowrap; max-width:300px; overflow:hidden; text-overflow:ellipsis; }
+.chip-warn { background:#5a3b00; color:#ffcf70; border:1px solid #8a6200; }
+.chip-sample { background:#3a2f5c; color:#d9c9ff; border:1px solid #5c4a94; }
+.chip-heat { background:#5c1f16; color:#ffb199; border:1px solid #8a3222; font-weight:700; }
+.chip-wk1 { background:#12405c; color:#8fd4ff; margin-left:4px; }
+.chip-ghost { background:transparent; color:var(--muted); border:1px dashed #3a424c; margin-left:4px; }
+
+.placeholder { margin-top:26px; padding:40px; border:1px dashed #2a323b; border-radius:12px; color:var(--muted); text-align:center; }
+.notfound { padding:60px; text-align:center; color:var(--muted); }
+a.back { color:var(--muted); }
+.back-row { margin-top:4px; font-size:12px; }
+
+/* ---- field-style depth chart (build step 4) ---- */
+.team-body { display:flex; gap:12px; margin-top:8px; align-items:flex-start; }
+/* Ruling E: team.js now scales the field on BOTH axes (k = min(widthFit, heightFit)) so the whole canvas
+   always fits the window without scrolling — there is no MIN_FIELD_SCALE floor to overflow past any
+   more, so neither axis needs a scrollbar. The compact overview rows stay legible down to about 0.6. */
+.field-outer { flex:1 1 auto; min-width:0; position:relative; overflow:hidden; border-radius:10px; border:1px solid #22282f;
+  animation: field-in .18s ease-out; }
+.player-panel { flex:0 0 440px; }
+/* 🎨 Polish (2026-09-11, round 2): 80px-tall turf bands read as oversized once the level stripes below
+   also carry visual weight — tightened to a ~45px band (item 3) so the turf texture reads as texture,
+   not another competing layer of stripes. */
+.field-scale { position:relative; background:repeating-linear-gradient(to bottom, #17421c 0 22px, #1b4d20 22px 44px); }
+.field-layer { position:absolute; inset:0; z-index:1; }
+/* D48: a faint, large team-logo watermark centred behind the cards — sits below .field-layer (z-index 1)
+   so it never competes with them. */
+.field-watermark { position:absolute; inset:0; background-repeat:no-repeat; background-position:center 42%; background-size:46% auto;
+  opacity:.05; filter:grayscale(.3); pointer-events:none; z-index:0; }
+
+/* D49: a short, subtle entrance for the field on render. */
+@keyframes field-in { from { opacity:0; transform:scale(.97); } to { opacity:1; transform:scale(1); } }
+@media (prefers-reduced-motion: reduce) { .field-outer { animation:none; } }
+
+/* Ruling E: one line, never two — it wraps only on a genuinely narrow window, and its height is part of
+   the budget team.js subtracts from the window before it scales the field. */
+.legend { display:flex; flex-wrap:wrap; gap:12px; align-items:center; margin-top:6px; padding:2px 2px; color:var(--muted); font-size:10.5px; line-height:1.2; }
+.legend b { color:#c3cad2; font-weight:700; }
+.legend .sw { display:inline-block; width:10px; height:10px; border-radius:3px; margin-right:4px; vertical-align:-1px; }
+.legend .sw-out { background:#e0524d; }
+.legend .sw-active { background:#3bb273; }
+.legend .sw-q { background:#f2c14e; }
+.legend .sw-d { background:#f2924e; }
+.legend .sw-susp { background:#9b5de5; }
+.legend .sw-inactive { background:#8a94a0; }
+.legend .sw-shaded { background:repeating-linear-gradient(45deg, #6b7480 0 3px, #333a42 3px 6px); }
+.legend .tier-strip { display:inline-flex; height:10px; width:56px; border-radius:3px; overflow:hidden; vertical-align:-1px; margin-right:4px; }
+.legend .tier-strip span { flex:1; }
+
+/* Adam (2026-09-11): "levels of guys visually" — DL on the line, EDGE its own layer (D14), LBs next,
+   then DBs, each with generous vertical separation (field.js's LEVEL_GAP_EXTRA) and one faint label at
+   the field's left edge, vertically centred on that level's whole span. Non-interactive overlay, always
+   on top (z-index above .field-layer's cards) but never intercepts clicks. */
+.level-layer { position:absolute; inset:0; z-index:2; pointer-events:none; }
+/* 🎨 Polish (2026-09-11, round 2, item 3): a full-width, team-tinted wash spanning the whole level so the
+   eye reads "this is one group" before it even parses the label text — alternating alpha (field.js) keeps
+   consecutive levels visually distinct from each other. */
+/* Final 👁 pass (item 4, 2026-09-12): left/width are now always set inline per-segment (field.js's
+   renderLevelLabels) — the offense's merged line row splits into a RECEIVERS segment and a LINE segment
+   side by side instead of one full-width stripe, so no CSS default spans the whole row any more. */
+.level-stripe { position:absolute; background:color-mix(in srgb, var(--team-secondary,#777) var(--stripe-alpha,7%), transparent); }
+.level-label { position:absolute; font-size:12.5px; font-weight:900; line-height:1.1;
+  letter-spacing:.13em; text-transform:uppercase; color:rgba(255,255,255,.82); text-shadow:0 1px 3px rgba(0,0,0,.7); white-space:nowrap; }
+
+.column { position:absolute; display:flex; flex-direction:column; border-radius:8px; transition:box-shadow .2s; }
+/* Amended D48 (Adam: "colors make it more interesting"): band labels carry the team's secondary colour
+   as a tinted bar, not just plain grey text. */
+.column-label { display:block; font-size:10.5px; font-weight:800; letter-spacing:.07em; color:#fff; text-align:center;
+  text-transform:uppercase; text-decoration:none; margin-bottom:3px; padding:1px 4px; border-radius:4px; line-height:1.2;
+  background:color-mix(in srgb, var(--team-secondary,#777) 55%, transparent); text-shadow:0 1px 2px rgba(0,0,0,.8);
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.column-label:hover { background:color-mix(in srgb, var(--team-secondary,#777) 80%, transparent); }
+/* RULING B (Adam, 2026-09-13): "put the backup boxes under the starters." Every column now reads
+   top-down — label, starter, backups — on BOTH sides of the ball, so the old `.column-stack.stack-reverse`
+   (flex-direction:column-reverse, which used to flip the defensive columns so the starter sat nearest the
+   line of scrimmage) is gone, along with field.js's matching bottom-flush defensive row geometry. */
+.column-stack { display:flex; flex-direction:column; gap:2px; flex:1 1 auto; }
+.column-shaded { background:repeating-linear-gradient(45deg, rgba(255,255,255,.05) 0 8px, rgba(255,255,255,0) 8px 16px); border-radius:8px; padding:2px; margin:-2px; }
+
+/* D50, corrected (Adam: quiet — "the eye gets drawn to it", not a loud chip): a warm glow scaled by
+   level, on the slot's label and column edge only — columns already carry tiers/hatching, so the tint
+   here stays restrained. Guarded entirely on slot.injury.level being present. */
+/* D50, as Adam corrected it: "the eye gets drawn to it, not HEY WE'RE HIGHLIGHTING THIS".
+   👁 QA: a solid red column header sitting directly on top of a red OUT banner (LV's tight ends) was two
+   loud reds shouting the same thing twice. The header keeps the team's own secondary tint and states the
+   level of concern with a thin coloured underline and a hint of wash instead — still the same amber /
+   orange / red language as the legend swatches and every other view, just no longer competing with the
+   banner immediately below it. The column's own glow (.column.heat-*) is unchanged. */
+/* 👁 QA C6a: mixing the bright heat colour INTO the team's secondary made the label lighter, and for a
+   club with a pale secondary (Las Vegas's silver) the result was white bold text on pale pink — the
+   faintest thing on the field. The tints are now deep by construction, so white ink reads on them
+   whatever colour the team brings; the bright accent survives as the underline, which is what carries
+   the low/high/critical distinction anyway. */
+.column-label.heat-low { background:color-mix(in srgb, #5c4410 62%, var(--team-secondary,#777) 38%); box-shadow:inset 0 -2px 0 rgba(242,193,78,.9); }
+.column-label.heat-high { background:color-mix(in srgb, #64330f 66%, var(--team-secondary,#777) 34%); box-shadow:inset 0 -2px 0 rgba(242,146,78,.95); }
+.column-label.heat-critical { background:color-mix(in srgb, #5e1613 70%, var(--team-secondary,#777) 30%); box-shadow:inset 0 -2px 0 #e0524d; }
+.column.heat-low { box-shadow:0 0 0 1px rgba(242,193,78,.4); }
+.column.heat-high { box-shadow:0 0 10px rgba(242,146,78,.45); }
+.column.heat-critical { box-shadow:0 0 14px rgba(224,82,77,.6); }
+
+/* ---- RULING E: the whole-team overview's player rows (.prow) --------------------------------------
+   Adam, 2026-09-13: the whole-team page is an OVERVIEW that must fit 1700x900 with nothing cut off, so
+   its columns are stacks of text rows instead of photo cards. A .prow-one is the starter — bold, a shade
+   taller, carrying the D44 banner when he is out or filling in; a plain .prow is a backup. Both keep the
+   D43 rating-tier treatment (a left-edge stripe plus a faint tint, the same language the side view's own
+   depth rows use) and the tier-coloured OVR number, so a column still reads as a ranked list by colour
+   alone. The big photo cards live on in the side/group/matchup views, which are where detail belongs.
+   These are a DIFFERENT class family from .card/.row on purpose: .card and .row are still rendered by
+   zoom.js and matchup.js and must keep their current sizes. */
+.prow { display:flex; flex-direction:column; justify-content:center; text-decoration:none; color:var(--ink);
+  background:#151a1f; border:1px solid #262d35; border-left:3px solid transparent; border-radius:4px;
+  min-height:18px; box-sizing:border-box; overflow:hidden; position:relative; }
+.prow:hover { border-color:#6b7885; }
+.prow.selected { outline:2px solid #ffd54a; outline-offset:1px; }
+.prow-line { display:flex; align-items:center; gap:4px; padding:0 4px; min-width:0; }
+.prow-num { flex:none; color:var(--muted); font-variant-numeric:tabular-nums; font-size:9.5px; min-width:15px; text-align:right; }
+.prow-name { flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:11px; }
+.prow-badges { flex:none; display:inline-flex; gap:2px; align-items:center; max-width:52px; overflow:hidden; }
+.prow-ovr { flex:none; font-size:10px; font-weight:800; font-variant-numeric:tabular-nums; min-width:19px; text-align:center;
+  border-radius:7px; padding:0 3px; background:rgba(255,255,255,.07); color:#c3cad2; }
+/* 👁 QA: "NR" for a player with no Madden entry — quiet, but never an empty slot where every other row
+   in the column has a number. Same wording and weight as the card views' own NR pill. */
+.prow-ovr-none { color:var(--muted); font-weight:700; font-size:8.5px; letter-spacing:.02em; }
+/* The starter's row: bigger, bolder, and its OVR is a solid tier-coloured pill rather than a tinted
+   number, so the one player who actually starts is unmistakable at a glance down a column. */
+.prow-one { min-height:27px; border-left-width:4px; }
+.prow-one .prow-name { font-size:12px; font-weight:700; }
+.prow-one .prow-num { font-size:10.5px; }
+.prow-one .prow-ovr { font-size:11px; padding:1px 5px; min-width:21px; }
+.prow-one .prow-ovr.tier-elite { background:var(--tier-elite); color:var(--tier-elite-ink); }
+.prow-one .prow-ovr.tier-strong { background:var(--tier-strong); color:var(--tier-strong-ink); }
+.prow-one .prow-ovr.tier-avg { background:var(--tier-avg); color:var(--tier-avg-ink); }
+.prow-one .prow-ovr.tier-weak { background:var(--tier-weak); color:var(--tier-weak-ink); }
+.prow-one .prow-ovr.tier-flat { background:var(--tier-flat); color:var(--tier-flat-ink); }
+/* Backups keep the number itself tier-coloured on a neutral chip — quieter than the starter's solid pill
+   but still enough that "the depth behind him is all red" reads without being read. `:not(.prow-one)` is
+   load-bearing: these selectors have exactly the same specificity as the solid-pill rules above and come
+   later in the file, so without it they'd win on the STARTER's row too and paint (say) tier-elite green
+   text straight onto the tier-elite green pill — an invisible number on every starter. */
+.prow:not(.prow-one).tier-elite .prow-ovr { color:var(--tier-elite); }
+.prow:not(.prow-one).tier-strong .prow-ovr { color:var(--tier-strong); }
+.prow:not(.prow-one).tier-avg .prow-ovr { color:var(--tier-avg); }
+.prow:not(.prow-one).tier-weak .prow-ovr { color:var(--tier-weak); }
+.prow:not(.prow-one).tier-flat .prow-ovr { color:var(--tier-flat); }
+/* D43 rating tiers on the row surface: a left stripe plus a faint tint, strongest at the top of the
+   scale so an elite player's row genuinely stands out on a crowded field. */
+.prow.tier-elite { border-left-color:#34d399; background:linear-gradient(90deg, rgba(52,211,153,.2), rgba(21,26,31,0) 70%), #151a1f; }
+.prow.tier-strong { border-left-color:#22a06b; background:linear-gradient(90deg, rgba(34,160,107,.13), rgba(21,26,31,0) 70%), #151a1f; }
+.prow.tier-avg { border-left-color:#7f8a5e; background:#171b20; }
+.prow.tier-weak { border-left-color:#6b7280; background:#181a1c; }
+.prow.tier-flat { border-left-color:#4b5157; background:#141516; }
+/* D44: the same red "who's out and for how long" / green "filling in" banners, as a strip on top of the
+   starter's own row rather than on a card. field.js reserves exactly BANNER_H for it.
+   👁 QA: the banner used to run edge to edge, so in a column of rows separated by a 2px gap it read as a
+   divider BETWEEN two players rather than as a label on one of them (PHI's EDGE co-starter pair). It is
+   now inset inside the row's own box, and a bannered row takes the banner's colour on its border and a
+   matching tint, so the strip and the name under it are unmistakably one object. */
+.prow-one .card-banner { position:static; height:13px; line-height:13px; font-size:8px; letter-spacing:.02em;
+  border-radius:3px; padding:0 3px; margin:2px 2px 1px; }
+.prow-one:has(.banner-out) { border-color:#c23b36; background-image:linear-gradient(rgba(194,59,54,.14), rgba(194,59,54,.14)); }
+.prow-one:has(.banner-active) { border-color:#2f9e63; background-image:linear-gradient(rgba(47,158,99,.14), rgba(47,158,99,.14)); }
+/* 👁 QA C6b: the dim used to cover the whole line, including the rating. But the rating is the entire
+   reason the out man is still on screen — D44 keeps him there so his number can be compared with his
+   replacement's, and a muted 93 above a bright 72 reads as if the bright one were the better player.
+   The name and number grey out to say "not available"; the number you are meant to compare does not. */
+.prow-out .prow-num, .prow-out .prow-name { opacity:.6; filter:grayscale(.55); }
+.prow-active { border-left-color:#2f9e63 !important; }
+.prow-costarter { border-style:solid; }
+.prow-shaded { background-image:repeating-linear-gradient(45deg, rgba(255,255,255,.06) 0 5px, rgba(255,255,255,0) 5px 10px); }
+.prow.espn-flag { border-color:#4fd1c5; border-style:dashed; }
+/* The "+N more" tail (ruling E's depth cap): deliberately quiet, and it links through to the position
+   group view — the screen that does show every player at the position, stacked 1, 2, 3… (D45). */
+.prow-more { display:flex; align-items:center; justify-content:center; min-height:18px; font-size:9.5px; font-style:italic;
+  color:var(--muted); background:transparent; border:1px dashed #333b45; }
+.prow-more:hover { color:#c3cad2; border-color:#6b7885; }
+.prow-signals { flex:none; display:inline-flex; gap:1px; align-items:center; }
+/* The compact rows put a real badge in a 15px-tall line, so the shared .badge sizing is scaled down here
+   (and only here — zoom.js/matchup.js badges keep their normal size). */
+.prow .badge { font-size:8px; padding:1px 3px; border-radius:3px; line-height:1.2; }
+.prow .chip { font-size:8px; padding:1px 4px; }
+
+/* Card surface. Height is set inline per card (field.js's geometry — normal or +banner) so CSS never
+   fights the layout engine's own math; box-shadow/background below are the D43 rating-tier surface,
+   layered UNDER two fixed elements — the badge cluster and the OUT/ACTIVE banner — so neither is ever
+   dimmed, tinted or hidden by the tier treatment or the STARTER_OUT greyscale (👁 review, D43, D44). */
+/* 🎨 Polish (2026-09-11, round 2, CRITICAL fix): was `overflow:hidden` with a fixed inline height that
+   consistently undershot a real card's content — silently clipping the rating pill on every line-one
+   card and hiding it completely on OUT/ACTIVE banner cards. cards.js/zoom.js now set `min-height` instead
+   of `height`, so the card can never be shorter than its layout box but is free to grow the few px real
+   content needs instead of clipping it. `.card-banner` gets its own top corner radius below so the
+   banner still looks clean without relying on this element clipping it. */
+.card { display:flex; flex-direction:column; align-items:center; text-decoration:none; color:var(--ink);
+  border:2px solid var(--team-primary, #333); border-radius:10px; padding:8px 6px 6px; position:relative;
+  box-shadow:0 2px 6px rgba(0,0,0,.4); box-sizing:border-box; overflow:visible; }
+.card:hover { border-color:#fff; }
+/* Amended D48: a soft glow in the TEAM's own colour on the selected card, on top of the gold outline
+   that says "this is the one you clicked" — the two read as distinct signals. */
+.card.selected { outline:3px solid #ffd54a; outline-offset:2px; box-shadow:0 0 18px 2px color-mix(in srgb, var(--team-primary,#333) 70%, transparent); }
+.card.espn-flag { border-style:dashed; border-color:#4fd1c5; border-width:2px; }
+.card:has(.card-banner) { padding-top:2px; }
+.card-badges { position:absolute; top:4px; right:4px; display:flex; gap:2px; z-index:2; }
+.card-banner { position:absolute; top:0; left:0; right:0; height:20px; line-height:20px; text-align:center;
+  font-size:9.5px; font-weight:800; letter-spacing:.03em; color:#fff; z-index:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding:0 4px;
+  border-radius:8px 8px 0 0; /* now that .card is overflow:visible, the banner rounds its own top corners */ }
+.banner-out { background:#c23b36; }
+.banner-active { background:#2f9e63; }
+.card:has(.card-banner) .card-body { margin-top:22px; }
+
+/* STARTER_OUT dims only the body (photo/name/label/pill) — never .card-badges or .card-banner, which
+   must stay fully legible on top of the tier surface (👁 review, D44). */
+.card-body { display:flex; flex-direction:column; align-items:center; gap:2px; width:100%; }
+.card.card-out .card-body { opacity:.55; filter:grayscale(.55); }
+
+.role-tag { font-size:9px; letter-spacing:.06em; color:var(--muted); text-transform:uppercase; }
+
+/* D43 rating tiers — the card surface tracks Madden OVR. Border colour stays the team's own (set
+   above); tiers add background + glow only, so team identity never disappears even at the low end.
+   Amended D48 (Adam: "colors make it more interesting" — elite reads as real emerald gloss, strong a
+   clear green, and weak/flat stay deliberately muted so the CONTRAST between tiers carries the meaning). */
+.card.tier-elite { background:linear-gradient(150deg, #0f4a2c 0%, #0c3722 32%, #1fae6e 47%, #0c3722 62%, #0a2c1b 100%);
+  box-shadow:0 0 0 1px rgba(255,255,255,.4) inset, 0 0 22px rgba(52,211,153,.75), 0 2px 6px rgba(0,0,0,.4); }
+.card.tier-strong { background:linear-gradient(150deg, #14522f 0%, #103d24 45%, #1a5c34 100%);
+  box-shadow:0 0 0 1px rgba(255,255,255,.18) inset, 0 0 12px rgba(46,196,124,.4), 0 2px 6px rgba(0,0,0,.4); }
+.card.tier-avg { background:#181d23; }
+.card.tier-weak { background:#1a1c1d; border-color:color-mix(in srgb, var(--team-primary) 35%, #5b6167 65%); filter:saturate(.7); }
+.card.tier-flat { background:#141516; border-color:color-mix(in srgb, var(--team-primary) 18%, #40454a 82%); filter:saturate(.5) brightness(.9); }
+
+.card-head { display:block; }
+.headshot-box { display:block; border-radius:50%; overflow:hidden; background:#0c0f12; flex:none; }
+.headshot { width:100%; height:100%; object-fit:cover; display:block; }
+.headshot-fallback { border-radius:50%; background:#2a323b; color:#cfd6dd; display:flex; align-items:center; justify-content:center; font-weight:800; flex:none; }
+/* D48: "a small jersey-crest treatment" for the number — a sleek shield silhouette (clip-path, two
+   shoulder notches) in the team's own colours, not a plain text tag. */
+.jersey-crest { display:flex; align-items:center; justify-content:center; width:30px; height:24px; margin:2px auto 0;
+  background:linear-gradient(160deg, var(--team-primary,#333), var(--team-secondary,#777));
+  clip-path:polygon(32% 0%, 68% 0%, 82% 12%, 100% 22%, 86% 38%, 78% 32%, 78% 100%, 22% 100%, 22% 32%, 14% 38%, 0% 22%, 18% 12%);
+  color:#fff; font-weight:800; font-size:11px; text-shadow:0 1px 1px rgba(0,0,0,.5); }
+.card-name { font-size:13px; font-weight:700; text-align:center; line-height:1.15; max-width:118px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.card-label { font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; }
+/* PFF-inspired (Adam, 2026-09-11): the pill's fill is now the shared tier-colour scale above, not the
+   team colour — "a single, consistent colour scale for the number itself... replaces any ad-hoc pill
+   colouring". The base rule is just a neutral fallback for the rare case a tier class hasn't been added. */
+.rating-pill { font-size:10.5px; font-weight:700; background:#3a424c; color:#fff; border-radius:10px; padding:2px 8px; margin-top:2px; white-space:nowrap; }
+.rating-pill.tier-elite { background:var(--tier-elite); color:var(--tier-elite-ink); }
+.rating-pill.tier-strong { background:var(--tier-strong); color:var(--tier-strong-ink); }
+.rating-pill.tier-avg { background:var(--tier-avg); color:var(--tier-avg-ink); }
+.rating-pill.tier-weak { background:var(--tier-weak); color:var(--tier-weak-ink); }
+.rating-pill.tier-flat { background:var(--tier-flat); color:var(--tier-flat-ink); }
+/* Adam: "keep the rating pill but make the position-rank the secondary emphasis" — the OVR number stays
+   full-weight/full-colour, the "· #4 RB" rank reads quieter alongside it. */
+.rating-pill-rank { font-weight:600; opacity:.72; }
+
+/* D43 depth-row tiers already put a tier-* class on the row itself (cards.js/matchup.js) — reuse it here
+   so the row's own OVR number (styles.css's shared .row-ovr) picks up the same tier-colour scale as
+   every pill/grade-box, without needing a class on .row-ovr itself. */
+.row.tier-elite .row-ovr { color:var(--tier-elite); }
+.row.tier-strong .row-ovr { color:var(--tier-strong); }
+.row.tier-avg .row-ovr { color:var(--tier-avg); }
+.row.tier-weak .row-ovr { color:var(--tier-weak); }
+.row.tier-flat .row-ovr { color:var(--tier-flat); }
+.card-chips { display:flex; gap:3px; flex-wrap:wrap; justify-content:center; min-height:0; }
+.costarter-pair { display:flex; gap:6px; justify-content:center; }
+.card.card-costarter { border-style:solid; }
+
+/* D50, corrected: quiet glyphs next to the name — no badges/chips, detail lives in the title tooltip.
+   .card-signals is matchup.js's inline layout; the whole-team overview row's own glyphs are
+   .prow-signals above (ruling E replaced that view's cards with text rows, so the old absolutely-
+   positioned .card-signals-corner slot it used has no card to sit in the corner of any more). */
+.card-signals { display:inline-flex; gap:2px; margin-left:3px; vertical-align:1px; }
+.signal-glyph { font-size:9px; line-height:1; color:#ffd54a; }
+.signal-glyph.sig-LOW_SNAPS { color:#8a94a0; }
+.signal-glyph.sig-NEW_ARRIVAL { color:#4fd1c5; }
+
+.row { display:flex; align-items:center; gap:6px; text-decoration:none; color:var(--ink); background:#151a1f; border:1px solid #262d35; border-left:4px solid transparent;
+  border-radius:6px; padding:0 8px; height:40px; box-sizing:border-box; font-size:12.5px; }
+.row:hover { border-color:#4a5560; }
+.row.selected { outline:2px solid #ffd54a; outline-offset:1px; }
+.row-number { color:var(--muted); font-variant-numeric:tabular-nums; flex:none; }
+.row-name { flex:1 1 auto; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.row-ovr { flex:none; font-size:10px; font-weight:700; color:#c3cad2; background:rgba(255,255,255,.06); border-radius:8px; padding:1px 6px; margin-left:auto; }
+/* 👁 QA: an unrated player reads "NR", muted — never a blank or a bare dash. */
+.row-ovr-none { color:var(--muted); font-size:8.5px; letter-spacing:.03em; }
+/* D61: a depth row for a man who will not play (the second-stringer on IR/PUP/NFI/suspension that D61 puts
+   at the bottom of his slot, and any other out backup) greys out exactly as the out line-one rows do
+   (.prow-out above) — number and name fade, the status badge and the rating pill stay at full strength,
+   because "how good is the man we are missing" is the whole reason he is on screen. */
+.row-out .row-number, .row-out .row-name { opacity:.6; filter:grayscale(.55); }
+
+/* D43 depth-row tiers — subtler than the line-one card: a left-edge stripe plus a faint tint. */
+.row.tier-elite { border-left-color:#34d399; background:linear-gradient(90deg, rgba(52,211,153,.16), rgba(21,26,31,0) 65%), #151a1f; }
+.row.tier-strong { border-left-color:#22a06b; background:linear-gradient(90deg, rgba(34,160,107,.1), rgba(21,26,31,0) 65%), #151a1f; }
+.row.tier-weak { border-left-color:#6b7280; background:#181a1c; filter:saturate(.85); }
+.row.tier-flat { border-left-color:#4b5157; background:#141516; filter:saturate(.65); }
+
+/* Amended D48: badge colours saturated — these are status alerts, they should read as unmistakably
+   alive, not pastel. */
+/* 👁 QA (2026-09-15, item 8): "IR" is two letters where every other code is three, so the same padding gave
+   it a visibly narrower, condensed-looking plate than OUT / PUP / NFI / SUSP sitting beside it. A shared
+   min-width and the same tracking make every status badge one family of pills. */
+.badge { font-size:9.5px; font-weight:800; padding:2px 5px; border-radius:4px; color:#1a1a1a; line-height:1.3;
+  min-width:22px; text-align:center; letter-spacing:.04em; box-sizing:border-box; display:inline-block; }
+.badge-q { background:#ffc22e; }
+.badge-d { background:#ff8a26; }
+.badge-out { background:#f23c34; color:#fff; }
+.badge-susp { background:#9b3df2; color:#fff; }
+.badge-inactive { background:#8a94a0; color:#1a1a1a; }
+.badge-active { background:#22c774; color:#052b14; }
+.badge-ps { background:#3a424c; color:#dfe4e8; }
+
+/* 👁 QA (2026-09-15, items 3 and 11): ONE line, always. A tray is a TRAY_H-tall strip in field.js's
+   geometry, so a wrapped second line was drawn in space no row had reserved — under the last offensive
+   row (DEN/KC/DAL's backfield) it spilled past the bottom edge of the field and was clipped. field.js now
+   sizes the box to hold its own text; nowrap is what guarantees it stays a strip if that estimate is ever
+   a few pixels short, and overflow:hidden keeps the tail inside the dashed outline rather than loose on
+   the turf. */
+.tray { position:absolute; display:flex; align-items:center; gap:8px; flex-wrap:nowrap; white-space:nowrap; overflow:hidden;
+  padding:6px 10px; background:rgba(0,0,0,.28); border:1px dashed #3a424c; border-radius:8px; box-sizing:border-box; }
+.tray-label { font-size:10px; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); font-style:italic; flex:none; }
+/* A tray whose own band collapsed (nothing charted there at all) hangs under a neighbouring band's row,
+   so it gets a slightly stronger outline to say it is a visitor rather than that row's own spare men. */
+.tray-homed { border-style:dashed; border-color:#4a5560; }
+.tray-chip { font-size:11.5px; font-style:italic; color:#b7c0c9; text-decoration:none; background:rgba(255,255,255,.04); border-radius:12px; padding:2px 8px; }
+.tray-chip:hover { color:#fff; }
+
+@media (max-width:1400px) {
+  .card-name { font-size:12px; }
+  .card-label { font-size:10px; }
+  .rating-pill { font-size:9.5px; }
+  .row { font-size:11.5px; }
+}
+
+/* D49: the whole-team field is the zoomed-OUT view and uses compact cards (field.js's CARD_W/CARD_H1);
+   these sizes are namespaced under .field-scale so they never bleed into the zoom builder's side/group
+   views, which reuse the same class names at their own (larger) sizes. */
+.field-scale .card-name { font-size:11.5px; max-width:112px; }
+.field-scale .card-label { font-size:9.5px; }
+.field-scale .rating-pill { font-size:9px; padding:1px 6px; }
+.field-scale .role-tag { font-size:8px; }
+/* 🎨 Polish (2026-09-11): backup names in this compact row were truncating to 5-6 characters ("Micha...",
+   "Mac ...") — tightening the number/OVR chip either side buys back a few characters for the name, which
+   is the one column Adam actually reads. */
+.field-scale .row { font-size:11px; gap:3px; padding:0 5px; }
+.field-scale .row-number { font-size:10px; }
+.field-scale .row-ovr { font-size:9px; padding:1px 5px; }
+/* 🎨 Polish (2026-09-11, round 2): a status badge or an "also OLB" chip inside this 40px row used to
+   render at full size (no field-scale override existed for either) — on a narrow compact row that alone
+   could eat the whole row and reduce the name to one letter ("#20 J PS IR 72"). Both shrink here so the
+   name — the column Adam actually reads — keeps most of the row. */
+.field-scale .row .badge { font-size:7.5px; padding:1px 3px; }
+.field-scale .row .chip { font-size:7.5px; padding:1px 4px; }
+.field-scale .card-banner { font-size:8.5px; height:17px; line-height:17px; }
+.field-scale .card:has(.card-banner) .card-body { margin-top:19px; }

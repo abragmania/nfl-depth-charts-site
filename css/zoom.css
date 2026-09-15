@@ -1,0 +1,343 @@
+/* D45 zoom levels: side view (Offense/Defense) and group view (one position group). Reuses the main
+   page's own class names for cards/badges/tiers/tray (defined in styles.css, which this builder does
+   not edit) so a card looks identical wherever it's drawn; everything below is layout only. */
+
+/* D59: the old per-page breadcrumb (.zoom-breadcrumb/.zoom-pills) is gone — every team-context page now
+   gets its Team/Offense/Defense/Matchup pills from the shared nav strip (public/js/nav.js, styled in
+   styles.css). .zoom-pill itself stays: the strip's pills reuse this exact class so a pill looks the same
+   wherever it renders. */
+.zoom-pill { background:#1c2128; border:1px solid #2a323b; border-radius:20px; padding:4px 14px; color:var(--ink); text-decoration:none; font-size:12px; font-weight:700; letter-spacing:.04em; }
+.zoom-pill:hover { border-color:#4a5560; }
+/* Active state uses the page's fixed ink/bg tokens rather than --team-primary: --team-primary is only
+   ever set inline on .teamhead/.nav-strip themselves, so a sibling element can't reliably inherit it.
+   Ink-on-bg reads as clearly "selected" regardless of where the pill ends up in the DOM. */
+.zoom-pill.active { background:var(--ink); border-color:var(--ink); color:var(--bg); }
+
+/* zoomNav — exported for the whole-team (both-sides) page to embed its own Offense/Defense toggle;
+   bigger and more prominent than the in-page breadcrumb pills above. */
+.zoom-nav { display:flex; gap:10px; }
+.zoom-pill-big { background:#1c2128; border:1px solid #2a323b; border-radius:24px; padding:9px 22px; color:var(--ink); text-decoration:none; font-size:14px; font-weight:800; letter-spacing:.05em; }
+.zoom-pill-big:hover { border-color:#4a5560; }
+.zoom-pill-big.active { background:var(--ink); border-color:var(--ink); color:var(--bg); }
+
+.zoom { width:100%; margin-top:6px; }
+
+/* 👁 QA item 2: the side and group views must FILL the window, not sit at a fixed size in the middle of
+   it. They are ordinary flow layouts rather than an absolutely-positioned canvas, so instead of a
+   coordinate system they get a fixed design width and one CSS transform (team.js's fitToViewport): above
+   1.0 the cards GROW to use the height, below it they shrink to fit. overflow:hidden because the scaled
+   child's own untransformed box is what the browser would otherwise reserve scroll space for. */
+.fit-outer { width:100%; overflow:hidden; }
+/* flow-root, not plain block: viewfit.js sizes this view from .fit-inner's scrollHeight, and a plain block
+   lets its first child's margin-top collapse THROUGH it — the height it reported was a few pixels short of
+   the box it actually drew, which at a fill scale is exactly the few pixels that clipped the last row of
+   cards against the bottom of the window (👁 QA 2026-09-15, item 1). */
+.fit-inner { transform-origin:top left; display:flow-root; }
+
+/* D49: entering a view (side or group) fades/scales in so stepping between zoom levels reads as an
+   actual zoom rather than a hard cut. Wraps the whole rendered page (nav strip+header+cards) so it
+   replays on every navigation, since root.innerHTML is replaced wholesale each time. */
+.zoom-page { animation: zoom-page-enter 180ms ease-out; }
+@keyframes zoom-page-enter { from { opacity:0; transform:scale(.97); } to { opacity:1; transform:scale(1); } }
+@media (prefers-reduced-motion: reduce) {
+  .zoom-page { animation: none; }
+}
+
+/* rating pill lives outside .card-body (zoom.js's fullCard) so it stays clear of the .card-out dim */
+.zoom-pill-row { margin-top:2px; }
+
+/* 👁 QA, 2026-09-11: a card with a top banner (OUT / ACTIVE) must never let the badge cluster (top-right,
+   z-index above the banner in styles.css) sit on top of the banner text — push it below instead. Scoped
+   to this build's own views so it can't touch a card drawn anywhere else. */
+.zoom-side .card:has(.card-banner) .card-badges,
+.zoom-group .card:has(.card-banner) .card-badges { top:26px; }
+
+/* Tiny quiet D50 signal markers (star-out / promoted / new / low-snaps) — top-left, opposite the
+   existing badge cluster (top-right), so the two clusters never collide. Fallback look only: the
+   step-4 builder owns the canonical sig-star/sig-ps/sig-new/sig-lowsnaps rules in styles.css; these
+   apply only where those haven't defined a background/color already (this build never overrides them). */
+/* Cross-view consistency (🎨 Polish, 2026-09-11): this used to render as a small filled chip (background
+   + padding) — the ONLY place any D50 signal marker looked like a badge; cards.js's/matchup.js's own
+   signal glyphs (styles.css's .signal-glyph) are plain coloured text, no chip, per D50's own "quiet, not
+   shouted" ruling. Restyled to match: same colours, no fill. */
+.zoom-signals { position:absolute; top:4px; left:4px; display:flex; gap:3px; z-index:2; }
+.sig { font-size:9px; font-weight:800; line-height:1.3; color:#ffd54a; }
+.sig-star { color:#ffd54a; }
+.sig-ps { color:#ffd54a; }
+.sig-new { color:#4fd1c5; }
+.sig-lowsnaps { color:#8a94a0; }
+
+/* Final 👁 pass (item 4/5, 2026-09-12): ONE canonical level order everywhere — a level is now a single
+   tinted-band row header (same visual language as the whole-team field's own level-stripe, D48) instead
+   of a separate grey heading line PLUS a per-band sidebar label. That dual system was the "300px empty
+   label gutter": every band used to get its own full row (with a 120px label column) even when several
+   bands share one level (e.g. offense's BACKFIELD = QB + RB/FB) — a level with two thin bands cost two
+   rows' worth of padding for almost no content. Clicking into a band's own group view now happens on
+   that band's own slot label (.zoom-stack-label below) instead of a separate sidebar link. */
+/* RULING E (Adam, 2026-09-13): the level caption is now a fixed-width column BESIDE its stacks rather
+   than a full-width bar above them. Four defensive levels each paying ~50px for a header bar is what
+   pushed the bottom two levels off a 900px window; the horizontal space this uses was empty margin
+   before (the stacks always centred themselves and left a wide gutter on both sides), so nothing is
+   lost. It is still one label system — the tinted band, the same wording, the same place in the flow. */
+/* 👁 QA item 5: the level plaque used to be a ~118x200px sidebar stretched to the row's full height for a
+   two-word label — 90% empty box. It is now a compact chip that sizes to its own text and sits at the
+   row's top-left corner (align-items:flex-start, not stretch), with a faint tinted wash across the WHOLE
+   row behind it (the same "this is one band of turf" language the whole-team field's own level-stripe
+   uses, D48) so the empty rectangle disappears but the level still reads as a distinct block at a glance. */
+/* D62 (Adam, 2026-09-15): on the SIDE views both of those are gone — the LINE / BACKFIELD / EDGE chip and
+   the alternating tinted washes behind the rows ("it's not helpful to see... the level divides and washes
+   on those views"). What a level still does is group its bands onto one row; the only thing it needs for
+   that is air around the block, so a row is now a plain flex row with a gap under it. The whole-team
+   field keeps its own level stripes and labels (field.js's renderLevelLabels) — that view was not part of
+   this ruling, and there the stripe is what says where one level ends and the next begins. */
+.zoom-level { position:relative; display:flex; align-items:flex-start; gap:10px; padding:0 2px; }
+/* With the wash and the chip gone this gap is the ONLY thing separating one level from the next, so it is
+   deliberately generous — and the leaner cards freed the height to spend on it. */
+.zoom-level + .zoom-level { margin-top:30px; }
+
+/* ---- side view: every band belonging to one level shares that level's row ---- */
+.zoom-side { display:flex; flex-direction:column; }
+/* 👁 QA fix, 2026-09-11 (still applies): stacks spread across the full row instead of packing left. */
+.zoom-band-stacks { flex:1 1 auto; min-width:0; display:flex; gap:14px; flex-wrap:wrap; justify-content:space-evenly; padding:2px 0 2px; }
+/* A band inside a shared level. (👁 QA 2026-09-15 item 4: the tight ends' own "TIGHT ENDS" caption is
+   gone with the rest of D63's labels — .zoom-band-caption went with it.) */
+.zoom-band-group { display:flex; flex-direction:column; gap:2px; border-radius:8px; flex:1 1 auto; }
+/* 👁 QA item 2: the stacks distribute across the row rather than huddling in a cluster in the middle
+   of it, so a four-man defensive line actually uses the width the page has. */
+.zoom-band-row { display:flex; gap:14px; flex-wrap:wrap; flex:1 1 auto; justify-content:space-evenly; }
+.zoom-side-stack { display:flex; flex-direction:column; gap:2px; align-items:center; }
+/* Ruling E: the side view's depth rows are half the height of the whole-page default — two of them plus
+   a card have to share ~175px of level. Scoped to .zoom-side so the group and matchup views keep theirs. */
+.zoom-side .row { height:20px; font-size:10.5px; padding:0 6px; gap:4px; border-left-width:3px; }
+.zoom-side .row-ovr { font-size:9px; padding:0 5px; }
+.zoom-side .badge { font-size:8.5px; padding:1px 4px; }
+
+/* Ruling E: "+N more" collapses the depth a capped stack is hiding, and expands it in place on click
+   (cards.js's renderDepth / wireDepthToggles). display:contents on the open state so the revealed rows
+   join the stack's own flex column instead of forming a nested box inside it. */
+.depth-more { align-self:stretch; background:transparent; border:1px dashed #333b45; border-radius:6px; color:var(--muted);
+  font:inherit; font-size:10px; font-style:italic; padding:2px 6px; cursor:pointer; }
+.depth-more:hover { color:#c3cad2; border-color:#6b7885; }
+.depth-extra { display:none; }
+.depth-extra.is-open { display:contents; }
+
+/* 👁 QA fix, 2026-09-11: the compact backup card's rating pill was clipping 1-2px past the card's own
+   bottom edge under `.card{overflow:hidden}`. Extra bottom padding plus a tighter body gap buys back
+   that margin without touching the shared .card padding used everywhere else. Name gets the same
+   ellipsis-on-overflow treatment as the big cards below — its 118px max-width (styles.css) is wider than
+   a 110px-wide compact card's own content box, so text was overflowing and getting centre-clipped on
+   both edges instead of ellipsizing on the right.
+   🎨 Polish (2026-09-11, round 2, item 10): card-body's gap was down to 1px to fight the old clipping —
+   at that gap the jersey crest sat close enough under the small (26px) headshot to read as touching its
+   chin. Now that .card itself is overflow:visible (styles.css) and heights are min-height, there's no
+   need to fight for every pixel here — bumped to 4px, the explicit clearance Adam asked for. */
+.zoom-card-sm .jersey-crest { width:22px; height:18px; font-size:9px; margin-top:1px; }
+.zoom-card-sm .card-body { gap:4px; }
+.zoom-card-sm .card-name { max-width:100%; font-size:11px; }
+.zoom-card-sm .card-label { font-size:9px; }
+.zoom-card-sm .role-tag { font-size:7.5px; }
+.zoom-card-sm .rating-pill { font-size:9px; padding:1px 6px; }
+.zoom-card-sm .zoom-pill-row { margin-top:1px; }
+
+/* 🎨 Polish (2026-09-11, round 2, item 2): the side view's medium card (zoom.js's LINE_ONE/PAIR_ONE)
+   still inherited styles.css's generic 118px `.card-name` max-width — barely narrower than the card's
+   own content box, so real names ("Quinyon Mitchell", "Landon Dickerson") truncated almost immediately.
+   Scoped wider here without touching the base rule other views rely on.
+   RULING E (Adam, 2026-09-13): the rest of this block is the side view's height budget. zoom.js's
+   LINE_ONE only sets a MIN-height — a card is as tall as its own content, and at the old type sizes that
+   content came to ~145px, which is why shrinking the constant alone did nothing and the secondary still
+   ran off the bottom of a 900px window. These rules shrink the content itself, scoped to .zoom-side so
+   the group view's big cards (D49: bigger headshot, an extra bio line) are untouched. */
+/* D62 (Adam, 2026-09-15): "the cards are too big and bulky" — leaner, at roughly 70% of the height they
+   were. zoom.js shrank the headshot (26 -> 18) and the reserved box (88 -> 62); the rest of the bulk was
+   here: the padding around the card, the thickness of its border, the size of the crest, name and pill,
+   and the tier glow, which at this size read as a halo around every good player rather than as a hint.
+   Nothing is dropped from the card — same photo, crest, name, role tag and rating pill, same colours. */
+.zoom-side .card-name { max-width:126px; font-size:11px; }
+.zoom-side .card { padding:2px 4px 3px; border-width:1px; box-shadow:0 1px 3px rgba(0,0,0,.35); }
+.zoom-side .card.tier-elite { box-shadow:0 0 0 1px rgba(255,255,255,.22) inset, 0 0 9px rgba(52,211,153,.35), 0 1px 3px rgba(0,0,0,.35); }
+.zoom-side .card.tier-strong { box-shadow:0 0 0 1px rgba(255,255,255,.1) inset, 0 0 6px rgba(46,196,124,.22), 0 1px 3px rgba(0,0,0,.35); }
+.zoom-side .card-body { gap:0; }
+/* 👁 QA item 1: at the side view's own scale-down (viewfit.js fitToViewport), the base 9px crest number
+   rendered near-illegible with colour fringing off a sub-pixel transform. A bigger, bolder glyph on a
+   near-solid dark plate (the gradient darkened toward its low end rather than the team's raw secondary
+   colour, which is too pale for some clubs) reads clearly regardless of the scale factor in play. */
+/* 👁 QA (2026-09-15, item 2): the shield is a clip-path, so its top 12% and its shoulders are cut away —
+   a 14px-tall plate left the 9.5px digits half-eaten. Back to a shield tall enough to hold its own number,
+   with the glyph small and tight (line-height 1) so the number reads on every card at every fit scale. */
+.zoom-side .jersey-crest { width:26px; height:20px; font-size:9px; line-height:1; font-weight:900; margin-top:0;
+  background:linear-gradient(160deg, var(--team-primary,#333) 0%, color-mix(in srgb, var(--team-primary,#333) 55%, #000) 100%);
+  text-shadow:0 1px 1px rgba(0,0,0,.9); }
+/* The stack's own label directly above the card already says the position, and a card's displayLabel IS
+   its slot label (server/compile/chart.js's makeCard), so in this view the two are the same word twice.
+   Hiding the in-card one buys back a line of height per card - and a level whose tallest stack draws two
+   cards (an out starter and his fill-in) pays for it twice. Only the side view: the group view has no
+   per-slot label above the card, and the matchup view keeps its own. */
+.zoom-side .card-label { display:none; }
+.zoom-side .role-tag { font-size:7px; line-height:1.2; }
+/* 👁 QA: a card showing a red OUT banner used to say "STARTER" underneath it — two opposite statements on
+   one card. It now reads OUT, in the banner's own colour so the two agree at a glance. */
+/* 👁 QA round 3 item 5: dark brick-red on a dark card was the lowest-contrast text on the page. The tag
+   now uses the banner's own light-on-red treatment, so the two read as the same statement; the dimmed
+   body under it is lifted at the same time so the bio line stays legible rather than merely present. */
+.role-tag-out { color:#fff; font-weight:800; background:#c23b36; border-radius:3px; padding:0 6px; letter-spacing:.05em; }
+.card.card-out .card-body { opacity:.78; filter:grayscale(.3); }
+.card.card-out .card-name { color:#c9d1d9; }
+/* "NR" where a player has no Madden entry: present and legible, but clearly not a rating. */
+.rating-pill.tier-none { background:#2a323b; color:var(--muted); font-weight:700; }
+.zoom-side .rating-pill { font-size:9px; padding:1px 7px; margin-top:0; }
+.zoom-side .card-banner { height:13px; line-height:13px; font-size:8px; }
+.zoom-side .card:has(.card-banner) .card-body { margin-top:13px; }
+.zoom-side .card:has(.card-banner) .card-badges { top:16px; }
+/* The pill row is an inline box, so it was paying for a full line-height's worth of leading (21px) around
+   a 12px pill — 8 of the 18px D62 still had to find. */
+.zoom-side .zoom-pill-row { margin-top:1px; display:flex; justify-content:center; line-height:1; }
+.zoom-side .zoom-stack-label { font-size:11px; padding:0 6px; }
+/* D62: the level washes are gone, so the gap between one band's stacks and the next is the only thing
+   saying where a group ends — give a stack a little room of its own inside the level's row. */
+.zoom-side .zoom-side-stack { gap:1px; }
+
+/* ---- group view: every slot's stack side by side ----
+   🎨 Polish (2026-09-11, round 2, item 12): `justify-content:center` (was space-evenly) so a group with
+   only 1-2 stacks (e.g. a team's Safety group: just FS/SS) reads as centred content, not two columns
+   pinned near the left/right thirds with huge empty margins either side. */
+/* 👁 QA A1: a GRID of equal fractions across the whole container, one column per slot, instead of a
+   centred row of fixed 220px columns. That row left a single-slot group (QB) as one narrow card with 87%
+   of the screen black, and a three-slot group (CB) not much better. The cards inside are fluid
+   (zoom.js's `fluid` option) so they fill their fraction up to a cap — a lone QB gets a big card, not a
+   1500px-wide one — and team.js's fill-mode scaling then grows the whole grid to use the leftover
+   height as well. --group-cols is set inline per render from the slot count. */
+/* align-items:stretch, not start: a two-deep column next to a three-deep one used to stop 230px short
+   (HOU's WR1/WR3 against WR2), which read as a broken grid rather than as "this man has less depth".
+   Stretching every stack to the tallest gives the group one shared bottom edge. */
+.zoom-group { display:grid; grid-template-columns:repeat(var(--group-cols,3), minmax(0,1fr)); gap:22px; align-items:stretch; justify-items:stretch; }
+/* align-items must be STRETCH, not center: a centred cross-axis shrinks every child to its own content
+   width, which left the card 161px wide inside a 1520px grid cell (the whole point of QA A1). The
+   label re-centres itself; the body fills the cell so the fluid card can use it. */
+/* 👁 QA item 2: the per-column width cap (zoom.js's groupCardCap, handed over as --card-cap) now lives on
+   .zoom-stack itself, not just its inner -body — LV's tight-end column had a heat-critical red outline
+   (applied to .zoom-stack) drawn at the full grid-cell width while the cards inside it stopped at the
+   capped -body width, leaving the outline floating ~170px past the last card. Capping the whole stack
+   means the outline, the label and the cards all share the same right edge. */
+.zoom-stack { display:flex; flex-direction:column; gap:5px; width:100%; max-width:var(--card-cap,400px); margin-inline:auto; align-items:stretch; }
+.zoom-group .zoom-stack-body { flex:1 1 auto; width:100%; }
+.zoom-group .zoom-stack-label { align-self:center; }
+/* Final 👁 pass (item 5, 2026-09-12): this label is an <a> in the side/matchup views now (click-through to
+   that slot's own band group — see zoom.js's/matchup.js's renderSideStack/renderStack) but stays a plain
+   <div> in the group view (already at the group; nothing further to zoom into) — text-decoration/hover
+   below are harmless no-ops on a div. */
+.zoom-stack-label { display:inline-block; font-size:12.5px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; color:rgba(255,255,255,.75); text-align:center; text-decoration:none; padding:2px 8px; border-radius:6px; }
+a.zoom-stack-label:hover { color:#ffd54a; text-decoration:underline; }
+.zoom-stack-body { display:flex; flex-direction:column; gap:6px; }
+/* 👁 QA round 3 item 1: EVERY rank row is one column box of the same width with the same left edge.
+   A pair block (an out starter above his fill-in, or two co-starters) used to be a differently-sized
+   child, so LV's tight ends had the pair sitting at x≈50–650 and the rank-2 card below it at x≈570–1168 —
+   two cards in one column that did not line up with each other. The tier number is a fixed-width gutter
+   and the body takes everything else, so the left edge is identical on every row of every column. */
+.tier-row { display:flex; align-items:stretch; gap:8px; }
+.tier-row > * { flex:1 1 auto; min-width:0; }
+.tier-num { align-self:center; }
+/* 👁 QA item 10: a co-starter PAIR sits side by side (.costarter-pair) because they share one job. An out
+   starter and his ACTIVE fill-in are a comparison instead — D44's "how good was the hurt man, how good is
+   his replacement" — which only reads when the two ratings sit one directly above the other. */
+.outfillin-stack { display:flex; flex-direction:column; gap:6px; }
+.zoom-group .outfillin-stack > .card { width:100%; }
+.zoom-group .costarter-pair { display:flex; gap:8px; }
+.zoom-group .costarter-pair > .card { flex:1 1 0; min-width:0; }
+/* 👁 QA fix, 2026-09-11: #3a424c on the near-black background was ~1.8:1 contrast — var(--muted) reads
+   clearly while staying quiet (it's already this app's standard "de-emphasized" text colour). */
+.tier-num { font-size:24px; font-weight:900; color:var(--muted); min-width:26px; text-align:center; flex:none; font-variant-numeric:tabular-nums; }
+
+/* 🎨 Polish (2026-09-11, round 2, item 12): `margin-left:auto` used to yank this chip up into the same
+   row as the stacks, floating alone at the top-right regardless of how tall those stacks were — dropping
+   it onto its own full-width line (flex-basis:100%) puts it calmly in the flow beneath the stacks,
+   centred like everything else in this view now that `.zoom-group` centers instead of space-evenly. */
+/* 🔵 review finding 6: .zoom-group is a GRID now, so flex-basis:100% means nothing here — the tray was
+   laid out as one more column and could overflow its cell. `grid-column: 1 / -1` is the grid way to say
+   "span the whole row", and dropping min-width lets it shrink with the grid instead of forcing it wider. */
+.zoom-unlisted { display:flex; flex-direction:column; align-items:center; gap:6px; padding:10px 14px; background:rgba(0,0,0,.28); border:1px dashed #3a424c; border-radius:8px; grid-column:1 / -1; margin-top:12px; }
+.zoom-unlisted .tray-label { align-self:center; }
+.zoom-unlisted .tray-chip { display:block; }
+
+/* D49: the group view's LARGE cards (fluid width up to zoom.js's per-column-count cap, set inline by
+   fullCard) need a tighter card-body than the side view's medium cards to fit the extra bio line —
+   namespaced to .zoom-group so it can never affect a card drawn anywhere else. */
+/* 👁 QA round 3 item 2: a one- or two-slot group (QB, or a safety pair) has width to burn and nothing to
+   put in it — a tall portrait card whose content only used the middle 250px of it. Those groups switch to
+   a HORIZONTAL card: headshot and crest on the left, name, position, bio line and role stacked against
+   them on the right, rating pill beneath. The card then genuinely uses the width. Three or more slots
+   (CB, OL — the look QA pointed at as correct) keep the portrait layout untouched. */
+/* The wide card is a THREE-part row: headshot, the text block, and the rating pill pinned to the far
+   end. Without the pill on the right the card was still mostly empty in the middle, which was the
+   original complaint in a new shape. The pill is a sibling of .card-body (zoom.js renders it outside so
+   the STARTER_OUT dim cannot touch it), so the card itself becomes the row. */
+/* 👁 QA item 3: card-body-wide used to be flex:1 1 auto, so it grew to fill the whole card width itself —
+   its own content (photo + a few short text lines) stayed hugged to the left, leaving a ~640px dead band
+   between the bio line and the rating pill that was really just this element's own unused flex space.
+   card-body-wide now takes only its natural content width; justify-content:space-between on the card
+   itself does the job of pinning the pill to the card's right edge instead, so the gap in between reads
+   as one deliberate space (a list-row layout) rather than an empty box within a box. */
+.zoom-group.group-wide .card { flex-direction:row; align-items:center; gap:16px; justify-content:space-between; }
+.zoom-group.group-wide .card-body-wide { flex:0 1 auto; min-width:0; flex-direction:row; align-items:center; gap:20px; }
+.zoom-group.group-wide .zoom-pill-row { flex:none; margin:0; }
+.zoom-group.group-wide .card:has(.card-banner) { padding-top:26px; }
+.zoom-group.group-wide .card:has(.card-banner) .card-body { margin-top:0; }
+.zoom-group.group-wide .card-head { flex:none; display:flex; flex-direction:column; align-items:center; gap:2px; }
+.zoom-group.group-wide .card-text { display:flex; flex-direction:column; align-items:flex-start; gap:4px; flex:1 1 auto; min-width:0; text-align:left; }
+.zoom-group.group-wide .card { padding:16px 24px; }
+/* 👁 QA item 3: a bit more air between rows in the wide layout too — GROUP_LINE_ONE_WIDE/GROUP_REST_WIDE
+   (zoom.js) already spend most of the reclaimed height on taller cards; this spends the rest. */
+.zoom-group.group-wide .zoom-stack-body { gap:9px; }
+.zoom-group.group-wide .card-name { font-size:20px; max-width:100%; text-align:left; }
+.zoom-group.group-wide .card-label { font-size:13px; }
+.zoom-group.group-wide .zoom-bio-line { font-size:12.5px; }
+.zoom-group.group-wide .role-tag { font-size:10.5px; }
+.zoom-group.group-wide .rating-pill { font-size:14px; padding:3px 12px; }
+.zoom-group.group-wide .jersey-crest { width:34px; height:26px; font-size:12px; margin:0; }
+/* The portrait card keeps its original flat LAYOUT: the wrapper that the wide card needs is
+   display:contents everywhere else, so name/label/bio/role go on behaving as direct children of
+   .card-body exactly as before. NOT scoped to .zoom-group - fullCard draws the side view's cards too,
+   and a plain inline span there put the name, position and role tag all on one line. */
+.card-textflow { display:contents; }
+.zoom-group .card { padding:5px 7px 5px; }
+/* The tier number and the card share the row, so the card takes whatever the number leaves. */
+/* The [tier number, card] pair centres in its grid cell: with a capped card width a single-slot group
+   (QB) would otherwise sit hard against the left edge of a 1520px cell. */
+.zoom-group .tier-row { width:100%; justify-content:center; }
+.zoom-group .tier-row > .card, .zoom-group .tier-row > .costarter-pair, .zoom-group .tier-row > .outfillin-stack { flex:1 1 auto; min-width:0; }
+.zoom-group .outfillin-stack, .zoom-group .costarter-pair { width:100%; }
+.zoom-group .costarter-pair .card { min-width:0; }
+.zoom-group .card-body { gap:2px; }
+.zoom-group .card-name { font-size:13px; max-width:100%; }
+.zoom-group .card-label { font-size:10.5px; }
+.zoom-group .jersey-crest { width:30px; height:23px; font-size:11px; margin-top:2px; }
+.zoom-group .zoom-bio-line { font-size:10px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; }
+.zoom-group .rating-pill { font-size:11px; padding:2px 9px; }
+.zoom-group .role-tag { font-size:8.5px; }
+
+@media (max-width:1400px) {
+  .tier-num { font-size:24px; min-width:28px; }
+  /* Tighter gaps and a shorter name cap on a narrow window. The group's cards are fluid now (one grid
+     fraction per slot, capped by zoom.js's groupCardCap), so nothing here needs to fight an inline width. */
+  .zoom-group { gap:14px; }
+  .zoom-group .card-name { max-width:136px; }
+}
+
+/* ---- D50 injury heat, corrected to "subtle, not loud" (Adam, 2026-09-11) — no chips, no banner. ----
+   Guarded on the JS side for absence (slot.injury / view.heat / card.signals may not exist yet); these
+   rules only ever fire once zoom.js actually applies one of the classes below. heat-low/high/critical
+   and sig-star/sig-ps/sig-new/sig-lowsnaps are the step-4 builder's canonical names (defined in
+   styles.css so every view matches) — this is a fallback look, scoped to .zoom-side/.zoom-group so it
+   steps out of the way the moment styles.css defines its own (same pattern as the D43 tier-* classes). */
+.zoom-side-stack.heat-low, .zoom-stack.heat-low { box-shadow:0 0 0 1px rgba(242,193,78,.35), 0 0 14px rgba(242,193,78,.25); border-radius:10px; }
+.zoom-side-stack.heat-high, .zoom-stack.heat-high { box-shadow:0 0 0 1px rgba(242,146,78,.45), 0 0 16px rgba(242,146,78,.32); border-radius:10px; }
+.zoom-side-stack.heat-critical, .zoom-stack.heat-critical { box-shadow:0 0 0 1px rgba(224,82,77,.55), 0 0 18px rgba(224,82,77,.4); border-radius:10px; }
+
+.zoom-stack-label.heat-low { background:rgba(242,193,78,.16); }
+.zoom-stack-label.heat-high { background:rgba(242,146,78,.18); }
+
+.zoom-heat-line { color:var(--muted); font-size:12px; font-style:italic; }
+/* PFF-inspired (Adam, 2026-09-11): "a compact ranked list treatment for the group view header... as a
+   quiet line" — the same quiet styling as the heat-summary line, just as its own standalone row under
+   the breadcrumb rather than an inline span inside it. */
+.zoom-top-line { display:block; margin:6px 0 2px; }

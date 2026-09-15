@@ -1,0 +1,87 @@
+/* Step-6 player detail panel (public/js/panel.js). Reuses styles.css's own theme variables
+   (--panel/--ink/--muted/--team-primary/--team-secondary) and its existing .badge/.badge-* classes for
+   status pills — no badge colours are redefined here (styles.css already has the full set: Q/D/OUT/IR/
+   PUP/NFI/SUSP/INACTIVE/ACTIVE/PS). Loaded after styles.css (see public/index.html); the two files don't
+   define the same property on the same selector, so cascade order between them doesn't matter here.
+   The base .player-panel { flex:0 0 440px; } sizing stays in styles.css — this file only adds the
+   panel's own sticky/scroll/internal-layout rules. */
+
+.player-panel {
+  position: sticky;
+  top: 78px; /* clears the sticky 58px-ish topbar plus a little breathing room */
+  max-height: calc(100vh - 96px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  background: var(--panel);
+  border: 1px solid #22282f;
+  border-radius: 12px;
+}
+
+.panel-inner { position: relative; padding: 18px 18px 26px; }
+
+.panel-close {
+  position: absolute; top: 10px; right: 10px; width: 28px; height: 28px;
+  border-radius: 50%; border: 1px solid #2a323b; background: #1c2228; color: var(--ink);
+  font-size: 18px; line-height: 1; cursor: pointer;
+}
+.panel-close:hover { background: #2a323b; border-color: #444; }
+
+.panel-head { display: flex; gap: 12px; align-items: center; padding-right: 34px; }
+/* PFF-inspired (Adam, 2026-09-11): "headshot on a team-colour backdrop". */
+.panel-headshot-backdrop { display: flex; flex: none; padding: 4px; border-radius: 50%;
+  background: linear-gradient(145deg, var(--team-primary,#333), var(--team-secondary,#777)); }
+.panel-headshot, .panel-headshot-fallback { border-radius: 50%; object-fit: cover; background: #0c0f12; flex: none; }
+.panel-headshot-fallback { display: flex; align-items: center; justify-content: center; font-weight: 800; background: #2a323b; color: #cfd6dd; }
+.panel-head-main { min-width: 0; }
+
+/* PFF-inspired (Adam, 2026-09-11): "a big rating number in a colour-scaled box (tier colours), with
+   '#4 of 119 at RB' directly under it and the launch rating as a small delta" — the shared tier-colour
+   scale (styles.css :root) as a solid fill instead of the old flat team-colour bar. */
+.panel-grade { flex: none; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  width: 68px; padding: 8px 4px 7px; border-radius: 12px; text-align: center; }
+.panel-grade-num { font-size: 26px; font-weight: 900; line-height: 1; font-variant-numeric: tabular-nums; }
+.panel-grade-rank { font-size: 10px; font-weight: 700; letter-spacing: .02em; opacity: .82; margin-top: 3px; white-space: nowrap; }
+.panel-grade-delta { font-size: 9px; font-weight: 600; opacity: .68; margin-top: 2px; white-space: nowrap; }
+.panel-grade.tier-elite { background: var(--tier-elite); color: var(--tier-elite-ink); }
+.panel-grade.tier-strong { background: var(--tier-strong); color: var(--tier-strong-ink); }
+.panel-grade.tier-avg { background: var(--tier-avg); color: var(--tier-avg-ink); }
+.panel-grade.tier-weak { background: var(--tier-weak); color: var(--tier-weak-ink); }
+.panel-grade.tier-flat { background: var(--tier-flat); color: var(--tier-flat-ink); }
+.panel-name { font-size: 20px; font-weight: 800; line-height: 1.2; }
+.panel-number { color: var(--muted); font-weight: 600; font-variant-numeric: tabular-nums; }
+.panel-label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin-top: 3px; }
+.panel-wordmark { display: block; max-width: 130px; max-height: 26px; margin-top: 8px; object-fit: contain; }
+
+.panel-bio-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px 10px; margin-top: 18px; font-size: 12.5px; }
+.panel-bio-row span { background: #1a1f25; border-radius: 6px; padding: 6px 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.panel-snaps { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+.panel-snaps-label { flex: none; font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.panel-snaps-bar { flex: 1 1 auto; height: 6px; border-radius: 3px; background: #1a1f25; overflow: hidden; }
+.panel-snaps-fill { display: block; height: 100%; border-radius: 3px; background: linear-gradient(90deg, var(--team-primary,#333), var(--team-secondary,#777)); }
+.panel-snaps-pct { flex: none; font-size: 11.5px; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+.panel-status { margin-top: 14px; background: #1a1f25; border-radius: 8px; padding: 10px 12px; }
+.panel-status-head { display: flex; align-items: center; gap: 8px; }
+.panel-roster-desig { font-size: 12px; color: var(--muted); }
+.panel-status-comment { margin-top: 6px; font-size: 12.5px; line-height: 1.4; }
+.panel-status-return { margin-top: 4px; font-size: 12px; color: var(--muted); }
+
+.panel-position-line { margin-top: 12px; font-size: 12.5px; color: var(--muted); font-style: italic; }
+
+.panel-stats { margin-top: 16px; }
+.panel-stats-heading { font-size: 11.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-bottom: 6px; }
+.panel-loading, .panel-error, .panel-stats-empty { padding: 14px 4px; text-align: center; color: var(--muted); font-size: 12.5px; }
+.panel-error { color: #ff9a90; }
+
+.panel-stats-table { width: 100%; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; }
+.panel-stats-table th, .panel-stats-table td { padding: 5px 6px; text-align: right; border-bottom: 1px solid #22282f; white-space: nowrap; }
+.panel-stats-table th:first-child, .panel-stats-table td:first-child,
+.panel-stats-table th:nth-child(2), .panel-stats-table td:nth-child(2) { text-align: left; }
+.panel-stats-table thead th { color: var(--muted); font-weight: 700; text-transform: uppercase; font-size: 10.5px; }
+.panel-stats-note { margin-top: 6px; font-size: 11px; color: var(--muted); font-style: italic; line-height: 1.4; }
+
+@media (max-width: 1400px) {
+  .player-panel { flex-basis: 380px; }
+  .panel-name { font-size: 18px; }
+}
