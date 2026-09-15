@@ -121,12 +121,18 @@ function tierOf(v) {
 
 // PFF-inspired (Adam, 2026-09-11): a quick-scan strip of year->OVR chips, newest first, above the full
 // table — launch-only seasons get a small superscript "L" instead of the table's fuller "launch" tag.
+// 🔵 review of D87, finding 3: the chip shows the LIVE rating when the row has one (r.ovrCurrent, the number on
+// the card header right now), falling back to the launch number - so the strip, the table's right-hand number
+// and the card all say the same thing. A row whose live rating has moved off the launch capture is no longer a
+// "launch only" season either, so it loses the superscript L.
 function stripHtml(rows) {
-  const chips = rows.filter((r) => r.ovr != null).map((r) => {
+  const chips = rows.filter((r) => (r.ovrCurrent ?? r.ovr) != null).map((r) => {
+    const v = r.ovrCurrent ?? r.ovr;
     const yr = String(r.season).slice(-2);
-    const launch = r.ratingKind === "LAUNCH" ? `<sup class="hist-strip-l" title="launch rating only">L</sup>` : "";
-    return `<span class="hist-strip-chip ${tierOf(r.ovr)}" title="${esc(r.season)}: ${esc(r.ovr)} OVR${r.ratingKind === "LAUNCH" ? " (launch)" : ""}">
-      <span class="hist-strip-yr">'${esc(yr)}</span><span class="hist-strip-ovr">${esc(r.ovr)}${launch}</span>
+    const launchOnly = r.ovrCurrent == null && r.ratingKind === "LAUNCH";
+    const launch = launchOnly ? `<sup class="hist-strip-l" title="launch rating only">L</sup>` : "";
+    return `<span class="hist-strip-chip ${tierOf(v)}" title="${esc(r.season)}: ${esc(v)} OVR${launchOnly ? " (launch)" : ""}">
+      <span class="hist-strip-yr">'${esc(yr)}</span><span class="hist-strip-ovr">${esc(v)}${launch}</span>
     </span>`;
   });
   return chips.length ? `<div class="hist-strip">${chips.join("")}</div>` : "";
@@ -147,19 +153,25 @@ function rowHtml(r, teams) {
   }).join(`<span class="hist-teamsep">/</span>`);
   const teamHtml = stints.length ? `<span class="hist-team">${logos}${old}</span>` : dash;
   const star = r.ovr != null && r.matchConfidence !== "id" ? `<span class="hist-star" title="matched by ${esc(r.matchMethod)}, not by player id">*</span>` : "";
-  const tag = r.ovr != null && r.ratingKind === "LAUNCH" ? `<span class="hist-tag launch" title="Only the launch rating exists for this season">launch</span>` : "";
+  // 🔵 review of D87, finding 4: a row carrying a live rating is not a "launch only" season - the launch tag
+  // (and the footnote that explains it, in historyHtml below) is for seasons where the launch capture is the
+  // only rating that exists, which this row has just disproved.
+  const tag = r.ovr != null && r.ratingKind === "LAUNCH" && r.ovrCurrent == null ? `<span class="hist-tag launch" title="Only the launch rating exists for this season">launch</span>` : "";
   // D87: the season being played right now carries this year's Madden LAUNCH rating in r.ovr and, when the live
   // EA rating on the card has since moved off it, that live number in r.ovrCurrent - printed "99 → 97", launch
   // first then now. The server only ever sets r.ovrCurrent when it differs from r.ovr (server/history/index.js),
   // so an unchanged rating stays a single number and every completed season is untouched by this.
-  const ed = String(r.season + 1).slice(-2); // Madden edition of a season, same rule as server/lib/seasons.js
+  // 🔵 review finding 3: when this year's capture never listed the man there is no launch number to move off,
+  // and the live rating is all he has - printed on its own, with no arrow and nothing to compare it against.
   const now = r.ovr != null && r.ovrCurrent != null && r.ovrCurrent !== r.ovr
     ? `<span class="hist-arrow">→</span><span class="hist-ovr hist-now ${tierOf(r.ovrCurrent)}">${r.ovrCurrent}</span>` : "";
   const ovrNum = `<span class="hist-ovr ${tierOf(r.ovr)}">${r.ovr}${star}</span>`;
-  const ovr = r.ovr == null ? dash
-    : now ? `<span class="hist-ovrpair" title="Madden ${ed} launch ${r.ovr}, now ${r.ovrCurrent}">${ovrNum}${now}</span>${tag}`
+  // D34: Adam names a season by its year, never by the Madden edition number.
+  const ovr = r.ovr == null
+    ? (r.ovrCurrent != null ? `<span class="hist-ovr ${tierOf(r.ovrCurrent)}" title="${esc(r.season)} rating ${esc(r.ovrCurrent)}">${r.ovrCurrent}</span>` : dash)
+    : now ? `<span class="hist-ovrpair" title="${esc(r.season)} launch ${r.ovr}, now ${r.ovrCurrent}">${ovrNum}${now}</span>${tag}`
     : `${ovrNum}${tag}`;
-  const empty = !r.team && r.ovr == null && !r.positionOfRecord;
+  const empty = !r.team && r.ovr == null && r.ovrCurrent == null && !r.positionOfRecord;
   const pos = r.positionOfRecord ? `<span class="hist-pos ${r.positionChanged ? "changed" : ""}" title="position of record: ${esc(r.positionSource || "")}">${esc(r.positionOfRecord)}</span>` : dash;
   return `<tr class="${empty ? "empty" : ""}"><td>${r.season}</td><td>${teamHtml}</td><td>${pos}</td><td>${ovr}</td><td class="hist-stats">${empty ? dash : esc(statText(r.statFamily, r.stats, r))}</td></tr>`;
 }
@@ -168,7 +180,7 @@ export function historyHtml(data, teamsMeta) {
   const teams = teamList(teamsMeta);
   const rows = [...(data.seasons || [])].sort((a, b) => b.season - a.season); // newest first: reads down from the card's current rating
   const anyStar = rows.some((r) => r.ovr != null && r.matchConfidence !== "id");
-  const anyLaunch = rows.some((r) => r.ovr != null && r.ratingKind === "LAUNCH");
+  const anyLaunch = rows.some((r) => r.ovr != null && r.ratingKind === "LAUNCH" && r.ovrCurrent == null);
   const notes = [];
   if (anyStar) notes.push("* rating matched by name, not by player id");
   if (anyLaunch) notes.push("launch = only the launch rating exists for that season");
@@ -176,7 +188,8 @@ export function historyHtml(data, teamsMeta) {
   // "— — — — —" row per year (rows sorted newest-first, so these trail at the end) — collapsed into a
   // single plain-English line instead of a stack of dashes that reads like a data error.
   let shownCount = rows.length;
-  while (shownCount > 0 && !rows[shownCount - 1].team && rows[shownCount - 1].ovr == null && !rows[shownCount - 1].positionOfRecord) shownCount--;
+  const blank = (r) => !r.team && r.ovr == null && r.ovrCurrent == null && !r.positionOfRecord; // same test rowHtml uses
+  while (shownCount > 0 && blank(rows[shownCount - 1])) shownCount--;
   const collapsedCount = rows.length - shownCount;
   const bodyRows = rows.slice(0, shownCount).map((r) => rowHtml(r, teams)).join("")
     + (collapsedCount ? `<tr class="empty hist-collapsed"><td colspan="5">No earlier seasons on file</td></tr>` : "");
