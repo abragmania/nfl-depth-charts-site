@@ -298,6 +298,22 @@ a.back { color:var(--muted); }
 .prow-one .prow-ovr.tier-avg { background:var(--tier-avg); color:var(--tier-avg-ink); }
 .prow-one .prow-ovr.tier-weak { background:var(--tier-weak); color:var(--tier-weak-ink); }
 .prow-one .prow-ovr.tier-flat { background:var(--tier-flat); color:var(--tier-flat-ink); }
+/* 👁 QA (2026-09-15): row one of a column is whichever man the club's own tier order (D90) puts first,
+   which is not always the actual starter — D89's 100-snap floor can leave a thin-sample BACKUP standing
+   alone in his club column. cards.js's overviewLineOne adds `.column-no-starter` to that row instead of
+   changing its tag or its box, so it undoes .prow-one's bold/photo-pill look back to the same weight a
+   plain backup row (.prow below, no `-one`) carries — while KEEPING .prow-one's 27px min-height (and its
+   own headshot slot on the side pages), so the column's height, and everything stacked under it, sits
+   exactly where field.js already reserved it. */
+.prow-one.column-no-starter { border-left-width:3px; }
+.prow-one.column-no-starter .prow-name { font-size:11px; font-weight:400; }
+.prow-one.column-no-starter .prow-num { font-size:9.5px; }
+.prow-one.column-no-starter .prow-ovr { font-size:10px; padding:0 3px; min-width:19px; background:rgba(255,255,255,.07); color:#c3cad2; }
+.prow-one.column-no-starter .prow-ovr.tier-elite { background:rgba(255,255,255,.07); color:var(--tier-elite); }
+.prow-one.column-no-starter .prow-ovr.tier-strong { background:rgba(255,255,255,.07); color:var(--tier-strong); }
+.prow-one.column-no-starter .prow-ovr.tier-avg { background:rgba(255,255,255,.07); color:var(--tier-avg); }
+.prow-one.column-no-starter .prow-ovr.tier-weak { background:rgba(255,255,255,.07); color:var(--tier-weak); }
+.prow-one.column-no-starter .prow-ovr.tier-flat { background:rgba(255,255,255,.07); color:var(--tier-flat); }
 /* Backups keep the number itself tier-coloured on a neutral chip — quieter than the starter's solid pill
    but still enough that "the depth behind him is all red" reads without being read. `:not(.prow-one)` is
    load-bearing: these selectors have exactly the same specificity as the solid-pill rules above and come

@@ -270,6 +270,19 @@ function overviewClasses(p, base) {
   return cls.join(" ");
 }
 
+// 👁 QA (2026-09-15): row one of a column is whichever man the club's own tier order (D90) puts first —
+// that is not always the actual starter. D89's 100-snap floor can leave a thin-sample BACKUP standing
+// alone in his club column (CAR's Jimmy Horn Jr., 75 slot snaps, under the floor that would have moved
+// him into WR · Slot with his column's real starter), and the team overview used to give whoever sat on
+// line one the bold/photo/pill starter treatment regardless of his actual role — dressing a BACKUP as the
+// opening-day starter the legend promises. This gates that treatment on the man himself: a real STARTER, a
+// STARTER_OUT (still the starter, just hurt — D44's banner still belongs to him), an ACTIVE fill-in, or
+// either half of a co-starter pair reads as the starter; a plain BACKUP who merely has nobody ranked above
+// him reads in the same weight the rows below line one already use.
+function isLineOneStarter(p) {
+  return p.role === "STARTER" || p.role === "STARTER_OUT" || p.role === "ACTIVE" || p.coStarter === true;
+}
+
 // The starter's bold row: jersey number, full name, any badges, and the tier-coloured rating. A fully-
 // out starter or an ACTIVE fill-in gets D44's banner strip stacked on top of the same row, which is the
 // BANNER_H field.js reserves for it — so "who is out, and how good is the man replacing him" still reads
@@ -295,7 +308,12 @@ function overviewLineOne(p, teamAbbr, opts = {}) {
   // unmistakably belongs to the man underneath it. Before, a full-bleed strip sat in the gap between two
   // rows and read as a divider between them (PHI's EDGE co-starter pair).
   const head = style.headshot ? `<span class="prow-head">${headshotHtml(p, style.headshot)}</span>` : "";
-  return `<a class="${overviewClasses(p, "prow prow-one")}${espnRing}" href="#/team/${esc(teamAbbr)}/player/${encodeURIComponent(p.playerKey)}" data-player-key="${esc(p.playerKey)}" title="${overviewTitle(p, disagrees)}" style="min-height:${lineOneHeight(p, style)}px">
+  // `column-no-starter` (see isLineOneStarter above) keeps the exact same box — same tag, same classes
+  // otherwise, same inline min-height straight off field.js's lineOneHeight — so the column's height and
+  // everything stacked under it (the pass-catcher cluster included) sits exactly where the layout engine
+  // already reserved it; only styles.css's bold/photo-pill treatment is switched off for this row.
+  const starterCls = isLineOneStarter(p) ? "" : " column-no-starter";
+  return `<a class="${overviewClasses(p, "prow prow-one")}${starterCls}${espnRing}" href="#/team/${esc(teamAbbr)}/player/${encodeURIComponent(p.playerKey)}" data-player-key="${esc(p.playerKey)}" title="${overviewTitle(p, disagrees)}" style="min-height:${lineOneHeight(p, style)}px">
     ${bannerHtml(p)}
     <span class="prow-line">
       ${head}

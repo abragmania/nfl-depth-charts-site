@@ -358,9 +358,8 @@ function stackColumns(cols) {
 // snaps as a career: LaJohntay Wester was standing ALONE in Baltimore's Slot column on 24 inside snaps at
 // 53.3%, Tom Kennedy held Detroit's on 26, and Jimmy Horn Jr. sat in Carolina's on 75 — three thin samples
 // that each invented a column, and in Baltimore's case hid Zay Flowers's own WR1 pill behind a fourth-
-// stringer. A man the source measured but published no snap count for is a different thing from a thin
-// sample — nothing is known about his window at all — so he is still judged on his rate alone, exactly as
-// D86 left him.
+// stringer. A man PlayerProfiler published no snap count for cannot show the required 100 either — an
+// unmeasured window is no different from a thin one for this purpose — so he too stays in his club column.
 //
 // Ordering is the club's own chart, read tier first — D90 (Adam, 2026-09-15), amending D86's ordering: the
 // tier a man is listed on inside his column (tier 0, a listed-OUT starter, then tier 1, then tier 2 and so
@@ -387,8 +386,8 @@ function stackColumns(cols) {
 // for a card that carries no pooled count at all (an older compiled file, or a season whose total snaps
 // could not be worked out so it never joined the pool). This count ORDERS the column, fills the tooltip's
 // bracket, and since D89 gates membership too: a man counted below SLOT_COLUMN_MIN_SNAPS is out whatever
-// his rate. A card with no count at all is the one exception — an unmeasured window is not a thin one, so
-// he is still judged on his rate alone.
+// his rate — and a card with no count at all cannot show 100 either, so it is out on the same terms, not an
+// exception.
 const snapCount = (v) => (typeof v === "number" && Number.isFinite(v) && v >= 0 ? v : null);
 const slotSnapsOf = (p) => snapCount(p?.slotSnapsPooled) ?? snapCount(p?.slotSnaps);
 // D86: the one rate window every man is judged on — the pooled 2025+2026 rate when the card carries one,
@@ -421,7 +420,7 @@ function lastName(name) {
 export function regroupSlotReceivers(wrSlots) {
   // Pass one: every charted receiver PlayerProfiler has measured, deduped, each carrying where the club
   // lists him — the rank of the column he came from and his tier inside it — because D86 orders the
-  // finished column by the club's own chart before it looks at any workload. wrSlots arrives in the club's
+  // finished column by the club's own chart before it looks at any workload (D90: tier before column). wrSlots arrives in the club's
   // column order, so the array position IS the rank: the first receiver column is rank 1.
   const charted = [];
   const seen = new Set();
@@ -440,12 +439,12 @@ export function regroupSlotReceivers(wrSlots) {
   });
 
   // Pass two: the men who play at least SLOT_COLUMN_MIN_RATE of their own snaps inside, over a window of at
-  // least SLOT_COLUMN_MIN_SNAPS inside snaps (D89 — a card with no count at all is unmeasured rather than
-  // thin, and is still judged on its rate). Ordered tier first so a backup never sits above a starter
-  // (D90), then the rank of the club column he came from, then slot snaps with the bigger workload first,
-  // and the club's own printed order settles anything still tied.
+  // least SLOT_COLUMN_MIN_SNAPS inside snaps (D89 — a card with no count at all cannot show 100 either, so
+  // it stays in its club column same as a thin sample). Ordered tier first so a backup never sits above a
+  // starter (D90), then the rank of the club column he came from, then slot snaps with the bigger workload
+  // first, and the club's own printed order settles anything still tied.
   const men = charted
-    .filter((c) => c.rate >= SLOT_COLUMN_MIN_RATE && (c.snaps == null || c.snaps >= SLOT_COLUMN_MIN_SNAPS))
+    .filter((c) => c.rate >= SLOT_COLUMN_MIN_RATE && c.snaps != null && c.snaps >= SLOT_COLUMN_MIN_SNAPS)
     .sort((a, b) => a.tier - b.tier || a.rank - b.rank || (b.snaps ?? -1) - (a.snaps ?? -1) || a.row - b.row)
     .map((c) => c.p);
   if (!men.length) return null;
@@ -463,13 +462,14 @@ export function regroupSlotReceivers(wrSlots) {
     label: "WR · Slot", derived: true, players: men,
   };
   // D86: the tooltip leads with the number that put each man in the column — the rate the bar was read on
-  // — and carries his slot snaps in brackets behind it, in the column's own order. A man PlayerProfiler
-  // published no snap count for shows his rate alone rather than an empty bracket.
+  // — and carries his slot snaps in brackets behind it, in the column's own order. D89 means every man who
+  // reaches the column has a snap count (a null count no longer clears the bar), so the bracket is never
+  // empty here; the null-safe fallback stays only as a defensive guard.
   const entryOf = (p) => {
     const snaps = slotSnapsOf(p);
     return `${lastName(p.name)} ${rateOf(p)}%${snaps == null ? "" : ` (${snaps} slot snaps)`}`;
   };
-  const reason = `Slot receivers (half or more of their snaps inside): ${men.map(entryOf).join(", ")}`;
+  const reason = `Slot receivers (half or more of their snaps inside, 100+ measured): ${men.map(entryOf).join(", ")}`;
   return { slot, kept, reason };
 }
 
