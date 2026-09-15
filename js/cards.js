@@ -280,6 +280,7 @@ function overviewLineOne(p, teamAbbr, opts = {}) {
   const badges = [
     isFullyOut(p) ? "" : statusBadge(p.status),
     psBadge(p),
+    slotBadge(p, opts),
     weekOneChip(p.weekOneNote),
     alsoListedChips(p, opts.slotLookup, opts.ownLabel),
   ].join("");
@@ -306,6 +307,7 @@ function overviewLineOne(p, teamAbbr, opts = {}) {
 function overviewDepth(p, teamAbbr, opts = {}) {
   const badges = [
     psBadge(p),
+    slotBadge(p, opts),
     statusBadge(p.status),
     p.role === "ACTIVE" ? `<span class="badge badge-active">FILLING IN</span>` : "",
     weekOneChip(p.weekOneNote),
@@ -338,6 +340,7 @@ export function compactRow(p, teamAbbr, opts = {}) {
   const title = tooltipFor(p);
   const badgesHtml = [
     psBadge(p),
+    slotBadge(p, opts),
     statusBadge(p.status),
     p.role === "ACTIVE" ? `<span class="badge badge-active">ACTIVE</span>` : "",
     weekOneChip(p.weekOneNote),
@@ -483,6 +486,11 @@ function keepOutRowsVisible(depth, n) {
 // D61: a man on a reserve list already wears IR / PUP / NFI / SUSP; a second "PS" (off the 53) badge beside it
 // reads as "practice squad", so the PS badge only shows when no reserve badge does.
 const RESERVE_CODES = new Set(["IR", "PUP", "NFI", "SUSP", "EXEMPT"]);
+// D77 (Adam): "Slot" describes the man, not only the column. A receiver who lines up inside on half or more
+// of his snaps wears a small Slot tag wherever he sits, unless his column is already the "WR · Slot" column.
+export const SLOT_TAG_RATE = 50;
+export const slotBadge = (p, opts = {}) => (typeof p.slotRate === "number" && p.slotRate >= SLOT_TAG_RATE && !opts.isSlotColumn
+  ? `<span class="badge badge-slot" title="Slot: ${esc(String(p.slotRate))}% of snaps${p.slotSeason ? " (" + esc(String(p.slotSeason)) + ")" : ""}">Slot</span>` : "");
 export const psBadge = (p, title = true) => (p.onActiveRoster === false && !RESERVE_CODES.has(p.status?.code)
   ? `<span class="badge badge-ps"${title ? ' title="Not on the 53-man active roster"' : ""}>PS</span>` : "");
 export function renderColumn(col, teamAbbr, opts = {}) {
@@ -518,7 +526,7 @@ export function renderColumn(col, teamAbbr, opts = {}) {
   // so the markup below can no more disagree about the headshot or the depth cap than it already could
   // about the row count — both come from the same object the reserved box was measured with.
   const style = col.style || {};
-  const colOpts = { ...opts, band: slot.band, ownLabel: slot.label, labelSource: slot.labelSource, style };
+  const colOpts = { ...opts, band: slot.band, ownLabel: slot.label, labelSource: slot.labelSource, style, isSlotColumn: /Slot/.test(col.displayLabel || "") };
 
   // Ruling E: bold line-one row(s) — one starter normally, two for a co-starter pair or for D44's
   // OUT-starter-plus-ACTIVE-fill-in — then up to MAX_DEPTH_ROWS slim rows, the last of which becomes a

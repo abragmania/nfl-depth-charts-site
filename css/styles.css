@@ -472,6 +472,7 @@ a.back { color:var(--muted); }
 .badge-inactive { background:#8a94a0; color:#1a1a1a; }
 .badge-active { background:#22c774; color:#052b14; }
 .badge-ps { background:#3a424c; color:#dfe4e8; }
+.badge-slot { background:color-mix(in srgb, var(--band-WR, #4a90c2) 55%, #1a2a38); color:#e8f2fa; } /* D77: the man lines up inside */
 
 /* 👁 QA (2026-09-15, items 3 and 11): ONE line, always. A tray is a TRAY_H-tall strip in field.js's
    geometry, so a wrapped second line was drawn in space no row had reserved — under the last offensive

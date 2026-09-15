@@ -165,7 +165,8 @@ const CROP_MARGIN = 26;
 // D72: the most spare height one gap between two rows may absorb on a single-unit page. Enough to turn a
 // four-row defense on a 1700x900 screen into a full page; beyond it the rows would start reading as
 // unrelated islands rather than as levels of one chart.
-const MAX_EXTRA_GAP = 220; // D75: a three-row offense page spreads its rows to fill the height rather than zooming
+const MAX_EXTRA_GAP = 220;
+const PASS_CATCHER_PITCH = 1.3; // D76: receivers/TE cluster pitch as a multiple of MIN_PITCH // D75: a three-row offense page spreads its rows to fill the height rather than zooming
 
 function offBandRange(band) {
   const cfg = OFF_BANDS[band] || { x: [REFERENCE_WIDTH / 2, REFERENCE_WIDTH / 2], n: 1 };
@@ -350,7 +351,9 @@ function isSlotArchetype(player) {
 // ("WR1 · Slot: 51.2% of snaps (2025)"), it is the whole tooltip text (cards.js prints slotReason verbatim),
 // so the rank a viewer lost off the pill is still one hover away.
 export function pickSlotColumn(wrColumns) {
-  if (wrColumns.length < 3) return null;
+  // D76 follow-up (Adam, CHI): a club that charts only two WR columns still has a slot man; pick among
+  // whatever columns exist (two or three), and the default falls to the last of them.
+  if (wrColumns.length < 2) return null;
   const top3 = wrColumns.slice(0, 3);
   const pick = (col, reason) => { col.slotReason = `${col.slot.label} · ${reason}`; return col; };
   // The man who decides a column's alignment is the one actually playing it: when the starter of record sits on
@@ -376,7 +379,7 @@ export function pickSlotColumn(wrColumns) {
 
   const byArchetype = top3.filter((c) => isSlotArchetype(playing(c)));
   if (byArchetype.length === 1) return pick(byArchetype[0], "Slot by Madden archetype");
-  return pick(top3[2], "Slot by default (WR3)"); // D19: WR3 is the slot until something better says otherwise
+  return pick(top3[top3.length - 1], `Slot by default (${top3[top3.length - 1].slot.label})`); // D19: the last charted WR is the slot until something better says otherwise
 }
 
 // The PASS CATCHERS row (D69's own row, D71's x-maths). D63 hung these columns off the ends of the
@@ -403,14 +406,17 @@ function layoutPassCatchers(offSlots, lm, style) {
 
   // The slot man is lifted out of his chart position and re-inserted immediately after the outermost
   // receiver; everyone else keeps the chart's own order around him.
+  // D76 (Adam): the cluster reads outside WR, WR · Slot, any further WRs, TE(s), outside WR — the TE sits
+  // INSIDE the right-side receiver — and it is spread a little wider than the line pitch so the boxes
+  // stop reading as packed together.
   const outside = wrCols.filter((c) => c !== slotCol);
-  const ordered = slotCol ? [outside[0], slotCol, ...outside.slice(1)].filter(Boolean) : wrCols.slice();
   stackColumns(teCols); // TE2 under TE1: the stack takes ONE place in the cluster, not two
-  const placed = teCols.length ? [...ordered, teCols[0]] : ordered;
-  // spanPoints on a zero-width range is the centred-cluster case: pitch falls back to MIN_PITCH and the
-  // whole block is centred on lm.C, which is the centre of the offensive line and so of the field.
-  const xs = spanPoints(lm.C, lm.C, placed.length);
-  placed.forEach((c, i) => { c.x = xs[i]; });
+  const te = teCols.length ? [teCols[0]] : [];
+  const placed = slotCol
+    ? [outside[0], slotCol, ...outside.slice(2), ...te, outside[1]].filter(Boolean)
+    : [wrCols[0], ...wrCols.slice(2), ...te, wrCols[1]].filter(Boolean);
+  const pitch = MIN_PITCH * PASS_CATCHER_PITCH;
+  placed.forEach((c, i) => { c.x = lm.C + (i - (placed.length - 1) / 2) * pitch; });
   return [...wrCols, ...teCols];
 }
 
