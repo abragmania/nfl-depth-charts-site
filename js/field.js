@@ -417,15 +417,38 @@ const starterLed = (slot) => {
 };
 // D93: the one man whose qualification decides what happens to a whole club column. Normally the column's
 // line-one man — the only receiver the front end can see "leading" a slot. The exception is D12/D44's pair:
-// a listed-OUT starter with his ACTIVE fill-in directly under him. The fill-in is the receiver actually
-// lining up there this week, so HIS rate decides, and if he qualifies the out man rides into the Slot column
-// with the rest of the column rather than being stranded behind.
+// a listed-OUT starter with his ACTIVE fill-in under him. The fill-in is the receiver actually lining up
+// there this week, so HIS rate decides, and if he qualifies the out man rides into the Slot column with the
+// rest of the column rather than being stranded behind.
+//
+// The fill-in is NOT always row two. The server builds a column as [...outs, card, ...rest] and promoteFillIns
+// tags the first playable man after the LAST out man, so real shapes include [OUT, OUT, ACTIVE] (two men
+// listed out) and [OUT, backup on IR, ACTIVE] (the man behind him is unavailable too). So the decider is the
+// first ACTIVE man ANYWHERE in the column — exactly the man the server's own receiverColumnLeader
+// (server/compile/chart.js) picks when it ranks the column — and the out man himself only when the column
+// carries no ACTIVE man at all.
 function columnDecider(slot) {
   const players = slot?.players || [];
   const lineOne = players[0];
   if (!lineOne) return null;
-  if (lineOne.role === "STARTER_OUT" && players[1]?.role === "ACTIVE") return players[1];
+  if (lineOne.role === "STARTER_OUT") return players.find((p) => p.role === "ACTIVE") || lineOne;
   return lineOne;
+}
+
+// How many rows of a column make up its LINE ONE — the block no other column's man may be pushed inside.
+// Normally the single starter on row one; for D12/D44's shape every row from the listed-OUT starter down to
+// and including the ACTIVE man filling in for him (the rows between them are men listed out or unavailable,
+// which is exactly why the fill-in is not always row two); and for a co-starter pair, both names, which is
+// what lineOneCount above already draws as bold rows. Used when a second qualifying starter joins the Slot
+// column: he goes below that block, never between an out man and the man playing for him.
+function lineOneBlock(slot) {
+  const players = slot?.players || [];
+  if (!players.length) return 0;
+  if (players[0].role === "STARTER_OUT") {
+    const fill = players.findIndex((p) => p.role === "ACTIVE");
+    if (fill > 0) return fill + 1;
+  }
+  return lineOneCount(players);
 }
 
 // A card with no tier number sorts below every man who has one, in the order the club printed them.
@@ -495,6 +518,18 @@ export function regroupSlotReceivers(wrSlots) {
   // staying in his own club column. That leftover is therefore the one case that can still leave a club
   // column holding nothing but backups, which is why D92's "backup-led columns sort last" clause below is
   // still live rather than dead code.
+  //
+  // Where that second starter lands inside the column is D90's binding principle, not the order the two
+  // groups happen to arrive in: a BACKUP never sits above a STARTER in any column. So the men who join the
+  // source column's group are split — qualifying starters go directly under the source column's LINE ONE
+  // block, ahead of the backups that column carried in, and qualifying backups go under all of them in D90's
+  // order. Buffalo therefore reads Shakir, Robinson, Atwell: the two starters together, the carried backup
+  // beneath them, rather than Robinson being stacked under another column's reserve.
+  //
+  // Accepted edge, low priority (Adam has not ruled on it and no real club hits it today): when the column
+  // that LOSES the two-starters tie is a [STARTER_OUT, ACTIVE] pair and only the ACTIVE fill-in qualifies,
+  // he moves into the Slot column alone and the out man is left leading his old column — whose `injury`
+  // block still names that fill-in as the man covering for him, now drawn one column over.
   const starterColumns = wrSlots.filter((s) => starterLed(s) && isQualified(columnDecider(s)));
   const source = starterColumns.length
     ? starterColumns.reduce((a, b) => ((a.columnOrder ?? 0) <= (b.columnOrder ?? 0) ? a : b))
@@ -502,10 +537,19 @@ export function regroupSlotReceivers(wrSlots) {
   const group = source ? (source.players || []).slice() : [];
   const inGroup = new Set(group);
   const groupKeys = new Set(group.map((p) => p.playerKey).filter((k) => k != null));
-  // Backups who qualify on their own, from every OTHER column, join BELOW the starter-led group in D90's
-  // order (tier, then the club column's rank, then slot snaps, then the printed row) — unchanged from D86.
+  // Men who qualify on their own, from every OTHER column, join the starter-led group in D90's order (tier,
+  // then the club column's rank, then slot snaps, then the printed row) — unchanged from D86 except for
+  // where they land relative to the backups the source column carried in, above.
   const individuals = qualified.filter((p) => !inGroup.has(p) && !(p.playerKey != null && groupKeys.has(p.playerKey)));
-  const men = [...group, ...individuals];
+  // A starter is a man his club lists on line one or two of a column (tier 0 or 1) or whom the server itself
+  // marks as leading one (D12/D44's listed-OUT starter and his ACTIVE fill-in, and a co-starter) — the same
+  // test starterLed applies to a whole column.
+  const isStarter = (p) => tierOf(p) <= 1 || STARTER_LED_ROLES.has(p.role) || p?.coStarter === true;
+  const head = group.slice(0, lineOneBlock(source));
+  const carried = group.slice(head.length);
+  const men = source
+    ? [...head, ...individuals.filter(isStarter), ...carried, ...individuals.filter((p) => !isStarter(p))]
+    : [...individuals];
 
   const moved = new Set(men);
   const movedKeys = new Set(men.map((p) => p.playerKey).filter((k) => k != null));
@@ -529,6 +573,8 @@ export function regroupSlotReceivers(wrSlots) {
   // `espnRank` and `clubLabel` are what columnRankReason quotes in the tooltip. Without them the Slot column
   // would lose a club's injury heat the moment its starter qualified. With no source column (only backups
   // qualified) there is nothing to carry and the fields are simply absent, as they were before D93.
+  // `sourceSlotId` is informational only — nothing reads it, and it is kept so a reader of the rendered view
+  // (or a future debugging aid) can see which club column this one was built out of.
   const slot = {
     slotId: "OFF-WR-SLOT", unit: "OFF", band: "WR", ordinal: 0, columnOrder: 0,
     label: "WR · Slot", derived: true, players: men,
@@ -545,10 +591,19 @@ export function regroupSlotReceivers(wrSlots) {
     return `${lastName(p.name)} ${rateOf(p)}%${snaps == null ? "" : ` (${snaps} slot snaps)`}`;
   };
   // D93: the column can now hold men who never cleared the bar — a qualifying starter's own backups, carried
-  // in with his column. The sentence is a statement about who plays inside, so it names only the men the bar
-  // was actually read on, in the column's own top-to-bottom order; a 12%-inside fourth-stringer riding along
-  // under his starter would make it false.
-  const reason = `Slot receivers (half or more of their snaps inside, 100+ measured): ${men.filter(isQualified).map(entryOf).join(", ")}`;
+  // in with his column. The first sentence is a statement about who plays inside, so it names only the men the
+  // bar was actually read on, in the column's own top-to-bottom order; a 12%-inside fourth-stringer riding
+  // along under his starter would make it false. Those carried men are then named in a clause of their own, so
+  // that a reader who sees a name on the column and not in the sentence is not left wondering why he is there:
+  // he is in the column because the CLUB lists him in it, not because of anything he does inside.
+  // (For D12/D44's shape the decider is the ACTIVE fill-in, so a listed-OUT starter above him who did not
+  // clear the bar himself is named in this clause too — he is one of the men the column carried in.)
+  const carriedOver = source ? men.filter((p) => inGroup.has(p) && !isQualified(p)) : [];
+  const decider = source ? columnDecider(source) : null;
+  const carriedClause = carriedOver.length && decider
+    ? `; listed behind ${lastName(decider.name)} by the club: ${carriedOver.map((p) => lastName(p.name)).join(", ")}`
+    : "";
+  const reason = `Slot receivers (half or more of their snaps inside, 100+ measured): ${men.filter(isQualified).map(entryOf).join(", ")}${carriedClause}`;
   return { slot, kept, reason };
 }
 
@@ -558,6 +613,12 @@ export function regroupSlotReceivers(wrSlots) {
 // provenance: "espn" when ESPN ranked the leading man, "chart" when nothing but the printed order of the
 // chart we hold placed the column. The club's printed position is the number on its own label when the club
 // numbers its receiver rows, and otherwise the column's ordinal, which was counted off that printed order.
+//
+// D93 renumbers the surviving columns down their left-to-right order, so the pill on the box and the number
+// in this sentence can be two different numbers (pill WR1, server label WR2). `displayLabel` is what the box
+// actually prints: when it differs from the server's own label the sentence opens by saying so, or the
+// tooltip would read as a flat contradiction of the pill above it. Called without one — as the tests call it
+// directly — it is the plain provenance sentence it has always been.
 // Exported for the tests — nothing else calls it.
 const ORDINAL_SUFFIX = (n) => (n % 100 >= 11 && n % 100 <= 13 ? "th" : ["th", "st", "nd", "rd"][n % 10] ?? "th");
 function printedOrdinal(slot) {
@@ -565,12 +626,15 @@ function printedOrdinal(slot) {
   const n = m ? Number(m[1]) : Number(slot?.ordinal);
   return Number.isFinite(n) && n > 0 ? `${n}${ORDINAL_SUFFIX(n)}` : null;
 }
-export function columnRankReason(slot) {
+export function columnRankReason(slot, displayLabel = null) {
   const printed = printedOrdinal(slot);
+  const renumbered = displayLabel && displayLabel !== slot?.label
+    ? `Numbered ${displayLabel} here because the slot man's column stands apart; `
+    : "";
   if (slot?.rankSource === "espn") {
-    return `ESPN ranks this column ${slot.label}${printed ? `; the club prints it ${printed}` : ""}`;
+    return `${renumbered}ESPN ranks this column ${slot.label}${printed ? `; the club prints it ${printed}` : ""}`;
   }
-  return printed ? `printed ${printed} on the chart` : "printed in the chart's own order";
+  return `${renumbered}${printed ? `printed ${printed} on the chart` : "printed in the chart's own order"}`;
 }
 
 // The PASS CATCHERS row (D69's own row, D71's x-maths). D63 hung these columns off the ends of the
@@ -600,10 +664,20 @@ function layoutPassCatchers(offSlots, lm, style) {
   // real receiver columns, so they are RENUMBERED WR1, WR2… down their existing left-to-right order (which is
   // still ESPN's, D92) — Philadelphia reads WR1, WR · Slot, WR2, TE rather than WR, WR · Slot, WR. The
   // renumbering is a display label only: the slot keeps the server's own `label`, so the tooltip can still say
-  // both numbers truthfully ("ESPN ranks this column WR2; the club prints it 3rd"). With no Slot column at all
-  // nothing is regrouped and the server's WR1/WR2/WR3 pills stand exactly as before.
+  // both numbers truthfully ("Numbered WR1 here…; ESPN ranks this column WR2; the club prints it 3rd"). With
+  // no Slot column at all nothing is regrouped and the server's WR1/WR2/WR3 pills stand exactly as before.
+  //
+  // Only a column still led by a STARTER takes a number. The two-starters case can leave a column holding
+  // nothing but the losing starter's backups (see regroupSlotReceivers), and D92 already sorts that column
+  // behind every starter's column precisely because it is not a number-two receiver — so it must not be
+  // handed a rank pill either. It prints a plain "WR", claiming no place in the club's receiver order, and
+  // the columns that ARE starter-led number straight through it: WR1, WR2, … WR.
+  let wrRank = 0;
   const wrCols = grouped
-    ? grouped.kept.map((s, i) => col(s, "WR", { displayLabel: `WR${i + 1}`, slotReason: columnRankReason(s) }))
+    ? grouped.kept.map((s) => {
+      const displayLabel = starterLed(s) ? `WR${++wrRank}` : "WR";
+      return col(s, "WR", { displayLabel, slotReason: columnRankReason(s, displayLabel) });
+    })
     : wrSlots.map((s) => col(s, "WR"));
 
   stackColumns(teCols); // TE2 under TE1: the stack takes ONE place in the cluster, not two

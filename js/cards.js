@@ -351,16 +351,31 @@ function overviewLineOne(p, teamAbbr, opts = {}) {
   // everything stacked under it (the pass-catcher cluster included) sits exactly where the layout engine
   // already reserved it; only styles.css's bold/photo-pill treatment is switched off for this row.
   const starterCls = isLineOneStarter(p) ? "" : " column-no-starter";
+  // Fix (👁 finding, 2026-09-15): on the side pages' headshot row the D91 snap trio used to sit inline
+  // after the rating pill, on the same line as the name — at that row's wider font sizes the trio ate
+  // into the name's width and pushed every longer name into a browser ellipsis ("C. Ok…", D91 hardening
+  // didn't touch this, it's a layout-only regression). `.prow-info` wraps everything but the headshot,
+  // and `.prow-main` wraps everything but the trio: on every OTHER row family (the whole-team overview
+  // with no headshot) both wrappers stay `display:contents` in CSS, so they add nothing to the box tree
+  // and the row renders byte-for-byte as it did before this change. Only styles.css's
+  // `.prow-one:has(.prow-head)` rule turns `.prow-info` into a two-line stack — trio under the pill —
+  // so the name gets back the same full row width it had before the trio existed. cards.js has to be the
+  // one to add these wrapper spans: CSS alone cannot single out "every flex item except the first" (the
+  // headshot) into its own stacking column without one.
   return `<a class="${overviewClasses(p, "prow prow-one")}${starterCls}${espnRing}" href="#/team/${esc(teamAbbr)}/player/${encodeURIComponent(p.playerKey)}" data-player-key="${esc(p.playerKey)}" title="${overviewTitle(p, disagrees)}" style="min-height:${lineOneHeight(p, style)}px">
     ${bannerHtml(p)}
     <span class="prow-line">
       ${head}
-      <span class="prow-num">${esc(p.number ?? "—")}</span>
-      <span class="prow-name" data-short="${esc(shortName(p))}">${esc(p.name)}</span>
-      ${signalGlyphs(p)}
-      <span class="prow-badges">${badges}</span>
-      ${overviewOvr(p.rating, ratingTier(p.rating))}
-      ${snapHistoryHtml(p, opts)}
+      <span class="prow-info">
+        <span class="prow-main">
+          <span class="prow-num">${esc(p.number ?? "—")}</span>
+          <span class="prow-name" data-short="${esc(shortName(p))}">${esc(p.name)}</span>
+          ${signalGlyphs(p)}
+          <span class="prow-badges">${badges}</span>
+          ${overviewOvr(p.rating, ratingTier(p.rating))}
+        </span>
+        ${snapHistoryHtml(p, opts)}
+      </span>
     </span>
   </a>`;
 }
@@ -580,10 +595,10 @@ export function renderColumn(col, teamAbbr, opts = {}) {
   const heatCls = slot.injury?.level && HEAT_CLASS[slot.injury.level] ? ` ${HEAT_CLASS[slot.injury.level]}` : "";
   const heatTitleText = heatCls ? heatTitle(slot.injury) : "";
   const labelHref = `#/team/${esc(teamAbbr)}/group/${esc((slot.band || "").toLowerCase())}`;
-  // col.slotReason (D64): why THIS receiver is the one standing in the slot. Under D86 that is the tooltip
-  // sentence naming the men at half or more of their own snaps inside, or, on an unlifted club column, "club
-  // lists this column as WRn". It leads the tooltip because on the slot column it is the thing a reader
-  // actually questions; every other column has no reason and reads exactly as before.
+  // col.slotReason (D64): why THIS receiver is the one standing in the slot. On the Slot column it is the D86/D89
+  // sentence naming the men at half or more of their own snaps inside (100+ measured); on a club column it is
+  // columnRankReason's sentence, ESPN's rank of the column plus what the club printed (D92/D93). It leads the
+  // tooltip because it is the thing a reader actually questions.
   const labelTitle = esc([col.slotReason || "", slot.labelSource ? `source: ${slot.labelSource}` : "", heatTitleText].filter(Boolean).join(" · "));
   // D83: `col.derived` marks a column the LAYOUT built rather than one the club charted (the WR · Slot
   // column). Two men in it may happen to be co-starters of the club columns they came from, but they are

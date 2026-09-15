@@ -267,6 +267,14 @@ a.back { color:var(--muted); }
 .prow:hover { border-color:#6b7885; }
 .prow.selected { outline:2px solid #ffd54a; outline-offset:1px; }
 .prow-line { display:flex; align-items:center; gap:4px; padding:0 4px; min-width:0; }
+/* Fix (👁 finding, 2026-09-15): cards.js's overviewLineOne wraps everything but the headshot in
+   .prow-info, and everything but the D91 snap trio in .prow-main, so styles.css can single the trio out
+   onto its own line on the headshot row ONLY (see .prow-one:has(.prow-head) below) without a second
+   markup path. `display:contents` here is the default for every OTHER row: both wrappers vanish from the
+   box tree and their children become direct flex items of .prow-line, exactly as if the wrappers were
+   never added — the whole-team overview (no headshot) and every row family besides .prow-one keep
+   rendering byte-for-byte as before this change. */
+.prow-info, .prow-main { display:contents; }
 .prow-num { flex:none; color:var(--muted); font-variant-numeric:tabular-nums; font-size:9.5px; min-width:15px; text-align:right; }
 /* D73 (Adam, 2026-09-15): "player ratings should appear next to their names, not all the way on the right
    of the cell." The name used to be the row's one growing element (flex:1 1 auto), which pushed the
@@ -311,6 +319,17 @@ a.back { color:var(--muted); }
    ever wrapping it (D58's fit) — the name still shrinks/abbreviates first (D73's fitNames), this only
    trims what the trio itself costs once that has already happened. */
 .prow-one:not(:has(.prow-head)) .snaps { font-size:8.5px; margin-left:1px; }
+/* Fix (👁 finding, 2026-09-15): the headshot row DOES now wrap the trio, contradicting "instead of ever
+   wrapping it" just above — SIDE_CARD_W's extra width still isn't enough once a starter's name is long
+   ("Nick Allegretti", "Jaylin Croskey-Merritt"): at the D91 comment's inline size the trio ate into the
+   name's own width and pushed it into a browser ellipsis. cards.js's .prow-info/.prow-main wrappers (see
+   the `display:contents` rule above) let this rule turn the trio into a second line under the pill,
+   right-aligned, instead — the name gets back the full width it had before D91. `gap:1px` between the two
+   .prow-info lines plus this 8px trio keeps the two-line stack inside the same headshot-row height
+   field.js already reserves (HEADSHOT_SIZE + HEADSHOT_PAD, 34px): nothing grows, nothing else moves. */
+.prow-one:has(.prow-head) .prow-info { display:flex; flex-direction:column; justify-content:center; gap:1px; flex:1 1 auto; min-width:0; }
+.prow-one:has(.prow-head) .prow-main { display:flex; align-items:center; gap:4px; min-width:0; }
+.prow-one:has(.prow-head) .snaps { align-self:flex-end; font-size:8px; line-height:1; margin:0; }
 /* 🔵 review follow-up (2026-09-15, D91 item 1): the player panel's grade box (public/css/panel.css's
    .panel-grade) is a centred vertical stack, not a row, so the base rule's row-only margin-left is wrong
    here; sized a step up from the base 9.5px to match the box's bigger num/rank/delta scale. */
