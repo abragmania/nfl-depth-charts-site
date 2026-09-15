@@ -399,6 +399,15 @@ const rateOf = (p) => {
   const own = p?.slotRate;
   return typeof own === "number" && Number.isFinite(own) ? own : null;
 };
+// D92: the roles that make a man the leader of a real starter's column, as against a column of backups left
+// behind when the slot men moved out. Same list assignRoles works in: a co-starter is a starter on a shared
+// line one, a STARTER_OUT still holds his column (D12) and an ACTIVE man is the one filling in for him (D44).
+const STARTER_LED_ROLES = new Set(["STARTER", "STARTER_OUT", "ACTIVE"]);
+const starterLed = (slot) => {
+  const lineOne = slot?.players?.[0];
+  return !!lineOne && (lineOne.coStarter === true || STARTER_LED_ROLES.has(lineOne.role));
+};
+
 // A card with no tier number sorts below every man who has one, in the order the club printed them.
 const UNTIERED = Number.MAX_SAFE_INTEGER;
 const tierOf = (p) => (typeof p?.tier === "number" && Number.isFinite(p.tier) ? p.tier : UNTIERED);
@@ -456,6 +465,14 @@ export function regroupSlotReceivers(wrSlots) {
     const players = (s.players || []).filter((p) => !moved.has(p) && !(p.playerKey != null && movedKeys.has(p.playerKey)));
     if (players.length) kept.push({ ...s, players });
   }
+  // D92 (Adam, 2026-09-15): the server orders the receiver columns by ESPN's rank of the man LEADING each of
+  // them, but lifting the slot men out can leave a column with nobody but backups in it - Green Bay's third
+  // column is Matthew Golden (a starter) and its second is Skyy Moore alone once Romeo Doubs and Jayden Reed
+  // move inside. A column of backups is not a number-two receiver and must not be drawn ahead of a starter's
+  // column, so every column still led by a starter comes first and the backup-led ones follow, each group
+  // keeping the order the server gave it. Roles are the server's own (D12/D44): a co-starter, a listed-OUT
+  // starter and his ACTIVE fill-in all lead a starter's column.
+  kept.sort((a, b) => (starterLed(a) ? 0 : 1) - (starterLed(b) ? 0 : 1));
 
   const slot = {
     slotId: "OFF-WR-SLOT", unit: "OFF", band: "WR", ordinal: 0, columnOrder: 0,

@@ -243,9 +243,11 @@ a.back { color:var(--muted); }
    faintest thing on the field. The tints are now deep by construction, so white ink reads on them
    whatever colour the team brings; the bright accent survives as the underline, which is what carries
    the low/high/critical distinction anyway. */
-.column-label.heat-low { background:color-mix(in srgb, #5c4410 62%, var(--team-secondary,#777) 38%); box-shadow:inset 0 -2px 0 rgba(242,193,78,.9); }
-.column-label.heat-high { background:color-mix(in srgb, #64330f 66%, var(--team-secondary,#777) 34%); box-shadow:inset 0 -2px 0 rgba(242,146,78,.95); }
-.column-label.heat-critical { background:color-mix(in srgb, #5e1613 70%, var(--team-secondary,#777) 30%); box-shadow:inset 0 -2px 0 #e0524d; }
+/* Adam (2026-09-15): the pill keeps its D70 band colour whatever the injury heat; heat lives in the underline and
+   the column glow only (a heat-tinted WR pill read as the TE colour on the Packers). */
+.column-label.heat-low { box-shadow:inset 0 -2px 0 rgba(242,193,78,.9); }
+.column-label.heat-high { box-shadow:inset 0 -2px 0 rgba(242,146,78,.95); }
+.column-label.heat-critical { box-shadow:inset 0 -2px 0 #e0524d; }
 .column.heat-low { box-shadow:0 0 0 1px rgba(242,193,78,.4); }
 .column.heat-high { box-shadow:0 0 10px rgba(242,146,78,.45); }
 .column.heat-critical { box-shadow:0 0 14px rgba(224,82,77,.6); }
@@ -280,6 +282,16 @@ a.back { color:var(--muted); }
 /* 👁 QA: "NR" for a player with no Madden entry — quiet, but never an empty slot where every other row
    in the column has a number. Same wording and weight as the card views' own NR pill. */
 .prow-ovr-none { color:var(--muted); font-weight:700; font-size:8.5px; letter-spacing:.02em; }
+/* D91 (Adam, 2026-09-15): the man's last-three-games snap-share trio ("81 · 64 · 70"), a span.snaps sitting
+   right after the rating pill wherever a pill is drawn (or after the name, on the tray chips below, which
+   draw no pill at all). Reuses --muted, the same token every other secondary fact on this card already
+   uses, and never wraps — on a compact row a long trio can only ever be squeezed by the name shrinking
+   first (D73's own rule for the rating pill; fitNames already handles that), never by breaking the row's
+   own height. Base size matches this row family's own jersey number (.prow-num); the two overrides below
+   match it in the other two row weights the same way. */
+.snaps { flex:none; color:var(--muted); font-variant-numeric:tabular-nums; font-size:9.5px; white-space:nowrap; margin-left:2px; }
+.prow-one .snaps { font-size:10.5px; }
+.prow-one.column-no-starter .snaps { font-size:9.5px; }
 /* The starter's row: bigger, bolder, and its OVR is a solid tier-coloured pill rather than a tinted
    number, so the one player who actually starts is unmistakable at a glance down a column. */
 .prow-one { min-height:27px; border-left-width:4px; }
@@ -292,6 +304,13 @@ a.back { color:var(--muted); }
 .prow-one .prow-head .headshot-box, .prow-one .prow-head .headshot-fallback { box-shadow:0 0 0 1px rgba(255,255,255,.18); }
 .prow-one .prow-name { font-size:12px; font-weight:700; }
 .prow-one .prow-num { font-size:10.5px; }
+/* D91: field.js's CARD_W (the whole-team overview and matchup columns, 156 layout units) leaves far less
+   room beside the name than SIDE_CARD_W (the offense/defense pages, 180, which also buy a headshot's worth
+   of extra row height to spend). A headshot on this row (.prow-head) is D72's own signal that this is the
+   wider single-unit page, so the narrower, no-headshot case drops the trio to a smaller size instead of
+   ever wrapping it (D58's fit) — the name still shrinks/abbreviates first (D73's fitNames), this only
+   trims what the trio itself costs once that has already happened. */
+.prow-one:not(:has(.prow-head)) .snaps { font-size:8.5px; margin-left:1px; }
 .prow-one .prow-ovr { font-size:11px; padding:1px 5px; min-width:21px; }
 .prow-one .prow-ovr.tier-elite { background:var(--tier-elite); color:var(--tier-elite-ink); }
 .prow-one .prow-ovr.tier-strong { background:var(--tier-strong); color:var(--tier-strong-ink); }
@@ -439,6 +458,9 @@ a.back { color:var(--muted); }
 /* Adam: "keep the rating pill but make the position-rank the secondary emphasis" — the OVR number stays
    full-weight/full-colour, the "· #4 RB" rank reads quieter alongside it. */
 .rating-pill-rank { font-weight:600; opacity:.72; }
+/* D91: the big group-view cards (zoom.js's fullCard) print the trio inside the same .zoom-pill-row span as
+   the rating pill, right after it — sized for this card's own jersey-crest number (.jersey-crest is 11px). */
+.zoom-pill-row .snaps { font-size:10px; margin-left:4px; }
 
 /* D43 depth-row tiers already put a tier-* class on the row itself (cards.js/matchup.js) — reuse it here
    so the row's own OVR number (styles.css's shared .row-ovr) picks up the same tier-colour scale as
@@ -470,6 +492,9 @@ a.back { color:var(--muted); }
 .row-ovr { flex:none; font-size:10px; font-weight:700; color:#c3cad2; background:rgba(255,255,255,.06); border-radius:8px; padding:1px 6px; margin-left:auto; }
 /* 👁 QA: an unrated player reads "NR", muted — never a blank or a bare dash. */
 .row-ovr-none { color:var(--muted); font-size:8.5px; letter-spacing:.03em; }
+/* D91: same jersey-number-weight trio as .prow's own .snaps above, sized for this row's own (bigger)
+   jersey number — compactRow prints it as the row's very last child, after .row-ovr. */
+.row .snaps { font-size:11px; margin-left:4px; }
 /* D61: a depth row for a man who will not play (the second-stringer on IR/PUP/NFI/suspension that D61 puts
    at the bottom of his slot, and any other out backup) greys out exactly as the out line-one rows do
    (.prow-out above) — number and name fade, the status badge and the rating pill stay at full strength,
@@ -512,6 +537,9 @@ a.back { color:var(--muted); }
 .tray-homed { border-style:dashed; border-color:#4a5560; }
 .tray-chip { font-size:11.5px; font-style:italic; color:#b7c0c9; text-decoration:none; background:rgba(255,255,255,.04); border-radius:12px; padding:2px 8px; }
 .tray-chip:hover { color:#fff; }
+/* D91: a tray chip carries no rating pill, so its trio sits after the name/PS badge instead — the same
+   muted, non-wrapping treatment, sized down slightly since a tray chip's own text already runs small. */
+.tray-chip .snaps { font-size:9.5px; margin-left:3px; font-style:normal; }
 
 @media (max-width:1400px) {
   .card-name { font-size:12px; }

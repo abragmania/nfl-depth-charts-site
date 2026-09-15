@@ -89,6 +89,38 @@ function weekOneChip(note) {
   return `<span class="chip chip-wk1" title="${esc(note)}">Wk1</span>`;
 }
 
+// D91 (Adam, 2026-09-15) front-end half: beside every name/rating pill, on every view, the man's last
+// three games' share of HIS unit's snaps, newest first, as small muted numbers ("81 · 64 · 70"). The data
+// comes from card.snapHistory = [{week, opponent, pct}] (server/compile/chart.js's makeCard — D91's server
+// half, built alongside this): newest first, at most 3 entries, pct already measured on the card's OWN
+// unit (an offensive card's numbers are always offense_pct, a defensive card's always defense_pct — see
+// that file's own comment beside `card.snapHistory =`), [] or absent when he has no game rows. This file
+// only has to print what is there: nothing at all when the array is empty or missing — no placeholder, no
+// dash — the same "optional fact" treatment weekOneChip/alsoListedChips above already give a maybe-missing
+// field.
+const UNIT_SNAP_WORD = { OFF: "offensive", DEF: "defensive" };
+
+// `opts.unit` is read off the column/slot/tray this card is drawn on (never guessed from the card itself —
+// a card has no unit of its own) so the tooltip says "offensive snaps" on an OFF card and "defensive
+// snaps" on a DEF one. `opts.gamesPlayed`, when the caller happens to have it, lets the tooltip explain a
+// short trio; every caller that reaches this through an `opts` bag with no header on it (renderColumn/
+// compactRow, fed by team.js/matchup.js/zoom.js's side view) simply never sets it, and the sentence is
+// skipped rather than guessed at — only zoom.js's group view (renderGroupStack, which builds its own opts
+// straight from the TeamView it already has in scope) can supply it today.
+function snapHistoryTitle(history, unit, gamesPlayed) {
+  const word = UNIT_SNAP_WORD[unit] || "offensive";
+  const lines = history.map((h) => `Wk ${esc(h.week)} vs ${esc(h.opponent)}: ${esc(h.pct)}% of ${word} snaps`);
+  if (history.length < 3 && typeof gamesPlayed === "number" && gamesPlayed > history.length) lines.push("Games he missed leave a gap");
+  return lines.join("\n");
+}
+
+export function snapHistoryHtml(p, opts = {}) {
+  const history = Array.isArray(p.snapHistory) ? p.snapHistory : [];
+  if (!history.length) return "";
+  const nums = history.map((h) => esc(String(h.pct))).join(" · ");
+  return `<span class="snaps" title="${snapHistoryTitle(history, opts.unit, opts.gamesPlayed)}">${nums}</span>`;
+}
+
 // 🎨 Polish (2026-09-11, round 2): "also OLB" was wide enough to shove the whole name out of a 40px
 // depth row (item 2 — the chip has no shrink limit, so it always rendered at full width while the name
 // beside it, the one column Adam actually reads, got squeezed to nothing). Dropping the "also " prefix
@@ -322,6 +354,7 @@ function overviewLineOne(p, teamAbbr, opts = {}) {
       ${signalGlyphs(p)}
       <span class="prow-badges">${badges}</span>
       ${overviewOvr(p.rating, ratingTier(p.rating))}
+      ${snapHistoryHtml(p, opts)}
     </span>
   </a>`;
 }
@@ -344,6 +377,7 @@ function overviewDepth(p, teamAbbr, opts = {}) {
       <span class="prow-name" data-short="${esc(shortName(p))}">${esc(name)}</span>
       <span class="prow-badges">${badges}</span>
       ${overviewOvr(p.rating, ratingTier(p.rating))}
+      ${snapHistoryHtml(p, opts)}
     </span>
   </a>`;
 }
@@ -385,6 +419,7 @@ export function compactRow(p, teamAbbr, opts = {}) {
     <span class="row-name">${esc(displayName)}</span>
     ${badgesHtml}
     <span class="row-ovr${p.rating?.current == null ? " row-ovr-none" : ""}">${esc(ovr)}</span>
+    ${snapHistoryHtml(p, opts)}
   </a>`;
 }
 
@@ -569,7 +604,11 @@ export function renderColumn(col, teamAbbr, opts = {}) {
   // so the markup below can no more disagree about the headshot or the depth cap than it already could
   // about the row count — both come from the same object the reserved box was measured with.
   const style = col.style || {};
-  const colOpts = { ...opts, band: slot.band, ownLabel: slot.label, labelSource: slot.labelSource, style, isSlotColumn: /Slot/.test(col.displayLabel || "") };
+  // D91: col.unit (field.js's placeRow stamps it from the row) is the one place renderColumn actually
+  // knows which side of the ball this column is on — never guessed from the players themselves — so every
+  // row renderer below reads the tooltip's "offensive"/"defensive" word off opts.unit rather than each
+  // reinventing its own way to ask.
+  const colOpts = { ...opts, band: slot.band, ownLabel: slot.label, labelSource: slot.labelSource, style, isSlotColumn: /Slot/.test(col.displayLabel || ""), unit: col.unit };
 
   // Ruling E: bold line-one row(s) — one starter normally, two for a co-starter pair or for D44's
   // OUT-starter-plus-ACTIVE-fill-in — then up to MAX_DEPTH_ROWS slim rows, the last of which becomes a
@@ -605,8 +644,11 @@ export function renderColumn(col, teamAbbr, opts = {}) {
 // width spanning to its last) rather than the whole row, with the row's own tray gap keeping it clear
 // of the deepest depth row above/below it (👁 review, 2026-09-11).
 export function renderTray(tray, teamAbbr) {
+  // D91: a tray chip carries no rating pill for the trio to sit "beside", so it sits beside the name
+  // instead — tray.unit (renderColumn's own colOpts.unit source: field.js stamps both from the same
+  // row.unit) is read the same way every other renderer here reads it, never guessed from the entry.
   const chips = tray.entries.map((p) => `<a class="tray-chip" href="#/team/${esc(teamAbbr)}/player/${encodeURIComponent(p.playerKey)}" data-player-key="${esc(p.playerKey)}" title="Carried on the roster but not on the club depth chart">
-      #${esc(p.number ?? "—")} ${esc(p.name)}${(psBadge(p, false) ? " " + psBadge(p, false) : "")}
+      #${esc(p.number ?? "—")} ${esc(p.name)}${(psBadge(p, false) ? " " + psBadge(p, false) : "")}${snapHistoryHtml(p, { unit: tray.unit })}
     </a>`).join("");
   // 👁 QA: the tray carries its band's name. It normally hangs under that band's own columns so the name
   // is obvious, but a band with nothing charted has no row of its own any more (field.js collapses it),

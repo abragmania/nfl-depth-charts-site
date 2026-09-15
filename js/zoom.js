@@ -18,7 +18,7 @@
 // card-banner, banner-out, banner-active, badge*, rating-pill, column-shaded, tray-label/tray-chip)
 // rather than inventing parallel styles.
 import { getTeams, getTeam, invalidateTeam } from "./api.js";
-import { esc, BAND_DISPLAY, headshotHtml, wireDepthToggles, isFullyOut, isScratch, psBadge } from "./cards.js";
+import { esc, BAND_DISPLAY, headshotHtml, wireDepthToggles, isFullyOut, isScratch, psBadge, snapHistoryHtml } from "./cards.js";
 import { headerHtml, mountTeamField, teamBodyHtml } from "./team.js";
 import { SIDE_CARD_W, SIDE_MAX_DEPTH_ROWS } from "./field.js";
 import { fitToViewport, disposeCurrentView } from "./viewfit.js";
@@ -256,7 +256,7 @@ function fullCard(p, teamAbbr, opts = {}) {
         ${roleTagHtml(p)}
       </span>
     </span>
-    <span class="zoom-pill-row">${ratingPill(p.rating)}</span>
+    <span class="zoom-pill-row">${ratingPill(p.rating)}${snapHistoryHtml(p, opts)}</span>
   </a>`;
 }
 
@@ -425,9 +425,14 @@ function tierRow(n, cardHtml) {
   return `<div class="tier-row"><span class="tier-num">${num}</span>${cardHtml}</div>`;
 }
 
-function renderGroupStack(slot, teamAbbr, wide = false) {
-  const lineOne = { ...(wide ? GROUP_LINE_ONE_WIDE : GROUP_LINE_ONE), wide };
-  const rest = { ...(wide ? GROUP_REST_WIDE : GROUP_REST), wide };
+// D91: `unit`/`gamesPlayed` ride along on the same size objects (lineOne/rest) fullCard already takes as
+// its own `opts` — renderZoomGroup is the one caller in this file that has both a known unit (BAND_UNIT)
+// and the TeamView's own header.record in scope, so it is the only place in the whole front end that can
+// pass gamesPlayed through without inventing a new way to ask for it (see cards.js's snapHistoryHtml for
+// why every other caller omits it).
+function renderGroupStack(slot, teamAbbr, wide = false, unit, gamesPlayed) {
+  const lineOne = { ...(wide ? GROUP_LINE_ONE_WIDE : GROUP_LINE_ONE), wide, unit, gamesPlayed };
+  const rest = { ...(wide ? GROUP_REST_WIDE : GROUP_REST), wide, unit, gamesPlayed };
   const hatched = slot.shadedByDefault ? " column-shaded" : "";
   const players = slot.players;
   // Lead ruling (2026-09-11, item 8): same "one slot, two names" label treatment as the side view, for
@@ -534,8 +539,13 @@ export async function renderZoomGroup(root, search, abbr, bandParam) {
     unlistedEntries = unlistedEntries.concat((view.unlisted?.DEF?.NB) || []);
   }
 
+  // D91: the same wins+losses+ties reading server/compile/coverage.js's own playerRecords() uses for
+  // "how many games has this club played" — the one figure the tooltip's "Games he missed leave a gap"
+  // sentence needs and the one place in this file's own call chain that still has view.header on hand.
+  const rec = view.header?.record;
+  const gamesPlayed = rec ? (rec.wins ?? 0) + (rec.losses ?? 0) + (rec.ties ?? 0) : null;
   const wide = slots.length <= GROUP_WIDE_MAX;
-  const stacksHtml = slots.map((slot) => renderGroupStack(slot, A, wide)).join("");
+  const stacksHtml = slots.map((slot) => renderGroupStack(slot, A, wide, unit, gamesPlayed)).join("");
   const trayHtml = unlistedEntries.length ? renderUnlistedStack(unlistedEntries, A) : "";
 
   // D59: same shared strip as the side view, with the group's band as a trailing crumb (linking nowhere —
