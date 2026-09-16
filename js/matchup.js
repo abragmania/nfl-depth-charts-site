@@ -14,7 +14,7 @@
 // header.nextOpponent (this week's schedule) and redirects, or shows a picker on a bye week.
 import { getTeams, getTeam } from "./api.js";
 import { esc, renderColumn, renderTray, fitNames } from "./cards.js";
-import { computeLayout, renderFieldSvg, renderLevelLabels, FIELD_VARIANT, SECONDARY_ONE_ROW, geometry } from "./field.js";
+import { computeLayout, renderFieldSvg, renderLevelLabels, FIELD_VARIANT, SECONDARY_ONE_ROW } from "./field.js";
 import { mountScaledField, disposeCurrentView } from "./viewfit.js";
 import { navStripHtml, wireNav } from "./nav.js";
 import { isLightWash } from "./landing.js";
@@ -81,17 +81,20 @@ function halfWatermarkHtml(layout, team, half) {
 
 // D113 (Adam, 2026-09-16): Adam read JAX's defence drawn on DEN's half of the field as "Denver's positions
 // rewritten" — a single shared field with no per-half ownership label reads that way no matter how the
-// columns are tinted. Each half now carries its own banner, flush to that half's own edge of the canvas
-// (top edge = the defending club, bottom edge = the offensive club — the same split halfWatermarkHtml
-// above already draws crests for), in that club's own colours so the ownership is unmistakable without
-// reading a column header. It lives in the margin band MARGIN_TOP/MARGIN_BOTTOM already reserve for the
-// old small SVG "DEFENSE"/"OFFENSE" caption (geometry, from field.js) — nothing is added to the canvas
-// height, so this cannot push the field past its 1700x900 box (D58) the way a taller header would.
-function halfBannerHtml(team, unitWord, marginPx, pos) {
+// columns are tinted. Each half now carries its own banner (top edge = the defending club, bottom edge =
+// the offensive club — the same split halfWatermarkHtml above already draws crests for), in that club's
+// own colours so the ownership is unmistakable without reading a column header.
+// 👁 QA follow-up (2026-09-16): the banner used to be drawn INSIDE `.field-scale`, sized off field.js's
+// MARGIN_TOP/MARGIN_BOTTOM in design pixels — the fit-to-window transform then shrank it along with the
+// whole canvas, so at a typical 1700x900 scale it rendered barely taller than its own text. It is now a
+// real, fixed-height DOM element OUTSIDE the scaled canvas (see fieldHtml/renderMatchup's
+// `.matchup-field-wrap`), so its height is exactly 32 real pixels at any window size, and it no longer
+// covers the "SECONDARY" level label that lives in that same margin band on the canvas itself.
+function halfBannerHtml(team, unitWord, pos) {
   const url = watermarkUrl(team);
   const crest = url ? `<img class="matchup-half-banner-crest" src="${esc(url)}" alt="" onerror="this.remove()">` : "";
   const light = isLightWash(team.colourPrimary) ? " matchup-half-banner-light" : "";
-  return `<div class="matchup-half-banner matchup-half-banner-${pos}${light}" style="height:${marginPx}px;--banner-primary:${team.colourPrimary};--banner-secondary:${team.colourSecondary}">
+  return `<div class="matchup-half-banner matchup-half-banner-${pos}${light}" style="--banner-primary:${team.colourPrimary};--banner-secondary:${team.colourSecondary}">
     ${crest}<span class="matchup-half-banner-text">${esc(team.name.toUpperCase())} <span class="matchup-half-banner-dot">·</span> ${unitWord}</span>
   </div>`;
 }
@@ -118,12 +121,6 @@ function fieldHtml(viewA, viewB, teamA, teamB, spread) {
   // layout.losY the cards and yard lines already use, so the blend always lines up with the actual line
   // of scrimmage rather than a hardcoded 50/50 split.
   const losPct = ((layout.losY / layout.layoutHeight) * 100).toFixed(2);
-  // D113: B defends the top half, A is on offense in the bottom half (see facingView above) — same split
-  // halfWatermarkHtml already uses, so the banner and the crest watermark can never disagree about which
-  // half belongs to which club. 4px shy of the full MARGIN_TOP/MARGIN_BOTTOM band so the banner reads as a
-  // strip flush to the canvas edge rather than touching the first/last row of cards.
-  const bannerTop = halfBannerHtml(teamB, "DEFENSE", geometry.MARGIN_TOP - 4, "top");
-  const bannerBottom = halfBannerHtml(teamA, "OFFENSE", geometry.MARGIN_BOTTOM - 4, "bottom");
   return {
     layout,
     html: `<div class="field-outer matchup-field" data-field-variant="${FIELD_VARIANT}" style="${colour(teamB)};--team-a-primary:${teamA.colourPrimary};--team-a-secondary:${teamA.colourSecondary};--los-pct:${losPct}%">
@@ -132,7 +129,6 @@ function fieldHtml(viewA, viewB, teamA, teamB, spread) {
         ${renderFieldSvg(layout.layoutHeight, layout.losY, layout.layoutWidth)}
         <div class="field-layer">${columnsHtml}${traysHtml}</div>
         <div class="level-layer">${renderLevelLabels(layout.levels, layout.layoutWidth)}</div>
-        ${bannerTop}${bannerBottom}
       </div>
     </div>`,
   };
@@ -321,11 +317,23 @@ export async function renderMatchup(root, search, aAbbr, bAbbr) {
   // before the field is built (same two-phase approach as team.js — see its mountField comment).
   // D59: the shared nav strip replaces this view’s old breadcrumb — team A’s switcher, the Matchup pill
   // lit, and the "A team page · B team page" links the old breadcrumb carried, folded into the strip.
+  // D113 follow-up (👁 QA, 2026-09-16): the two half banners are real DOM siblings of `.field-outer`, not
+  // part of the scaled canvas (see halfBannerHtml/fieldHtml) — B defends the top half, A is on offense in
+  // the bottom half (the same split halfWatermarkHtml/facingView use), so they can never disagree about
+  // which half belongs to which club. `.matchup-field-wrap` (styles.css) gives the three a single rounded,
+  // bordered frame so the banners read as caps on the same card the field sits in rather than a separate
+  // element floating above it.
   root.innerHTML = `
     <div class="matchup">
       ${navStripHtml({ teams, abbr: A, page: "matchup", opponentAbbr: B, primary: teamA.colourPrimary, secondary: teamA.colourSecondary })}
       ${headerHtml(teamA, teamB, viewA, viewB, teams)}
-      <div class="team-body"><div class="field-outer matchup-field" data-field-variant="${FIELD_VARIANT}"></div></div>
+      <div class="team-body">
+        <div class="matchup-field-wrap">
+          ${halfBannerHtml(teamB, "DEFENSE", "top")}
+          <div class="field-outer matchup-field" data-field-variant="${FIELD_VARIANT}"></div>
+          ${halfBannerHtml(teamA, "OFFENSE", "bottom")}
+        </div>
+      </div>
     </div>`;
   wireNav(root); // D59: switcher routes to the newly picked team’s matchup
   wireOpponentPicker(root, A); // D100: header opponent dropdown routes to #/matchup/A/B
