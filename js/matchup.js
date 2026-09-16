@@ -93,9 +93,16 @@ function fieldHtml(viewA, viewB, teamA, teamB, spread) {
   const traysHtml = layout.trays.map((t) => renderTray(t, (t.unit === "OFF" ? teamA : teamB).abbr)).join("");
   // D98 part 2: B defends (top half), A is on offense (bottom half) — see facingView above.
   const watermarkHtml = `<div class="field-watermark">${halfWatermarkHtml(layout, teamB, "def")}${halfWatermarkHtml(layout, teamA, "off")}</div>`;
+  // D99: the field surface tints each half with its own club. --team-primary/--team-secondary (from
+  // colour(teamB)) already carry the defending club for the header pill and column tints (D98 part 2);
+  // --team-a-primary/--team-a-secondary add the offensive club's colours for styles.css's
+  // .matchup-field .field-scale rule, and --los-pct gives it the real seam position off the same
+  // layout.losY the cards and yard lines already use, so the blend always lines up with the actual line
+  // of scrimmage rather than a hardcoded 50/50 split.
+  const losPct = ((layout.losY / layout.layoutHeight) * 100).toFixed(2);
   return {
     layout,
-    html: `<div class="field-outer matchup-field" style="${colour(teamB)}">
+    html: `<div class="field-outer matchup-field" style="${colour(teamB)};--team-a-primary:${teamA.colourPrimary};--team-a-secondary:${teamA.colourSecondary};--los-pct:${losPct}%">
       <div class="field-scale" style="width:${layout.layoutWidth}px;height:${layout.layoutHeight}px">
         ${watermarkHtml}
         ${renderFieldSvg(layout.layoutHeight, layout.losY, layout.layoutWidth)}

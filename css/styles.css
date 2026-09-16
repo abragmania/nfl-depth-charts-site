@@ -164,8 +164,44 @@ a.back { color:var(--muted); }
    a loud, busy stripe pattern competing with the cards. Replaced with one calm, low-saturation dark-green
    wash (a soft vignette, not a repeat, so there is no banding) — the yard lines already drawn in
    renderFieldSvg (field.js, thin white rgba(255,255,255,.13) rules) remain the only line-level texture. */
+/* D99 (Adam, 2026-09-16): "I don't want the background to be a plain boring colour, but the weird
+   alternating ugly green field colour should go too... get creative with interesting gradient
+   backgrounds that are slightly different for each team." The flat dark-green wash above was the same on
+   every team, which read as generic rather than "this club's field". Each club's own --team-primary/
+   --team-secondary (already on .field-outer, set by team.js/zoom.js/matchup.js) now drive two corner-
+   anchored glows plus a diagonal base wash — color-mix() pulls whatever hue the club brings (Green Bay's
+   gold, the Chargers' powder blue, Miami's aqua) down into the same dark register the old wash sat in, so
+   contrast against white card text never moves, but the eight clubs' fields are all visibly different.
+   No repeats, so no banding; the crest watermark plate (D95/D98) keeps working unchanged on top of it. */
 .field-scale { position:relative;
-  background:radial-gradient(ellipse 140% 90% at 50% 40%, #17281d 0%, #121e16 55%, #0e1712 100%); }
+  --field-dk1:#12161c; --field-dk2:#0d1014;
+  --field-tint-a:color-mix(in srgb, var(--team-primary,#333) 38%, var(--field-dk1) 62%);
+  --field-tint-b:color-mix(in srgb, var(--team-secondary,#777) 22%, var(--field-dk2) 78%);
+  background:
+    radial-gradient(115% 85% at 14% 10%, var(--field-tint-a) 0%, transparent 58%),
+    radial-gradient(115% 95% at 90% 96%, var(--field-tint-b) 0%, transparent 62%),
+    linear-gradient(135deg, var(--field-dk1) 0%, var(--field-dk2) 100%); }
+/* D99: the matchup field carries two clubs, so it gets its own version — a smooth top-to-bottom blend
+   from the defending club's tint (top/defensive half) into the attacking club's tint (bottom/offensive
+   half), seamed around the real line of scrimmage (--los-pct, set inline by matchup.js from the same
+   layout.losY the cards and the SVG yard lines already use) rather than a hard 50/50 split. The two extra
+   custom properties (--team-a-primary/--team-a-secondary) are the offensive club's colours; the base
+   --team-primary/--team-secondary stay the defensive club's, exactly as D98 part 2 already used them for
+   the header pill and column tints, so nothing else on this page has to change. */
+.matchup-field .field-scale {
+  --def-tint:color-mix(in srgb, var(--team-primary,#333) 38%, var(--field-dk1) 62%);
+  --off-tint:color-mix(in srgb, var(--team-a-primary,#333) 38%, var(--field-dk2) 62%);
+  --def-glow:color-mix(in srgb, var(--team-secondary,#777) 20%, transparent 80%);
+  --off-glow:color-mix(in srgb, var(--team-a-secondary,#777) 20%, transparent 80%);
+  background:
+    radial-gradient(100% 55% at 50% 0%, var(--def-glow) 0%, transparent 68%),
+    radial-gradient(100% 55% at 50% 100%, var(--off-glow) 0%, transparent 68%),
+    linear-gradient(to bottom,
+      var(--def-tint) 0%,
+      var(--def-tint) calc(var(--los-pct, 50%) - 16%),
+      color-mix(in srgb, var(--def-tint) 50%, var(--off-tint) 50%) var(--los-pct, 50%),
+      var(--off-tint) calc(var(--los-pct, 50%) + 16%),
+      var(--off-tint) 100%); }
 .field-layer { position:absolute; inset:0; z-index:1; }
 /* D95: the watermark was effectively invisible (5% opacity, grayscale) — a dark club mark disappeared
    entirely into the dark turf. Two background layers on the same element: a soft round light plate first
