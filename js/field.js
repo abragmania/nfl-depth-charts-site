@@ -388,6 +388,13 @@ const OFF_LEVEL_LABEL = { PASS_CATCHERS: "PASS CATCHERS", LINE: "LINE", BACKFIEL
 // rather than ~90. He still reads as "inside the corner, outside the box", which is what D71 asked for, but
 // he sits noticeably closer to the tackle than he did.
 const CB_PITCH_OUT = 1.15;
+// D112 (Adam, 2026-09-16, team view): "the OLBs / edges are way too far to the outside of the screen"
+// (Eagles, Broncos, among others). The EDGE row used to sit on the same 1.0-pitch-out landmark as CB_PITCH_OUT's
+// near neighbour (lm.OUTSIDE_L/R), which reads fine for a corner but drags an edge rusher out past where a real
+// defensive end lines up. 0.6 pitches outside the tackle is where that man actually stands - the widest real
+// EDGE row in data/cache/compiled (a 3-4's three edge columns, e.g. BAL/NYG/PIT/SEA) still leaves ~630 units to
+// its nearest neighbour at this value, so there was no need to shave it any closer.
+const EDGE_PITCH_OUT = 0.6;
 // D71: "the nickel sits between the corner and the box." Nominally one pitch outside the left tackle,
 // which is what Adam described; the floor below it is arithmetic, not taste — two columns closer than
 // MIN_PITCH overlap, and the corner is already at 1.4 pitches, so a literal one-pitch nickel would be
@@ -1060,12 +1067,13 @@ function mirrorLandmarks(olCols) {
     C = LAYOUT_WIDTH / 2; LG = C - MIN_PITCH; RG = C + MIN_PITCH; LT = C - 2 * MIN_PITCH; RT = C + 2 * MIN_PITCH;
   }
   const pitch = Math.max(LG - LT, MIN_PITCH);
-  const OUTSIDE_L = LT - pitch;
-  const OUTSIDE_R = RT + pitch;
+  // D112: edge rushers stand just outside the tackle, not out at the corner's landmark.
+  const EDGE_L = LT - EDGE_PITCH_OUT * pitch;
+  const EDGE_R = RT + EDGE_PITCH_OUT * pitch;
   const CB_L = LT - CB_PITCH_OUT * pitch;
   const CB_R = RT + CB_PITCH_OUT * pitch;
   const NB_X = Math.max(LT - NB_PITCH_OUT * pitch, CB_L + MIN_PITCH);
-  return { LT, LG, C, RG, RT, pitch, OUTSIDE_L, OUTSIDE_R, CB_L, CB_R, NB_X };
+  return { LT, LG, C, RG, RT, pitch, EDGE_L, EDGE_R, CB_L, CB_R, NB_X };
 }
 
 // Ruling A: the LINE row places by LABEL, not by count, because it can now hold 3-5 columns of two
@@ -1107,9 +1115,11 @@ function mirrorDefXs(band, slots, scheme, lm) {
   if (count <= 0) return [];
   switch (band) {
     case "DL": return placeLineColumns(slots, scheme, lm);
+    // D112: EDGE_L/EDGE_R sit EDGE_PITCH_OUT pitches outside the tackles (just outside, where a real
+    // defensive end lines up) - not on the corner's own, much-further-out landmark.
     case "EDGE": return scheme === "3-4"
-      ? placeOuterInner(count, lm.OUTSIDE_L, lm.OUTSIDE_R, lm.LG, lm.RG)
-      : spanPoints(lm.OUTSIDE_L, lm.OUTSIDE_R, count);
+      ? placeOuterInner(count, lm.EDGE_L, lm.EDGE_R, lm.LG, lm.RG)
+      : spanPoints(lm.EDGE_L, lm.EDGE_R, count);
     case "LB": return placeFlankedCenter(count, lm.LG, lm.RG, lm.C);
     // 👁 QA item 8: spanPoints(xMin,xMax,1) lands a single point on the exact MIDPOINT of its range — fine
     // for a band that belongs in the middle (NB, S), wrong for CB, whose range is the two outside corners.
@@ -1608,4 +1618,4 @@ export function renderFieldSvg(layoutHeight, losY, layoutWidth = LAYOUT_WIDTH, c
 // D111 adds the DEFENSIVE ROW COUNT to the bag for the same reason: the canvas constant is derived from it,
 // so a test that wants to state "the canvas is this many full rows plus its gaps" can read the count from
 // here instead of hard-coding the 5 that D111 turned into a 4.
-export const geometry = { CARD_W, CARD_H1, ROW_H, SIDE_ROW_H, CARD_GAP, SIDE_CARD_GAP, BANNER_H, OUT_RAIL_H, LABEL_RESERVE, MAX_DEPTH_ROWS, HEADSHOT_SIZE, BAND_GAP, LEVEL_GAP_EXTRA, LOS_HALF_GAP, MARGIN_TOP, MARGIN_BOTTOM, SIDE_INSET, DEF_ROW_FULL_H, DEF_ROW_COUNT: DEF_ROW_ORDER.length, DEF_LEVEL_BOUNDARIES, BOTH_SIDES_HALF, BOTH_SIDES_HEIGHT, MIN_PITCH, MIN_CARD_GAP, CB_PITCH_OUT, PASS_CATCHER_PITCH };
+export const geometry = { CARD_W, CARD_H1, ROW_H, SIDE_ROW_H, CARD_GAP, SIDE_CARD_GAP, BANNER_H, OUT_RAIL_H, LABEL_RESERVE, MAX_DEPTH_ROWS, HEADSHOT_SIZE, BAND_GAP, LEVEL_GAP_EXTRA, LOS_HALF_GAP, MARGIN_TOP, MARGIN_BOTTOM, SIDE_INSET, DEF_ROW_FULL_H, DEF_ROW_COUNT: DEF_ROW_ORDER.length, DEF_LEVEL_BOUNDARIES, BOTH_SIDES_HALF, BOTH_SIDES_HEIGHT, MIN_PITCH, MIN_CARD_GAP, CB_PITCH_OUT, EDGE_PITCH_OUT, PASS_CATCHER_PITCH };

@@ -919,3 +919,32 @@ a.back { color:var(--muted); }
 @media (max-width:1400px) {
   .matchup-opp-picker label, .matchup-opp-picker select, .matchup-opp-note { font-size:10px; }
 }
+
+/* D113 (Adam, 2026-09-16): a shared field with two clubs on it read as "one team's positions rewritten"
+   rather than "club A's offense facing club B's defense" — each half now carries its own banner, flush to
+   that half's own edge of the canvas, in that club's own colours with its crest. It lives inside
+   `.field-scale` (matchup.js's halfBannerHtml sizes it off field.js's own MARGIN_TOP/MARGIN_BOTTOM), in the
+   margin band the old small "DEFENSE"/"OFFENSE" SVG caption used to occupy, so it adds no canvas height and
+   cannot push the field past its 1700x900 box (D58) — the corner captions are hidden below so the two
+   never double up. Positioned/sized in design pixels like every other `.field-scale`-scoped rule above, so
+   it scales uniformly with the rest of the canvas under the shared zoom transform. */
+.matchup-half-banner { position:absolute; left:0; right:0; z-index:3; display:flex; align-items:center;
+  justify-content:center; gap:6px; padding:0 16px; overflow:hidden;
+  background:linear-gradient(90deg, var(--banner-primary) 0%, var(--banner-secondary) 100%);
+  color:#fff; text-shadow:0 1px 2px rgba(0,0,0,.6); }
+.matchup-half-banner-top { top:0; }
+.matchup-half-banner-bottom { bottom:0; }
+.matchup-half-banner-light { color:#14181d; text-shadow:0 1px 2px rgba(255,255,255,.5); }
+.matchup-half-banner-crest { height:100%; max-height:20px; width:auto; flex:none; padding:2px; object-fit:contain;
+  border-radius:50%; background:radial-gradient(circle at 50% 45%, rgba(255,255,255,.6) 0%, rgba(255,255,255,.22) 55%, rgba(255,255,255,0) 75%);
+  filter:drop-shadow(0 1px 2px rgba(0,0,0,.45)); }
+.matchup-half-banner-text { font-size:11.5px; font-weight:800; letter-spacing:.05em; text-transform:uppercase;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.matchup-half-banner-dot { opacity:.65; margin:0 1px; }
+
+/* D113: the field engine's own tiny "DEFENSE"/"OFFENSE" corner caption (field.js's renderFieldSvg) is now
+   redundant with the full-width banner above and repeats it in the same corner — hidden on the matchup
+   page only; the team page's single-caption use of the same SVG text is unchanged. The two captions this
+   view draws are told apart by their own font-size attribute: the unit caption is 14, the "LINE OF
+   SCRIMMAGE" labels either side of the yellow line are 11, so only the former is targeted. */
+.matchup-field svg text[font-size="14"] { display:none; }

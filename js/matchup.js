@@ -14,7 +14,7 @@
 // header.nextOpponent (this week's schedule) and redirects, or shows a picker on a bye week.
 import { getTeams, getTeam } from "./api.js";
 import { esc, renderColumn, renderTray, fitNames } from "./cards.js";
-import { computeLayout, renderFieldSvg, renderLevelLabels, FIELD_VARIANT, SECONDARY_ONE_ROW } from "./field.js";
+import { computeLayout, renderFieldSvg, renderLevelLabels, FIELD_VARIANT, SECONDARY_ONE_ROW, geometry } from "./field.js";
 import { mountScaledField, disposeCurrentView } from "./viewfit.js";
 import { navStripHtml, wireNav } from "./nav.js";
 import { isLightWash } from "./landing.js";
@@ -79,6 +79,23 @@ function halfWatermarkHtml(layout, team, half) {
   return `<div class="matchup-watermark-crest" style="--wm-url:url('${esc(url)}');top:${topPct}%;height:${heightPct}%"></div>`;
 }
 
+// D113 (Adam, 2026-09-16): Adam read JAX's defence drawn on DEN's half of the field as "Denver's positions
+// rewritten" — a single shared field with no per-half ownership label reads that way no matter how the
+// columns are tinted. Each half now carries its own banner, flush to that half's own edge of the canvas
+// (top edge = the defending club, bottom edge = the offensive club — the same split halfWatermarkHtml
+// above already draws crests for), in that club's own colours so the ownership is unmistakable without
+// reading a column header. It lives in the margin band MARGIN_TOP/MARGIN_BOTTOM already reserve for the
+// old small SVG "DEFENSE"/"OFFENSE" caption (geometry, from field.js) — nothing is added to the canvas
+// height, so this cannot push the field past its 1700x900 box (D58) the way a taller header would.
+function halfBannerHtml(team, unitWord, marginPx, pos) {
+  const url = watermarkUrl(team);
+  const crest = url ? `<img class="matchup-half-banner-crest" src="${esc(url)}" alt="" onerror="this.remove()">` : "";
+  const light = isLightWash(team.colourPrimary) ? " matchup-half-banner-light" : "";
+  return `<div class="matchup-half-banner matchup-half-banner-${pos}${light}" style="height:${marginPx}px;--banner-primary:${team.colourPrimary};--banner-secondary:${team.colourSecondary}">
+    ${crest}<span class="matchup-half-banner-text">${esc(team.name.toUpperCase())} <span class="matchup-half-banner-dot">·</span> ${unitWord}</span>
+  </div>`;
+}
+
 // Each column is tinted with the colours of the team it actually belongs to, so a glance at any row says
 // whose players those are without reading the header — the one thing a single shared field wash cannot do
 // when two teams are on it.
@@ -101,6 +118,12 @@ function fieldHtml(viewA, viewB, teamA, teamB, spread) {
   // layout.losY the cards and yard lines already use, so the blend always lines up with the actual line
   // of scrimmage rather than a hardcoded 50/50 split.
   const losPct = ((layout.losY / layout.layoutHeight) * 100).toFixed(2);
+  // D113: B defends the top half, A is on offense in the bottom half (see facingView above) — same split
+  // halfWatermarkHtml already uses, so the banner and the crest watermark can never disagree about which
+  // half belongs to which club. 4px shy of the full MARGIN_TOP/MARGIN_BOTTOM band so the banner reads as a
+  // strip flush to the canvas edge rather than touching the first/last row of cards.
+  const bannerTop = halfBannerHtml(teamB, "DEFENSE", geometry.MARGIN_TOP - 4, "top");
+  const bannerBottom = halfBannerHtml(teamA, "OFFENSE", geometry.MARGIN_BOTTOM - 4, "bottom");
   return {
     layout,
     html: `<div class="field-outer matchup-field" data-field-variant="${FIELD_VARIANT}" style="${colour(teamB)};--team-a-primary:${teamA.colourPrimary};--team-a-secondary:${teamA.colourSecondary};--los-pct:${losPct}%">
@@ -109,6 +132,7 @@ function fieldHtml(viewA, viewB, teamA, teamB, spread) {
         ${renderFieldSvg(layout.layoutHeight, layout.losY, layout.layoutWidth)}
         <div class="field-layer">${columnsHtml}${traysHtml}</div>
         <div class="level-layer">${renderLevelLabels(layout.levels, layout.layoutWidth)}</div>
+        ${bannerTop}${bannerBottom}
       </div>
     </div>`,
   };
@@ -133,6 +157,11 @@ function logoPlate(team, extraClass) {
 // OUT_STATUS_CODES.
 const matchupLegendHtml = () => (SECONDARY_ONE_ROW ? legendHtml("legend-matchup") : "");
 
+// D113 (Adam, 2026-09-16): the centre block used to print its own "A offense vs B defense" line here — the
+// exact small grey text that read as "Denver's positions rewritten" rather than "Jacksonville's defence".
+// That announcement now lives on the field itself, as a full-width banner in each club's own colours
+// across the top and bottom edge (see halfBannerHtml/fieldHtml), so this block keeps only the opponent
+// picker, the swap link and the legend.
 function headerHtml(teamA, teamB, viewA, viewB, teams) {
   const recA = viewA?.header?.record ?? teamA.record;
   const recB = viewB?.header?.record ?? teamB.record;
@@ -150,7 +179,6 @@ function headerHtml(teamA, teamB, viewA, viewB, teams) {
       </div>
     </div>
     <div class="matchup-vs${SECONDARY_ONE_ROW ? " has-legend" : ""}">
-      <div class="matchup-title">${esc(teamA.abbr)} <span class="matchup-title-unit">offense</span> vs ${esc(teamB.abbr)} <span class="matchup-title-unit">defense</span></div>
       <div class="matchup-vs-controls">
         ${opponentPickerHtml(teams, teamA, teamB)}
         <a class="matchup-swap" href="#/matchup/${esc(teamB.abbr)}/${esc(teamA.abbr)}" title="Swap: ${esc(teamB.abbr)} offense vs ${esc(teamA.abbr)} defense">⇄ Swap sides</a>
