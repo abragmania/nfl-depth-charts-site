@@ -9,7 +9,7 @@
 // rating-tier surface colours all survive the shrink. The SIDE, GROUP and MATCHUP views keep their big
 // headshot cards and their own renderers (zoom.js's fullCard, matchup.js's matchupCard) — they come
 // through renderSlotBody below, which is deliberately untouched by this ruling.
-import { lineOneCount, lineOneHeight, visibleDepthRows, OUT_STATUS_CODES, isFullyOut, isScratch } from "./field.js";
+import { lineOneCount, lineOneHeight, visibleDepthRows, displayOrder, outFillInDemotion, OUT_STATUS_CODES, isFullyOut, isScratch } from "./field.js";
 // Re-exported so zoom.js and matchup.js can share the single definition rather than keeping their own
 // copies, which had all drifted from it (blue review: every copy was missing INACTIVE and EXEMPT, so a
 // game-day inactive starter got no red banner in any view). D60's isScratch rides the same route.
@@ -382,6 +382,11 @@ function overviewLineOne(p, teamAbbr, opts = {}) {
 
 // A slim backup row: number, name, rating. The name drops to "F. Last" as soon as a badge competes with
 // it for the width (D37b — the row that matters most must stay readable).
+// D104: `opts.outRail` marks the demoted OUT starter now sitting at the BOTTOM of his column. He keeps
+// this compact weight — he is not the man playing here — but takes D44's red banner strip on top of the
+// row at full strength, so the eye still lands on "big injury here" without reading a word. field.js's
+// OUT_RAIL_H is the height reserved for that strip; no other depth row ever draws one, so a D61 reserve
+// second-stringer who happens to be on IR is unaffected and still renders as a plain greyed row.
 function overviewDepth(p, teamAbbr, opts = {}) {
   const badges = [
     psBadge(p),
@@ -392,7 +397,10 @@ function overviewDepth(p, teamAbbr, opts = {}) {
     alsoListedChips(p, opts.slotLookup, opts.ownLabel),
   ].join("");
   const name = badges.trim() ? shortName(p) : p.name;
-  return `<a class="${overviewClasses(p, "prow")}" href="#/team/${esc(teamAbbr)}/player/${encodeURIComponent(p.playerKey)}" data-player-key="${esc(p.playerKey)}" title="${overviewTitle(p, false)}">
+  const rail = opts.outRail ? bannerHtml(p) : "";
+  const railCls = opts.outRail ? " prow-outrail" : "";
+  return `<a class="${overviewClasses(p, "prow")}${railCls}" href="#/team/${esc(teamAbbr)}/player/${encodeURIComponent(p.playerKey)}" data-player-key="${esc(p.playerKey)}" title="${overviewTitle(p, false)}">
+    ${rail}
     <span class="prow-line">
       <span class="prow-num">${esc(p.number ?? "—")}</span>
       <span class="prow-name" data-short="${esc(shortName(p))}">${esc(name)}</span>
@@ -555,11 +563,16 @@ function heatTitle(injury) {
 // healthy backup for the visible places: the same NUMBER of rows is drawn, so the column height the layout
 // engine reserved is untouched; the DEEPEST healthy rows collapse instead, and whatever survives keeps the
 // chart's own order. "+N more" still leads to the group view, where every row is shown in full.
-function keepOutRowsVisible(depth, n) {
+// D104 adds a second, stronger claim on those places: the demoted OUT starter now lives at the very BOTTOM
+// of his column, which is exactly where the "+N more" tail bites first — so `mustKeep` (the demoted rows,
+// handed in by renderColumn) is filled before any other out row, and only then the rest of the chart's own
+// order. field.js's shownOutRows does the same "how many places are left once the tail has taken one"
+// arithmetic when it reserves the column's height, so the box and this selection stay in step.
+function keepOutRowsVisible(depth, n, mustKeep = []) {
   if (n <= 0) return [];
-  const outs = depth.filter(isFullyOut).slice(0, n);
-  const keep = new Set(outs);
-  for (const p of depth) { if (keep.size >= n) break; if (!keep.has(p)) keep.add(p); }
+  const keep = new Set(mustKeep.slice(0, n));
+  for (const p of depth) { if (keep.size >= n) break; if (isFullyOut(p)) keep.add(p); }
+  for (const p of depth) { if (keep.size >= n) break; keep.add(p); }
   return depth.filter((p) => keep.has(p));
 }
 
@@ -635,15 +648,29 @@ export function renderColumn(col, teamAbbr, opts = {}) {
   // OUT-starter-plus-ACTIVE-fill-in — then up to MAX_DEPTH_ROWS slim rows, the last of which becomes a
   // "+N more" tail when the slot runs deeper. lineOneCount/visibleDepthRows come from field.js so the
   // markup below can never disagree with the box height the layout engine reserved for it.
+  // D104: the rows are drawn in field.js's displayOrder, which moves a fully-out starter who has an ACTIVE
+  // fill-in behind him to the BOTTOM of the column — the fill-in leads, the backups follow, the out man
+  // brings up the rear still wearing his red rail. `players` itself is never reordered, so everything that
+  // asks "who is the starter of record here" still reads the compiled players[0].
+  const ordered = displayOrder(players);
   const bold = lineOneCount(players);
   const visible = visibleDepthRows(players, style.maxDepthRows);
-  const depth = players.slice(bold);
+  const depth = ordered.slice(bold);
+  const demoted = outFillInDemotion(players);
+  const outRows = demoted ? depth.slice(depth.length - demoted) : [];
   const hiddenCount = depth.length - visible;
-  const shownDepth = hiddenCount > 0 ? keepOutRowsVisible(depth, Math.max(visible - 1, 0)) : depth;
+  const shownDepth = hiddenCount > 0 ? keepOutRowsVisible(depth, Math.max(visible - 1, 0), outRows) : depth;
+  // The "+N more" tail stands for the healthy depth that was collapsed, so it belongs with that depth —
+  // above the out man, not under him. Printing it last would put a dotted "+2 more" line beneath the red
+  // rail and cost the ruling the one thing it is for: the bottom of the column is the injury.
+  const railed = new Set(outRows);
+  const shownOut = shownDepth.filter((p) => railed.has(p));
+  const shownRest = shownDepth.filter((p) => !railed.has(p));
   const body = [
-    ...players.slice(0, bold).map((p) => overviewLineOne(p, teamAbbr, colOpts)),
-    ...shownDepth.map((p) => overviewDepth(p, teamAbbr, colOpts)),
+    ...ordered.slice(0, bold).map((p) => overviewLineOne(p, teamAbbr, colOpts)),
+    ...shownRest.map((p) => overviewDepth(p, teamAbbr, colOpts)),
     hiddenCount > 0 && visible > 0 ? overviewMore(depth.length - shownDepth.length, teamAbbr, slot.band) : "",
+    ...shownOut.map((p) => overviewDepth(p, teamAbbr, { ...colOpts, outRail: true })),
   ].join("");
 
 // Ruling B (Adam, 2026-09-13): "put the backup boxes under the starters." Every column, offense and
@@ -654,7 +681,13 @@ export function renderColumn(col, teamAbbr, opts = {}) {
   // wrapper. It is concatenated INTO the style attribute, never added as a second one - a duplicate
   // `style` is silently dropped by the browser, which took every column's left/top with it.
   const colourStyle = opts.colourStyle ? `${opts.colourStyle};` : "";
-  return `<div class="column${hatched}${heatCls}" data-slot-id="${esc(slot.slotId)}" style="${colourStyle}left:${x - col.width / 2}px;top:${top}px;width:${col.width}px;height:${height}px">
+  // D103: `column-compact` is the whole-team/matchup row family — the one that draws no headshot and whose
+  // type scale went up 15% with the wider card. The side pages (D72) draw headshots and keep their own
+  // sizes, so styles.css scopes every new size under this class rather than changing the shared base rules.
+  // The test is the same `style.headshot` field field.js's layoutStyle keys the slim-row height off, so the
+  // markup and the reserved box can never end up in different families.
+  const compact = style.headshot ? "" : " column-compact";
+  return `<div class="column${compact}${hatched}${heatCls}" data-slot-id="${esc(slot.slotId)}" style="${colourStyle}left:${x - col.width / 2}px;top:${top}px;width:${col.width}px;height:${height}px">
     ${label}
     <div class="column-stack">${body}</div>
   </div>`;

@@ -79,11 +79,30 @@ const SCALE = LAYOUT_WIDTH / REFERENCE_WIDTH;
 // ---- compact overview geometry (ruling E) -------------------------------------------------------
 // A column is now a stack of text rows, not photo cards, so its width is set by how much room a real
 // name plus a rating pill needs ("Quinyon Mitchell" + "88") rather than by a headshot diameter.
-const CARD_W = 156;
+// D103 (Adam, 2026-09-16) — "the player cells are too small even on a super large screen; don't go crazy
+// blowing them up." The whole-team and matchup card is 15% wider (156 -> 180) and the row type scale goes
+// up with it (styles.css's `.column-compact` block, which is scoped so D72's side pages keep their own).
+// WIDTH is free here: LAYOUT_WIDTH is fixed and the fit engine spreads the canvas sideways to fill the
+// window, so a wider card is simply a bigger share of the same canvas — and two 180-wide cards plus
+// MIN_CARD_GAP still come to 192, inside MIN_PITCH's 200, so every column keeps exactly the x D71/D76
+// place it at and no pitch constant has to move.
+// HEIGHT is NOT free: this page's scale is height-bound (a real Washington canvas is ~1200 layout units
+// tall against ~584 CSS pixels of room), so every unit added to a row is handed straight back as a
+// smaller scale on screen. The heights below therefore grow only as far as the bigger type genuinely
+// needs: ROW_H by two units, while CARD_H1 and BANNER_H do not move at all, because a line-one row was
+// already carrying ~8 units of slack above its own content.
+const CARD_W = 180;
 const CARD_H1 = 27;  // the starter's bold row
-const ROW_H = 18;    // a slim backup row
+const ROW_H = 20;    // a slim backup row on the team/matchup pages (D103)
+const SIDE_ROW_H = 18; // D72's offense/defense pages keep the slim-row height they already have
 const CARD_GAP = 2;  // vertical gap between rows inside a column
 const BANNER_H = 13; // extra strip on a line-one row carrying the red OUT / green FILLING IN banner
+// D104 (Adam, 2026-09-16): a starter who is out, once somebody active is filling in for him, renders as a
+// compact row at the BOTTOM of his column rather than on line one — still wearing his red OUT rail, so
+// "big injury here" still reads at a glance. The rail is a strip stacked above that row's own text, so the
+// box has to reserve height for it; a shade more than BANNER_H because a slim depth row, unlike a line-one
+// row, has no spare slack of its own to lend it.
+const OUT_RAIL_H = 15;
 // The column's own label pill, which lives inside the reserved box. 18, not 17: the pill really is 17.6
 // tall in styles.css (10.5px text at 1.2 line-height, 1px of padding each side, 3px margin under it), and
 // rounding that down is what pushed every column a fraction over its own box.
@@ -264,10 +283,17 @@ export function isScratch(p) {
 // told separately, so the markup it draws and the box this module reserved for it cannot disagree — the
 // same contract lineOneCount/visibleDepthRows already had.
 export function layoutStyle(opts = {}) {
+  // D103: `headshot` is what tells the two row families apart — a headshot on line one is D72's own signal
+  // that this is a single-unit side page — so the slim-row height keyed off it here is the same
+  // discriminator styles.css uses for the type scale (`.column-compact`, which cards.js puts on every
+  // column that is NOT drawing headshots). One question asked once, so the reserved box and the rendered
+  // row cannot disagree about which family they are in.
+  const side = !!opts.headshot;
   return {
-    headshot: opts.headshot ? HEADSHOT_SIZE : 0,
+    headshot: side ? HEADSHOT_SIZE : 0,
     maxDepthRows: opts.maxDepthRows ?? MAX_DEPTH_ROWS,
     cardWidth: opts.cardWidth ?? CARD_W,
+    rowH: side ? SIDE_ROW_H : ROW_H,
   };
 }
 
@@ -280,15 +306,43 @@ export function lineOneHeight(p, style = {}) {
   return base + (isFullyOut(p) || p.role === "ACTIVE" ? BANNER_H : 0);
 }
 
-// How many leading players render as BOLD line-one rows rather than slim depth rows: a co-starter pair
-// is two names on one slot (both bold), and a fully-out starter with his ACTIVE fill-in directly under
-// him is D44's "the two ratings sit one above the other" case (also both bold). Everything else is one
-// bold starter row. Shared with cards.js's renderColumn so the markup and this maths cannot diverge.
+// D104 (Adam, 2026-09-16) — "put the red OUT cell and that hurt/suspended player at the bottom of the
+// position; that way it still visually shows me 'big injury here' even if the hurt guy is at the bottom."
+// How many of the players standing at the TOP of a slot are fully-out starters who have somebody active
+// filling in behind them — that run is the block that moves to the bottom of the column. Zero (and no
+// reordering at all) when the slot opens with a healthy man, or when the out man has nobody active behind
+// him: with no replacement to promote, he stays on line one exactly as before, because he IS still the
+// only answer the column has to "who plays here".
+// Co-starters who are BOTH out are one such run of two and move together, keeping their order (Adam:
+// "multiple OUT men: all at the bottom in their current relative order").
+export function outFillInDemotion(players) {
+  let n = 0;
+  while (n < players.length && isFullyOut(players[n])) n++;
+  if (n === 0) return 0;
+  return players[n]?.role === "ACTIVE" ? n : 0;
+}
+
+// D104 is a DISPLAY rule and nothing else: this returns a reordered COPY for drawing, and never touches
+// the slot's own players[] array. Everything that reasons about who the starter of record is —
+// columnDecider (D93), receiverColumnLeader, D61's reserve placement, the heir logic, slot.injury — keeps
+// reading players[0] off the compiled data, which is unchanged.
+export function displayOrder(players) {
+  const n = outFillInDemotion(players);
+  return n ? [...players.slice(n), ...players.slice(0, n)] : players;
+}
+
+// How many leading players render as BOLD line-one rows rather than slim depth rows, counted in DISPLAY
+// order: a co-starter pair is two names on one slot (both bold). D44 used to put a fully-out starter and
+// his ACTIVE fill-in on line one together; D104 sends the out man to the bottom instead, so line one is
+// now the fill-in on his own. Everything else is one bold starter row. Shared with cards.js's renderColumn
+// so the markup and this maths cannot diverge.
 export function lineOneCount(players) {
   if (!players.length) return 0;
-  const hasCoPair = players.length >= 2 && players[0].coStarter && players[1].coStarter;
-  const hasOutFillIn = !hasCoPair && players.length >= 2 && isFullyOut(players[0]) && players[1].role === "ACTIVE";
-  return hasCoPair || hasOutFillIn ? 2 : 1;
+  // The demotion is decided before the co-starter question, not after it: a pair of co-starters who are
+  // both out with a fill-in behind them is precisely the case Adam named, so the pair goes to the bottom
+  // and the fill-in leads. A pair with no fill-in behind it is untouched and still reads as two bold rows.
+  if (outFillInDemotion(players)) return 1;
+  return players.length >= 2 && players[0].coStarter && players[1].coStarter ? 2 : 1;
 }
 
 // Ruling E: at most MAX_DEPTH_ROWS slim rows are drawn behind the line-one row(s). When more players
@@ -298,16 +352,37 @@ export function visibleDepthRows(players, maxRows = MAX_DEPTH_ROWS) {
   return Math.min(Math.max(players.length - lineOneCount(players), 0), maxRows);
 }
 
+// D104: how many of the demoted OUT rows are actually DRAWN, which is what the reserved box has to pay the
+// OUT_RAIL_H for. The "+N more" tail spends one of the visible places whenever anything is hidden, so the
+// out rows can only fill what is left of the cap. This is the same arithmetic cards.js's renderColumn does
+// when it decides how many places keepOutRowsVisible may fill — the two are kept in step deliberately, the
+// way lineOneCount/visibleDepthRows already are, so the box and the markup cannot drift apart.
+export function shownOutRows(players, style = {}) {
+  const demoted = outFillInDemotion(players);
+  if (!demoted) return 0;
+  const visible = visibleDepthRows(players, style.maxDepthRows);
+  const depthCount = Math.max(players.length - lineOneCount(players), 0);
+  const places = depthCount > visible ? Math.max(visible - 1, 0) : visible;
+  return Math.min(demoted, places);
+}
+
 // A slot's real rendered content height: the column's own label pill (which lives inside this box —
 // 🎨 Polish round 3 item 3: leaving it out made the deepest column in a row overflow the shared bottom
 // edge), plus each bold line-one row, plus the visible slim rows.
 function slotContentHeight(slot, style) {
   const players = slot.players;
   if (!players.length) return CARD_H1 + LABEL_RESERVE;
+  const ordered = displayOrder(players); // D104: measure the rows in the order they will be drawn
   const bold = lineOneCount(players);
+  const rowH = style.rowH ?? ROW_H;
   let h = LABEL_RESERVE;
-  for (let i = 0; i < bold; i++) h += lineOneHeight(players[i], style) + (i ? CARD_GAP : 0);
-  h += visibleDepthRows(players, style.maxDepthRows) * (ROW_H + CARD_GAP);
+  for (let i = 0; i < bold; i++) h += lineOneHeight(ordered[i], style) + (i ? CARD_GAP : 0);
+  const visible = visibleDepthRows(players, style.maxDepthRows);
+  // D104: the demoted OUT rows are slim rows that also carry a red rail, so they each cost OUT_RAIL_H more
+  // than the healthy rows beside them. They are never the rows that collapse behind "+N more" (that is the
+  // whole point of moving them), so the count is known here without knowing which players they are.
+  const outRows = shownOutRows(players, style);
+  h += visible * (rowH + CARD_GAP) + outRows * OUT_RAIL_H;
   return h;
 }
 
@@ -830,9 +905,10 @@ function mirrorDefXs(band, slots, scheme, lm) {
 // sorts a row's columns by x, pushes any pair closer than their two half widths plus a small clearance
 // apart, then re-centres the group on its original midpoint so a rare fix-up doesn't drift the row.
 // The bare minimum turf between two adjacent cards, used only as the floor when a view's cards are wide
-// enough that MIN_PITCH alone would let them touch. At the standard 156 (and at D72's 180) two cards plus
-// this gap still fit inside MIN_PITCH, so the Math.max below resolves to MIN_PITCH and every row keeps
-// exactly the pitch its own placement function chose — which is what D71 depends on.
+// enough that MIN_PITCH alone would let them touch. At the standard card width (D103's 180) two cards plus
+// this gap come to 192, still inside MIN_PITCH's 200, so the Math.max below resolves to MIN_PITCH and every
+// row keeps exactly the pitch its own placement function chose — which is what D71 depends on. Only D94's
+// 210-wide side card crosses that line, and only on the single-unit pages.
 const MIN_CARD_GAP = 12;
 function enforceNoOverlap(cols) {
   if (cols.length < 2) return;
@@ -1243,4 +1319,4 @@ export function renderFieldSvg(layoutHeight, losY, layoutWidth = LAYOUT_WIDTH, c
   </svg>`;
 }
 
-export const geometry = { CARD_W, CARD_H1, ROW_H, CARD_GAP, BANNER_H, LABEL_RESERVE, MAX_DEPTH_ROWS, HEADSHOT_SIZE };
+export const geometry = { CARD_W, CARD_H1, ROW_H, SIDE_ROW_H, CARD_GAP, BANNER_H, OUT_RAIL_H, LABEL_RESERVE, MAX_DEPTH_ROWS, HEADSHOT_SIZE };

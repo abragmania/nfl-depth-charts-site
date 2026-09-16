@@ -508,6 +508,21 @@ a.back { color:var(--muted); }
    quiet tint treatment the other two banners get, so "not dressing today" reads as a different fact from
    "hurt and out". */
 .prow-one:has(.banner-inactive) { border-color:#8a94a0; background-image:linear-gradient(rgba(138,148,160,.1), rgba(138,148,160,.1)); }
+/* D104 (Adam, 2026-09-16): "put the red OUT cell and that hurt/suspended player at the bottom of the
+   position; that way it still visually shows me 'big injury here' even if the hurt guy is at the bottom."
+   The demoted starter is a SLIM row now (cards.js's overviewDepth, not overviewLineOne), so he wears the
+   quieter type of a backup — but the rail itself keeps its full colour, border and tint, because the rail
+   is the entire signal. A shade shorter than the line-one rail (12 vs 13) with tighter margins, which is
+   what lets it sit on a slim row inside the OUT_RAIL_H field.js reserves for it.
+   `.column` on the front is not decoration: `.field-scale .card-banner` further down this file also
+   matches this element at (0,2,0), so without the extra class this rule would lose to it on file order and
+   the strip would render at that rule's 17px — taller than the box reserved for it. */
+.column .prow-outrail .card-banner { position:static; height:12px; line-height:12px; font-size:8.5px; letter-spacing:.03em;
+  font-weight:700; border-radius:var(--r-chip); padding:0 4px; margin:1px 3px 0; }
+.column .prow-outrail { border-color:#a83530; background-image:linear-gradient(rgba(194,59,54,.10), rgba(194,59,54,.10)); }
+/* The same neutral grey a healthy game-day scratch gets on line one (D60) — a coach's decision is not an
+   injury, wherever the row sits. */
+.column .prow-outrail:has(.banner-inactive) { border-color:#8a94a0; background-image:linear-gradient(rgba(138,148,160,.1), rgba(138,148,160,.1)); }
 /* 👁 QA C6b: the dim used to cover the whole line, including the rating. But the rating is the entire
    reason the out man is still on screen — D44 keeps him there so his number can be compared with his
    replacement's, and a muted 93 above a bright 72 reads as if the bright one were the better player.
@@ -527,6 +542,56 @@ a.back { color:var(--muted); }
    (and only here — zoom.js/matchup.js badges keep their normal size). */
 .prow .badge { font-size:8px; padding:1px 3px; border-radius:3px; line-height:1.2; }
 .prow .chip { font-size:8px; padding:1px 4px; }
+
+/* ---- D103: the team / matchup row type scale -------------------------------------------------------
+   Adam, 2026-09-16: "the player cells are too small even on a super large screen; don't go crazy blowing
+   them up." field.js's CARD_W went 156 -> 180 and everything printed inside the card goes up with it,
+   roughly 15%: name, jersey number, rating pill, snap trio, badges and chips, on the whole-team page and
+   the matchup page.
+   WHY THIS IS A SCOPED BLOCK RATHER THAN NEW NUMBERS IN THE RULES ABOVE. The .prow family is shared: the
+   offense/defense side pages (D72) draw the SAME rows at a 1.3-1.8x page scale, in a 210-wide card, with a
+   headshot on line one — they are already large and this ruling deliberately leaves them alone. cards.js's
+   renderColumn puts `column-compact` on every column that is NOT drawing headshots, which is exactly the
+   team/matchup family, so the base rules above stay the side pages' sizes and these override them here.
+   Every selector below is one class more specific than the rule it replaces, and the `column-no-starter`
+   pairs are repeated because that downgrade is the same specificity as the plain .prow-one rules.
+   The explicit line-height is what buys the room: the page default is 1.4, which at 12.5px needs 17.5px of
+   line box in what is now a 20px row (18px inside its borders). At 1.2 the tallest thing on a slim row is
+   the rating pill at ~15.8px, so nothing is clipped and field.js only had to find two extra units. */
+.column-compact .prow { min-height:20px; }
+.column-compact .prow-line { line-height:1.2; }
+.column-compact .prow-num { font-size:11px; min-width:17px; }
+.column-compact .prow-name { font-size:12.5px; }
+.column-compact .prow-badges { max-width:60px; }
+.column-compact .prow-ovr { font-size:11.5px; min-width:22px; }
+.column-compact .prow-ovr-none { font-size:10px; }
+.column-compact .snaps { font-size:11px; }
+.column-compact .prow-more { min-height:20px; font-size:11px; }
+.column-compact .prow .badge { font-size:9px; padding:1px 4px; }
+.column-compact .prow .chip { font-size:9px; padding:1px 5px; }
+.column-compact .signal-glyph { font-size:10px; }
+/* Line one — the one row on the column that is a whole player rather than a name in a list. */
+.column-compact .prow-one .prow-name { font-size:14px; }
+.column-compact .prow-one .prow-num { font-size:12px; }
+.column-compact .prow-one .prow-ovr { font-size:12.5px; min-width:24px; }
+/* The trio is the first thing to give up width when a name is long (D91/D73), so it stays a step under the
+   rest of the row rather than growing with it. */
+.column-compact .prow-one .snaps { font-size:10px; }
+/* 👁 QA's non-starter row one keeps its quieter weight — same box, backup type, one size up like the rest
+   of this block. Repeated at this specificity because the rules it defers to are .prow-one.column-no-starter
+   compounds, which the two-class selectors above would otherwise beat on file order. */
+.column-compact .prow-one.column-no-starter .prow-name { font-size:12.5px; }
+.column-compact .prow-one.column-no-starter .prow-num { font-size:11px; }
+.column-compact .prow-one.column-no-starter .prow-ovr { font-size:11.5px; min-width:22px; }
+/* D44's rail on line one. The height is restated at this specificity on purpose: `.field-scale .card-banner`
+   at the foot of this file matches the same element at (0,2,0) and, being later, has quietly been drawing
+   this strip at 17px rather than the 13 field.js's BANNER_H reserves for it. At the bigger type above that
+   overspill would start clipping the name under it, so the compact family pins the strip to the height its
+   own box was measured with. */
+.column-compact .prow-one .card-banner { height:13px; line-height:13px; font-size:9px; }
+/* D104's rail on the demoted OUT row at the foot of the column — the same step up, inside the OUT_RAIL_H
+   field.js reserves for it (15: a 13px strip plus its 2px of margin, over a 20px row). */
+.column-compact .prow-outrail .card-banner { height:13px; line-height:13px; font-size:9.5px; }
 
 /* Card surface. Height is set inline per card (field.js's geometry — normal or +banner) so CSS never
    fights the layout engine's own math; box-shadow/background below are the D43 rating-tier surface,
