@@ -609,7 +609,7 @@ export function renderColumn(col, teamAbbr, opts = {}) {
   const heatTitleText = heatCls ? heatTitle(slot.injury) : "";
   const labelHref = `#/team/${esc(teamAbbr)}/group/${esc((slot.band || "").toLowerCase())}`;
   // col.slotReason (D64): why THIS receiver is the one standing in the slot. On the Slot column it is the D86/D89
-  // sentence naming the men at half or more of their own snaps inside (100+ measured); on a club column it is
+  // sentence naming the men at 40 percent or more of their own snaps inside (D118; D117 dropped the snap floor); on a club column it is
   // columnRankReason's sentence, ESPN's rank of the column plus what the club printed (D92/D93). It leads the
   // tooltip because it is the thing a reader actually questions.
   const labelTitle = esc([col.slotReason || "", slot.labelSource ? `source: ${slot.labelSource}` : "", heatTitleText].filter(Boolean).join(" · "));

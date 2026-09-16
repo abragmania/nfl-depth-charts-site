@@ -429,7 +429,7 @@ const MAX_EXTRA_GAP = 220; // D75: a three-row offense page spreads its rows to 
 // while a hypothetical sixth place now fits inside the canvas with 66 units to spare instead of hanging off
 // the sideline. The clear air between two neighbouring receivers is 74 units, nearly three times the line's.
 const PASS_CATCHER_PITCH = 1.2;
-const SLOT_COLUMN_MIN_RATE = 50; // D86: share of his OWN snaps a receiver must take inside to stand in the WR · Slot column
+const SLOT_COLUMN_MIN_RATE = 40; // D86: share of his OWN snaps a receiver must take inside to stand in the WR · Slot column; bar lowered from 50 to 40 by D118
 
 function offBandRange(band) {
   const cfg = OFF_BANDS[band] || { x: [REFERENCE_WIDTH / 2, REFERENCE_WIDTH / 2], n: 1 };
@@ -682,6 +682,11 @@ function stackColumns(cols) {
 // (D86, SLOT_COLUMN_MIN_RATE) — a rate with no snap count at all is now admitted on the rate, same as a
 // well-measured one; a thin sample is still evidence of where the man actually lines up, and D117 trusts it.
 //
+// D118 (Adam, 2026-09-16) LOWERS D86's bar from 50 to 40 percent (SLOT_COLUMN_MIN_RATE): of 175 receivers
+// with 100+ offensive snaps in 2025, 42 (24%) were at 40 or more versus 26 (15%) at 50 or more, so the old
+// bar was screening out real slot men. D90's ordering and D93's whole-column move are unchanged; D117's
+// retirement of D89's snap floor stands.
+//
 // Ordering is the club's own chart, read tier first — D90 (Adam, 2026-09-15), amending D86's ordering: the
 // tier a man is listed on inside his column (tier 0, a listed-OUT starter, then tier 1, then tier 2 and so
 // on, a card with no tier at all last), then the rank of the column he came from (the ordinal position in
@@ -924,7 +929,7 @@ export function regroupSlotReceivers(wrSlots) {
   const carriedClause = carriedOver.length && decider
     ? `; listed behind ${lastName(decider.name)} by the club: ${carriedOver.map((p) => lastName(p.name)).join(", ")}`
     : "";
-  const reason = `Slot receivers (half or more of their snaps inside): ${men.filter(isQualified).map(entryOf).join(", ")}${carriedClause}`;
+  const reason = `Slot receivers (40 percent or more of their snaps inside): ${men.filter(isQualified).map(entryOf).join(", ")}${carriedClause}`;
   return { slot, kept, reason };
 }
 
