@@ -430,7 +430,6 @@ const MAX_EXTRA_GAP = 220; // D75: a three-row offense page spreads its rows to 
 // the sideline. The clear air between two neighbouring receivers is 74 units, nearly three times the line's.
 const PASS_CATCHER_PITCH = 1.2;
 const SLOT_COLUMN_MIN_RATE = 50; // D86: share of his OWN snaps a receiver must take inside to stand in the WR · Slot column
-const SLOT_COLUMN_MIN_SNAPS = 100; // D89: inside snaps that rate must have been measured over before it counts
 
 function offBandRange(band) {
   const cfg = OFF_BANDS[band] || { x: [REFERENCE_WIDTH / 2, REFERENCE_WIDTH / 2], n: 1 };
@@ -674,14 +673,14 @@ function stackColumns(cols) {
 // lines up inside on 17% of his snaps and still takes the biggest share of his team's slot work — and,
 // ordering purely by snaps, could seat a club's number-one receiver underneath a lesser man.
 //
-// D89 (Adam, 2026-09-15) AMENDS D86's membership rule: a rate only counts once it has been measured over
-// at least SLOT_COLUMN_MIN_SNAPS inside snaps (slotSnapsPooled, else the headline slotSnaps). Below that
-// floor a receiver stays in his club column whatever his rate says. D86's rate-only bar read a handful of
-// snaps as a career: LaJohntay Wester was standing ALONE in Baltimore's Slot column on 24 inside snaps at
-// 53.3%, Tom Kennedy held Detroit's on 26, and Jimmy Horn Jr. sat in Carolina's on 75 — three thin samples
-// that each invented a column, and in Baltimore's case hid Zay Flowers's own WR1 pill behind a fourth-
-// stringer. A man PlayerProfiler published no snap count for cannot show the required 100 either — an
-// unmeasured window is no different from a thin one for this purpose — so he too stays in his club column.
+// D89 (Adam, 2026-09-15) had AMENDED D86's membership rule with a floor: a rate only counted once it had
+// been measured over at least 100 inside snaps, else the man stayed in his club column whatever his rate
+// said — thin samples like LaJohntay Wester's 24 Baltimore snaps at 53.3%, Tom Kennedy's 26 in Detroit and
+// Jimmy Horn Jr.'s 75 in Carolina each invented a column, and in Baltimore's case hid Zay Flowers's own WR1
+// pill behind a fourth-stringer. D117 (Adam, 2026-09-16) RETIRES D89: "if they line up frequently in the
+// slot, they're a slot guy, who cares how often they are out there." Membership is the rate alone again
+// (D86, SLOT_COLUMN_MIN_RATE) — a rate with no snap count at all is now admitted on the rate, same as a
+// well-measured one; a thin sample is still evidence of where the man actually lines up, and D117 trusts it.
 //
 // Ordering is the club's own chart, read tier first — D90 (Adam, 2026-09-15), amending D86's ordering: the
 // tier a man is listed on inside his column (tier 0, a listed-OUT starter, then tier 1, then tier 2 and so
@@ -714,10 +713,10 @@ function stackColumns(cols) {
 // A card's measured slot snaps over the pooled 2025+2026 window, or null when PlayerProfiler has no number
 // for him. slotSnapsPooled is the window every man is read on; the headline slotSnaps is the fallback only
 // for a card that carries no pooled count at all (an older compiled file, or a season whose total snaps
-// could not be worked out so it never joined the pool). This count ORDERS the column, fills the tooltip's
-// bracket, and since D89 gates membership too: a man counted below SLOT_COLUMN_MIN_SNAPS is out whatever
-// his rate — and a card with no count at all cannot show 100 either, so it is out on the same terms, not an
-// exception.
+// could not be worked out so it never joined the pool). This count ORDERS the column (D90) and fills the
+// tooltip's bracket; it no longer gates membership — D117 retired D89's floor, so a rate with no snap count
+// at all is admitted on the rate alone, same as a well-measured one, and simply sorts last, unchanged from
+// D90's null-snaps-sort-last rule.
 const snapCount = (v) => (typeof v === "number" && Number.isFinite(v) && v >= 0 ? v : null);
 const slotSnapsOf = (p) => snapCount(p?.slotSnapsPooled) ?? snapCount(p?.slotSnaps);
 // D86: the one rate window every man is judged on — the pooled 2025+2026 rate when the card carries one,
@@ -812,13 +811,13 @@ export function regroupSlotReceivers(wrSlots) {
     });
   });
 
-  // Pass two: the men who play at least SLOT_COLUMN_MIN_RATE of their own snaps inside, over a window of at
-  // least SLOT_COLUMN_MIN_SNAPS inside snaps (D89 — a card with no count at all cannot show 100 either, so
-  // it stays in its club column same as a thin sample). Ordered tier first so a backup never sits above a
-  // starter (D90), then the rank of the club column he came from, then slot snaps with the bigger workload
-  // first, and the club's own printed order settles anything still tied.
+  // Pass two: the men who play at least SLOT_COLUMN_MIN_RATE of their own snaps inside — no minimum snap
+  // count any more (D117 retired D89's 100-snap floor; a rate with no snap count at all is admitted on the
+  // rate alone). Ordered tier first so a backup never sits above a starter (D90), then the rank of the club
+  // column he came from, then slot snaps with the bigger workload first (null snaps sort last), and the
+  // club's own printed order settles anything still tied.
   const qualified = charted
-    .filter((c) => c.rate >= SLOT_COLUMN_MIN_RATE && c.snaps != null && c.snaps >= SLOT_COLUMN_MIN_SNAPS)
+    .filter((c) => c.rate >= SLOT_COLUMN_MIN_RATE)
     .sort((a, b) => a.tier - b.tier || a.rank - b.rank || (b.snaps ?? -1) - (a.snaps ?? -1) || a.row - b.row)
     .map((c) => c.p);
   if (!qualified.length) return null;
@@ -905,9 +904,9 @@ export function regroupSlotReceivers(wrSlots) {
       : {}),
   };
   // D86: the tooltip leads with the number that put each man in the column — the rate the bar was read on
-  // — and carries his slot snaps in brackets behind it, in the column's own order. D89 means every man who
-  // reaches the column has a snap count (a null count no longer clears the bar), so the bracket is never
-  // empty here; the null-safe fallback stays only as a defensive guard.
+  // — and carries his slot snaps in brackets behind it, in the column's own order. D117 retired D89's floor,
+  // so a man can reach the column on his rate alone with no snap count at all; the null-safe fallback below
+  // is what drops the bracket for him rather than printing an empty one.
   const entryOf = (p) => {
     const snaps = slotSnapsOf(p);
     return `${lastName(p.name)} ${rateOf(p)}%${snaps == null ? "" : ` (${snaps} slot snaps)`}`;
@@ -925,7 +924,7 @@ export function regroupSlotReceivers(wrSlots) {
   const carriedClause = carriedOver.length && decider
     ? `; listed behind ${lastName(decider.name)} by the club: ${carriedOver.map((p) => lastName(p.name)).join(", ")}`
     : "";
-  const reason = `Slot receivers (half or more of their snaps inside, 100+ measured): ${men.filter(isQualified).map(entryOf).join(", ")}${carriedClause}`;
+  const reason = `Slot receivers (half or more of their snaps inside): ${men.filter(isQualified).map(entryOf).join(", ")}${carriedClause}`;
   return { slot, kept, reason };
 }
 
