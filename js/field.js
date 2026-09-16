@@ -72,6 +72,32 @@
 // at the bigger `style` a 1.3-1.8x scale affords — a small headshot on each line-one row and one more depth
 // row before the "+N" tail.
 
+// D110 (Adam, 2026-09-16) — "pull the columns closer together so the layout is narrower than the screen
+// ratio and the cards grow to fill it." The ruling named LAYOUT_WIDTH as the lever: take the canvas from
+// 1800 down toward ~1475 and every column, being a fixed share of a narrower canvas, comes out bigger on
+// screen. MEASURED, THAT LEVER IS ALREADY AT ITS STOP, and the canvas width therefore does NOT move.
+//
+// Why, in the fit engine's own terms (viewfit.js, which this ruling does not open). A team/matchup canvas
+// is far taller in proportion than the box it has to land in — 1800 x 1106 is 1.63:1 against a measured
+// 1619 x 584 field box at a 1700x900 window (2.77:1) and 1914 x 663 at Adam's 2000x980 (2.89:1). The
+// engine closes that gap with `spread`: it rebuilds the canvas horizontally by kW/kH so that the width fit
+// and the height fit land on the same scale, and a column's size on screen is then
+//     card px = CARD_W x spread x scale = CARD_W x (box width / LAYOUT_WIDTH)
+// — i.e. exactly the ratio the ruling is aiming at. BUT the spread is capped at MAX_SPREAD = 1.8, and the
+// measured spreads are already 1.70 at 1700x900 and 1.77 at Adam's 2000x980. Narrowing LAYOUT_WIDTH raises
+// the spread the engine ASKS for; past the cap it stops being granted, the formula above stops holding, and
+// the card stays frozen at CARD_W x 1.8 x scale while the canvas simply stops reaching the right-hand edge.
+// Concretely, at the ruling's own 1475 the cap binds on every screen: the card would come out 171 px at
+// 1700x900 and 194 px at 2000x980 (against the ruling's targets of 195-205 and ~230) with ~350 px of dead
+// turf down the sides of Adam's screen — the empty bands the ruling was raised to remove. The matchup page,
+// whose halves are taller than the constant, is at the cap TODAY, so for it a narrower canvas is pure loss.
+//
+// So the ruling's ARITHMETIC is delivered where it is not capped — through the card's share of the canvas,
+// CARD_W / LAYOUT_WIDTH, which is the one number that actually sets how big a column reads. The ruling asks
+// for 180/1475 = 0.122; this file now carries 216/1800 = 0.120, the same chart at the same proportions, on a
+// canvas wide enough that the fit engine can still spread onto it. The pitches come down in proportion
+// exactly as the ruling describes (a column is now a much bigger share of the turf between its neighbours),
+// and nothing vertical moves: D109's 1106 stands.
 const REFERENCE_WIDTH = 1600; // the OFF_BANDS anchors below were tuned against this width
 export const LAYOUT_WIDTH = 1800;
 const SCALE = LAYOUT_WIDTH / REFERENCE_WIDTH;
@@ -115,7 +141,13 @@ export const FIELD_VARIANT = "A";
 //   row gap    styles.css's .column-stack gap              -> CARD_GAP 1 on the team/matchup family
 // styles.css's `.column-compact` block carries the matching min-heights and stack gap, so the drawn row
 // and the box reserved for it still cannot disagree (the same contract D103 set up).
-const CARD_W = 180;
+// D110 (Adam, 2026-09-16): 180 -> 216, the whole of this ruling's size gain (see the LAYOUT_WIDTH note at
+// the top of the file for why it is spent here rather than on the canvas width). On screen a column is
+// CARD_W x box width / LAYOUT_WIDTH, so this is 194 px on a 1700x900 window and 230 px on Adam's 2000x980,
+// against 162 and 191 before. HEIGHT is untouched: the row heights, the type scale in styles.css and the
+// scale the fit engine applies all come off D109's 1106-unit canvas, so the text is exactly the size it was
+// and the extra 36 units go into the one thing that was short — the room a name has before it abbreviates.
+const CARD_W = 216;
 const CARD_H1 = 23;  // the starter's bold row: 19 units of content, 23 reserved (36 with a banner over 35)
 const ROW_H = 18;    // a slim backup row on the team/matchup pages: 17 units of content (D109)
 const SIDE_ROW_H = 18; // D72's offense/defense pages keep the slim-row height they already have
@@ -181,7 +213,18 @@ const LOS_HALF_GAP = 10; // half the empty gutter straddling the line of scrimma
 // so if the columns only spanned the middle of the canvas the page would waste the spare width. At 224
 // the widest row (corners, 1.4 pitches outside the tackles) still reaches close to both sidelines, so the
 // field keeps filling a 1700px window edge to edge instead of leaving a dead strip down one side.
-const MIN_PITCH = 224;
+//
+// D110 (Adam, 2026-09-16) — 224 -> 242, and the clear turf between two neighbouring cards goes from 44
+// units to 26 with it, which is this ruling relaxing D106's 44 on purpose ("the D106 44-unit gap is
+// relaxed by this ruling"). The two numbers are the same trade seen from both ends: on a canvas whose
+// width the fit engine has already stretched as far as it can (see LAYOUT_WIDTH), every unit a card gains
+// is a unit of turf its neighbour loses. 26 units is not the drop it looks like — measured on screen it is
+// ~23 px of air at 1700x900, against the ~18 px that D106 was raised to fix and the ~24 px the ruling's own
+// numbers (a 180-wide card at a 202 pitch on a 1475 canvas) would have produced.
+// The pitch has to CLEAR the card rather than merely being a floor under it: 216 + MIN_CARD_GAP is 242, so
+// this constant and enforceNoOverlap's own minimum are now the same number by construction and no row is
+// ever re-pitched after its placement function has chosen its x's (which is what D71's landmarks depend on).
+const MIN_PITCH = 242;
 const TRAY_H = 22; // height of an "unlisted" tray strip, when a band has one
 const TRAY_GAP = 6;
 const FIELD_MARGIN_X = 80 * SCALE; // left/right canvas margin so edge columns don't clip
@@ -279,7 +322,17 @@ const OFF_LEVEL_LABEL = { PASS_CATCHERS: "PASS CATCHERS", LINE: "LINE", BACKFIEL
 // D71: the corners keep the placement they have always had — 1.4 pitches outside the tackles — and they
 // keep it whatever the receivers do, because the receivers are now a centred cluster that would drag the
 // secondary into the middle of the field if the corners still mirrored it.
-const CB_PITCH_OUT = 1.4;
+// D110 (Adam, 2026-09-16) — 1.4 -> 1.15, which the ruling asks for in as many words ("corners about 1.2
+// pitches outside the tackles"). The corners are the widest thing on the field and therefore the row that
+// decides whether a 216-wide card fits at all: at the new 242 pitch the corner sits 278 units outside the
+// tackle, so its card's outer edge lands 30 units inside the sideline — roughly where a 180-wide card at
+// 1.4 x 224 used to land, i.e. the secondary still reaches both sidelines and the field still fills the
+// window. Leaving it at 1.4 would have pushed that edge 40 units OFF the canvas.
+// The knock-on to name below: a corner only 1.15 pitches out leaves less room between him and the box, so
+// the nickel's own floor (a full pitch inside the corner) now places him ~36 units outside the left tackle
+// rather than ~90. He still reads as "inside the corner, outside the box", which is what D71 asked for, but
+// he sits noticeably closer to the tackle than he did.
+const CB_PITCH_OUT = 1.15;
 // D71: "the nickel sits between the corner and the box." Nominally one pitch outside the left tackle,
 // which is what Adam described; the floor below it is arithmetic, not taste — two columns closer than
 // MIN_PITCH overlap, and the corner is already at 1.4 pitches, so a literal one-pitch nickel would be
@@ -295,7 +348,13 @@ const CROP_MARGIN = 26;
 // four-row defense on a 1700x900 screen into a full page; beyond it the rows would start reading as
 // unrelated islands rather than as levels of one chart.
 const MAX_EXTRA_GAP = 220; // D75: a three-row offense page spreads its rows to fill the height rather than zooming
-const PASS_CATCHER_PITCH = 1.3; // D76: receivers/TE cluster pitch as a multiple of MIN_PITCH
+// D76: receivers/TE cluster pitch as a multiple of MIN_PITCH. D110 (Adam, 2026-09-16) takes it 1.3 -> 1.2,
+// which on the bigger MIN_PITCH leaves the widest real cluster (five places — Cleveland's WR·Slot, WR1, WR2,
+// WR3 and a tight end, and Houston's five with its second tight end stacked on one x) almost exactly the
+// absolute width it has today, so the row still spreads across the turf rather than huddling on the centre,
+// while a hypothetical sixth place now fits inside the canvas with 66 units to spare instead of hanging off
+// the sideline. The clear air between two neighbouring receivers is 74 units, nearly three times the line's.
+const PASS_CATCHER_PITCH = 1.2;
 const SLOT_COLUMN_MIN_RATE = 50; // D86: share of his OWN snaps a receiver must take inside to stand in the WR · Slot column
 const SLOT_COLUMN_MIN_SNAPS = 100; // D89: inside snaps that rate must have been measured over before it counts
 
@@ -1009,13 +1068,15 @@ function mirrorDefXs(band, slots, scheme, lm) {
 // sorts a row's columns by x, pushes any pair closer than their two half widths plus a small clearance
 // apart, then re-centres the group on its original midpoint so a rare fix-up doesn't drift the row.
 // The bare minimum turf between two adjacent cards, used only as the floor when a view's cards are wide
-// enough that MIN_PITCH alone would let them touch. At the standard card width (D103's 180) two cards plus
-// this gap come to 192, still inside MIN_PITCH's 224 (D106), so the Math.max below resolves to MIN_PITCH and
-// every row keeps exactly the pitch its own placement function chose — which is what D71 depends on. D94's
-// 210-wide side card no longer crosses that line either, now that MIN_PITCH itself is 224 (210+12=222 <
-// 224): the single-unit LINE row's pitch is set by MIN_PITCH the same as every other row, two units more
-// than the 222 D94's own comment used to cite.
-const MIN_CARD_GAP = 12;
+// enough that MIN_PITCH alone would let them touch. D110 (Adam, 2026-09-16) makes it the number MIN_PITCH is
+// actually BUILT from rather than a slack floor sitting well under it: the team/matchup card is 216 and
+// MIN_PITCH is 242, so 216 + 26 = 242 and the two agree exactly. The Math.max below therefore still resolves
+// to MIN_PITCH on every row — no row is re-pitched after its own placement function has chosen its x's,
+// which is what D71's landmarks depend on — but now it does so by construction instead of by luck, and the
+// gap a reader actually sees between two cards is this constant rather than a number derived elsewhere.
+// D94's 210-wide side card is inside it too (210 + 26 = 236 < 242), so the offense/defense pages keep taking
+// their pitch from MIN_PITCH the same as every other view.
+const MIN_CARD_GAP = 26;
 function enforceNoOverlap(cols) {
   if (cols.length < 2) return;
   const originalMin = Math.min(...cols.map((c) => c.x));
@@ -1438,4 +1499,9 @@ export function renderFieldSvg(layoutHeight, losY, layoutWidth = LAYOUT_WIDTH, c
   </svg>`;
 }
 
-export const geometry = { CARD_W, CARD_H1, ROW_H, SIDE_ROW_H, CARD_GAP, SIDE_CARD_GAP, BANNER_H, OUT_RAIL_H, LABEL_RESERVE, MAX_DEPTH_ROWS, HEADSHOT_SIZE, BAND_GAP, LEVEL_GAP_EXTRA, LOS_HALF_GAP, MARGIN_TOP, MARGIN_BOTTOM, SIDE_INSET, DEF_ROW_FULL_H, BOTH_SIDES_HALF, BOTH_SIDES_HEIGHT };
+// D110 (Adam, 2026-09-16): the four HORIZONTAL constants join the bag as well. The pitch tests used to
+// carry 224, 1.3 and 1.4 as literals copied out of this file, which is how a number goes stale silently the
+// moment a ruling moves it; they now read them from here, so the test states the RELATIONSHIP (a corner is
+// CB_PITCH_OUT pitches outside the tackle; two cards never come closer than MIN_CARD_GAP) and only the
+// handful of assertions that are genuinely about a specific number still spell one out.
+export const geometry = { CARD_W, CARD_H1, ROW_H, SIDE_ROW_H, CARD_GAP, SIDE_CARD_GAP, BANNER_H, OUT_RAIL_H, LABEL_RESERVE, MAX_DEPTH_ROWS, HEADSHOT_SIZE, BAND_GAP, LEVEL_GAP_EXTRA, LOS_HALF_GAP, MARGIN_TOP, MARGIN_BOTTOM, SIDE_INSET, DEF_ROW_FULL_H, BOTH_SIDES_HALF, BOTH_SIDES_HEIGHT, MIN_PITCH, MIN_CARD_GAP, CB_PITCH_OUT, PASS_CATCHER_PITCH };
