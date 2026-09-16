@@ -193,6 +193,23 @@ a.back { color:var(--muted); }
     var(--wm-url, none);
   opacity:.22; }
 
+/* D98 part 2: the matchup field carries TWO crests (defending club's in the defensive/top half, the
+   club on offense's in the offensive/bottom half) instead of team.js's single centred one, so its
+   .field-watermark's own ::before is switched off and each half gets its own element instead. Same
+   plate + contain-sized crest + opacity as the team page (D95/D98 part 1) — only the position/size per
+   half differs, and that comes from matchup.js reading the already-computed layout.losY/layoutHeight
+   (no new layout maths), not a hardcoded 50/50 split. */
+.matchup-field .field-watermark::before { content:none; }
+.matchup-watermark-crest { position:absolute; left:50%; aspect-ratio:1/1;
+  transform:translate(-50%,-50%);
+  background-repeat:no-repeat, no-repeat;
+  background-position:center, center;
+  background-size:100% 100%, contain;
+  background-image:
+    radial-gradient(circle, rgba(255,255,255,.22) 0%, rgba(255,255,255,.1) 55%, rgba(255,255,255,0) 80%),
+    var(--wm-url, none);
+  opacity:.22; }
+
 /* D49: a short, subtle entrance for the field on render. */
 @keyframes field-in { from { opacity:0; transform:scale(.97); } to { opacity:1; transform:scale(1); } }
 @media (prefers-reduced-motion: reduce) { .field-outer { animation:none; } }

@@ -55,6 +55,29 @@ function heatSummaryHtml(view) {
   return text ? `<div class="matchup-team-heat">${esc(text)}</div>` : "";
 }
 
+// Same URL rule team.js's fieldHtml uses for its single watermark (D95/D98 part 1): prefer the dark
+// crest, fall back to the plain logo, and make a bare "img/logos/..." path root-relative so it resolves
+// against the document rather than against styles.css's own /css/ location.
+function watermarkUrl(team) {
+  let u = team.logoDark || team.logo || "";
+  if (u && !/^https?:\/\//.test(u) && !u.startsWith("/")) u = "/" + u;
+  return u;
+}
+
+// D98 part 2: one crest per half, each sized to ~74% of that half's own height (70-80% asked for) and
+// centred within it, reading the split straight off the layout this same field already computed (the
+// line of scrimmage sits at layout.losY, not always exactly the canvas midpoint once margins are in) so
+// neither crest can ever cross into the other half or overlap the line of scrimmage.
+function halfWatermarkHtml(layout, team, half) {
+  const url = watermarkUrl(team);
+  if (!url) return "";
+  const span = half === "def" ? layout.losY : layout.layoutHeight - layout.losY;
+  const center = half === "def" ? layout.losY / 2 : layout.losY + span / 2;
+  const topPct = (center / layout.layoutHeight) * 100;
+  const heightPct = ((span * 0.74) / layout.layoutHeight) * 100;
+  return `<div class="matchup-watermark-crest" style="--wm-url:url('${esc(url)}');top:${topPct}%;height:${heightPct}%"></div>`;
+}
+
 // Each column is tinted with the colours of the team it actually belongs to, so a glance at any row says
 // whose players those are without reading the header — the one thing a single shared field wash cannot do
 // when two teams are on it.
@@ -68,10 +91,13 @@ function fieldHtml(viewA, viewB, teamA, teamB, spread) {
     return renderColumn(c, team.abbr, { slotLookup, scheme: view.scheme, colourStyle: colour(team) });
   }).join("");
   const traysHtml = layout.trays.map((t) => renderTray(t, (t.unit === "OFF" ? teamA : teamB).abbr)).join("");
+  // D98 part 2: B defends (top half), A is on offense (bottom half) — see facingView above.
+  const watermarkHtml = `<div class="field-watermark">${halfWatermarkHtml(layout, teamB, "def")}${halfWatermarkHtml(layout, teamA, "off")}</div>`;
   return {
     layout,
     html: `<div class="field-outer matchup-field" style="${colour(teamB)}">
       <div class="field-scale" style="width:${layout.layoutWidth}px;height:${layout.layoutHeight}px">
+        ${watermarkHtml}
         ${renderFieldSvg(layout.layoutHeight, layout.losY, layout.layoutWidth)}
         <div class="field-layer">${columnsHtml}${traysHtml}</div>
         <div class="level-layer">${renderLevelLabels(layout.levels, layout.layoutWidth)}</div>
