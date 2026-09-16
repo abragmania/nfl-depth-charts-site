@@ -188,14 +188,23 @@ a.back { color:var(--muted); }
    custom properties (--team-a-primary/--team-a-secondary) are the offensive club's colours; the base
    --team-primary/--team-secondary stay the defensive club's, exactly as D98 part 2 already used them for
    the header pill and column tints, so nothing else on this page has to change. */
+/* Adam (2026-09-16), D99 follow-up: "the background colours on the matchup page look way brighter than
+   the other three pages." Measured — the old version stacked THREE opaque/semi-opaque layers (two 55%-tall
+   alpha glows plus a fully-opaque tint-to-tint base filling 100% of the canvas edge-to-edge) where the
+   team/side .field-scale above only ever shows its brightest colour in two small corner patches over a
+   plain dark dk1/dk2 base; the rest of that surface stays dark. That's why the matchup page read brighter
+   everywhere, not just at the seam. Fixed by matching the team surface's own structure exactly: one plain
+   dk1-to-dk2 base gradient (same darkness as every other page) carries the LOS seam, and the two clubs'
+   colour only shows up as short, edge-anchored glows (not full-half washes) that fade out well before they
+   reach the LOS band, so they never stack on top of each other or the seam blend.  */
 .matchup-field .field-scale {
-  --def-tint:color-mix(in srgb, var(--team-primary,#333) 38%, var(--field-dk1) 62%);
-  --off-tint:color-mix(in srgb, var(--team-a-primary,#333) 38%, var(--field-dk2) 62%);
-  --def-glow:color-mix(in srgb, var(--team-secondary,#777) 20%, transparent 80%);
-  --off-glow:color-mix(in srgb, var(--team-a-secondary,#777) 20%, transparent 80%);
+  --def-tint:color-mix(in srgb, var(--team-primary,#333) 24%, var(--field-dk1) 76%);
+  --off-tint:color-mix(in srgb, var(--team-a-primary,#333) 24%, var(--field-dk2) 76%);
+  --def-glow:color-mix(in srgb, var(--team-secondary,#777) 12%, transparent 88%);
+  --off-glow:color-mix(in srgb, var(--team-a-secondary,#777) 12%, transparent 88%);
   background:
-    radial-gradient(100% 55% at 50% 0%, var(--def-glow) 0%, transparent 68%),
-    radial-gradient(100% 55% at 50% 100%, var(--off-glow) 0%, transparent 68%),
+    radial-gradient(90% 34% at 50% 4%, var(--def-glow) 0%, transparent 72%),
+    radial-gradient(90% 34% at 50% 96%, var(--off-glow) 0%, transparent 72%),
     linear-gradient(to bottom,
       var(--def-tint) 0%,
       var(--def-tint) calc(var(--los-pct, 50%) - 16%),
@@ -669,3 +678,20 @@ a.back { color:var(--muted); }
 .field-scale .row .chip { font-size:7.5px; padding:1px 4px; }
 .field-scale .card-banner { font-size:8.5px; height:17px; line-height:17px; }
 .field-scale .card:has(.card-banner) .card-body { margin-top:19px; }
+
+/* D100 (Adam, 2026-09-16): the matchup header's opponent switcher (public/js/matchup.js). It sits in
+   .matchup-vs-controls, the same row as the Swap sides button, so picking a new opponent never adds a
+   row to the header — D58 still holds. Sized and coloured to match .matchup-swap (matchup.css) since the
+   two controls read as one pair of pills on that line. */
+.matchup-vs-controls { display:flex; align-items:center; justify-content:center; gap:10px; flex-wrap:wrap; }
+.matchup-opp-picker { display:flex; align-items:center; gap:6px; white-space:nowrap; }
+.matchup-opp-picker label { font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); }
+.matchup-opp-picker select { font-size:12px; font-weight:700; color:var(--ink); background:#1c2128; border:1px solid #2a323b;
+  border-radius:16px; padding:4px 10px; max-width:170px; }
+.matchup-opp-picker select:hover { border-color:#4a5560; }
+/* D100: the "not this week's opponent" note keeps the scheduled default visible even while a hand-picked
+   matchup is on screen — muted and small so it never competes with the title or the two team names. */
+.matchup-opp-note { font-size:10.5px; font-style:italic; color:var(--muted); white-space:nowrap; }
+@media (max-width:1400px) {
+  .matchup-opp-picker label, .matchup-opp-picker select, .matchup-opp-note { font-size:10px; }
+}

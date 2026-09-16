@@ -119,7 +119,7 @@ function logoPlate(team, extraClass) {
 
 // ---- header / breadcrumb ----
 
-function headerHtml(teamA, teamB, viewA, viewB) {
+function headerHtml(teamA, teamB, viewA, viewB, teams) {
   const recA = viewA?.header?.record ?? teamA.record;
   const recB = viewB?.header?.record ?? teamB.record;
   // 👁 QA (2026-09-15, item 7): a club whose primary is pale (New Orleans' gold) gets dark ink on its
@@ -137,7 +137,10 @@ function headerHtml(teamA, teamB, viewA, viewB) {
     </div>
     <div class="matchup-vs">
       <div class="matchup-title">${esc(teamA.abbr)} <span class="matchup-title-unit">offense</span> vs ${esc(teamB.abbr)} <span class="matchup-title-unit">defense</span></div>
-      <a class="matchup-swap" href="#/matchup/${esc(teamB.abbr)}/${esc(teamA.abbr)}" title="Swap: ${esc(teamB.abbr)} offense vs ${esc(teamA.abbr)} defense">⇄ Swap sides</a>
+      <div class="matchup-vs-controls">
+        ${opponentPickerHtml(teams, teamA, teamB)}
+        <a class="matchup-swap" href="#/matchup/${esc(teamB.abbr)}/${esc(teamA.abbr)}" title="Swap: ${esc(teamB.abbr)} offense vs ${esc(teamA.abbr)} defense">⇄ Swap sides</a>
+      </div>
     </div>
     <div class="matchup-team matchup-team-b${inkB}" style="--team-primary:${teamB.colourPrimary};--team-secondary:${teamB.colourSecondary}">
       <div class="matchup-team-info matchup-team-info-right">
@@ -150,6 +153,43 @@ function headerHtml(teamA, teamB, viewA, viewB) {
   </div>`;
 }
 
+// D100: the same "all 31 other clubs, alphabetised" option list backs both the bye-week picker (which has
+// no B yet) and the header's opponent dropdown (which always has one) — one place builds it so the two
+// pickers can never drift into different sort orders or a different label format.
+function opponentOptionsHtml(teams, aAbbr, selectedAbbr) {
+  return teams.slice()
+    .filter((t) => t.abbr !== aAbbr)
+    .sort((a, b) => a.abbr.localeCompare(b.abbr))
+    .map((t) => `<option value="${esc(t.abbr)}" ${t.abbr === selectedAbbr ? "selected" : ""}>${esc(t.abbr)} — ${esc(t.name)}</option>`)
+    .join("");
+}
+
+// D100 (Adam, 2026-09-16): the opponent is always changeable from the header, not just on a bye week.
+// Sits beside the title and the Swap sides button in the centre block (D58: the header must not grow
+// taller, so this shares the swap button's row rather than adding one of its own). Defaults to A's
+// scheduled opponent; when the current B isn't that team, a muted note names the scheduled one so the
+// default stays visible even while looking at a hand-picked matchup.
+function opponentPickerHtml(teams, teamA, teamB) {
+  const nextOppAbbr = teamA.nextOpponent?.abbr;
+  const notScheduled = nextOppAbbr && nextOppAbbr !== teamB.abbr;
+  const note = notScheduled
+    ? `<span class="matchup-opp-note">not this week's opponent (next: ${esc(nextOppAbbr)})</span>` : "";
+  return `<span class="matchup-opp-picker">
+    <label for="matchup-opp-select">Opponent</label>
+    <select id="matchup-opp-select" aria-label="Change opponent">${opponentOptionsHtml(teams, teamA.abbr, teamB.abbr)}</select>
+    ${note}
+  </span>`;
+}
+
+function wireOpponentPicker(root, A) {
+  const select = root.querySelector("#matchup-opp-select");
+  if (!select) return;
+  select.addEventListener("change", (e) => {
+    const b = e.target.value;
+    if (b) location.hash = `#/matchup/${A}/${b}`;
+  });
+}
+
 function notFoundHtml(abbr) {
   return `<div class="notfound">No such team "${esc(abbr)}". <a class="back" href="#/">Back to all teams</a></div>`;
 }
@@ -160,11 +200,7 @@ function errorHtml(e) {
 
 // A-has-no-game-this-week (bye) picker: A is fixed, pick any opponent to build the matchup by hand.
 function byePickerHtml(teamA, teams) {
-  const opts = teams.slice()
-    .filter((t) => t.abbr !== teamA.abbr)
-    .sort((a, b) => a.abbr.localeCompare(b.abbr))
-    .map((t) => `<option value="${esc(t.abbr)}">${esc(t.abbr)} — ${esc(t.name)}</option>`)
-    .join("");
+  const opts = opponentOptionsHtml(teams, teamA.abbr, null);
   return `<div class="matchup-picker">
     <h1>${esc(teamA.name)} matchup</h1>
     <p class="matchup-picker-note">${esc(teamA.abbr)} has no game on this week's schedule (bye). Pick an opponent to build a matchup anyway.</p>
@@ -245,10 +281,11 @@ export async function renderMatchup(root, search, aAbbr, bAbbr) {
   root.innerHTML = `
     <div class="matchup">
       ${navStripHtml({ teams, abbr: A, page: "matchup", opponentAbbr: B, primary: teamA.colourPrimary, secondary: teamA.colourSecondary })}
-      ${headerHtml(teamA, teamB, viewA, viewB)}
+      ${headerHtml(teamA, teamB, viewA, viewB, teams)}
       <div class="team-body"><div class="field-outer matchup-field"></div></div>
     </div>`;
   wireNav(root); // D59: switcher routes to the newly picked team’s matchup
+  wireOpponentPicker(root, A); // D100: header opponent dropdown routes to #/matchup/A/B
   mountMatchupField(root, viewA, viewB, teamA, teamB);
 }
 
