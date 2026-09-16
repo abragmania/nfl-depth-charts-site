@@ -206,7 +206,7 @@ a.back { color:var(--muted); }
    reaches roughly a third of the way toward the centre before fading, while the centre band stays neutral
    charcoal so cards/pills/crest are still the loudest things on screen (unchanged mean luminance band). */
 [data-field-variant="A"] .field-scale {
-  --field-a-neu1:#15171b; --field-a-neu2:#101216;
+  --field-a-neu1:#101216; --field-a-neu2:#0b0d10; /* Adam (2026-09-16): a shade darker so the cells stand out */
   --field-a-edge:color-mix(in srgb, var(--team-primary,#333) 48%, transparent);
   background:
     radial-gradient(40% 92% at 0% 50%, var(--field-a-edge) 0%, transparent 84%),
