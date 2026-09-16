@@ -629,6 +629,14 @@ export function regroupSlotReceivers(wrSlots) {
 // actually prints: when it differs from the server's own label the sentence opens by saying so, or the
 // tooltip would read as a flat contradiction of the pill above it. Called without one — as the tests call it
 // directly — it is the plain provenance sentence it has always been.
+//
+// D94 (Adam, 2026-09-15): the WR band is now built straight off ESPN's own depth chart, not the club's page —
+// every WR column carries `clubLabel: "WR (ESPN)"` (server/compile/starters.js's ESPN_WR_CLUB_LABEL, inlined
+// here since this module takes no imports) and `labelSource: "espn"`. For those columns there is no club
+// position to quote: `printedOrdinal` would find no digit in "WR (ESPN)" and fall back to `slot.ordinal`,
+// which is just ESPN's own column count dressed up as something the club printed — a claim that is no longer
+// true. So an ESPN column drops the "the club prints it" clause entirely and says only what is true: ESPN
+// listed it at this number.
 // Exported for the tests — nothing else calls it.
 const ORDINAL_SUFFIX = (n) => (n % 100 >= 11 && n % 100 <= 13 ? "th" : ["th", "st", "nd", "rd"][n % 10] ?? "th");
 function printedOrdinal(slot) {
@@ -641,6 +649,10 @@ export function columnRankReason(slot, displayLabel = null) {
   const renumbered = displayLabel && displayLabel !== slot?.label
     ? `Numbered ${displayLabel} here because the slot man's column stands apart; `
     : "";
+  const isEspnColumn = slot?.clubLabel === "WR (ESPN)" || (slot?.band === "WR" && slot?.labelSource === "espn");
+  if (isEspnColumn) {
+    return `${renumbered}ESPN lists this column ${slot.label}`;
+  }
   if (slot?.rankSource === "espn") {
     return `${renumbered}ESPN ranks this column ${slot.label}${printed ? `; the club prints it ${printed}` : ""}`;
   }
