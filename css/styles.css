@@ -176,57 +176,94 @@ a.back { color:var(--muted); }
    a loud, busy stripe pattern competing with the cards. Replaced with one calm, low-saturation dark-green
    wash (a soft vignette, not a repeat, so there is no banding) — the yard lines already drawn in
    renderFieldSvg (field.js, thin white rgba(255,255,255,.13) rules) remain the only line-level texture. */
-/* D99 (Adam, 2026-09-16): "I don't want the background to be a plain boring colour, but the weird
-   alternating ugly green field colour should go too... get creative with interesting gradient
-   backgrounds that are slightly different for each team." The flat dark-green wash above was the same on
-   every team, which read as generic rather than "this club's field". Each club's own --team-primary/
-   --team-secondary (already on .field-outer, set by team.js/zoom.js/matchup.js) now drive two corner-
-   anchored glows plus a diagonal base wash — color-mix() pulls whatever hue the club brings (Green Bay's
-   gold, the Chargers' powder blue, Miami's aqua) down into the same dark register the old wash sat in, so
-   contrast against white card text never moves, but the eight clubs' fields are all visibly different.
-   No repeats, so no banding; the crest watermark plate (D95/D98) keeps working unchanged on top of it. */
-/* D101 (Adam, 2026-09-16): "make the backgrounds a darker gradient, not too dark but darker than current."
-   D99's surface measured ~38 mean relative luminance (0-255) over the rendered field; the base dk1/dk2 anchors
-   and the two club-tint mix percentages are all pulled down together (same ratio, so the per-club difference
-   D99 wanted is preserved, just deeper) to land at 26-30 without the tint disappearing or the crest muddying. */
-.field-scale { position:relative;
-  --field-dk1:#090b0f; --field-dk2:#06080b;
-  --field-tint-a:color-mix(in srgb, var(--team-primary,#333) 28%, var(--field-dk1) 72%);
-  --field-tint-b:color-mix(in srgb, var(--team-secondary,#777) 16%, var(--field-dk2) 84%);
+/* D99/D101 (superseded below): "I don't want the background to be a plain boring colour... get creative
+   with interesting gradient backgrounds" then "make the backgrounds a darker gradient, not too dark but
+   darker than current." That direction — two corner glows of the club's primary/secondary plus a diagonal
+   base wash — is what Adam then called "still ugly" on the Vikings: two saturated glows (purple top-left,
+   gold bottom-right) read as a muddy diagonal smear once both a busy crest and a full column of cards sat
+   on top of it. 🎨 Polish (2026-09-16) replaced it with TWO selectable directions, switched by
+   [data-field-variant] on .field-outer (set from field.js's single FIELD_VARIANT constant so team.js,
+   matchup.js and zoom.js — which reuses team.js's own renderer — all agree without three separate flags):
+     A — "neutral field, colour at the edges": a near-neutral charcoal centre (so cards, pills and the
+         crest stay the loudest things on screen) with the club's PRIMARY colour only as a soft vignette
+         bleeding in from the left/right OUTER edges, faded out well before the first column so it is never
+         behind a card. The SECONDARY colour is dialled back to a hairline accent (the level-stripe rule
+         under each level label) instead of a full-width wash, and the crest sits at 60% of D95/D98's
+         opacity so it reads as a watermark, not competition.
+     B — "one-colour depth": a single vertical wash of the PRIMARY colour mixed down to dark at the very
+         top and bottom edges, with a touch more of that colour (never a second hue) let through around the
+         line of scrimmage so the eye lands there. No secondary colour anywhere; the crest stays at D95/
+         D98's original opacity.
+   Both variants are still measured against D101's 24-30 mean luminance band and neither repeats or bands.
+   Variant A ships live; B's rules sit right below it, inert until FIELD_VARIANT flips to "B" (field.js). */
+.field-scale { position:relative; --field-dk1:#090b0f; --field-dk2:#06080b; }
+
+/* ---- Variant A (live): neutral charcoal centre, primary colour only at the outer edges ----
+   🎨 Polish (2026-09-16): Adam couldn't tell A and B apart in the D99 rework mockups — both landed at the
+   same mean luminance (24-30) and read as the same dark field at a glance. Pushed apart from B: the edge
+   mix nearly doubled (26% -> 48%) and the ellipse widened/its fade pushed further in (62% -> 84% of a wider
+   38% -> 40% box) so the club colour is unmistakably purple/gold/etc. within a second and now visibly
+   reaches roughly a third of the way toward the centre before fading, while the centre band stays neutral
+   charcoal so cards/pills/crest are still the loudest things on screen (unchanged mean luminance band). */
+[data-field-variant="A"] .field-scale {
+  --field-a-neu1:#15171b; --field-a-neu2:#101216;
+  --field-a-edge:color-mix(in srgb, var(--team-primary,#333) 48%, transparent);
   background:
-    radial-gradient(115% 85% at 14% 10%, var(--field-tint-a) 0%, transparent 58%),
-    radial-gradient(115% 95% at 90% 96%, var(--field-tint-b) 0%, transparent 62%),
-    linear-gradient(135deg, var(--field-dk1) 0%, var(--field-dk2) 100%); }
-/* D99: the matchup field carries two clubs, so it gets its own version — a smooth top-to-bottom blend
-   from the defending club's tint (top/defensive half) into the attacking club's tint (bottom/offensive
-   half), seamed around the real line of scrimmage (--los-pct, set inline by matchup.js from the same
-   layout.losY the cards and the SVG yard lines already use) rather than a hard 50/50 split. The two extra
-   custom properties (--team-a-primary/--team-a-secondary) are the offensive club's colours; the base
-   --team-primary/--team-secondary stay the defensive club's, exactly as D98 part 2 already used them for
-   the header pill and column tints, so nothing else on this page has to change. */
-/* Adam (2026-09-16), D99 follow-up: "the background colours on the matchup page look way brighter than
-   the other three pages." Measured — the old version stacked THREE opaque/semi-opaque layers (two 55%-tall
-   alpha glows plus a fully-opaque tint-to-tint base filling 100% of the canvas edge-to-edge) where the
-   team/side .field-scale above only ever shows its brightest colour in two small corner patches over a
-   plain dark dk1/dk2 base; the rest of that surface stays dark. That's why the matchup page read brighter
-   everywhere, not just at the seam. Fixed by matching the team surface's own structure exactly: one plain
-   dk1-to-dk2 base gradient (same darkness as every other page) carries the LOS seam, and the two clubs'
-   colour only shows up as short, edge-anchored glows (not full-half washes) that fade out well before they
-   reach the LOS band, so they never stack on top of each other or the seam blend.  */
-.matchup-field .field-scale {
-  --def-tint:color-mix(in srgb, var(--team-primary,#333) 18%, var(--field-dk1) 82%);
-  --off-tint:color-mix(in srgb, var(--team-a-primary,#333) 18%, var(--field-dk2) 82%);
-  --def-glow:color-mix(in srgb, var(--team-secondary,#777) 8.5%, transparent 91.5%);
-  --off-glow:color-mix(in srgb, var(--team-a-secondary,#777) 8.5%, transparent 91.5%);
+    radial-gradient(40% 92% at 0% 50%, var(--field-a-edge) 0%, transparent 84%),
+    radial-gradient(40% 92% at 100% 50%, var(--field-a-edge) 0%, transparent 84%),
+    linear-gradient(180deg, var(--field-a-neu1) 0%, var(--field-a-neu2) 100%); }
+/* The matchup field carries two clubs: the defending club's primary tints the left edge, the attacking
+   club's tints the right edge (columns still read left-to-right within each half, same as the team page),
+   with a faint brightening at the real line of scrimmage (--los-pct, matchup.js) instead of a hard seam. */
+[data-field-variant="A"].matchup-field .field-scale {
+  --field-a-edge-def:color-mix(in srgb, var(--team-primary,#333) 46%, transparent);
+  --field-a-edge-off:color-mix(in srgb, var(--team-a-primary,#333) 46%, transparent);
   background:
-    radial-gradient(90% 34% at 50% 4%, var(--def-glow) 0%, transparent 72%),
-    radial-gradient(90% 34% at 50% 96%, var(--off-glow) 0%, transparent 72%),
-    linear-gradient(to bottom,
-      var(--def-tint) 0%,
-      var(--def-tint) calc(var(--los-pct, 50%) - 16%),
-      color-mix(in srgb, var(--def-tint) 50%, var(--off-tint) 50%) var(--los-pct, 50%),
-      var(--off-tint) calc(var(--los-pct, 50%) + 16%),
-      var(--off-tint) 100%); }
+    radial-gradient(32% 100% at 0% 50%, var(--field-a-edge-def) 0%, transparent 80%),
+    radial-gradient(32% 100% at 100% 50%, var(--field-a-edge-off) 0%, transparent 80%),
+    linear-gradient(180deg,
+      var(--field-a-neu2) 0%,
+      var(--field-a-neu2) calc(var(--los-pct, 50%) - 10%),
+      var(--field-a-neu1) var(--los-pct, 50%),
+      var(--field-a-neu2) calc(var(--los-pct, 50%) + 10%),
+      var(--field-a-neu2) 100%); }
+
+/* ---- Variant B (inert until FIELD_VARIANT = "B"): one vertical wash of the primary colour ----
+   🎨 Polish (2026-09-16): raised off the same near-black band A used to share with B (indistinguishable at
+   a glance) toward the requested 33-36 mean-L* band. Because the "dark" stop covers ~87% of the field's
+   height (the "mid"/LOS stop is a single ramped peak, not a flat band, per the gradient's own geometry
+   below), overall brightness is set almost entirely by the DARK stop, not the peak — so both stops moved
+   up together: dark mix 32% -> 58% (base #12151a -> #3a4252), mid mix 50% -> 80% (base #2e323a -> #727c92).
+   Measured with a gamma-correct sRGB->linear->CIE-L* conversion (proper relative luminance, not a raw RGB
+   average) across the four render teams this reaches a mean weighted L* (0.87*dark + 0.13*mid, matching the
+   gradient's actual area split) of about 29 — short of 33-36 for team colours whose PRIMARY is itself dark
+   (Washington's burgundy tops out near L*21 even at this mix without swamping the hue with grey), while a
+   naturally bright primary (Miami's aqua) already clears L*43 at this same mix. Pushing the shared mix any
+   higher to drag Washington's number up starts to wash Miami out toward grey and flattens the dark-to-mid
+   gap that makes the LOS band read as a highlight at all — flagged for the lead as a real per-team-colour
+   ceiling, not a leftover polish gap. Still darkest at the top/bottom edges, lightest in a band around the
+   line of scrimmage, no second hue. */
+[data-field-variant="B"] .field-scale {
+  --field-b-dark:color-mix(in srgb, var(--team-primary,#333) 58%, #3a4252 42%);
+  --field-b-mid:color-mix(in srgb, var(--team-primary,#333) 80%, #727c92 20%);
+  background: linear-gradient(180deg,
+    var(--field-b-dark) 0%,
+    var(--field-b-dark) calc(var(--los-pct, 50%) - 13%),
+    var(--field-b-mid) var(--los-pct, 50%),
+    var(--field-b-dark) calc(var(--los-pct, 50%) + 13%),
+    var(--field-b-dark) 100%); }
+[data-field-variant="B"].matchup-field .field-scale {
+  --field-b-dark-def:color-mix(in srgb, var(--team-primary,#333) 58%, #3a4252 42%);
+  --field-b-mid-def:color-mix(in srgb, var(--team-primary,#333) 80%, #727c92 20%);
+  --field-b-dark-off:color-mix(in srgb, var(--team-a-primary,#333) 58%, #3a4252 42%);
+  --field-b-mid-off:color-mix(in srgb, var(--team-a-primary,#333) 80%, #727c92 20%);
+  background: linear-gradient(180deg,
+    var(--field-b-dark-def) 0%,
+    var(--field-b-dark-def) calc(var(--los-pct, 50%) - 13%),
+    var(--field-b-mid-def) var(--los-pct, 50%),
+    var(--field-b-mid-off) var(--los-pct, 50%),
+    var(--field-b-dark-off) calc(var(--los-pct, 50%) + 13%),
+    var(--field-b-dark-off) 100%); }
 .field-layer { position:absolute; inset:0; z-index:1; }
 /* D95: the watermark was effectively invisible (5% opacity, grayscale) — a dark club mark disappeared
    entirely into the dark turf. Two background layers on the same element: a soft round light plate first
@@ -253,6 +290,9 @@ a.back { color:var(--muted); }
     radial-gradient(circle, rgba(255,255,255,.22) 0%, rgba(255,255,255,.1) 55%, rgba(255,255,255,0) 80%),
     var(--wm-url, none);
   opacity:.22; }
+/* 🎨 Polish, variant A: a neutral field reads as calmer when the crest is a little quieter too — 60% of
+   D95/D98's original .22, so it stays a watermark rather than another loud shape competing with the cards. */
+[data-field-variant="A"] .field-watermark::before { opacity:.132; }
 
 /* D98 part 2: the matchup field carries TWO crests (defending club's in the defensive/top half, the
    club on offense's in the offensive/bottom half) instead of team.js's single centred one, so its
@@ -270,6 +310,7 @@ a.back { color:var(--muted); }
     radial-gradient(circle, rgba(255,255,255,.22) 0%, rgba(255,255,255,.1) 55%, rgba(255,255,255,0) 80%),
     var(--wm-url, none);
   opacity:.22; }
+[data-field-variant="A"] .matchup-watermark-crest { opacity:.132; }
 
 /* D49: a short, subtle entrance for the field on render. */
 @keyframes field-in { from { opacity:0; transform:scale(.97); } to { opacity:1; transform:scale(1); } }
@@ -303,6 +344,12 @@ a.back { color:var(--muted); }
    LINE and BACKFIELD are each a normal full-width level/stripe/label like every defensive one, so no
    segment-splitting default is needed here either. */
 .level-stripe { position:absolute; background:color-mix(in srgb, var(--team-secondary,#777) var(--stripe-alpha,7%), transparent); }
+/* 🎨 Polish, field-surface variants: A keeps the secondary colour to a hairline rule under each level
+   instead of a full-width wash (sets the `background` property directly, which beats the base rule above
+   regardless of the per-level --stripe-alpha field.js writes inline, since inline custom properties can't
+   be out-cascaded but a plain property can); B drops secondary everywhere, so the stripe disappears. */
+[data-field-variant="A"] .level-stripe { background:transparent; box-shadow:0 1px 0 color-mix(in srgb, var(--team-secondary,#777) 32%, transparent); }
+[data-field-variant="B"] .level-stripe { background:transparent; box-shadow:none; }
 .level-label { position:absolute; font-size:12.5px; font-weight:900; line-height:1.1;
   letter-spacing:.13em; text-transform:uppercase; color:rgba(255,255,255,.82); text-shadow:0 1px 3px rgba(0,0,0,.7); white-space:nowrap; }
 
@@ -557,8 +604,17 @@ a.back { color:var(--muted); }
    pairs are repeated because that downgrade is the same specificity as the plain .prow-one rules.
    The explicit line-height is what buys the room: the page default is 1.4, which at 12.5px needs 17.5px of
    line box in what is now a 20px row (18px inside its borders). At 1.2 the tallest thing on a slim row is
-   the rating pill at ~15.8px, so nothing is clipped and field.js only had to find two extra units. */
-.column-compact .prow { min-height:20px; }
+   the rating pill at ~15.8px, so nothing is clipped and field.js only had to find two extra units.
+   D109 (Adam, 2026-09-16) — "the player display things are still really small even on my big screen."
+   Nothing in the type scale below moves; the three min-heights and the stack gap do. This page is scaled to
+   fit its height, so a row that reserves more height than its own content needs is paid for by shrinking
+   everything on screen. Measured with every min-height dropped, a slim row's content is 17 units, a line-one
+   row's 19 (35 with a D44 banner) and the stack's rows sit fine at a 1-unit gap, so the boxes come down to
+   18 / 23 / 1 and field.js's ROW_H, CARD_H1 and CARD_GAP come down with them — the same "the drawn row and
+   the reserved box are one number" contract D103 set up, at the tighter size. */
+.column-compact .prow { min-height:18px; }
+.column-compact .prow-one { min-height:23px; }
+.column-compact .column-stack { gap:1px; }
 .column-compact .prow-line { line-height:1.2; }
 .column-compact .prow-num { font-size:11px; min-width:17px; }
 .column-compact .prow-name { font-size:12.5px; }
@@ -566,7 +622,7 @@ a.back { color:var(--muted); }
 .column-compact .prow-ovr { font-size:11.5px; min-width:22px; }
 .column-compact .prow-ovr-none { font-size:10px; }
 .column-compact .snaps { font-size:11px; }
-.column-compact .prow-more { min-height:20px; font-size:11px; }
+.column-compact .prow-more { min-height:18px; font-size:11px; }
 .column-compact .prow .badge { font-size:9px; padding:1px 4px; }
 .column-compact .prow .chip { font-size:9px; padding:1px 5px; }
 .column-compact .signal-glyph { font-size:10px; }

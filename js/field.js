@@ -76,6 +76,12 @@ const REFERENCE_WIDTH = 1600; // the OFF_BANDS anchors below were tuned against 
 export const LAYOUT_WIDTH = 1800;
 const SCALE = LAYOUT_WIDTH / REFERENCE_WIDTH;
 
+// 🎨 Polish (2026-09-16): Adam's call on the field surface, both variants live in styles.css behind
+// [data-field-variant="A"|"B"] — flip this one constant to switch every page (team/side/matchup) at once.
+// "A" = neutral charcoal field with the club's colour only as a soft edge vignette; "B" = one vertical
+// wash of the club's primary colour, darkest at the top/bottom edges, lighter at the line of scrimmage.
+export const FIELD_VARIANT = "A";
+
 // ---- compact overview geometry (ruling E) -------------------------------------------------------
 // A column is now a stack of text rows, not photo cards, so its width is set by how much room a real
 // name plus a rating pill needs ("Quinyon Mitchell" + "88") rather than by a headshot diameter.
@@ -94,11 +100,30 @@ const SCALE = LAYOUT_WIDTH / REFERENCE_WIDTH;
 // smaller scale on screen. The heights below therefore grow only as far as the bigger type genuinely
 // needs: ROW_H by two units, while CARD_H1 and BANNER_H do not move at all, because a line-one row was
 // already carrying ~8 units of slack above its own content.
+//
+// D109 (Adam, 2026-09-16) — "the player display things are still really small even on my big screen; do
+// something about it." The whole-team and matchup canvas is HEIGHT-bound: the fit engine scales it so its
+// full height lands in the ~687 CSS pixels left under the page chrome, so every layout unit of canvas
+// height is a direct tax on the size everything renders at. The canvas was 1376 units tall, of which 506
+// were air — gaps between rows, the line-of-scrimmage gutter, the page margins, and slack reserved inside
+// each row that its own content never used. Those 506 were measured against the real rendered rows (with
+// every min-height dropped, on MIA/WAS/HOU and the WAS matchup) rather than estimated, and the heights
+// below are now the measured content plus one or two units, not a guess:
+//   line one   19 units of content (35 with a D44 banner)  -> CARD_H1 23  (+13 banner = 36)
+//   slim row   17 units of content                         -> ROW_H   18
+//   label pill 15 units plus its 2-unit margin             -> LABEL_RESERVE 17
+//   row gap    styles.css's .column-stack gap              -> CARD_GAP 1 on the team/matchup family
+// styles.css's `.column-compact` block carries the matching min-heights and stack gap, so the drawn row
+// and the box reserved for it still cannot disagree (the same contract D103 set up).
 const CARD_W = 180;
-const CARD_H1 = 27;  // the starter's bold row
-const ROW_H = 20;    // a slim backup row on the team/matchup pages (D103)
+const CARD_H1 = 23;  // the starter's bold row: 19 units of content, 23 reserved (36 with a banner over 35)
+const ROW_H = 18;    // a slim backup row on the team/matchup pages: 17 units of content (D109)
 const SIDE_ROW_H = 18; // D72's offense/defense pages keep the slim-row height they already have
-const CARD_GAP = 2;  // vertical gap between rows inside a column
+// D109: the team/matchup family tightens its stack gap to 1 (styles.css `.column-compact .column-stack`),
+// which is three units off every full column; the side pages keep the 2 the shared `.column-stack` draws,
+// so the gap is a per-view option the way `rowH` already is rather than one number for both families.
+const CARD_GAP = 1;
+const SIDE_CARD_GAP = 2;
 const BANNER_H = 13; // extra strip on a line-one row carrying the red OUT / green FILLING IN banner
 // D104 (Adam, 2026-09-16): a starter who is out, once somebody active is filling in for him, renders as a
 // compact row at the BOTTOM of his column rather than on line one — still wearing his red OUT rail, so
@@ -106,10 +131,10 @@ const BANNER_H = 13; // extra strip on a line-one row carrying the red OUT / gre
 // box has to reserve height for it; a shade more than BANNER_H because a slim depth row, unlike a line-one
 // row, has no spare slack of its own to lend it.
 const OUT_RAIL_H = 15;
-// The column's own label pill, which lives inside the reserved box. 18, not 17: the pill really is 17.6
-// tall in styles.css (10.5px text at 1.2 line-height, 1px of padding each side, 3px margin under it), and
-// rounding that down is what pushed every column a fraction over its own box.
-const LABEL_RESERVE = 18;
+// The column's own label pill, which lives inside the reserved box. D109 measured it rather than deriving
+// it from the type: the rendered pill is 15 units tall and carries a 2-unit margin under it, on the team,
+// matchup AND side pages alike, so 17 is the exact box it needs and the 18th unit was slack.
+const LABEL_RESERVE = 17;
 export const MAX_DEPTH_ROWS = 3; // ruling E: at most three depth rows, the third becoming "+N more"
 // D72: the single-unit (offense / defense) pages draw half as many rows, so the fit engine scales them to
 // roughly 1.3-1.8x. At that size a line-one row has room for a small headshot at its left edge — the SAME
@@ -134,11 +159,16 @@ export const SIDE_MAX_DEPTH_ROWS = 4; // D72: one more depth row than the whole-
 // the team/matchup/group pages, which must not move), so nothing outside this single-unit side page changes.
 export const SIDE_CARD_W = 210;
 
-const BAND_GAP = 10; // vertical gap between adjacent rows inside one level
-const LEVEL_GAP_EXTRA = 20; // on top of BAND_GAP, only between two rows in DIFFERENT levels
-const MARGIN_TOP = 16;
-const MARGIN_BOTTOM = 14;
-const LOS_HALF_GAP = 18; // half the empty gutter straddling the line of scrimmage, same both sides
+// D109: halved. These four are the canvas's pure air — 266 of the 1376 units the canvas used to stand at,
+// which on a height-bound field is 266 units of card size handed back for nothing. A both-sides half still
+// opens BAND_GAP between two rows of one level and BAND_GAP + LEVEL_GAP_EXTRA at a level boundary, so the
+// levels still read as levels; on top of that every real club's rows are spread evenly across the half
+// (placeSpan's extra gap), which is where the visible separation between rows actually comes from.
+const BAND_GAP = 5; // vertical gap between adjacent rows inside one level
+const LEVEL_GAP_EXTRA = 10; // on top of BAND_GAP, only between two rows in DIFFERENT levels
+const MARGIN_TOP = 8;
+const MARGIN_BOTTOM = 8;
+const LOS_HALF_GAP = 10; // half the empty gutter straddling the line of scrimmage, same both sides
 // D106 (Adam, 2026-09-16) — "the boxes on the team page are super close together." D103 widened the card
 // from 156 to 180 but left this pitch at 200, so the clear turf between two neighbouring 180-wide columns
 // on the LINE and pass-catcher rows fell from ~44 units to ~20 (enforceNoOverlap's minDist was
@@ -208,6 +238,10 @@ const DEF_LEVEL_LABEL = { LINE: "LINE", EDGE: "EDGE", LB: "LINEBACKERS", SEC: "S
 // today (the 48 units of headroom above Miami cover several rails), and if one ever did it would grow its
 // own canvas instead of drawing its rows through each other.
 const DEF_ROW_FULL_H = LABEL_RESERVE + CARD_H1 + MAX_DEPTH_ROWS * (ROW_H + CARD_GAP);
+// D109 leaves this derivation exactly as D107 wrote it — the constant is still the tallest defence this
+// engine CAN draw, so no club's chart can push its own canvas past it — and moves the number by moving the
+// row constants underneath it: 111 units per full row became 97, and the per-half gaps 100 became 50, so
+// BOTH_SIDES_HALF falls from 655 to 535 and the canvas from 1376 to 1106.
 const DEF_LEVEL_BOUNDARIES = DEF_ROW_ORDER.reduce(
   (n, key, i) => (i && DEF_ROW_LEVEL[key] !== DEF_ROW_LEVEL[DEF_ROW_ORDER[i - 1]] ? n + 1 : n), 0);
 export const BOTH_SIDES_HALF = DEF_ROW_ORDER.length * DEF_ROW_FULL_H
@@ -223,7 +257,11 @@ export const BOTH_SIDES_HEIGHT = MARGIN_TOP + BOTH_SIDES_HALF + 2 * LOS_HALF_GAP
 // below the last, and the rows spread evenly inside what is left, so the block sits toward the middle of the
 // screen. Deliberately one pitch and no more (Adam: "pushed in a LITTLE BIT, not a ton"); the fill mode, the
 // card sizes and every x are untouched.
-const SIDE_INSET = BAND_GAP + LEVEL_GAP_EXTRA;
+// D109 halved BAND_GAP/LEVEL_GAP_EXTRA to buy the whole-team and matchup pages their height back. The side
+// pages are not height-bound (they crop to one unit and fill, so their rows are spread by the fill pass
+// anyway) and D108 is a settled ruling about how they look, so the inset keeps the 30 units it was shipped
+// at rather than tracking a pitch that moved for a different page's sake.
+const SIDE_INSET = 30;
 
 // D69: THREE offensive rows now, listed here nearest-the-LOS first. This IS the one constant Adam asked to
 // be able to flip — reorder these entries and the whole offensive half reorders with them (levels,
@@ -356,6 +394,9 @@ export function layoutStyle(opts = {}) {
     maxDepthRows: opts.maxDepthRows ?? MAX_DEPTH_ROWS,
     cardWidth: opts.cardWidth ?? CARD_W,
     rowH: side ? SIDE_ROW_H : ROW_H,
+    // D109: the stack gap is the same question asked the same way — the team/matchup family draws 1
+    // (styles.css `.column-compact .column-stack`), the side pages the shared 2.
+    cardGap: side ? SIDE_CARD_GAP : CARD_GAP,
   };
 }
 
@@ -437,14 +478,15 @@ function slotContentHeight(slot, style) {
   const ordered = displayOrder(players); // D104: measure the rows in the order they will be drawn
   const bold = lineOneCount(players);
   const rowH = style.rowH ?? ROW_H;
+  const cardGap = style.cardGap ?? CARD_GAP;
   let h = LABEL_RESERVE;
-  for (let i = 0; i < bold; i++) h += lineOneHeight(ordered[i], style) + (i ? CARD_GAP : 0);
+  for (let i = 0; i < bold; i++) h += lineOneHeight(ordered[i], style) + (i ? cardGap : 0);
   const visible = visibleDepthRows(players, style.maxDepthRows);
   // D104: the demoted OUT rows are slim rows that also carry a red rail, so they each cost OUT_RAIL_H more
   // than the healthy rows beside them. They are never the rows that collapse behind "+N more" (that is the
   // whole point of moving them), so the count is known here without knowing which players they are.
   const outRows = shownOutRows(players, style);
-  h += visible * (rowH + CARD_GAP) + outRows * OUT_RAIL_H;
+  h += visible * (rowH + cardGap) + outRows * OUT_RAIL_H;
   return h;
 }
 
@@ -1396,4 +1438,4 @@ export function renderFieldSvg(layoutHeight, losY, layoutWidth = LAYOUT_WIDTH, c
   </svg>`;
 }
 
-export const geometry = { CARD_W, CARD_H1, ROW_H, SIDE_ROW_H, CARD_GAP, BANNER_H, OUT_RAIL_H, LABEL_RESERVE, MAX_DEPTH_ROWS, HEADSHOT_SIZE, MARGIN_TOP, MARGIN_BOTTOM, SIDE_INSET, BOTH_SIDES_HALF, BOTH_SIDES_HEIGHT };
+export const geometry = { CARD_W, CARD_H1, ROW_H, SIDE_ROW_H, CARD_GAP, SIDE_CARD_GAP, BANNER_H, OUT_RAIL_H, LABEL_RESERVE, MAX_DEPTH_ROWS, HEADSHOT_SIZE, BAND_GAP, LEVEL_GAP_EXTRA, LOS_HALF_GAP, MARGIN_TOP, MARGIN_BOTTOM, SIDE_INSET, DEF_ROW_FULL_H, BOTH_SIDES_HALF, BOTH_SIDES_HEIGHT };

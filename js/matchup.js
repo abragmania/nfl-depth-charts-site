@@ -14,7 +14,7 @@
 // header.nextOpponent (this week's schedule) and redirects, or shows a picker on a bye week.
 import { getTeams, getTeam } from "./api.js";
 import { esc, renderColumn, renderTray, fitNames } from "./cards.js";
-import { computeLayout, renderFieldSvg, renderLevelLabels } from "./field.js";
+import { computeLayout, renderFieldSvg, renderLevelLabels, FIELD_VARIANT } from "./field.js";
 import { mountScaledField, disposeCurrentView } from "./viewfit.js";
 import { navStripHtml, wireNav } from "./nav.js";
 import { isLightWash } from "./landing.js";
@@ -102,7 +102,7 @@ function fieldHtml(viewA, viewB, teamA, teamB, spread) {
   const losPct = ((layout.losY / layout.layoutHeight) * 100).toFixed(2);
   return {
     layout,
-    html: `<div class="field-outer matchup-field" style="${colour(teamB)};--team-a-primary:${teamA.colourPrimary};--team-a-secondary:${teamA.colourSecondary};--los-pct:${losPct}%">
+    html: `<div class="field-outer matchup-field" data-field-variant="${FIELD_VARIANT}" style="${colour(teamB)};--team-a-primary:${teamA.colourPrimary};--team-a-secondary:${teamA.colourSecondary};--los-pct:${losPct}%">
       <div class="field-scale" style="width:${layout.layoutWidth}px;height:${layout.layoutHeight}px">
         ${watermarkHtml}
         ${renderFieldSvg(layout.layoutHeight, layout.losY, layout.layoutWidth)}
@@ -282,7 +282,7 @@ export async function renderMatchup(root, search, aAbbr, bAbbr) {
     <div class="matchup">
       ${navStripHtml({ teams, abbr: A, page: "matchup", opponentAbbr: B, primary: teamA.colourPrimary, secondary: teamA.colourSecondary })}
       ${headerHtml(teamA, teamB, viewA, viewB, teams)}
-      <div class="team-body"><div class="field-outer matchup-field"></div></div>
+      <div class="team-body"><div class="field-outer matchup-field" data-field-variant="${FIELD_VARIANT}"></div></div>
     </div>`;
   wireNav(root); // D59: switcher routes to the newly picked team’s matchup
   wireOpponentPicker(root, A); // D100: header opponent dropdown routes to #/matchup/A/B

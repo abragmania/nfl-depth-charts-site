@@ -1,5 +1,5 @@
 import { getTeams, getTeam, invalidateTeam } from "./api.js";
-import { computeLayout, renderFieldSvg, renderLevelLabels } from "./field.js";
+import { computeLayout, renderFieldSvg, renderLevelLabels, FIELD_VARIANT } from "./field.js";
 import { renderColumn, renderTray, esc, fitNames } from "./cards.js";
 import { mountScaledField, disposeCurrentView } from "./viewfit.js";
 import { navStripHtml, wireNav } from "./nav.js";
@@ -134,10 +134,14 @@ function fieldHtml(view, team, layoutOpts = {}) {
   // inspection: getComputedStyle().backgroundImage showed the wrong resolved path).
   let watermarkUrl = team.logoDark || team.logo || "";
   if (watermarkUrl && !/^https?:\/\//.test(watermarkUrl) && !watermarkUrl.startsWith("/")) watermarkUrl = "/" + watermarkUrl;
+  // 🎨 Polish: the field-variant's "B" wash lightens the surface around the real line of scrimmage, so it
+  // needs the same --los-pct a matchup page already carries; a single-unit side page has no losY (D72), so
+  // it falls back to the vertical middle rather than lighting up a spot that means nothing on that page.
+  const losPct = layout.losY != null ? ((layout.losY / layout.layoutHeight) * 100).toFixed(2) + "%" : "50%";
   return {
     layout,
     html: `
-    <div class="field-outer" style="--team-primary:${team.colourPrimary};--team-secondary:${team.colourSecondary}">
+    <div class="field-outer" data-field-variant="${FIELD_VARIANT}" style="--team-primary:${team.colourPrimary};--team-secondary:${team.colourSecondary};--los-pct:${losPct}">
       <div class="field-scale" style="width:${layout.layoutWidth}px;height:${layout.layoutHeight}px">
         ${watermarkUrl ? `<div class="field-watermark" style="--wm-url:url('${esc(watermarkUrl)}')"></div>` : ""}
         ${svg}
@@ -184,7 +188,7 @@ export function mountTeamField(root, view, team, teamAbbr, layoutOpts = {}) {
 // opening the panel in place.
 export function teamBodyHtml(team) {
   return `<div class="team-body">
-      <div class="field-outer" style="--team-primary:${team.colourPrimary};--team-secondary:${team.colourSecondary}"></div>
+      <div class="field-outer" data-field-variant="${FIELD_VARIANT}" style="--team-primary:${team.colourPrimary};--team-secondary:${team.colourSecondary}"></div>
       <aside class="player-panel" hidden></aside>
     </div>`;
 }
