@@ -175,14 +175,23 @@ a.back { color:var(--muted); }
    overwritten this rule's own multi-layer background-image instead of composing with it). Sized to ~58%
    of the field width per D95, centred on the field's midline, still z-index 0 (below .field-layer's cards
    and .level-layer's labels, so it never competes with text). */
-.field-watermark { position:absolute; inset:0;
+/* Adam (2026-09-16): "the team logos are really stretched out looking in the background." The field box
+   is wide, not square (layoutWidth != layoutHeight), so sizing the plate/crest as two independent
+   width%/height% values stretched the radial-gradient "circle" into an ellipse and could exceed the
+   image's own aspect ratio. Fix: paint both layers on a square ::before sized off the field's HEIGHT only
+   (aspect-ratio:1 with a single height:%), centred on the same midline D95 used, so the plate is always a
+   true circle and the crest (background-size:contain) always keeps its own intrinsic ratio and never
+   overflows the square. */
+.field-watermark { position:absolute; inset:0; pointer-events:none; z-index:0; }
+.field-watermark::before { content:""; position:absolute; left:50%; top:45%; height:58%; aspect-ratio:1/1;
+  transform:translate(-50%,-50%);
   background-repeat:no-repeat, no-repeat;
-  background-position:center 45%, center 45%;
-  background-size:62% 62%, 56% auto;
+  background-position:center, center;
+  background-size:100% 100%, contain;
   background-image:
     radial-gradient(circle, rgba(255,255,255,.22) 0%, rgba(255,255,255,.1) 55%, rgba(255,255,255,0) 80%),
     var(--wm-url, none);
-  opacity:.22; pointer-events:none; z-index:0; }
+  opacity:.22; }
 
 /* D49: a short, subtle entrance for the field on render. */
 @keyframes field-in { from { opacity:0; transform:scale(.97); } to { opacity:1; transform:scale(1); } }
