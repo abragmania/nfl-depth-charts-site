@@ -339,18 +339,22 @@ function fillDraftRound(asideEl, apiDraft) {
 // not "0 starts".
 export function gamesChipData(seasons) {
   const rows = Array.isArray(seasons) ? seasons : [];
-  let games = 0, starts = 0, anyStarts = false, minSeason = null, maxSeason = null;
+  // D115 (Adam): starts only when KNOWN for every counted season - a season with games but no starts figure
+  // (nflverse leaves GS blank for some linemen) would make the total a floor, and "0 starts" would then be
+  // a claim the data does not support. One unknown season drops the starts half entirely.
+  let games = 0, starts = 0, anyStarts = false, startsUnknown = false, minSeason = null, maxSeason = null;
   for (const r of rows) {
     if (!r || (r.games == null && r.starts == null)) continue;
     if (r.games != null) games += Number(r.games) || 0;
     if (r.starts != null) { anyStarts = true; starts += Number(r.starts) || 0; }
+    else if (r.games != null && Number(r.games) > 0) startsUnknown = true;
     const s = Number(r.season);
     if (Number.isFinite(s)) {
       minSeason = minSeason == null ? s : Math.min(minSeason, s);
       maxSeason = maxSeason == null ? s : Math.max(maxSeason, s);
     }
   }
-  const text = anyStarts ? `${games} games · ${starts} starts` : `${games} games`;
+  const text = anyStarts && !startsUnknown ? `${games} games · ${starts} starts` : `${games} games`;
   const span = minSeason == null ? "" : minSeason === maxSeason ? `, ${minSeason}` : `, ${minSeason}–${maxSeason}`;
   return { text, title: `Regular-season games on file${span}` };
 }
