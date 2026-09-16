@@ -108,6 +108,25 @@ const SCALE = LAYOUT_WIDTH / REFERENCE_WIDTH;
 // wash of the club's primary colour, darkest at the top/bottom edges, lighter at the line of scrimmage.
 export const FIELD_VARIANT = "A";
 
+// D111 (Adam, 2026-09-16) — THE ONE SWITCH THE WHOLE RULING SITS BEHIND. `true` draws the secondary as ONE
+// row (corners at the outer edges, the nickel inside the left corner, the safeties inside them, all on a
+// single y), shortens the canvas that follows from the row count, and moves the legend line INTO the team
+// banner / the matchup header's centre block. `false` restores exactly what shipped before it — the two-row
+// secondary (safeties on their own row above the corners), the taller canvas AND the separate legend line
+// under the banner. team.js and matchup.js import this same constant to decide where the legend goes, so
+// the whole ruling is undone by editing this one word and nothing else has to be touched to undo it.
+//
+// WHY ONE ROW. The secondary was the only level drawing two row bands, so a both-sides canvas had to reserve
+// FIVE defensive rows' worth of height (D107 computes the canvas from the row count alone, never from the
+// club's own chart). Collapsing the level to one row band takes that count from five to four, which takes
+// BOTH_SIDES_HALF from 535 units to 433 — and because the team and matchup field is scaled to fit its
+// HEIGHT, a shorter canvas is a bigger scale on screen, which is what the ruling is buying. Nothing
+// horizontal moves: the corners keep D71's 1.15 pitches outside the tackles, the nickel keeps its place
+// between the left corner and the box, and the safeties keep the x mirrorDefXs has always given them
+// (spread across the guards), so this is a vertical change only. Net of EDGE_CHROME below, the canvas goes
+// from 1106 units to 946.
+export const SECONDARY_ONE_ROW = true;
+
 // ---- compact overview geometry (ruling E) -------------------------------------------------------
 // A column is now a stack of text rows, not photo cards, so its width is set by how much room a real
 // name plus a rating pill needs ("Quinyon Mitchell" + "88") rather than by a headshot diameter.
@@ -198,8 +217,23 @@ export const SIDE_CARD_W = 210;
 // (placeSpan's extra gap), which is where the visible separation between rows actually comes from.
 const BAND_GAP = 5; // vertical gap between adjacent rows inside one level
 const LEVEL_GAP_EXTRA = 10; // on top of BAND_GAP, only between two rows in DIFFERENT levels
-const MARGIN_TOP = 8;
-const MARGIN_BOTTOM = 8;
+// D111: the top strip of the canvas used to be empty turf, because the nearest thing to it was the SAFETIES
+// row and safeties stand over the guards, in the middle of the field. With the secondary on one row the
+// TOP defensive row is the one carrying the two corners, whose cards sit 30 units off each sideline — and
+// the two pieces of chrome the canvas prints up there both live exactly where those cards now are: the
+// "SECONDARY" level label at the left edge (summarizeLevels lifts a crowded level's label into the gap
+// ABOVE its first row, and with no gap there it was lifted clean off the canvas — it simply stopped being
+// drawn) and renderFieldSvg's "DEFENSE" caption at the right edge (drawn under the cards, so the right
+// corner's card covered all but its last letter; both were caught on the first LV render). So the canvas
+// now opens a strip above its first row big enough for a 12.5px level label plus its lift and for the
+// caption, and — because D96 puts the line of scrimmage on the canvas midpoint, which holds only while the
+// two margins are equal — the same strip below the last offensive row, where the "OFFENSE" caption sits.
+// 22 units, not LABEL_LIFT's 27: the label lands at row.top - LABEL_LIFT = 3 and is ~14 units tall, so 22
+// clears it with air to spare, and every unit here is a unit of the size the ruling is buying back.
+// Zero when the switch is off, so the two-row secondary draws on exactly the margins it always had.
+const EDGE_CHROME = SECONDARY_ONE_ROW ? 22 : 0;
+const MARGIN_TOP = 8 + EDGE_CHROME;
+const MARGIN_BOTTOM = 8 + EDGE_CHROME;
 const LOS_HALF_GAP = 10; // half the empty gutter straddling the line of scrimmage, same both sides
 // D106 (Adam, 2026-09-16) — "the boxes on the team page are super close together." D103 widened the card
 // from 156 to 180 but left this pitch at 200, so the clear turf between two neighbouring 180-wide columns
@@ -241,9 +275,23 @@ const OFF_BANDS = {
 // belongs to so computeLayout can (a) open a bigger gap at a level boundary than between rows inside
 // one level and (b) hand back one label per level for the field to print at the left edge.
 // Ruling A: the LINE row is the DL band, which now includes every defensive end.
-const DEF_ROW_ORDER = ["LINE", "EDGE", "LB", "CB_NB", "S"]; // nearest LOS -> farthest
-const DEF_ROW_BANDS = { LINE: ["DL"], EDGE: ["EDGE"], LB: ["LB"], CB_NB: ["CB", "NB"], S: ["S"] };
-const DEF_ROW_LEVEL = { LINE: "LINE", EDGE: "EDGE", LB: "LB", CB_NB: "SEC", S: "SEC" };
+// The two row models, written out in full rather than patched, so that reading either one tells you the
+// whole defensive layout it produces. `order` is nearest-the-LOS first; `bands` says which compiled bands
+// each row draws; `level` groups consecutive rows into the levels the stripes and labels are printed from.
+const DEF_ROWS_ONE_ROW_SECONDARY = {
+  order: ["LINE", "EDGE", "LB", "SECONDARY"],
+  bands: { LINE: ["DL"], EDGE: ["EDGE"], LB: ["LB"], SECONDARY: ["CB", "NB", "S"] },
+  level: { LINE: "LINE", EDGE: "EDGE", LB: "LB", SECONDARY: "SEC" },
+};
+const DEF_ROWS_TWO_ROW_SECONDARY = {
+  order: ["LINE", "EDGE", "LB", "CB_NB", "S"],
+  bands: { LINE: ["DL"], EDGE: ["EDGE"], LB: ["LB"], CB_NB: ["CB", "NB"], S: ["S"] },
+  level: { LINE: "LINE", EDGE: "EDGE", LB: "LB", CB_NB: "SEC", S: "SEC" },
+};
+const DEF_ROWS = SECONDARY_ONE_ROW ? DEF_ROWS_ONE_ROW_SECONDARY : DEF_ROWS_TWO_ROW_SECONDARY;
+const DEF_ROW_ORDER = DEF_ROWS.order; // nearest LOS -> farthest
+const DEF_ROW_BANDS = DEF_ROWS.bands;
+const DEF_ROW_LEVEL = DEF_ROWS.level;
 const DEF_LEVEL_LABEL = { LINE: "LINE", EDGE: "EDGE", LB: "LINEBACKERS", SEC: "SECONDARY" };
 
 // D107 (Adam, 2026-09-16) — "the JAX team display is still different than other teams." ONE FIELD SCALE FOR
@@ -258,10 +306,12 @@ const DEF_LEVEL_LABEL = { LINE: "LINE", EDGE: "EDGE", LB: "LINEBACKERS", SEC: "S
 // visibly bigger than Las Vegas's for no reason a reader could see.
 //
 // So the both-sides canvas is now a CONSTANT, computed from the row constants alone and never from the
-// club's own rows. BOTH_SIDES_HALF is the tallest defence this engine can draw at its natural pitch: all
-// five rows of DEF_ROW_ORDER, each as tall as a FULL column (its label pill, one bold starter row and the
-// maximum number of slim depth rows), spaced at the minimum pitch — BAND_GAP between two rows of one
-// level, plus LEVEL_GAP_EXTRA at each of the three level boundaries the defensive order contains. Per D96
+// club's own rows. BOTH_SIDES_HALF is the tallest defence this engine can draw at its natural pitch: EVERY
+// row of DEF_ROW_ORDER (five before D111, four after it collapsed the secondary to one row), each as tall
+// as a FULL column (its label pill, one bold starter row and the maximum number of slim depth rows), spaced
+// at the minimum pitch — BAND_GAP between two rows of one level, plus LEVEL_GAP_EXTRA at each of the three
+// level boundaries the defensive order contains (three either way: LINE, EDGE, LB and SEC are four levels
+// whether the secondary draws on one row or two, which is why only the ROW count moves). Per D96
 // the offence gets a half of exactly the same height, and the line of scrimmage sits on the boundary
 // between them, which is the canvas midpoint. Every club therefore draws on the same canvas, so the fit
 // engine hands every club the same scale, the same card size and the same half boundaries.
@@ -285,6 +335,11 @@ const DEF_ROW_FULL_H = LABEL_RESERVE + CARD_H1 + MAX_DEPTH_ROWS * (ROW_H + CARD_
 // engine CAN draw, so no club's chart can push its own canvas past it — and moves the number by moving the
 // row constants underneath it: 111 units per full row became 97, and the per-half gaps 100 became 50, so
 // BOTH_SIDES_HALF falls from 655 to 535 and the canvas from 1376 to 1106.
+// D111 leaves it alone again and moves the number the same way, by moving what it is derived FROM: with the
+// secondary on one row DEF_ROW_ORDER.length is 4 rather than 5, so the half is 4*97 + 3*BAND_GAP +
+// 3*LEVEL_GAP_EXTRA = 433, and the canvas — the half twice over plus the LOS gutter and the two margins,
+// which D111 widens by EDGE_CHROME — is 946. The constants stay DERIVED — nobody may type 433 or 946 here
+// — so a future ruling that adds or removes a defensive row moves the canvas with it automatically.
 const DEF_LEVEL_BOUNDARIES = DEF_ROW_ORDER.reduce(
   (n, key, i) => (i && DEF_ROW_LEVEL[key] !== DEF_ROW_LEVEL[DEF_ROW_ORDER[i - 1]] ? n + 1 : n), 0);
 export const BOTH_SIDES_HALF = DEF_ROW_ORDER.length * DEF_ROW_FULL_H
@@ -1039,6 +1094,14 @@ function placeLineColumns(slots, scheme, lm) {
 // spreads between them; MLB over the centre, OLB/ILB over the guards; CB wide of the tackles, NB inside
 // the left corner (D71 — both fixed off the line, no longer mirrored off the receivers); safeties deepest
 // but still centred over the guards.
+//
+// D111 (Adam, 2026-09-16) changes NONE of the x's below, which is the point of it: the one-row secondary is
+// the CB, NB and S bands drawn on a single y, each keeping exactly the place it already had. Left to right
+// that reads corner, nickel, safety, safety, corner — the corner 1.15 pitches outside the left tackle
+// (D71/D110), the nickel one pitch outside it but never closer than MIN_PITCH to the corner, and the two
+// safeties on the guards. At the standard five-man shape every real club charts, the gaps come out 242,
+// 278, 484, 520 units against a MIN_PITCH of 242, so nothing is re-pitched and no card touches another;
+// computeLayout's secondaryFitsOneRow check below is what keeps that honest for a shape nobody charts yet.
 function mirrorDefXs(band, slots, scheme, lm) {
   const count = slots.length;
   if (count <= 0) return [];
@@ -1088,6 +1151,29 @@ function enforceNoOverlap(cols) {
   }
   const shift = (originalMin + originalMax) / 2 - (sorted[0].x + sorted[sorted.length - 1].x) / 2;
   for (const c of sorted) c.x += shift;
+}
+
+// D111: "confirm nothing collides... if a club would collide, that club alone falls back to the two-row
+// layout with a warning." This is that confirmation, asked of the club's OWN secondary before the row is
+// committed to. It is deliberately stricter than "do the cards overlap": enforceNoOverlap would happily
+// shove a crowded row apart, but doing so would re-pitch the corners off the 1.15 pitches D71 fixes them
+// at, or push the outermost card off the sideline — so a shape that needs shoving is not a shape this row
+// can draw, and that club falls back to the two-row secondary rather than silently drawing a wrong one.
+//
+// Measured against the league as compiled today (data/cache/compiled, all 32 clubs): the widest secondary
+// anybody charts is 2 corners + 1 nickel + 2 safeties, i.e. the five-column shape the comment on
+// mirrorDefXs works through, and 11 clubs chart four (no nickel). Nothing in the league reaches this check,
+// so nothing falls back today; it exists for the chart that adds a third corner or a fourth safety.
+function secondaryFitsOneRow(cols) {
+  if (cols.length < 2) return true;
+  const sorted = cols.slice().sort((a, b) => a.x - b.x);
+  for (let i = 1; i < sorted.length; i++) {
+    const minDist = Math.max(sorted[i - 1].width / 2 + sorted[i].width / 2 + MIN_CARD_GAP, MIN_PITCH);
+    if (sorted[i].x - sorted[i - 1].x < minDist - 0.5) return false;
+  }
+  const first = sorted[0];
+  const last = sorted[sorted.length - 1];
+  return first.x - first.width / 2 >= -0.5 && last.x + last.width / 2 <= LAYOUT_WIDTH + 0.5;
 }
 
 // Players carried on the roster but absent from the chart (role UNLISTED), grouped per real band —
@@ -1153,14 +1239,29 @@ export function computeLayout(teamView, opts = {}) {
   // empty band still has UNLISTED players (ATL carries an edge rusher on the roster but on no chart row);
   // keeping the row alive just to hang his tray on cost a whole level of height and printed an "EDGE"
   // stripe over a blank strip. Empty rows are dropped outright and their trays re-homed by planTrays.
-  const defRowsTopDown = DEF_ROW_ORDER.slice().reverse().map((key) => {
-    const bands = DEF_ROW_BANDS[key];
-    const cols = bands.flatMap((band) => {
-      const slots = defSlots.filter((s) => s.band === band).slice().sort(byColumnOrder);
-      const xs = mirrorDefXs(band, slots, scheme, lm);
-      return slots.map((slot, i) => ({ slot, x: xs[i], height: slotContentHeight(slot, style), band, width: colWidth(style) }));
-    });
-    return buildRow(key, bands, "DEF", DEF_ROW_LEVEL[key], cols);
+  // One row's worth of columns, freshly built every time it is asked for: the D111 fit check below places a
+  // candidate SECONDARY row and may then throw it away, and buildRow mutates the x's it is given
+  // (enforceNoOverlap), so nothing may be reused between the two attempts.
+  const defColsFor = (bands) => bands.flatMap((band) => {
+    const slots = defSlots.filter((s) => s.band === band).slice().sort(byColumnOrder);
+    const xs = mirrorDefXs(band, slots, scheme, lm);
+    return slots.map((slot, i) => ({ slot, x: xs[i], height: slotContentHeight(slot, style), band, width: colWidth(style) }));
+  });
+
+  // D111: the one-row secondary is used unless THIS club's own secondary cannot be drawn on one row without
+  // being re-pitched or hanging off the sideline (see secondaryFitsOneRow). Such a club — none in the league
+  // as compiled today — falls back to the two-row model on its own, which also means its defence is five
+  // rows again and therefore taller than BOTH_SIDES_HALF, so D107's `half` floor grows ITS canvas rather
+  // than drawing its rows through each other. Every other club is unaffected.
+  let defRows = DEF_ROWS;
+  if (SECONDARY_ONE_ROW && !secondaryFitsOneRow(defColsFor(DEF_ROWS_ONE_ROW_SECONDARY.bands.SECONDARY))) {
+    defRows = DEF_ROWS_TWO_ROW_SECONDARY;
+    console.warn("[field] this chart's secondary is too wide for one row; falling back to the two-row secondary (D111)");
+  }
+
+  const defRowsTopDown = defRows.order.slice().reverse().map((key) => {
+    const bands = defRows.bands[key];
+    return buildRow(key, bands, "DEF", defRows.level[key], defColsFor(bands));
   }).filter((row) => row.cols.length);
 
   const offRowCols = { PASS_CATCHERS: passCatcherCols, LINE: olCols, BACKFIELD: backfieldCols };
@@ -1504,4 +1605,7 @@ export function renderFieldSvg(layoutHeight, losY, layoutWidth = LAYOUT_WIDTH, c
 // moment a ruling moves it; they now read them from here, so the test states the RELATIONSHIP (a corner is
 // CB_PITCH_OUT pitches outside the tackle; two cards never come closer than MIN_CARD_GAP) and only the
 // handful of assertions that are genuinely about a specific number still spell one out.
-export const geometry = { CARD_W, CARD_H1, ROW_H, SIDE_ROW_H, CARD_GAP, SIDE_CARD_GAP, BANNER_H, OUT_RAIL_H, LABEL_RESERVE, MAX_DEPTH_ROWS, HEADSHOT_SIZE, BAND_GAP, LEVEL_GAP_EXTRA, LOS_HALF_GAP, MARGIN_TOP, MARGIN_BOTTOM, SIDE_INSET, DEF_ROW_FULL_H, BOTH_SIDES_HALF, BOTH_SIDES_HEIGHT, MIN_PITCH, MIN_CARD_GAP, CB_PITCH_OUT, PASS_CATCHER_PITCH };
+// D111 adds the DEFENSIVE ROW COUNT to the bag for the same reason: the canvas constant is derived from it,
+// so a test that wants to state "the canvas is this many full rows plus its gaps" can read the count from
+// here instead of hard-coding the 5 that D111 turned into a 4.
+export const geometry = { CARD_W, CARD_H1, ROW_H, SIDE_ROW_H, CARD_GAP, SIDE_CARD_GAP, BANNER_H, OUT_RAIL_H, LABEL_RESERVE, MAX_DEPTH_ROWS, HEADSHOT_SIZE, BAND_GAP, LEVEL_GAP_EXTRA, LOS_HALF_GAP, MARGIN_TOP, MARGIN_BOTTOM, SIDE_INSET, DEF_ROW_FULL_H, DEF_ROW_COUNT: DEF_ROW_ORDER.length, DEF_LEVEL_BOUNDARIES, BOTH_SIDES_HALF, BOTH_SIDES_HEIGHT, MIN_PITCH, MIN_CARD_GAP, CB_PITCH_OUT, PASS_CATCHER_PITCH };

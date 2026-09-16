@@ -331,6 +331,49 @@ a.back { color:var(--muted); }
 .legend .tier-strip { display:inline-flex; height:10px; width:56px; border-radius:3px; overflow:hidden; vertical-align:-1px; margin-right:4px; }
 .legend .tier-strip span { flex:1; }
 
+/* D111 (Adam, 2026-09-16) — the same key, printed INSIDE the page header instead of on a line of its own
+   below it, so the line it used to occupy goes to the field. Two placements, one set of rules, because the
+   two headers are shaped differently:
+
+   `.legend-banner` (team page) sits in .teamhead's own flex row, between the club's details and its
+   controls. The banner's height is set by its 38px crest, and at the sizes this ruling is about the key
+   wraps to two lines well inside that, so the banner does not grow (48px before and after, measured at
+   1700x900 and 2000x980). Its items are packed to the right-hand end of the block (justify-content) and
+   printed on a dark plate, because .teamhead is a club-colour gradient — the base .legend's muted grey is
+   unreadable on a mid-tone wash, and a plate reads on every club without dulling the wash itself, which
+   D48 wants bright.
+
+   `.legend-matchup` sits under the opponent picker in the matchup header's centre block, which is the
+   SHORT column of that header (the two club panels, with their 60px crests, set its height). .has-legend
+   tightens that column's own 6px gap to 4px to pay for the extra line, so .matchup-head does not grow
+   either. It keeps the page's normal muted ink: the centre block is on the page background, not on a club
+   colour.
+
+   Both keep every item the D44 key has always carried; only the type size and the wrap change. */
+/* `flex:1 1 200px` rather than a max-width is what keeps the banner on one row. A flex container decides
+   where to BREAK from each item's hypothetical size before it ever shrinks anything, so a legend whose
+   natural width is its 818px single line (or any max-width bigger than the room left over) is simply moved
+   to a second row, and the banner grows by its whole height — measured at 87px against today's 48px on the
+   first cut of this rule. A small flex-basis makes the hypothetical size 200px, which always fits, and the
+   flex-grow then hands the block whatever room is actually left between the club's details and its
+   controls (602px at 1700x900) for it to wrap inside.
+   There is deliberately NO max-height on it. One was tried, at the 38px of the crest, so that the banner
+   could not grow whatever happened; on a 1366-wide window the key needs four lines in the 381px it is left
+   and the fourth was simply cut off, which loses an item of the key rather than a pixel of chrome. Growing
+   is the better failure: at the sizes the ruling is about the banner measures exactly the 48px it did
+   before (1700x900 and 2000x980, both measured), and on a window narrow enough to push it past that it is
+   still shorter than the banner plus the separate legend line it replaced. */
+.legend-banner { margin:0; flex:1 1 200px; min-width:0; justify-content:flex-end;
+  gap:3px 9px; font-size:9.5px; line-height:1.15; color:rgba(255,255,255,.88);
+  background:rgba(0,0,0,.26); border-radius:8px; padding:3px 9px; }
+.legend-banner b { color:#fff; }
+.legend-banner .sw { width:8px; height:8px; border-radius:2px; margin-right:3px; }
+.legend-banner .tier-strip { height:8px; width:44px; margin-right:3px; }
+.matchup-vs.has-legend { gap:4px; }
+.legend-matchup { margin:0; max-width:430px; justify-content:center; gap:2px 9px; font-size:9px; line-height:1.15; padding:0; }
+.legend-matchup .sw { width:8px; height:8px; border-radius:2px; margin-right:3px; }
+.legend-matchup .tier-strip { height:8px; width:42px; margin-right:3px; }
+
 /* Adam (2026-09-11): "levels of guys visually" — DL on the line, EDGE its own layer (D14), LBs next,
    then DBs, each with generous vertical separation (field.js's LEVEL_GAP_EXTRA) and one faint label at
    the field's left edge, vertically centred on that level's whole span. Non-interactive overlay, always

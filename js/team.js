@@ -1,5 +1,5 @@
 import { getTeams, getTeam, invalidateTeam } from "./api.js";
-import { computeLayout, renderFieldSvg, renderLevelLabels, FIELD_VARIANT } from "./field.js";
+import { computeLayout, renderFieldSvg, renderLevelLabels, FIELD_VARIANT, SECONDARY_ONE_ROW } from "./field.js";
 import { renderColumn, renderTray, esc, fitNames } from "./cards.js";
 import { mountScaledField, disposeCurrentView } from "./viewfit.js";
 import { navStripHtml, wireNav } from "./nav.js";
@@ -42,7 +42,10 @@ function heatSummaryChip(view) {
 // (integration note, 2026-09-11) — team/view/teams are the same shapes renderTeam already works with;
 // fromFixture defaults to false since most callers other than this file's own renderTeam() won't have
 // that flag handy.
-export function headerHtml(team, view, fromFixture = false, teams) {
+// D111: `withLegend` is opt-in and defaults to false, so zoom.js's offense/defense and player pages — which
+// call this same header and which the ruling leaves alone ("nothing else changes there") — are untouched.
+// Only the whole-team page asks for the legend inside its banner.
+export function headerHtml(team, view, fromFixture = false, teams, withLegend = false) {
   const rec = view.header?.record ?? team.record;
   const bye = view.header?.byeWeek ?? team.byeWeek;
   const opp = view.header?.nextOpponent ?? team.nextOpponent;
@@ -77,6 +80,7 @@ export function headerHtml(team, view, fromFixture = false, teams) {
         <span>${schemeText}</span>
       </div>
     </div>
+    ${withLegend && SECONDARY_ONE_ROW ? legendHtml("legend-banner") : ""}
     <div class="teamhead-controls">
       <div class="chip-row">${chips.join("")}</div>
       <button type="button" class="refresh-btn">Refresh now</button>
@@ -93,8 +97,18 @@ export function headerHtml(team, view, fromFixture = false, teams) {
 // Ruling E replaced the whole-team view's photo cards with text rows, so the first legend entry no longer
 // describes a visible "STARTER" tag — on the overview the STARTER is simply the bold top row of a column.
 // The wording follows the pixels rather than the other way round.
-function legendHtml() {
-  return `<div class="legend">
+//
+// D111 (Adam, 2026-09-16) — "the legend line under the team banner moves INTO the banner row". The KEY ITSELF
+// is unchanged: every item (bold starter, OUT, FILLING IN, Q/D, IR PUP NFI SUSP, INACTIVE, part-time and the
+// rating-tint strip) is still here in the same words and the same order. Only where it is printed moves, and
+// it moves by a class: `legend-banner` (styles.css) is the same key re-set smaller, right-aligned and on a
+// dark plate so it reads on any club's colour, sitting in the banner's own row between the club's details
+// and its controls. Because it is now INSIDE .teamhead, whose height is set by the 38px crest, the banner
+// does not grow and the line the legend used to occupy goes to the field. With SECONDARY_ONE_ROW false it is
+// emitted under the banner as its own `.legend` line exactly as before, which is what makes the ruling undo
+// in one edit.
+export function legendHtml(extraClass = "") {
+  return `<div class="legend${extraClass ? " " + extraClass : ""}">
     <span><b>Bold top row</b> = opening-day starter</span>
     <span><span class="sw sw-out"></span><b>OUT</b> starter out</span>
     <span><span class="sw sw-active"></span><b>FILLING IN</b> active replacement</span>
@@ -243,8 +257,8 @@ export async function renderTeam(root, search, abbr, playerKey) {
   // D59: the shared nav strip renders first, directly under the app bar, on every team-context page.
   root.innerHTML = `
     ${navStripHtml({ teams, abbr: A, page: "team", primary: team.colourPrimary, secondary: team.colourSecondary })}
-    ${headerHtml(team, view, fromFixture, teams)}
-    ${legendHtml()}
+    ${headerHtml(team, view, fromFixture, teams, true)}
+    ${SECONDARY_ONE_ROW ? "" : legendHtml()}
     ${teamBodyHtml(team)}
     `;
 

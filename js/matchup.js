@@ -14,10 +14,11 @@
 // header.nextOpponent (this week's schedule) and redirects, or shows a picker on a bye week.
 import { getTeams, getTeam } from "./api.js";
 import { esc, renderColumn, renderTray, fitNames } from "./cards.js";
-import { computeLayout, renderFieldSvg, renderLevelLabels, FIELD_VARIANT } from "./field.js";
+import { computeLayout, renderFieldSvg, renderLevelLabels, FIELD_VARIANT, SECONDARY_ONE_ROW } from "./field.js";
 import { mountScaledField, disposeCurrentView } from "./viewfit.js";
 import { navStripHtml, wireNav } from "./nav.js";
 import { isLightWash } from "./landing.js";
+import { legendHtml } from "./team.js"; // D111: one legend, drawn on both pages (see matchupLegendHtml)
 
 const dash = "\u2014";
 const record = (r) => (r ? `${r.wins}-${r.losses}${r.ties ? "-" + r.ties : ""}` : dash);
@@ -119,6 +120,19 @@ function logoPlate(team, extraClass) {
 
 // ---- header / breadcrumb ----
 
+// D111 (Adam, 2026-09-16): "same on the matchup page (its two-club header: put the legend on the centre
+// block or under it, not taller)." The key is the same six items the team page prints, in the same words —
+// the two pages must never explain the same cards differently — sitting under the opponent picker inside
+// the centre block. That block is the SHORT one: the header's height is set by the two club panels, whose
+// 60px crest and three text lines run ~30 units taller than the title plus its controls, so the legend goes
+// into slack that already existed and .matchup-head does not grow (styles.css's `.matchup-vs.has-legend`,
+// which also tightens the block's own gap to pay for the extra line). With SECONDARY_ONE_ROW false the
+// centre block is exactly what it was before the ruling and no legend is printed here at all.
+// The markup is team.js's own legendHtml, imported rather than copied: the two pages draw the same cards, so
+// a reworded key must reword on both at once or the copies drift the way four of them once did over
+// OUT_STATUS_CODES.
+const matchupLegendHtml = () => (SECONDARY_ONE_ROW ? legendHtml("legend-matchup") : "");
+
 function headerHtml(teamA, teamB, viewA, viewB, teams) {
   const recA = viewA?.header?.record ?? teamA.record;
   const recB = viewB?.header?.record ?? teamB.record;
@@ -135,12 +149,13 @@ function headerHtml(teamA, teamB, viewA, viewB, teams) {
         ${heatSummaryHtml(viewA)}
       </div>
     </div>
-    <div class="matchup-vs">
+    <div class="matchup-vs${SECONDARY_ONE_ROW ? " has-legend" : ""}">
       <div class="matchup-title">${esc(teamA.abbr)} <span class="matchup-title-unit">offense</span> vs ${esc(teamB.abbr)} <span class="matchup-title-unit">defense</span></div>
       <div class="matchup-vs-controls">
         ${opponentPickerHtml(teams, teamA, teamB)}
         <a class="matchup-swap" href="#/matchup/${esc(teamB.abbr)}/${esc(teamA.abbr)}" title="Swap: ${esc(teamB.abbr)} offense vs ${esc(teamA.abbr)} defense">⇄ Swap sides</a>
       </div>
+      ${matchupLegendHtml()}
     </div>
     <div class="matchup-team matchup-team-b${inkB}" style="--team-primary:${teamB.colourPrimary};--team-secondary:${teamB.colourSecondary}">
       <div class="matchup-team-info matchup-team-info-right">
