@@ -98,9 +98,19 @@ const HEADSHOT_PAD = 6;
 export const SIDE_MAX_DEPTH_ROWS = 4; // D72: one more depth row than the whole-team overview's cap
 // D72: a headshot eats ~28 of a 156-unit row, and it eats it out of the one thing worth reading — the
 // name. ("Riq Woolen" came out as "R. Wo…" on the first defense render.) A single-unit page has half the
-// columns, so it can afford a wider one, and 180 is the widest that costs nothing: two 180-wide cards plus
-// MIN_CARD_GAP still fit inside MIN_PITCH, so the columns keep exactly the pitch D71 places them at.
-export const SIDE_CARD_W = 180;
+// columns, so it can afford a wider one, and 180 was the widest that cost nothing: two 180-wide cards plus
+// MIN_CARD_GAP still fit inside MIN_PITCH, so the columns kept exactly the pitch D71 places them at.
+//
+// D94 (👁 finding, 2026-09-15) — two WAS starters still ellipsised on the headshot row even with the D91
+// snap trio moved off the name's line: "C. Okonkwo" (badge competing for the same ~134-unit text block)
+// and "J. Croskey-Merritt", a longer surname than the 180-wide card was ever budgeted for. Widened by 30
+// (180 -> 210), the smallest step that clears both on WAS off/def and the widest (four-WR-plus-TE) HOU
+// pass-catcher row. This does cross the 188 ceiling the comment above used to cite (cardWidth + MIN_CARD_GAP
+// > MIN_PITCH), so the offensive LINE row's own enforceNoOverlap pass now widens that row's five columns
+// from MIN_PITCH's 200 to 222 to keep them from touching — the one on-canvas consequence, verified by render
+// to still leave every row inside 1700x900 with no overlap. MIN_PITCH itself is untouched (it is shared with
+// the team/matchup/group pages, which must not move), so nothing outside this single-unit side page changes.
+export const SIDE_CARD_W = 210;
 
 const BAND_GAP = 10; // vertical gap between adjacent rows inside one level
 const LEVEL_GAP_EXTRA = 20; // on top of BAND_GAP, only between two rows in DIFFERENT levels
