@@ -74,6 +74,18 @@ function settle(fn, isDead) {
   return () => timers.forEach(clearTimeout);
 }
 
+// The one rule every fit mode in this file has to obey (Adam's screenshots, 2026-09-16 — JAX rendered
+// wider than the viewport, its right "LINE OF SCRIMMAGE" caption cut off at the edge). Jacksonville plays
+// a 4-3 with all four linemen on the LINE row, so its compiled chart has no EDGE row and the canvas is one
+// defensive row shorter than a normal team's - which can make the scale needed to reach the bottom of the
+// window (the height fit) LARGER than the scale needed to reach the right edge (the width fit). The
+// applied scale must never be that height fit alone: it is always the smaller of the two, with whatever
+// height goes unused left as air below the field. Pulled out as its own pure function so the invariant is
+// tested directly, once, rather than only indirectly through a fake DOM.
+export function capToWidthFit(widthFit, heightFit) {
+  return Math.min(widthFit, heightFit);
+}
+
 // How much room a field actually has, measured rather than guessed, so a wrapped header or a second chip
 // line is accounted for automatically instead of silently pushing the field off the bottom.
 function availableBox(el, main, panel, backRow) {
@@ -170,7 +182,7 @@ export function mountScaledField({ root, probe, build, onDraw, onScale, panel = 
   const apply = () => {
     if (!alive()) return;
     const { width, height } = boxOf(el);
-    const k = Math.min(width / layout.layoutWidth, height / layout.layoutHeight);
+    const k = capToWidthFit(width / layout.layoutWidth, height / layout.layoutHeight);
     // apply() resizes .field-outer, which wakes the ResizeObserver that called it - bailing out on a
     // scale that hasn't meaningfully moved breaks that feedback loop instead of ping-ponging forever.
     if (lastK !== null && Math.abs(k - lastK) < K_EPSILON) return;
@@ -314,7 +326,7 @@ export function fitToViewport(root, { fill = false, maxGrow = MAX_FILL_GROW } = 
     inner.style.width = `${FIT_DESIGN_WIDTH}px`;
     const naturalH = inner.scrollHeight;
     const availW = outer.clientWidth || FIT_DESIGN_WIDTH;
-    const k = Math.min(availW / FIT_DESIGN_WIDTH, naturalH ? availableHeight() / naturalH : 1);
+    const k = capToWidthFit(availW / FIT_DESIGN_WIDTH, naturalH ? availableHeight() / naturalH : 1);
     commit(FIT_DESIGN_WIDTH, k, naturalH);
   };
 
@@ -341,7 +353,11 @@ export function fitToViewport(root, { fill = false, maxGrow = MAX_FILL_GROW } = 
     designW = availW / k;
     inner.style.width = `${designW}px`;
     h = inner.scrollHeight || h;
-    return { designW, k: Math.min(k, availH / h), h };
+    // Same invariant as the two canvas modes above, spelled out the same way: the committed scale is the
+    // smaller of the width fit and the height fit. Width fit is `availW / designW` rather than a bare 1 -
+    // designW is defined as availW/k every pass, so on paper that ratio is always k already, but writing it
+    // out keeps this mode honest against the same rule instead of a bespoke one that happens to agree.
+    return { designW, k: capToWidthFit(availW / designW, availH / h), h };
   };
 
   const applyFill = () => {

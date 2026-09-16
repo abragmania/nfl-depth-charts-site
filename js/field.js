@@ -86,6 +86,9 @@ const SCALE = LAYOUT_WIDTH / REFERENCE_WIDTH;
 // window, so a wider card is simply a bigger share of the same canvas — and two 180-wide cards plus
 // MIN_CARD_GAP still come to 192, inside MIN_PITCH's 200, so every column keeps exactly the x D71/D76
 // place it at and no pitch constant has to move.
+// D106 (Adam, 2026-09-16) corrects the claim above: 192 inside 200 left only a ~20-unit gap between two
+// neighbouring cards on the LINE/pass-catcher rows — not enough air, per Adam's report that the boxes read
+// as "super close together." A pitch constant DID have to move after all: MIN_PITCH is now 224 (see below).
 // HEIGHT is NOT free: this page's scale is height-bound (a real Washington canvas is ~1200 layout units
 // tall against ~584 CSS pixels of room), so every unit added to a row is handed straight back as a
 // smaller scale on screen. The heights below therefore grow only as far as the bigger type genuinely
@@ -136,12 +139,19 @@ const LEVEL_GAP_EXTRA = 20; // on top of BAND_GAP, only between two rows in DIFF
 const MARGIN_TOP = 16;
 const MARGIN_BOTTOM = 14;
 const LOS_HALF_GAP = 18; // half the empty gutter straddling the line of scrimmage, same both sides
+// D106 (Adam, 2026-09-16) — "the boxes on the team page are super close together." D103 widened the card
+// from 156 to 180 but left this pitch at 200, so the clear turf between two neighbouring 180-wide columns
+// on the LINE and pass-catcher rows fell from ~44 units to ~20 (enforceNoOverlap's minDist was
+// max(180+12, 200) = 200, i.e. a 20-unit gap). Raised to 224 so that same pair is back to a ~44-unit gap
+// (224 - 180 = 44), restoring the air D103 ate. LAYOUT_WIDTH does not grow (D58): the widest rows this
+// pitch drives — five linemen, the five-wide Houston pass-catcher cluster, the corners 1.4 pitches outside
+// the tackles — all still land inside the fixed canvas (checked by the D103 geometry test and by render).
 // Review requirement B: never let two columns sit closer than this. Also the lever that decides how much
 // of the canvas the chart actually covers — ruling E scales the whole canvas to fit the window's HEIGHT,
-// so if the columns only spanned the middle of the canvas the page would waste the spare width. At 200
-// the widest row (corners, two pitches outside the tackles) reaches both sidelines, so the field fills a
-// 1700px window edge to edge instead of leaving a dead strip down one side.
-const MIN_PITCH = 200;
+// so if the columns only spanned the middle of the canvas the page would waste the spare width. At 224
+// the widest row (corners, 1.4 pitches outside the tackles) still reaches close to both sidelines, so the
+// field keeps filling a 1700px window edge to edge instead of leaving a dead strip down one side.
+const MIN_PITCH = 224;
 const TRAY_H = 22; // height of an "unlisted" tray strip, when a band has one
 const TRAY_GAP = 6;
 const FIELD_MARGIN_X = 80 * SCALE; // left/right canvas margin so edge columns don't clip
@@ -906,9 +916,11 @@ function mirrorDefXs(band, slots, scheme, lm) {
 // apart, then re-centres the group on its original midpoint so a rare fix-up doesn't drift the row.
 // The bare minimum turf between two adjacent cards, used only as the floor when a view's cards are wide
 // enough that MIN_PITCH alone would let them touch. At the standard card width (D103's 180) two cards plus
-// this gap come to 192, still inside MIN_PITCH's 200, so the Math.max below resolves to MIN_PITCH and every
-// row keeps exactly the pitch its own placement function chose — which is what D71 depends on. Only D94's
-// 210-wide side card crosses that line, and only on the single-unit pages.
+// this gap come to 192, still inside MIN_PITCH's 224 (D106), so the Math.max below resolves to MIN_PITCH and
+// every row keeps exactly the pitch its own placement function chose — which is what D71 depends on. D94's
+// 210-wide side card no longer crosses that line either, now that MIN_PITCH itself is 224 (210+12=222 <
+// 224): the single-unit LINE row's pitch is set by MIN_PITCH the same as every other row, two units more
+// than the 222 D94's own comment used to cite.
 const MIN_CARD_GAP = 12;
 function enforceNoOverlap(cols) {
   if (cols.length < 2) return;
