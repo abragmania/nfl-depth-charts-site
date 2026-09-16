@@ -50,7 +50,12 @@
 .panel-name { font-size: 20px; font-weight: 800; line-height: 1.2; }
 .panel-number { color: var(--muted); font-weight: 600; font-variant-numeric: tabular-nums; }
 .panel-label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin-top: 3px; }
-.panel-wordmark { display: block; max-width: 130px; max-height: 26px; margin-top: 8px; object-fit: contain; }
+/* 🎨 Polish (2026-09-15): the wordmark PNG is the club's own dark colour on a transparent background, so
+   on a dark club (WAS burgundy, BAL purple, CHI navy, PIT/LV/NO/JAX) it nearly vanishes against the panel's
+   own dark fill (--panel). Same fix as the landing tile's crest backdrop (styles.css .tile img, line ~97):
+   an opaque light chip behind the mark so it reads regardless of the club's own colours. */
+.panel-wordmark { display: block; max-width: 130px; max-height: 26px; margin-top: 8px; object-fit: contain;
+  padding: 4px 8px; border-radius: 6px; background: rgba(255,255,255,.92); }
 
 .panel-bio-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px 10px; margin-top: 18px; font-size: 12.5px; }
 .panel-bio-row span { background: #1a1f25; border-radius: 6px; padding: 6px 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
