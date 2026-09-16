@@ -21,7 +21,7 @@
 // GET /api/player/{espnId} (server/api/player.js).
 import { esc, snapHistoryHtml } from "./cards.js";
 import { renderHistory } from "./history.js";
-import { getPlayer } from "./api.js";
+import { getPlayer, getHistory } from "./api.js";
 
 const dash = "—";
 const STATUS_CLASS = {
@@ -130,9 +130,17 @@ function bioRowHtml(card) {
   // 🎨 Polish (2026-09-11, round 2, item 11): the "Drafted " prefix cost 8 of this narrow grid cell's
   // characters for no real information (the whole row is obviously bio data) — dropping it is what
   // finally lets "2020 · R2 #53" fit without the ellipsis eating the pick number.
+  // D115 (Adam, 2026-09-16): a seventh cell, spanning the grid's full width as its own row, for the games/
+  // starts chip below (gamesChipData/patchGamesChip). The draft cell above already reads "—" for the many
+  // undrafted men on file, which looked like a free slot, but that dash is a real answer ("undrafted") for
+  // a drafted player it instead shows his round/pick — overwriting it would destroy that data, so this adds
+  // a cell rather than repurposing one. History hasn't resolved yet when this first renders (see openPanel),
+  // so it starts on the same dash placeholder every other unknown cell uses and is patched in place once the
+  // /api/history fetch lands.
   return `<div class="panel-bio-row">
     <span>${esc(height)}</span><span>${weight}</span><span>${age}</span>
     <span>${esc(college)}</span><span>${exp}</span><span data-bio-draft title="Draft">${draft}</span>
+    <span class="panel-bio-games" data-games title="Regular-season games on file">${dash}</span>
   </div>`;
 }
 
@@ -230,6 +238,48 @@ function seasonsTableHtml(family, seasons, collegeFallback) {
 // the rest of this file already calls.
 const fetchPlayer = (espnId) => getPlayer(espnId);
 
+// --- D115: season-stats fetch failure classification ----------------------------------------------------
+// "This player has no ESPN stats" is a normal answer, not a bug — the coverage audit already knows ~160
+// players (mostly offensive linemen) have no ESPN stats page at all. It reaches getPlayer()'s throw two
+// different ways depending which mode api.js is running in, and both need to render the same muted line
+// instead of the red error box:
+//   - live server: server/api/player.js's 404 handler (added alongside this fix) answers with this exact
+//     message when the ESPN bio/stats fetch itself 404s.
+//   - published static site (D67): api.js's getPlayer() (~line 88) turns a missing pre-rendered player
+//     file into this exact message when isStatic() && the fetch 404s.
+// Matched on the exact strings rather than a generic "contains 404" check so a real 404 elsewhere (a
+// malformed URL, a broken proxy) still reads as a genuine error, not a shrug.
+const NO_STATS_MESSAGES = new Set([
+  "no ESPN season stats on file for this player",
+  "season stats are not part of this published snapshot",
+]);
+
+// One muted line, worded for the family: the OL family (D30's STAT_FAMILIES) never has an ESPN stats
+// category at all (see STAT_FAMILIES's own "OL: []" comment above), so its wording says that outright
+// instead of implying this one lineman is somehow unusual.
+function noStatsMessage(family) {
+  return family === "OL" ? "ESPN keeps no season stats for linemen." : "No ESPN season stats for this player.";
+}
+
+// Real failures (network error, 5xx, malformed JSON) still get the red error box, but as one short line —
+// Adam's screenshot (2026-09-16, Cowboys LG T.J. Bass) showed the full ESPN URL printed in red, which reads
+// like a crash even when it's just this one player missing a page. Strips any bare URL out of the message;
+// what's left (a status code, "network down", etc.) is still useful without dragging ESPN's internal
+// endpoint onto the screen.
+function shortErrorMessage(err) {
+  const msg = String(err?.message ?? "").replace(/https?:\/\/\S+/g, "").trim();
+  return `Couldn't load season stats${msg ? `: ${msg}` : ""}`;
+}
+
+// Pure classifier so the fetch/render code below (and the tests) share one place that decides muted-note
+// vs. red-error — exported for tests/panel.test.mjs, which has no DOM available to exercise the real
+// openPanel() catch handler through.
+export function classifyStatsError(err, family) {
+  const message = String(err?.message ?? "");
+  if (NO_STATS_MESSAGES.has(message)) return { muted: true, text: noStatsMessage(family) };
+  return { muted: false, text: shortErrorMessage(err) };
+}
+
 // --- close/back behaviour (finding 2) -------------------------------------------------------------------
 // HashChangeEvent.oldURL/newURL are computed by the browser itself, so this is race-free regardless of
 // what order other modules' own hashchange listeners run in — no dependency on team.js's own routing code.
@@ -276,6 +326,62 @@ function fillDraftRound(asideEl, apiDraft) {
   if (!apiDraft || apiDraft.round == null) return;
   const el = asideEl.querySelector("[data-bio-draft]");
   if (el) el.textContent = draftLine(apiDraft);
+}
+
+// --- D115: game-experience chip -----------------------------------------------------------------------
+// Pure summarizer over the /api/history/{abbr}/{playerKey} `seasons` rows (server/history/index.js's
+// buildHistory: nine completed seasons plus D87's current-season row, each already carrying `games` and
+// `starts`, null when unknown). Exported for tests/panel.test.mjs, which has no DOM to drive the real fetch
+// through. A row with both fields null (no data on file for that year, e.g. before he entered the league)
+// is skipped entirely — it contributes to neither the totals nor the "on file" season span. Games sums
+// over every row that has a games number; starts only ever appears in the chip text when at least one row
+// actually carries a starts number (`anyStarts`) — otherwise the honest answer is "we don't know starts",
+// not "0 starts".
+export function gamesChipData(seasons) {
+  const rows = Array.isArray(seasons) ? seasons : [];
+  let games = 0, starts = 0, anyStarts = false, minSeason = null, maxSeason = null;
+  for (const r of rows) {
+    if (!r || (r.games == null && r.starts == null)) continue;
+    if (r.games != null) games += Number(r.games) || 0;
+    if (r.starts != null) { anyStarts = true; starts += Number(r.starts) || 0; }
+    const s = Number(r.season);
+    if (Number.isFinite(s)) {
+      minSeason = minSeason == null ? s : Math.min(minSeason, s);
+      maxSeason = maxSeason == null ? s : Math.max(maxSeason, s);
+    }
+  }
+  const text = anyStarts ? `${games} games · ${starts} starts` : `${games} games`;
+  const span = minSeason == null ? "" : minSeason === maxSeason ? `, ${minSeason}` : `, ${minSeason}–${maxSeason}`;
+  return { text, title: `Regular-season games on file${span}` };
+}
+
+// history.js owns the /api/history fetch for the position/season table it renders into `[data-history]`,
+// but it renders straight into that container and hands nothing back to its caller — and this builder's
+// file list doesn't include history.js — so this calls api.js's getHistory() a second time for the same
+// player rather than reaching into that file for its parsed response. Mirrors history.js's own query-param
+// and team/key fallback logic exactly (see that file's renderHistory) so both calls resolve the same player.
+// Returns [] (not a throw) for the deliberate "no prior NFL seasons on record" 404 — a rookie's honest chip
+// is "0 games", not an error.
+async function fetchGamesSeasons(card, abbr) {
+  const team = String(abbr || card?.teamAbbr || card?.team || "").toUpperCase();
+  const key = card?.playerKey ?? card?.gsisId ?? card?.espnId ?? "";
+  if (!team || !key) return [];
+  const q = new URLSearchParams();
+  for (const [k, v] of [["gsisId", card?.gsisId], ["espnId", card?.espnId], ["pfrId", card?.pfrId], ["eaId", card?.rating?.eaId], ["name", card?.name], ["college", card?.bio?.college], ["birthDate", card?.bio?.birthDate], ["position", card?.displayLabel ?? card?.position]])
+    if (v != null && v !== "") q.set(k, String(v));
+  const { ok, status, body } = await getHistory(team, key, q);
+  if (status === 404 && body?.error?.code === "no_history") return [];
+  if (!ok) throw new Error(body?.error?.message || `${status} /api/history`);
+  return body?.seasons || [];
+}
+
+// Patches the placeholder dash in place once the history fetch resolves — same pattern as fillDraftRound
+// above and as history.js's own strip/table (the header can render before any network response lands).
+function patchGamesChip(asideEl, data) {
+  const el = asideEl.querySelector("[data-games]");
+  if (!el) return; // the aside moved on to a different player/team while this fetch was in flight
+  el.textContent = data.text;
+  el.title = data.title;
 }
 
 function renderStats(asideEl, data, family) {
@@ -331,6 +437,13 @@ export function openPanel(asideEl, card, teamView, teamMeta) {
   asideEl.innerHTML = panelShellHtml(card, teamView?.season, teamMeta);
   { const h = asideEl.querySelector("[data-history]"); if (h) renderHistory(h, card, teamMeta, { abbr: teamView?.abbr ?? teamMeta?.abbr }); }
 
+  // D115: independent of the ESPN-bio fetch below (gated on card.espnId) — games/starts come from
+  // gsis/pfr/name matching against nflverse history, not from ESPN, so this runs even for the small number
+  // of players with no ESPN id on file.
+  fetchGamesSeasons(card, abbr)
+    .then((seasons) => { if (asideEl._panelGen === myGen) patchGamesChip(asideEl, gamesChipData(seasons)); })
+    .catch(() => {}); // leave the dash placeholder; a real failure already surfaces via the history block above
+
   if (!card.espnId) return; // finding 1: no ESPN id on file -> card-only panel, no fetch, no error state
 
   const family = statFamily(card);
@@ -343,7 +456,9 @@ export function openPanel(asideEl, card, teamView, teamMeta) {
     .catch((err) => {
       if (asideEl._panelGen !== myGen) return;
       const box = asideEl.querySelector("[data-stats]");
-      if (box) box.innerHTML = `<div class="panel-error">Couldn't load season stats: ${esc(err.message)}</div>`;
+      if (!box) return;
+      const { muted, text } = classifyStatsError(err, family);
+      box.innerHTML = `<div class="${muted ? "panel-stats-note" : "panel-error"}">${esc(text)}</div>`;
     });
 }
 

@@ -340,6 +340,25 @@ export async function renderMatchup(root, search, aAbbr, bAbbr) {
   mountMatchupField(root, viewA, viewB, teamA, teamB);
 }
 
+// D114 (Adam, 2026-09-16): "on the matchup screen it's permanently shaking uncontrollably." viewfit.js's
+// height budget only ever reserved space for a `.back-row` UNDER the field; it had never heard of the D113
+// bottom half-banner, which lives INSIDE `.matchup-field-wrap` below `.field-outer` (see renderMatchup's
+// markup). Missing that, the wrap rendered taller than the window on every load, which raised a vertical
+// scrollbar, narrowed `main`, triggered a refit at the narrower width that shrank the field enough to lose
+// the scrollbar, widened `main` back, and refit grew the field right back into overflow - forever. This
+// measures the real, live space the bottom banner and the wrap's own trailing border/margin actually cost
+// - not a hardcoded 32, so a future CSS change to the banner is picked up automatically - and hands it to
+// mountScaledField as `reserveBelow` (a function, so it is re-measured on every refit rather than read once
+// and then gone stale). The top banner needs no such plumbing: it sits ABOVE `.field-outer`, so viewfit's
+// existing measurement of the field's own top edge already accounts for it.
+function matchupReserveBelow(root) {
+  const wrap = root.querySelector(".matchup-field-wrap");
+  const banner = root.querySelector(".matchup-half-banner-bottom");
+  if (!wrap || !banner) return 0;
+  const wrapCs = getComputedStyle(wrap);
+  return banner.offsetHeight + parseFloat(wrapCs.borderBottomWidth || 0) + parseFloat(wrapCs.marginBottom || 0);
+}
+
 // The team-page mount with two teams' worth of specifics: which colours each column takes, and which
 // team's page a click should open. Everything else - measure, spread, draw, rescale, rebuild, settle,
 // dispose - is viewfit.js's mountScaledField, shared with team.js (🔵 delta review: this used to be a
@@ -350,6 +369,7 @@ function mountMatchupField(root, viewA, viewB, teamA, teamB) {
     probe: computeLayout(facingView(viewA, viewB)),
     build: (spread) => fieldHtml(viewA, viewB, teamA, teamB, spread),
     observe: [root.querySelector(".nav-strip"), root.querySelector(".matchup-head")],
+    reserveBelow: () => matchupReserveBelow(root), // D114: account for the bottom half-banner strip
     onDraw: (el) => { fitNames(el); wireMatchupClicks(el, teamA, teamB); },
     onScale: (el) => fitNames(el),
   });

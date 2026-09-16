@@ -62,6 +62,10 @@
 
 .panel-bio-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px 10px; margin-top: 18px; font-size: 12.5px; }
 .panel-bio-row span { background: #1a1f25; border-radius: 6px; padding: 6px 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* D115: games/starts chip — a seventh cell that spans the grid's full width as its own row (see panel.js's
+   bioRowHtml comment on why it isn't sharing the draft cell's "—"), bold and centered so it reads as the
+   one line in this grid meant to be scanned first, per Adam's "show game experience prominently" ruling. */
+.panel-bio-games { grid-column: 1 / -1; font-weight: 700; text-align: center; letter-spacing: .01em; }
 
 .panel-snaps { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
 .panel-snaps-label { flex: none; font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }

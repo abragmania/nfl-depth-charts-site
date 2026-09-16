@@ -41,6 +41,14 @@ export function disposeCurrentView() {
 
 const BOTTOM_RESERVE = 14;      // breathing room under the absolute-canvas field (team, matchup)
 const FLOW_BOTTOM_RESERVE = 28; // the same for the flow-layout fit (side, group), which now fills the height
+// D114 shake fix (Adam, 2026-09-16): "on the matchup screen it's permanently shaking uncontrollably." The
+// height budget below is arithmetic on measured pixels, so a Math.ceil'd scaled height (apply() rounds the
+// canvas UP to the next pixel) could land exactly one fractional pixel past the window even when every
+// other input was correct - enough by itself to raise a scrollbar and start the feedback loop this margin
+// exists to prevent. Only added when a caller actually reserves something below the field (reserveBelow >
+// 0, i.e. matchup.js today) - the team and side pages have no strip below the field to round against, and
+// must not move by even these two pixels, so they never pay for a guard they don't need.
+const SAFETY_MARGIN = 2;
 const MAX_SPREAD = 1.8;         // a short chart must not stretch into a smear of white space
 const RESPREAD_TOLERANCE = 0.04; // rebuild only when the ideal spread is >4% off what we drew
 const MAX_REBUILDS = 2;         // bounded so a rebuild can never oscillate
@@ -86,14 +94,33 @@ export function capToWidthFit(widthFit, heightFit) {
   return Math.min(widthFit, heightFit);
 }
 
+// The height-budget arithmetic, pulled out as its own pure function so it can be unit tested directly
+// (Adam, 2026-09-16 — the matchup page "permanently shaking uncontrollably"). The budget used to be
+// `innerHeight - fieldTop - (backRow + BOTTOM_RESERVE)`, which only ever knew about a `.back-row` UNDER
+// the field. matchup.js's D113 bottom half-banner is a real sibling INSIDE `.field-outer`'s own wrapper
+// (`.matchup-field-wrap`) that this budget never heard of, so the wrap rendered ~33px taller than the
+// window on every load: a vertical scrollbar appeared, `main` narrowed, the ResizeObserver refit at the
+// narrower width, which (being the same height budget) also shrank the field - narrow enough that the
+// page fit again, the scrollbar vanished, `main` widened back, and refit grew the field right back into
+// overflow. Forever. `reserveBelow` is the fix: whatever trails the field INSIDE its own wrapper - for
+// matchup.js, the bottom banner's rendered height plus the wrapper's own border/margin below it - passed
+// in already measured off the live DOM (see matchup.js's reserveBelow) rather than guessed here, so a
+// future CSS change to the banner is picked up automatically instead of silently drifting out of date
+// again. It is 0 for the team and side pages, which have no such wrapper, so a zero reserveBelow also
+// skips SAFETY_MARGIN (see its own comment) and their numbers are exactly what they were before D114.
+export function heightBudget(innerHeight, fieldTop, backRowHeight, reserveBelow = 0) {
+  const extra = reserveBelow > 0 ? reserveBelow + SAFETY_MARGIN : 0;
+  return Math.max(innerHeight - fieldTop - (backRowHeight + BOTTOM_RESERVE + extra), 240);
+}
+
 // How much room a field actually has, measured rather than guessed, so a wrapped header or a second chip
 // line is accounted for automatically instead of silently pushing the field off the bottom.
-function availableBox(el, main, panel, backRow) {
+function availableBox(el, main, panel, backRow, reserveBelow) {
   const cs = getComputedStyle(main);
   const width = Math.max(main.clientWidth - parseFloat(cs.paddingLeft || 0) - parseFloat(cs.paddingRight || 0)
     - (panel && !panel.hidden ? panel.offsetWidth + 12 : 0), 320);
-  const height = Math.max(window.innerHeight - el.getBoundingClientRect().top
-    - ((backRow?.offsetHeight ?? 26) + BOTTOM_RESERVE), 240);
+  const extra = typeof reserveBelow === "function" ? (reserveBelow() || 0) : (reserveBelow || 0);
+  const height = heightBudget(window.innerHeight, el.getBoundingClientRect().top, backRow?.offsetHeight ?? 26, extra);
   return { width, height };
 }
 
@@ -120,8 +147,13 @@ function availableBox(el, main, panel, backRow) {
 //             the leftover height instead of leaving a black band under the last row. The two levers are
 //             mutually exclusive by construction — a canvas is either too tall for its box (spread it
 //             wider) or too wide for it (fill it taller) — so enabling this never fights the spread.
+//   reserveBelow  D114: a number, or a zero-arg function returning one, for whatever trails the field
+//             INSIDE its own wrapper and would otherwise go uncounted by the height budget (matchup.js's
+//             bottom half-banner). A function is re-invoked on every measurement rather than read once, so
+//             it stays correct even if the reserved element's own height can change. Defaults to 0, which
+//             is exact for the team and side pages - they have no such wrapper.
 // Returns a dispose function; also registers it, so the caller usually needs nothing further.
-export function mountScaledField({ root, probe, build, onDraw, onScale, panel = null, observe = [], fillHeight = false }) {
+export function mountScaledField({ root, probe, build, onDraw, onScale, panel = null, observe = [], fillHeight = false, reserveBelow = 0 }) {
   const mountPoint = root.querySelector(".field-outer");
   if (!mountPoint) return () => {};
   const main = mountPoint.closest("main") ?? document.body;
@@ -141,7 +173,7 @@ export function mountScaledField({ root, probe, build, onDraw, onScale, panel = 
   // element in the document, so it returns instead of rewriting whatever view is on screen now.
   const alive = () => !dead && el !== null && document.contains(el);
 
-  const boxOf = (node) => availableBox(node, main, panel, backRow);
+  const boxOf = (node) => availableBox(node, main, panel, backRow, reserveBelow);
 
   // The spread that makes the canvas exactly fill the width once it is scaled to fit the height.
   const idealSpread = (node) => {
