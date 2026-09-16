@@ -173,6 +173,58 @@ const DEF_ROW_BANDS = { LINE: ["DL"], EDGE: ["EDGE"], LB: ["LB"], CB_NB: ["CB", 
 const DEF_ROW_LEVEL = { LINE: "LINE", EDGE: "EDGE", LB: "LB", CB_NB: "SEC", S: "SEC" };
 const DEF_LEVEL_LABEL = { LINE: "LINE", EDGE: "EDGE", LB: "LINEBACKERS", SEC: "SECONDARY" };
 
+// D107 (Adam, 2026-09-16) — "the JAX team display is still different than other teams." ONE FIELD SCALE FOR
+// EVERY CLUB, on the team page and the matchup page alike.
+//
+// Until now a both-sides canvas was exactly as tall as the club's own chart needed (D96: the taller half's
+// natural height, doubled). Ten clubs (ARI, CHI, CIN, CLE, HOU, IND, JAX, KC, SF, TEN) put all four of
+// their linemen on the LINE row, so their compiled chart has NO EDGE row and their defence is four rows
+// rather than five; other clubs differ again through banners, "+N more" tails and "not on chart" trays.
+// Measured across the 32 charts the canvas ran from 874 units (ARI) to 1280 (MIA) — and the fit engine
+// scales the canvas to the window, so a shorter canvas came out MAGNIFIED: Jacksonville's cards were
+// visibly bigger than Las Vegas's for no reason a reader could see.
+//
+// So the both-sides canvas is now a CONSTANT, computed from the row constants alone and never from the
+// club's own rows. BOTH_SIDES_HALF is the tallest defence this engine can draw at its natural pitch: all
+// five rows of DEF_ROW_ORDER, each as tall as a FULL column (its label pill, one bold starter row and the
+// maximum number of slim depth rows), spaced at the minimum pitch — BAND_GAP between two rows of one
+// level, plus LEVEL_GAP_EXTRA at each of the three level boundaries the defensive order contains. Per D96
+// the offence gets a half of exactly the same height, and the line of scrimmage sits on the boundary
+// between them, which is the canvas midpoint. Every club therefore draws on the same canvas, so the fit
+// engine hands every club the same scale, the same card size and the same half boundaries.
+//
+// A club whose half is SHORTER than the constant (every real club: the tallest measured half is Miami's
+// defence at 607 against the constant's 655, and the tallest offence is San Francisco's at 427) spreads
+// its rows evenly across the half with placeSpan's extra gap — which is exactly what D96 already did to
+// the shorter of the two sides, now applied to both.
+//
+// THE DEEP-COLUMN QUESTION, stated as D107 asks. A row is as tall as the deepest column in it, and the
+// deepest a column can be is its label plus a line-one row plus MAX_DEPTH_ROWS slim rows — which is
+// precisely what DEF_ROW_FULL_H is, so a "+N more" tail costs nothing extra (the tail REPLACES the last
+// slim row rather than adding one). Two things can still push a single row past it: the OUT rail D104
+// stacks on a demoted starter's row, and a "not on chart" tray. Those are a per-row surcharge the
+// constant does not attempt to predict, so the rule is kept honest by a floor rather than by arithmetic:
+// the half is max(BOTH_SIDES_HALF, this club's own natural halves). No club in the league reaches it
+// today (the 48 units of headroom above Miami cover several rails), and if one ever did it would grow its
+// own canvas instead of drawing its rows through each other.
+const DEF_ROW_FULL_H = LABEL_RESERVE + CARD_H1 + MAX_DEPTH_ROWS * (ROW_H + CARD_GAP);
+const DEF_LEVEL_BOUNDARIES = DEF_ROW_ORDER.reduce(
+  (n, key, i) => (i && DEF_ROW_LEVEL[key] !== DEF_ROW_LEVEL[DEF_ROW_ORDER[i - 1]] ? n + 1 : n), 0);
+export const BOTH_SIDES_HALF = DEF_ROW_ORDER.length * DEF_ROW_FULL_H
+  + (DEF_ROW_ORDER.length - 1) * BAND_GAP
+  + DEF_LEVEL_BOUNDARIES * LEVEL_GAP_EXTRA;
+export const BOTH_SIDES_HEIGHT = MARGIN_TOP + BOTH_SIDES_HALF + 2 * LOS_HALF_GAP + BOTH_SIDES_HALF + MARGIN_BOTTOM;
+
+// D108 (Adam, 2026-09-16) — "the offense and defense pages need to breathe at the top and the bottom." On a
+// single-unit side page the first row sat on MARGIN_TOP and the last row on MARGIN_BOTTOM, i.e. hard against
+// the turf's own edges, while the fill pass poured all the spare height into the gaps BETWEEN the rows. The
+// content therefore read as pinned to the frame. One row pitch — the engine's own smallest unit of vertical
+// air, the BAND_GAP + LEVEL_GAP_EXTRA it opens at a level boundary — is now inset above the first row and
+// below the last, and the rows spread evenly inside what is left, so the block sits toward the middle of the
+// screen. Deliberately one pitch and no more (Adam: "pushed in a LITTLE BIT, not a ton"); the fill mode, the
+// card sizes and every x are untouched.
+const SIDE_INSET = BAND_GAP + LEVEL_GAP_EXTRA;
+
 // D69: THREE offensive rows now, listed here nearest-the-LOS first. This IS the one constant Adam asked to
 // be able to flip — reorder these entries and the whole offensive half reorders with them (levels,
 // stripes, labels and gaps all fall out of it). PASS CATCHERS (WR+TE) sits above LINE (OL alone) — not
@@ -1052,31 +1104,44 @@ export function computeLayout(teamView, opts = {}) {
   let losY, layoutHeight;
   if (bothSides) {
     // D96 (Adam, 2026-09-16) — "give the offensive side more room; there's no reason it should be so much
-    // smaller." The two halves now get EQUAL height, LOS at the midpoint, each half's own rows spread
-    // evenly across it. `half` is the TALLER side's own natural (minimum-pitch) height — normally the
-    // defence, which carries more rows — so that side is never compressed, only ever drawn at its floor;
-    // the shorter side's internal gaps are widened just enough to reach the same height. A side with one
-    // row (or none) has no internal gap to widen, so it simply sits at its natural height inside the half.
+    // smaller." The two halves get EQUAL height, LOS at the midpoint, each half's own rows spread evenly
+    // across it. A side with one row (or none) has no internal gap to widen, so it simply sits at its
+    // natural height inside the half.
+    //
+    // D107 (Adam, 2026-09-16) changes WHERE that half height comes from. It used to be the taller side's
+    // own natural height, which made the canvas — and therefore the scale the fit engine chose — a
+    // function of the club's chart: a four-row defence produced a short canvas that was then magnified,
+    // so Jacksonville's cards came out bigger than everyone else's. The half is now the CONSTANT
+    // BOTH_SIDES_HALF, so every club draws on an identical canvas and takes an identical scale. The
+    // natural heights are still measured, but only as a floor (see BOTH_SIDES_HALF's note): a club taller
+    // than the constant would grow its own canvas rather than have its rows compressed into each other.
     const defMin = naturalSpanHeight(defRowsTopDown);
     const offMin = naturalSpanHeight(offRowsTopDown);
-    const half = Math.max(defMin, offMin);
+    const half = Math.max(BOTH_SIDES_HALF, defMin, offMin);
     const spreadGap = (rows, natural) => (rows.length > 1 && half > natural) ? (half - natural) / (rows.length - 1) : 0;
-    const defEnd = placeSpan(defRowsTopDown, MARGIN_TOP, spreadGap(defRowsTopDown, defMin));
-    losY = defEnd + LOS_HALF_GAP;
+    placeSpan(defRowsTopDown, MARGIN_TOP, spreadGap(defRowsTopDown, defMin));
+    // D107: the half boundaries are the constant's, not the rows' — a defence with fewer rows than the
+    // half can hold (a 4-3 with no EDGE row) leaves its spare height as air at the bottom of its own half
+    // instead of dragging the line of scrimmage up, so the LOS stays on the canvas midpoint for every club.
+    losY = MARGIN_TOP + half + LOS_HALF_GAP;
     const offStart = losY + LOS_HALF_GAP; // the same gutter both ways
-    const offEnd = placeSpan(offRowsTopDown, offStart, spreadGap(offRowsTopDown, offMin));
-    layoutHeight = offEnd + MARGIN_BOTTOM;
+    placeSpan(offRowsTopDown, offStart, spreadGap(offRowsTopDown, offMin));
+    layoutHeight = offStart + half + MARGIN_BOTTOM;
   } else {
     // D72/D75: a single-unit page has no LOS and no second side, so both lists start at the same top and
     // only one of them is ever populated. `extraGap` is spare height handed back to the rows: the canvas
     // is usually WIDER than tall for the window it has to fit, so the scale is pinned by the width and the
     // leftover height would otherwise be a black band under the last row (D58 asks for both axes to be
     // used). Sharing it out between the rows spends it as air rather than shrinking or stretching anything.
+    // D108: the rows start one SIDE_INSET below the top margin and finish one SIDE_INSET above the bottom
+    // one, so the first and last rows no longer sit against the turf's edges; the fill pass below then
+    // spreads whatever height is left between the rows exactly as it did before.
     const placeSingle = (extraGap) => {
-      const defEnd = placeSpan(defRowsTopDown, MARGIN_TOP, extraGap);
-      const offEnd = placeSpan(offRowsTopDown, MARGIN_TOP, extraGap);
-      const end = defRowsTopDown.length ? defEnd : (offRowsTopDown.length ? offEnd : MARGIN_TOP);
-      return end + MARGIN_BOTTOM;
+      const top = MARGIN_TOP + SIDE_INSET;
+      const defEnd = placeSpan(defRowsTopDown, top, extraGap);
+      const offEnd = placeSpan(offRowsTopDown, top, extraGap);
+      const end = defRowsTopDown.length ? defEnd : (offRowsTopDown.length ? offEnd : top);
+      return end + SIDE_INSET + MARGIN_BOTTOM;
     };
     losY = null;
     layoutHeight = placeSingle(0);
@@ -1331,4 +1396,4 @@ export function renderFieldSvg(layoutHeight, losY, layoutWidth = LAYOUT_WIDTH, c
   </svg>`;
 }
 
-export const geometry = { CARD_W, CARD_H1, ROW_H, SIDE_ROW_H, CARD_GAP, BANNER_H, OUT_RAIL_H, LABEL_RESERVE, MAX_DEPTH_ROWS, HEADSHOT_SIZE };
+export const geometry = { CARD_W, CARD_H1, ROW_H, SIDE_ROW_H, CARD_GAP, BANNER_H, OUT_RAIL_H, LABEL_RESERVE, MAX_DEPTH_ROWS, HEADSHOT_SIZE, MARGIN_TOP, MARGIN_BOTTOM, SIDE_INSET, BOTH_SIDES_HALF, BOTH_SIDES_HEIGHT };
