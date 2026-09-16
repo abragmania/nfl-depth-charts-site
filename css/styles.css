@@ -159,15 +159,30 @@ a.back { color:var(--muted); }
 .field-outer { flex:1 1 auto; min-width:0; position:relative; overflow:hidden; border-radius:10px; border:1px solid #22282f;
   animation: field-in .18s ease-out; }
 .player-panel { flex:0 0 440px; }
-/* 🎨 Polish (2026-09-11, round 2): 80px-tall turf bands read as oversized once the level stripes below
-   also carry visual weight — tightened to a ~45px band (item 3) so the turf texture reads as texture,
-   not another competing layer of stripes. */
-.field-scale { position:relative; background:repeating-linear-gradient(to bottom, #17421c 0 22px, #1b4d20 22px 44px); }
+/* D95 (Adam, 2026-09-16): "the field colour background is ugly, and you can't really see the team logo."
+   The old repeating-linear-gradient turf banded every 22px in two fairly saturated greens, which read as
+   a loud, busy stripe pattern competing with the cards. Replaced with one calm, low-saturation dark-green
+   wash (a soft vignette, not a repeat, so there is no banding) — the yard lines already drawn in
+   renderFieldSvg (field.js, thin white rgba(255,255,255,.13) rules) remain the only line-level texture. */
+.field-scale { position:relative;
+  background:radial-gradient(ellipse 140% 90% at 50% 40%, #17281d 0%, #121e16 55%, #0e1712 100%); }
 .field-layer { position:absolute; inset:0; z-index:1; }
-/* D48: a faint, large team-logo watermark centred behind the cards — sits below .field-layer (z-index 1)
-   so it never competes with them. */
-.field-watermark { position:absolute; inset:0; background-repeat:no-repeat; background-position:center 42%; background-size:46% auto;
-  opacity:.05; filter:grayscale(.3); pointer-events:none; z-index:0; }
+/* D95: the watermark was effectively invisible (5% opacity, grayscale) — a dark club mark disappeared
+   entirely into the dark turf. Two background layers on the same element: a soft round light plate first
+   (painted first = furthest back), then the crest itself on top, so a dark mark (WAS, PIT) still reads as
+   a silhouette against the plate while a light mark (MIA) reads directly. team.js/zoom.js/matchup.js set
+   the crest URL via the --wm-url custom property (was a direct background-image, which would have
+   overwritten this rule's own multi-layer background-image instead of composing with it). Sized to ~58%
+   of the field width per D95, centred on the field's midline, still z-index 0 (below .field-layer's cards
+   and .level-layer's labels, so it never competes with text). */
+.field-watermark { position:absolute; inset:0;
+  background-repeat:no-repeat, no-repeat;
+  background-position:center 45%, center 45%;
+  background-size:62% 62%, 56% auto;
+  background-image:
+    radial-gradient(circle, rgba(255,255,255,.22) 0%, rgba(255,255,255,.1) 55%, rgba(255,255,255,0) 80%),
+    var(--wm-url, none);
+  opacity:.22; pointer-events:none; z-index:0; }
 
 /* D49: a short, subtle entrance for the field on render. */
 @keyframes field-in { from { opacity:0; transform:scale(.97); } to { opacity:1; transform:scale(1); } }

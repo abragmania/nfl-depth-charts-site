@@ -124,15 +124,22 @@ function fieldHtml(view, team, layoutOpts = {}) {
   // layout.caption is null on a two-sided field (the SVG then labels both halves itself) and "OFFENSE" /
   // "DEFENSE" on a single-unit one, where it replaces the line of scrimmage as the thing naming the view.
   const svg = renderFieldSvg(layout.layoutHeight, layout.losY, layout.layoutWidth, layout.caption);
-  // D48: a faint, large team-logo watermark centred behind the cards — never competing with them, so
-  // it lives in the CSS background (low opacity, no pointer events) rather than as a real <img> element.
-  const watermarkUrl = team.logoDark || team.logo || "";
+  // D48/D95: a large, clearly-visible team-logo watermark centred behind the cards — never competing with
+  // them, so it lives in the CSS background (z-index 0, no pointer events) rather than as a real <img>
+  // element. The URL goes through the --wm-url custom property (not a direct background-image) so styles.
+  // css's own light-plate layer can sit behind the crest in the same background-image stack (D95).
+  // Root-relative: a relative url() inside a custom property resolves against the STYLESHEET's own URL
+  // (styles.css lives at /css/), not the document's, so the plain "img/logos/WAS-dark.png" the API returns
+  // 404'd at /css/img/logos/WAS-dark.png and the watermark silently vanished (found via CDP computed-style
+  // inspection: getComputedStyle().backgroundImage showed the wrong resolved path).
+  let watermarkUrl = team.logoDark || team.logo || "";
+  if (watermarkUrl && !/^https?:\/\//.test(watermarkUrl) && !watermarkUrl.startsWith("/")) watermarkUrl = "/" + watermarkUrl;
   return {
     layout,
     html: `
     <div class="field-outer" style="--team-primary:${team.colourPrimary};--team-secondary:${team.colourSecondary}">
       <div class="field-scale" style="width:${layout.layoutWidth}px;height:${layout.layoutHeight}px">
-        ${watermarkUrl ? `<div class="field-watermark" style="background-image:url('${esc(watermarkUrl)}')"></div>` : ""}
+        ${watermarkUrl ? `<div class="field-watermark" style="--wm-url:url('${esc(watermarkUrl)}')"></div>` : ""}
         ${svg}
         <div class="field-layer">${columnsHtml}${traysHtml}</div>
         <div class="level-layer">${levelsHtml}</div>

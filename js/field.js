@@ -659,14 +659,15 @@ export function columnRankReason(slot, displayLabel = null) {
   return `${renumbered}${printed ? `printed ${printed} on the chart` : "printed in the chart's own order"}`;
 }
 
-// The PASS CATCHERS row (D69's own row, D71's x-maths). D63 hung these columns off the ends of the
-// offensive-line comb so the receivers stood where they really line up, two pitches outside the tackles;
-// D71 replaced that with what Adam actually wants to read — ONE evenly-pitched cluster centred on the
-// field's centre line, at the same MIN_PITCH every other row uses. Left to right it reads:
-//   outside WR · WR · Slot · any further WRs · TE(s)
-// so the slot man is always drawn INSIDE (to the right of) the outside receiver, which is the one spatial
-// fact the row is there to carry. A second tight end still stacks directly under the first on one x, so a
-// two-TE club takes no more width than a one-TE club.
+// The PASS CATCHERS row (D69's own row, D71's x-maths, D97's left-to-right order). D63 hung these columns
+// off the ends of the offensive-line comb so the receivers stood where they really line up, two pitches
+// outside the tackles; D71 replaced that with what Adam actually wants to read — ONE evenly-pitched cluster
+// centred on the field's centre line, at the same MIN_PITCH every other row uses. D97 (Adam, 2026-09-16):
+// the pills must climb left to right, so it reads
+//   WR1 · WR · Slot (if any) · WR2 · ... · TE(s) · WRlast
+// i.e. the club columns in their own ascending order, the Slot column (if any) right after WR1, and the
+// tight end(s) tucked inside the last receiver. A second tight end still stacks directly under the first on
+// one x, so a two-TE club takes no more width than a one-TE club.
 // Nothing is written back into `lm` any more: with the receivers in a cluster there is no receiver
 // position for the secondary to mirror, so the corners and the nickel are fixed off the tackles in
 // mirrorLandmarks instead (D71).
@@ -704,15 +705,17 @@ function layoutPassCatchers(offSlots, lm, style) {
 
   stackColumns(teCols); // TE2 under TE1: the stack takes ONE place in the cluster, not two
   const te = teCols.length ? [teCols[0]] : [];
-  // D71/D76 order, now over the surviving columns: outside WR, WR · Slot, any further WRs, TE(s), and the
-  // last club column on the right — so the slot men are always drawn INSIDE the outside receiver and the
-  // tight end inside the right-side receiver. One club column left keeps the left end with the Slot column
-  // inside it; none left (every charted receiver plays inside) leaves the Slot column alone with the TEs.
-  const placed = (slotCol
-    ? (wrCols.length > 1
-      ? [wrCols[0], slotCol, ...wrCols.slice(1, -1), ...te, wrCols[wrCols.length - 1]]
-      : [...wrCols, slotCol, ...te])
-    : [wrCols[0], ...wrCols.slice(2), ...te, wrCols[1]]).filter(Boolean);
+  // D97 (Adam, 2026-09-16): the pills must read ascending left to right — WR1, WR2, WR3. The old order below
+  // hung the LAST club column off the far end only when a Slot column sat between WR1 and the rest; with no
+  // Slot column it instead read WR1, WR3, TE, WR2 (the Ravens), which is what D97 was raised against. Both
+  // cases now share one shape: the club columns stay in their own ascending order, the Slot column (if any)
+  // slots in right after WR1, and the tight end(s) stay tucked inside the last receiver exactly as D71/D76
+  // already placed them. One club column left keeps that single column with the Slot column right after it;
+  // none left (every charted receiver plays inside) leaves the Slot column alone with the TEs.
+  const placed = (wrCols.length > 1
+    ? [wrCols[0], ...(slotCol ? [slotCol] : []), ...wrCols.slice(1, -1), ...te, wrCols[wrCols.length - 1]]
+    : [...wrCols, ...(slotCol ? [slotCol] : []), ...te]
+  ).filter(Boolean);
   const pitch = MIN_PITCH * PASS_CATCHER_PITCH;
   placed.forEach((c, i) => { c.x = lm.C + (i - (placed.length - 1) / 2) * pitch; });
   return [...(slotCol ? [slotCol] : []), ...wrCols, ...teCols];
@@ -929,50 +932,75 @@ export function computeLayout(teamView, opts = {}) {
   // caption naming the unit it is showing, where the whole-team field labels its two halves.
   const bothSides = defRowsTopDown.length > 0 && offRowsTopDown.length > 0;
 
-  // The y-pass, as one function so it can be run twice (see the fill pass below). `extraGap` is spare
-  // height handed back to the rows: on a single-unit page the canvas is usually WIDER than tall for the
-  // window it has to fit, so the scale is pinned by the width and the leftover height would otherwise be
-  // a black band under the last row (D58 asks for both axes to be used). Sharing it out between the rows
-  // spends it as air rather than shrinking or stretching anything — every column keeps its own box, so
-  // the page is the same chart with more room around it.
-  const placeAll = (extraGap) => {
-    // --- DEF rows, farthest-from-LOS first (top of canvas) down to nearest (LINE, bottom of the half) ---
-    let y = MARGIN_TOP;
-    let prevDefLevel = null;
-    for (const row of defRowsTopDown) {
-      // Adam: "generous vertical separation" between LEVELS — rows that share a level (CB/NB and S, both
-      // "secondary") keep the normal BAND_GAP between them.
-      if (prevDefLevel !== null) y += extraGap + (row.level !== prevDefLevel ? LEVEL_GAP_EXTRA : 0);
+  // Places one row list top-down starting at `top`, opening BAND_GAP between two rows in the same level,
+  // BAND_GAP + LEVEL_GAP_EXTRA at a level boundary (Adam: "generous vertical separation" between levels),
+  // plus a uniform `extraGap` spent as air between every pair of rows. Returns the y just past the last
+  // row's bottom (or `top` unchanged for an empty list, so an empty side never pushes anything).
+  const placeSpan = (rows, top, extraGap) => {
+    let y = top;
+    let prevLevel = null;
+    for (const row of rows) {
+      if (prevLevel !== null) y += BAND_GAP + extraGap + (row.level !== prevLevel ? LEVEL_GAP_EXTRA : 0);
       placeRow(row, y);
-      y = row.bottom + BAND_GAP;
-      prevDefLevel = row.level;
+      y = row.bottom;
+      prevLevel = row.level;
     }
-    const defEnd = defRowsTopDown.length ? y - BAND_GAP : MARGIN_TOP;
-    const los = bothSides ? defEnd + LOS_HALF_GAP : null;
-    const offStart = bothSides ? los + LOS_HALF_GAP : MARGIN_TOP; // the same gutter both ways when there is one
-
-    // --- OFF rows, nearest-LOS first down to farthest (D69: PASS CATCHERS, LINE, BACKFIELD) ---
-    y = offStart;
-    let prevOffLevel = null;
-    for (const row of offRowsTopDown) {
-      if (prevOffLevel !== null) y += extraGap + (row.level !== prevOffLevel ? LEVEL_GAP_EXTRA : 0);
-      placeRow(row, y);
-      y = row.bottom + BAND_GAP;
-      prevOffLevel = row.level;
-    }
-    const offEnd = offRowsTopDown.length ? y - BAND_GAP : defEnd;
-    return { losY: los, layoutHeight: offEnd + MARGIN_BOTTOM };
+    return rows.length ? y : top;
   };
 
-  let { losY, layoutHeight } = placeAll(0);
-  // The fill pass. `opts.minHeight` is the height this canvas would have to be to reach the bottom of the
-  // window at the scale its width already dictates — viewfit.js measures the box and works it out, since
-  // this module never sees a viewport. Only ever set on a single-unit page, and capped so a very sparse
-  // unit ends up airy rather than adrift.
-  const gapCount = defRowsTopDown.length + offRowsTopDown.length - 1;
-  if (opts.minHeight > layoutHeight && gapCount > 0) {
-    const extra = Math.min((opts.minHeight - layoutHeight) / gapCount, MAX_EXTRA_GAP);
-    ({ losY, layoutHeight } = placeAll(extra));
+  // The same span, measured at zero extra air — BAND_GAP/LEVEL_GAP_EXTRA only. This is the "minimum row
+  // pitch that keeps cards from overlapping" D96 forbids compressing a side below.
+  const naturalSpanHeight = (rows) => {
+    let h = 0;
+    let prevLevel = null;
+    for (const row of rows) {
+      if (prevLevel !== null) h += BAND_GAP + (row.level !== prevLevel ? LEVEL_GAP_EXTRA : 0);
+      h += row.height;
+      prevLevel = row.level;
+    }
+    return h;
+  };
+
+  let losY, layoutHeight;
+  if (bothSides) {
+    // D96 (Adam, 2026-09-16) — "give the offensive side more room; there's no reason it should be so much
+    // smaller." The two halves now get EQUAL height, LOS at the midpoint, each half's own rows spread
+    // evenly across it. `half` is the TALLER side's own natural (minimum-pitch) height — normally the
+    // defence, which carries more rows — so that side is never compressed, only ever drawn at its floor;
+    // the shorter side's internal gaps are widened just enough to reach the same height. A side with one
+    // row (or none) has no internal gap to widen, so it simply sits at its natural height inside the half.
+    const defMin = naturalSpanHeight(defRowsTopDown);
+    const offMin = naturalSpanHeight(offRowsTopDown);
+    const half = Math.max(defMin, offMin);
+    const spreadGap = (rows, natural) => (rows.length > 1 && half > natural) ? (half - natural) / (rows.length - 1) : 0;
+    const defEnd = placeSpan(defRowsTopDown, MARGIN_TOP, spreadGap(defRowsTopDown, defMin));
+    losY = defEnd + LOS_HALF_GAP;
+    const offStart = losY + LOS_HALF_GAP; // the same gutter both ways
+    const offEnd = placeSpan(offRowsTopDown, offStart, spreadGap(offRowsTopDown, offMin));
+    layoutHeight = offEnd + MARGIN_BOTTOM;
+  } else {
+    // D72/D75: a single-unit page has no LOS and no second side, so both lists start at the same top and
+    // only one of them is ever populated. `extraGap` is spare height handed back to the rows: the canvas
+    // is usually WIDER than tall for the window it has to fit, so the scale is pinned by the width and the
+    // leftover height would otherwise be a black band under the last row (D58 asks for both axes to be
+    // used). Sharing it out between the rows spends it as air rather than shrinking or stretching anything.
+    const placeSingle = (extraGap) => {
+      const defEnd = placeSpan(defRowsTopDown, MARGIN_TOP, extraGap);
+      const offEnd = placeSpan(offRowsTopDown, MARGIN_TOP, extraGap);
+      const end = defRowsTopDown.length ? defEnd : (offRowsTopDown.length ? offEnd : MARGIN_TOP);
+      return end + MARGIN_BOTTOM;
+    };
+    losY = null;
+    layoutHeight = placeSingle(0);
+    // The fill pass. `opts.minHeight` is the height this canvas would have to be to reach the bottom of the
+    // window at the scale its width already dictates — viewfit.js measures the box and works it out, since
+    // this module never sees a viewport. Only ever set on a single-unit page, and capped so a very sparse
+    // unit ends up airy rather than adrift.
+    const gapCount = defRowsTopDown.length + offRowsTopDown.length - 1;
+    if (opts.minHeight > layoutHeight && gapCount > 0) {
+      const extra = Math.min((opts.minHeight - layoutHeight) / gapCount, MAX_EXTRA_GAP);
+      layoutHeight = placeSingle(extra);
+    }
   }
 
   const allRows = [...defRowsTopDown, ...offRowsTopDown];
