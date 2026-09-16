@@ -216,16 +216,23 @@ a.back { color:var(--muted); }
    club's tints the right edge (columns still read left-to-right within each half, same as the team page),
    with a faint brightening at the real line of scrimmage (--los-pct, matchup.js) instead of a hard seam. */
 [data-field-variant="A"].matchup-field .field-scale {
+  /* Adam (2026-09-16): the DEFENDING club (team B, --team-primary) owns the TOP half, the club on offense
+     (team A, --team-a-primary) owns the BOTTOM half - both edges of each half in that half's colour, split at
+     the line of scrimmage (--los-pct). The old rule painted the left edge with one club and the right edge
+     with the other down the full height, so the 49ers-Dolphins matchup read red top / teal bottom. */
   --field-a-edge-def:color-mix(in srgb, var(--team-primary,#333) 46%, transparent);
   --field-a-edge-off:color-mix(in srgb, var(--team-a-primary,#333) 46%, transparent);
+  --field-a-los:var(--los-pct, 50%);
   background:
-    radial-gradient(32% 100% at 0% 50%, var(--field-a-edge-def) 0%, transparent 80%),
-    radial-gradient(32% 100% at 100% 50%, var(--field-a-edge-off) 0%, transparent 80%),
+    radial-gradient(32% 50% at 0% calc(var(--field-a-los) / 2), var(--field-a-edge-def) 0%, transparent 80%),
+    radial-gradient(32% 50% at 100% calc(var(--field-a-los) / 2), var(--field-a-edge-def) 0%, transparent 80%),
+    radial-gradient(32% 50% at 0% calc(var(--field-a-los) + (100% - var(--field-a-los)) / 2), var(--field-a-edge-off) 0%, transparent 80%),
+    radial-gradient(32% 50% at 100% calc(var(--field-a-los) + (100% - var(--field-a-los)) / 2), var(--field-a-edge-off) 0%, transparent 80%),
     linear-gradient(180deg,
       var(--field-a-neu2) 0%,
-      var(--field-a-neu2) calc(var(--los-pct, 50%) - 10%),
-      var(--field-a-neu1) var(--los-pct, 50%),
-      var(--field-a-neu2) calc(var(--los-pct, 50%) + 10%),
+      var(--field-a-neu2) calc(var(--field-a-los) - 10%),
+      var(--field-a-neu1) var(--field-a-los),
+      var(--field-a-neu2) calc(var(--field-a-los) + 10%),
       var(--field-a-neu2) 100%); }
 
 /* ---- Variant B (inert until FIELD_VARIANT = "B"): one vertical wash of the primary colour ----
