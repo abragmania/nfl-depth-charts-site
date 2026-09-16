@@ -589,6 +589,9 @@ a.back { color:var(--muted); }
    overspill would start clipping the name under it, so the compact family pins the strip to the height its
    own box was measured with. */
 .column-compact .prow-one .card-banner { height:13px; line-height:13px; font-size:9px; }
+/* 👁 (2026-09-16): the side pages (headshot rows, D72) reserve BANNER_H = 13 too, and `.field-scale .card-banner`
+   was winning there at 17px, pushing the fill-in card 4px past its box. Same pin for every line-one rail. */
+.field-scale .column .prow-one .card-banner { height:13px; line-height:13px; }
 /* D104's rail on the demoted OUT row at the foot of the column — the same step up, inside the OUT_RAIL_H
    field.js reserves for it (15: a 13px strip plus its 2px of margin, over a 20px row). */
 .column-compact .prow-outrail .card-banner { height:13px; line-height:13px; font-size:9.5px; }
