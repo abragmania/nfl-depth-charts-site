@@ -391,10 +391,22 @@ const CB_PITCH_OUT = 1.15;
 // D112 (Adam, 2026-09-16, team view): "the OLBs / edges are way too far to the outside of the screen"
 // (Eagles, Broncos, among others). The EDGE row used to sit on the same 1.0-pitch-out landmark as CB_PITCH_OUT's
 // near neighbour (lm.OUTSIDE_L/R), which reads fine for a corner but drags an edge rusher out past where a real
-// defensive end lines up. 0.6 pitches outside the tackle is where that man actually stands - the widest real
-// EDGE row in data/cache/compiled (a 3-4's three edge columns, e.g. BAL/NYG/PIT/SEA) still leaves ~630 units to
-// its nearest neighbour at this value, so there was no need to shave it any closer.
-const EDGE_PITCH_OUT = 0.6;
+// defensive end lines up. D112 first moved it to 0.6 pitches outside the tackle.
+// D116 (Adam, 2026-09-16): "the EDGE and/or OLBs are still too far outside, tighten them up... I don't want to
+// look the whole way across the screen to see the OLB/EDGE counterpart." 0.6 was still reading as "out past the
+// corner's own gravity" on a 1700px screen — the EDGE pair sat ~1170 units apart. 0.2 pitches outside the tackle
+// puts the column over the tackle itself, where a real edge defender's hand is actually in the dirt; the widest
+// real EDGE row in data/cache/compiled (a 3-4's three edge columns, e.g. BAL/NYG/PIT/SEA) still clears
+// MIN_CARD_GAP to its nearest neighbour at this value (see the D112 test below), so there was no floor stopping
+// it from coming in this far.
+const EDGE_PITCH_OUT = 0.2;
+// D116: the LB band's two inside linebackers used to sit ON the guards (1.0 pitch off centre, same distance as
+// the safeties), which put them at or past where the new, tighter EDGE columns land and defeated the point of
+// tightening EDGE_PITCH_OUT — there was nothing between an EDGE man and his neighbouring ILB. Pulling the ILBs
+// in to 0.85 pitches off centre (just inside the guards) keeps an EDGE column clearly outside its neighbouring
+// ILB with a visible margin, and still clears MIN_CARD_GAP between the two ILB columns themselves (see the
+// D116 test below).
+const ILB_PITCH_FROM_CENTER = 0.85;
 // D71: "the nickel sits between the corner and the box." Nominally one pitch outside the left tackle,
 // which is what Adam described; the floor below it is arithmetic, not taste — two columns closer than
 // MIN_PITCH overlap, and the corner is already at 1.4 pitches, so a literal one-pitch nickel would be
@@ -1067,13 +1079,18 @@ function mirrorLandmarks(olCols) {
     C = LAYOUT_WIDTH / 2; LG = C - MIN_PITCH; RG = C + MIN_PITCH; LT = C - 2 * MIN_PITCH; RT = C + 2 * MIN_PITCH;
   }
   const pitch = Math.max(LG - LT, MIN_PITCH);
-  // D112: edge rushers stand just outside the tackle, not out at the corner's landmark.
+  // D112/D116: edge rushers stand just outside the tackle, not out at the corner's landmark.
   const EDGE_L = LT - EDGE_PITCH_OUT * pitch;
   const EDGE_R = RT + EDGE_PITCH_OUT * pitch;
+  // D116: the inside linebackers stand just inside the guards, not on top of them, so they read as clearly
+  // inside their neighbouring EDGE column rather than sharing a landmark with the safeties (which stay on
+  // the guards themselves — see the "S" case below, untouched by this ruling).
+  const ILB_L = C - ILB_PITCH_FROM_CENTER * pitch;
+  const ILB_R = C + ILB_PITCH_FROM_CENTER * pitch;
   const CB_L = LT - CB_PITCH_OUT * pitch;
   const CB_R = RT + CB_PITCH_OUT * pitch;
   const NB_X = Math.max(LT - NB_PITCH_OUT * pitch, CB_L + MIN_PITCH);
-  return { LT, LG, C, RG, RT, pitch, EDGE_L, EDGE_R, CB_L, CB_R, NB_X };
+  return { LT, LG, C, RG, RT, pitch, EDGE_L, EDGE_R, ILB_L, ILB_R, CB_L, CB_R, NB_X };
 }
 
 // Ruling A: the LINE row places by LABEL, not by count, because it can now hold 3-5 columns of two
@@ -1097,11 +1114,12 @@ function placeLineColumns(slots, scheme, lm) {
   return xs;
 }
 
-// The per-band mirroring rule (Adam, 2026-09-11), as amended by ruling A: the LINE row places by label
-// (above); a 3-4's outside linebackers sit just outside the tackles and any other stand-up edge label
-// spreads between them; MLB over the centre, OLB/ILB over the guards; CB wide of the tackles, NB inside
-// the left corner (D71 — both fixed off the line, no longer mirrored off the receivers); safeties deepest
-// but still centred over the guards.
+// The per-band mirroring rule (Adam, 2026-09-11), as amended by ruling A and D116: the LINE row places by
+// label (above); a 3-4's outside linebackers sit just outside the tackles and any other stand-up edge label
+// spreads between them; MLB over the centre, OLB/ILB at ILB_PITCH_FROM_CENTER pitches off it (D116 — just
+// inside the guards, not on top of them); CB wide of the tackles, NB inside the left corner (D71 — both
+// fixed off the line, no longer mirrored off the receivers); safeties deepest but still centred over the
+// guards (unmoved by D116 — only the LB band's landmark changed).
 //
 // D111 (Adam, 2026-09-16) changes NONE of the x's below, which is the point of it: the one-row secondary is
 // the CB, NB and S bands drawn on a single y, each keeping exactly the place it already had. Left to right
@@ -1115,12 +1133,23 @@ function mirrorDefXs(band, slots, scheme, lm) {
   if (count <= 0) return [];
   switch (band) {
     case "DL": return placeLineColumns(slots, scheme, lm);
-    // D112: EDGE_L/EDGE_R sit EDGE_PITCH_OUT pitches outside the tackles (just outside, where a real
+    // D112/D116: EDGE_L/EDGE_R sit EDGE_PITCH_OUT pitches outside the tackles (just outside, where a real
     // defensive end lines up) - not on the corner's own, much-further-out landmark.
     case "EDGE": return scheme === "3-4"
       ? placeOuterInner(count, lm.EDGE_L, lm.EDGE_R, lm.LG, lm.RG)
       : spanPoints(lm.EDGE_L, lm.EDGE_R, count);
-    case "LB": return placeFlankedCenter(count, lm.LG, lm.RG, lm.C);
+    // D116: "the LB band's two inside linebackers" (Adam) is exactly the even-count case in this codebase —
+    // a 3-4's 2 ILBs, its only real shape today, since a 3-4's OLBs live on the EDGE band, not here. That
+    // pair moves in to ILB_L/ILB_R (ILB_PITCH_FROM_CENTER pitches off the centre) instead of the guards.
+    // A 4-3's odd-count row (WLB, MLB, SLB — outside backers flanking a true inside one) is left on the
+    // guards: placeFlankedCenter's odd branch splits the flank range into two HALVES and re-widens either
+    // half up to MIN_PITCH if it is narrower, so reusing ILB_L/ILB_R there would push WLB/SLB further out
+    // than intended instead of tighter — and Adam's ruling never named that shape as wrong. It was already
+    // comfortably inside the tightened EDGE landmarks (1 pitch off centre vs. EDGE's new 2.2) before this
+    // ruling and still is (see the D116 "3-LB row" test), so it does not need to move.
+    case "LB": return count % 2 === 0
+      ? placeFlankedCenter(count, lm.ILB_L, lm.ILB_R, lm.C)
+      : placeFlankedCenter(count, lm.LG, lm.RG, lm.C);
     // 👁 QA item 8: spanPoints(xMin,xMax,1) lands a single point on the exact MIDPOINT of its range — fine
     // for a band that belongs in the middle (NB, S), wrong for CB, whose range is the two outside corners.
     // A team whose chart carries only one combined CB slot (both corners stacked as one column, e.g. WAS)
@@ -1618,4 +1647,4 @@ export function renderFieldSvg(layoutHeight, losY, layoutWidth = LAYOUT_WIDTH, c
 // D111 adds the DEFENSIVE ROW COUNT to the bag for the same reason: the canvas constant is derived from it,
 // so a test that wants to state "the canvas is this many full rows plus its gaps" can read the count from
 // here instead of hard-coding the 5 that D111 turned into a 4.
-export const geometry = { CARD_W, CARD_H1, ROW_H, SIDE_ROW_H, CARD_GAP, SIDE_CARD_GAP, BANNER_H, OUT_RAIL_H, LABEL_RESERVE, MAX_DEPTH_ROWS, HEADSHOT_SIZE, BAND_GAP, LEVEL_GAP_EXTRA, LOS_HALF_GAP, MARGIN_TOP, MARGIN_BOTTOM, SIDE_INSET, DEF_ROW_FULL_H, DEF_ROW_COUNT: DEF_ROW_ORDER.length, DEF_LEVEL_BOUNDARIES, BOTH_SIDES_HALF, BOTH_SIDES_HEIGHT, MIN_PITCH, MIN_CARD_GAP, CB_PITCH_OUT, EDGE_PITCH_OUT, PASS_CATCHER_PITCH };
+export const geometry = { CARD_W, CARD_H1, ROW_H, SIDE_ROW_H, CARD_GAP, SIDE_CARD_GAP, BANNER_H, OUT_RAIL_H, LABEL_RESERVE, MAX_DEPTH_ROWS, HEADSHOT_SIZE, BAND_GAP, LEVEL_GAP_EXTRA, LOS_HALF_GAP, MARGIN_TOP, MARGIN_BOTTOM, SIDE_INSET, DEF_ROW_FULL_H, DEF_ROW_COUNT: DEF_ROW_ORDER.length, DEF_LEVEL_BOUNDARIES, BOTH_SIDES_HALF, BOTH_SIDES_HEIGHT, MIN_PITCH, MIN_CARD_GAP, CB_PITCH_OUT, EDGE_PITCH_OUT, ILB_PITCH_FROM_CENTER, PASS_CATCHER_PITCH };
