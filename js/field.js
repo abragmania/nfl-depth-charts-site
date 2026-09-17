@@ -810,28 +810,68 @@ function mirrorLandmarks(olCols) {
 
 // Ruling A: the LINE row places by LABEL, not by count, because it can now hold 3-5 columns of two
 // different kinds. Ends (label "DE") go over/just outside the tackles; the interior (DT, or a 3-4's NT)
-// goes over the guards in a 4-3 and on the centre in a 3-4. Left to right that reads DE, DT/NT…, DE in
-// a 4-3 and DE, NT, DE in a 3-4 — which is exactly how the two fronts actually line up. The slots keep
-// their own chart order; only their x's are assigned by kind, so the DOM order never has to change.
+// takes the middle. The slots keep their own chart order; only their x's are assigned by kind, so the
+// DOM order never has to change.
+//
+// D127 (Adam, every page): "for DE/DT/D-lines you can take advantage of the gaps, they don't need to sit
+// right over the guards." The interior is ONE evenly-pitched cluster centred on the centre — one man on
+// the centre, two in the gaps either side of it (±0.5 pitch), three on the centre and ±1, four at ±0.5
+// and ±1.5 — instead of the guards-and-nose comb, which left a two-gap hole over the centre on the
+// four-man DE, DT, DT, DE line ten clubs chart. The scheme no longer decides anything here: the count of
+// interior men does, which is why a 3-4's lone nose still lands on the centre.
 const isEndLabel = (slot) => /^(?:[LR]?DE)$/.test(String(slot?.label || "").toUpperCase());
-function placeLineColumns(slots, scheme, lm) {
+function placeLineColumns(slots, lm) {
   const xs = new Array(slots.length);
   const ends = [], interior = [];
   slots.forEach((s, i) => (isEndLabel(s) ? ends : interior).push(i));
-  const interiorXs = scheme === "3-4"
-    ? placeFlankedCenter(interior.length, lm.LG, lm.RG, lm.C) // one nose tackle sits on the centre
-    : spanPoints(lm.LG, lm.RG, interior.length);             // 4-3 tackles sit over the two guards
-  interior.forEach((idx, k) => (xs[idx] = interiorXs[k]));
-  // Two ends flank the tackles; a rare third or fourth end spreads between the guards and is then
-  // pushed clear of the interior linemen by enforceNoOverlap below.
+  interior.forEach((idx, k) => (xs[idx] = lm.C + (k - (interior.length - 1) / 2) * lm.pitch));
+  const innerL = interior.length ? Math.min(...interior.map((idx) => xs[idx])) : lm.C;
+  const innerR = interior.length ? Math.max(...interior.map((idx) => xs[idx])) : lm.C;
+  // D127: an end keeps his tackle's landmark unless the interior cluster has grown out to within MIN_PITCH
+  // of it, in which case he steps OUT (away from the centre) by exactly the shortfall. A rare third end,
+  // whom placeOuterInner lands on the centre itself, has no side to step to and is left to enforceNoOverlap.
   const endXs = placeOuterInner(ends.length, lm.LT, lm.RT, lm.LG, lm.RG);
-  ends.forEach((idx, k) => (xs[idx] = endXs[k]));
+  ends.forEach((idx, k) => {
+    const x = endXs[k];
+    if (!interior.length || Math.abs(x - lm.C) < 0.5) xs[idx] = x;
+    else xs[idx] = x < lm.C ? Math.min(x, innerL - MIN_PITCH) : Math.max(x, innerR + MIN_PITCH);
+  });
   return xs;
 }
 
-// The per-band mirroring rule: the LINE row places by label (above); a 3-4's outside linebackers sit just
-// outside the tackles and any other stand-up edge label spreads between them; MLB over the centre, OLB/ILB
-// at ILB_PITCH_FROM_CENTER pitches off it (D116); CB, NB and S on D125's centre-pitched landmarks.
+// D128(1) (Adam, every club): Tennessee prints its linebackers MLB, OLB, OLB and the row was filled in that
+// printed order, standing the middle linebacker on the LEFT. The row now places by LABEL like the line does:
+// the one column the club calls MLB (or MIKE) takes the centre and the rest flank him keeping their printed
+// left-to-right order. Only a row with a centre spot (an ODD count) is re-ordered: a two-backer row (MLB, OLB)
+// stays the symmetric pair it always was, and two Mikes or none keeps D116's placement. Placement only —
+// no column's label, slot or men ever change here (Adam: "before was right, make sure it's STILL right").
+const isMikeLabel = (slot) => /^(?:MLB|MIKE)$/.test(String(slot?.label || "").toUpperCase());
+function placeLbColumns(slots, lm) {
+  const count = slots.length;
+  const mikes = [];
+  slots.forEach((s, i) => { if (isMikeLabel(s)) mikes.push(i); });
+  if (mikes.length !== 1 || count % 2 === 0) {
+    return count % 2 === 0
+      ? placeFlankedCenter(count, lm.ILB_L, lm.ILB_R, lm.C)
+      : placeFlankedCenter(count, lm.LG, lm.RG, lm.C);
+  }
+  const mike = mikes[0];
+  const flankers = slots.map((_, i) => i).filter((i) => i !== mike);
+  // How many flankers go left is where the club printed the Mike, pulled back to an even split when he is
+  // printed at one end of the row — otherwise Tennessee's leading MLB would leave both its OLBs on one side
+  // and the "centre" column would be the leftmost thing on the row.
+  const left = Math.min(Math.max(mike, Math.floor(flankers.length / 2)), Math.ceil(flankers.length / 2));
+  const leftXs = left ? spanPoints(lm.LG, lm.C, left + 1).slice(0, left) : [];
+  const rightXs = flankers.length - left ? spanPoints(lm.C, lm.RG, flankers.length - left + 1).slice(1) : [];
+  const xs = new Array(count);
+  xs[mike] = lm.C;
+  [...leftXs, ...rightXs].forEach((x, k) => (xs[flankers[k]] = x));
+  return xs;
+}
+
+// The per-band mirroring rule: the LINE and LINEBACKER rows both place by label (above); a 3-4's outside
+// linebackers sit just outside the tackles and any other stand-up edge label spreads between them; CB, NB
+// and S on D125's centre-pitched landmarks.
 //
 // D111 changes NONE of the x's below — the one-row secondary is just the CB, NB and S bands drawn on a
 // single y. Left to right that reads corner, nickel, safety, safety, corner; at the five-man shape every
@@ -841,17 +881,14 @@ function mirrorDefXs(band, slots, scheme, lm) {
   const count = slots.length;
   if (count <= 0) return [];
   switch (band) {
-    case "DL": return placeLineColumns(slots, scheme, lm);
+    case "DL": return placeLineColumns(slots, lm);
     case "EDGE": return scheme === "3-4"
       ? placeOuterInner(count, lm.EDGE_L, lm.EDGE_R, lm.LG, lm.RG)
       : spanPoints(lm.EDGE_L, lm.EDGE_R, count);
-    // D116: the even-count case is a 3-4's 2 ILBs (its only real shape — a 3-4's OLBs live on EDGE, not
-    // here), which move in to ILB_L/ILB_R. A 4-3's odd-count row (WLB, MLB, SLB) stays on the guards —
-    // reusing ILB_L/ILB_R there would push WLB/SLB further out instead of tighter, and that shape was
-    // already comfortably inside the tightened EDGE landmarks before this ruling and still is.
-    case "LB": return count % 2 === 0
-      ? placeFlankedCenter(count, lm.ILB_L, lm.ILB_R, lm.C)
-      : placeFlankedCenter(count, lm.LG, lm.RG, lm.C);
+    // D128(1): by label, Mike on the centre (placeLbColumns). Its no-Mike fallback is D116's own rule —
+    // a 3-4's ILB pair moves in to ILB_L/ILB_R, any other row spreads across the guards, which keeps
+    // WLB/SLB outside rather than pushing them tighter than the inside backers they flank.
+    case "LB": return placeLbColumns(slots, lm);
     // spanPoints(xMin,xMax,1) lands a single point on the exact MIDPOINT of its range — fine for a band
     // that belongs in the middle (NB, S), wrong for CB, whose range is the two outside corners: a chart
     // with only one combined CB slot (e.g. WAS) would draw it dead centre, on top of the nickel, leaving
