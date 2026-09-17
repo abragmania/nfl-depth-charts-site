@@ -1,13 +1,10 @@
 // View lifecycle and fit-to-window scaling, shared by every page that draws a scaled field.
 //
-// WHY THIS MODULE EXISTS (🔵 delta review, 2026-09-13). The whole-team page and the matchup page had
-// grown two near-identical copies of the same ~80 lines: measure the box, choose a horizontal spread,
-// render, re-scale on resize, rebuild if the spread turns out wrong, and never quite tear any of it
-// down. Two copies meant two of every bug, and the review found the worst one: nothing disposed a view's
-// observers when the ROUTE changed, so navigating from a team page to the matchup left the team page's
-// ResizeObserver alive on <main>. It fired on the next layout, its refit() measured the now-detached
-// field, concluded the spread was wrong, and wrote the OLD team's field straight over the matchup's —
-// taking a wrong-team click handler with it. On a zoom route the same orphan threw inside a timer.
+// WHY THIS MODULE EXISTS: without one shared teardown, a view's ResizeObserver can outlive its route.
+// Navigating from a team page to the matchup would leave the team page's ResizeObserver alive on <main>;
+// it fires on the next layout, its refit() measures the now-detached field, concludes the spread is wrong,
+// and writes the OLD team's field straight over the matchup's — taking a wrong-team click handler with it.
+// On a zoom route the same kind of orphan throws inside a timer.
 //
 // So there is now exactly one implementation, one set of named constants, and one registry:
 //   registerView(dispose) / disposeCurrentView() - main.js's router guard disposes the outgoing view
@@ -53,15 +50,14 @@ const MAX_SPREAD = 1.8;         // a short chart must not stretch into a smear o
 const RESPREAD_TOLERANCE = 0.04; // rebuild only when the ideal spread is >4% off what we drew
 const MAX_REBUILDS = 2;         // bounded so a rebuild can never oscillate
 const K_EPSILON = 0.002;        // ignore scale changes too small to see
-// 👁 QA item 4: was 1400, which left ~300px of a 1700px window black on the right whenever the side view's
-// scale was HEIGHT-bound (defence's four levels) rather than width-bound — the design canvas itself was
-// simply narrower than the window, so no amount of scale-up could ever reach the right edge. Raising the
-// canvas lets the same height-bound scale spread across more width instead of stopping short of it.
+// 1650, not a narrower value: a narrower design canvas leaves black space on the right whenever the side
+// view's scale is HEIGHT-bound (defence's four levels) rather than width-bound, since the canvas itself is
+// then too narrow for the window and no amount of scale-up can reach the right edge.
 const FIT_DESIGN_WIDTH = 1650;  // the side views' fixed design canvas
 const MAX_FILL_GROW = 1.9;      // fill mode: a two-card group must not balloon into a wall of headshots
 const RESIZE_DEBOUNCE = 180;
 
-// 👁 QA B4 — why the settle is a TIMER and not an observer.
+// Why the settle is a TIMER and not an observer.
 //
 // The available height is `window - fieldTop - backRow`, so it changes whenever anything ABOVE the field
 // changes height. On a cold load that happens twice: the header's controls wrap to a second line and the
@@ -74,17 +70,18 @@ const RESIZE_DEBOUNCE = 180;
 const SETTLE_DELAYS = [0, 80, 250, 700];
 
 // Runs `fn` on the settle schedule. `isDead()` is checked before every call INCLUDING the fonts.ready
-// continuation, which cannot be cancelled any other way (🔵 review finding 2: a promise callback armed by
-// a view that has since been torn down would otherwise still fire against its detached DOM).
+// continuation, which cannot be cancelled any other way: a promise callback armed by a view that has since
+// been torn down would otherwise still fire against its detached DOM.
 function settle(fn, isDead) {
   const timers = SETTLE_DELAYS.map((ms) => setTimeout(() => { if (!isDead()) fn(); }, ms));
   document.fonts?.ready.then(() => { if (!isDead()) fn(); }).catch(() => {});
   return () => timers.forEach(clearTimeout);
 }
 
-// The one rule every fit mode in this file has to obey (Adam's screenshots, 2026-09-16 — JAX rendered
-// wider than the viewport, its right "LINE OF SCRIMMAGE" caption cut off at the edge). Jacksonville plays
-// a 4-3 with all four linemen on the LINE row, so its compiled chart has no EDGE row and the canvas is one
+// The one rule every fit mode in this file has to obey: a canvas must never render wider than the
+// viewport (a real symptom was JAX's right "LINE OF SCRIMMAGE" caption cut off at the edge). Jacksonville
+// plays a 4-3 with all four linemen on the LINE row, so its compiled chart has no EDGE row and the canvas
+// is one
 // defensive row shorter than a normal team's - which can make the scale needed to reach the bottom of the
 // window (the height fit) LARGER than the scale needed to reach the right edge (the width fit). The
 // applied scale must never be that height fit alone: it is always the smaller of the two, with whatever
@@ -95,8 +92,8 @@ export function capToWidthFit(widthFit, heightFit) {
 }
 
 // The height-budget arithmetic, pulled out as its own pure function so it can be unit tested directly
-// (Adam, 2026-09-16 — the matchup page "permanently shaking uncontrollably"). The budget used to be
-// `innerHeight - fieldTop - (backRow + BOTTOM_RESERVE)`, which only ever knew about a `.back-row` UNDER
+// (D114 — the matchup page could otherwise shake uncontrollably). The plain budget is
+// `innerHeight - fieldTop - (backRow + BOTTOM_RESERVE)`, which only ever knows about a `.back-row` UNDER
 // the field. matchup.js's D113 bottom half-banner is a real sibling INSIDE `.field-outer`'s own wrapper
 // (`.matchup-field-wrap`) that this budget never heard of, so the wrap rendered ~33px taller than the
 // window on every load: a vertical scrollbar appeared, `main` narrowed, the ResizeObserver refit at the
@@ -247,8 +244,8 @@ export function mountScaledField({ root, probe, build, onDraw, onScale, panel = 
     apply();
   };
 
-  // 🔵 review finding 3: the rebuild budget is spent by the cold-load settle, so without this a later
-  // panel toggle or window resize could only ever re-scale an already-wrong canvas. A genuine user
+  // The rebuild budget is spent by the cold-load settle, so without this a later panel toggle or window
+  // resize could only ever re-scale an already-wrong canvas. A genuine user
   // action - resizing the window, opening or closing the panel - is a new layout question, so it gets a
   // fresh budget. Debounced, because a drag-resize fires continuously and rebuilding on every frame of
   // one would be gratuitous.
@@ -301,19 +298,18 @@ export function mountScaledField({ root, probe, build, onDraw, onScale, panel = 
 // The side and group views are ordinary flow layouts rather than an absolutely-positioned canvas, so
 // instead of a coordinate system they get a design width and one CSS transform. Two modes:
 //   default  a fixed FIT_DESIGN_WIDTH canvas scaled to whichever axis runs out first
-//   fill     BOTH axes filled (👁 QA A1, the group view; 👁 QA 2026-09-15 item 1, the side views): the
-//            content is laid out at a design width of `container / k` and scaled by that same k, so the
-//            scaled width lands exactly on the container and the scaled height exactly on the available
-//            height. Because the design width is derived from a height that was measured at a DIFFERENT
-//            width, one pass is not enough — solveFit below iterates the pair to a fixed point.
+//   fill     BOTH axes filled (the group view and the side views): the content is laid out at a design
+//            width of `container / k` and scaled by that same k, so the scaled width lands exactly on the
+//            container and the scaled height exactly on the available height. Because the design width is
+//            derived from a height that was measured at a DIFFERENT width, one pass is not enough —
+//            solveFit below iterates the pair to a fixed point.
 //
-// 👁 QA (2026-09-15, item 1) — why the side views moved from `default` to `fill`. The fixed canvas could
-// only ever scale to `container / FIT_DESIGN_WIDTH`, so once D62's leaner cards made the content short,
-// nothing could grow into the space they freed: PHI's offense and defense both ended ~190px above the
-// bottom of the window with idle margins down each side. zoom.js's old note said fill mode made cards
-// SMALLER for a unit with few levels; that was this function's fault, not the mode's — its single
-// correction pass kept the first pass's design width even when it took a smaller scale, so the result
-// both under-filled the height and letterboxed the width. Iterating fixes it for every level count.
+// Why the side views use `fill` rather than `default`: the fixed canvas can only ever scale to
+// `container / FIT_DESIGN_WIDTH`, so once D62's leaner cards made the content short, nothing could grow
+// into the space they freed — a unit with few levels would end well above the bottom of the window with
+// idle margins down each side. A single, non-iterated correction pass would keep the first pass's design
+// width even when it took a smaller scale, both under-filling the height and letterboxing the width;
+// iterating fixes it for every level count.
 export function fitToViewport(root, { fill = false, maxGrow = MAX_FILL_GROW } = {}) {
   const outer = root.querySelector(".fit-outer");
   const inner = outer?.querySelector(".fit-inner");
@@ -323,27 +319,23 @@ export function fitToViewport(root, { fill = false, maxGrow = MAX_FILL_GROW } = 
   let dead = false;
 
   const alive = () => !dead && document.contains(inner);
-  // 👁 QA (2026-09-15, item 1): the `?? 26` was an allowance for a "back to team" link under the field.
+  // No `?? 26` fallback here: that used to be an allowance for a "back to team" link under the field, but
   // D59 replaced every one of those with the nav strip ABOVE the page, so no view renders a .back-row any
-  // more and that 26px was pure phantom reserve — a quarter of the gap QA measured at the bottom of the
-  // side views. A view that does render one is still measured; nothing else is held back for it.
+  // more. A view that does render one is still measured; nothing else is held back for it.
   // FLOW_BOTTOM_RESERVE replaces it with an honest margin: now that the fit actually consumes the height
   // it is given, whatever is left over is the visible gap under the last card, and a card pressed against
   // the window edge reads as cut off even when it is not.
   const availableHeight = () => Math.max(window.innerHeight - outer.getBoundingClientRect().top
     - ((backRow?.offsetHeight ?? 0) + FLOW_BOTTOM_RESERVE), 200);
 
-  // This used to cache the last scale and skip the write when it had not moved (old review finding 9, which
-  // was about reflow churn). That cache was never able to work here and actively broke the view: BOTH apply
-  // functions below CLEAR the transform and the outer height before they measure - that is how they get an
-  // unscaled natural height - so by the time commit runs, "nothing changed" is false on the element even
-  // when the number is identical, and returning early left the page laid out at full size with no transform
-  // at all. That is a scrolling page, which D58 forbids; BUF's defence (four levels, k≈0.88) rendered that
-  // way on every ResizeObserver pass after the first. The write is unconditional now. It is also cheap: the
-  // expensive part is the measuring reflow above, which happened either way, and writing the same values
-  // back changes no layout, so nothing observing `outer` is woken by it. (The absolute-canvas fitter higher
-  // up this file keeps its own early return - it measures the container without clearing anything first, so
-  // there the fast path is real.)
+  // The write below is unconditional — no cache-and-skip-if-unmoved shortcut. BOTH apply functions below
+  // CLEAR the transform and the outer height before they measure (that is how they get an unscaled natural
+  // height), so "nothing changed" would be false on the element even when the number is identical, and
+  // skipping the write would leave the page laid out at full size with no transform at all — a scrolling
+  // page, which D58 forbids. It is also cheap: the expensive part is the measuring reflow above, which
+  // happens either way, and writing the same values back changes no layout, so nothing observing `outer`
+  // is woken by it. (The absolute-canvas fitter higher up this file keeps its own early return — it
+  // measures the container without clearing anything first, so there the fast path is real.)
   const commit = (designW, k, naturalH) => {
     inner.style.width = `${designW}px`;
     inner.style.transform = `scale(${k})`;

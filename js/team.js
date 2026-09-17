@@ -267,15 +267,15 @@ export async function renderTeam(root, search, abbr, playerKey) {
 
   wireNav(root); // D59: switcher routes to the equivalent page on the newly picked team
 
-  // Integration task 2: "Refresh now" kicks off a server-side refresh cycle (window.NFLRefresh, from
-  // refresh.js — main.js imports it for this side effect) and reloads this team once it's done. The
-  // listener is added once per render (a fresh header each time) rather than delegated, since there's
-  // only ever one such button on the page.
+  // "Refresh now" kicks off a server-side refresh cycle (window.NFLRefresh, from refresh.js — main.js
+  // imports it for this side effect) and reloads this team once it's done. The listener is added once per
+  // render (a fresh header each time) rather than delegated, since there's only ever one such button on
+  // the page.
   root.querySelector(".refresh-btn")?.addEventListener("click", (e) => {
     window.NFLRefresh?.trigger(e.currentTarget);
   });
-  // 🔵 review: `{ once: true }` only removes a listener after it FIRES, so every re-render added another
-  // that never did. The previous one is dropped explicitly before a new one is registered.
+  // `{ once: true }` only removes a listener after it FIRES, so every re-render would add another that
+  // never did. The previous one is dropped explicitly before a new one is registered.
   if (teamRefreshListener) window.removeEventListener("nfl:data-refreshed", teamRefreshListener);
   teamRefreshListener = () => {
     if (window.__nflView?.abbr !== A) return; // navigated away before the refresh finished — stale, ignore

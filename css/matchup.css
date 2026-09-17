@@ -20,10 +20,8 @@
 .matchup-logo-fallback { display:flex; align-items:center; justify-content:center; font-weight:900; font-size:18px; background:rgba(0,0,0,.3); }
 .matchup-team-info { min-width:0; }
 .matchup-team-info-right { text-align:right; }
-/* 👁 QA (2026-09-15, item 7): "the weakest text on the site". These two lines sat at 85% and 70% white on
-   a mid-tone team wash (Tennessee's blue measures 0.27 relative luminance — white on it is barely 3:1
-   before the fade is applied, and the record line is a 12.5px italic). Full-strength ink with a dark
-   shadow under it reads on every club's colour without dulling the wash itself, which D48 wants bright;
+/* Full-strength ink with a dark shadow under it, so the team name and record read on every club's colour
+   (even a mid-tone wash like Tennessee's blue) without dulling the wash itself, which D48 wants bright;
    a genuinely PALE primary flips to dark ink instead (.matchup-team-light, from the same luminance rule
    the landing tiles use — matchup.js's isLightWash import). */
 .matchup-team-name { font-size:18px; font-weight:800; line-height:1.15; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
@@ -31,11 +29,9 @@
 .matchup-team-sub { font-size:12.5px; color:#fff; margin-top:2px; text-shadow:0 1px 3px rgba(0,0,0,.6); }
 .matchup-team-light .matchup-team-name, .matchup-team-light .matchup-team-sub, .matchup-team-light .matchup-team-heat {
   color:#14181d; text-shadow:0 1px 2px rgba(255,255,255,.45); }
-/* 🎨 Polish (2026-09-11, round 2, item 13): the heat-summary line only renders for whichever team
-   actually has an injury signal (view.heat.summary) — when only one side has one, that team's block grew
-   a third line the other side didn't have, so the two teams' text blocks (and therefore their logos)
-   didn't share a vertical centre. Reserving its height on every team block, present or not, fixes that
-   regardless of which side (or neither) actually has a summary to show. */
+/* The heat-summary line only renders for whichever team actually has an injury signal (view.heat.summary).
+   min-height reserves its space on every team block, present or not, so a summary on only one side never
+   throws the two teams' text blocks (and therefore their logos) off a shared vertical centre. */
 .matchup-team-heat { font-size:11.5px; color:rgba(255,255,255,.95); margin-top:3px; font-style:italic; min-height:14px;
   text-shadow:0 1px 3px rgba(0,0,0,.6); }
 
@@ -56,13 +52,11 @@
 .matchup-picker-form button { padding:7px 18px; border-radius:6px; border:1px solid #2a323b; background:var(--ink); color:var(--bg); font-weight:800; font-size:13px; cursor:pointer; }
 .matchup-picker-form button:hover { background:#ffd54a; border-color:#ffd54a; }
 
-/* 👁 QA item 1 (2026-09-13): everything that used to live here — the compact card and row sizing, the
-   per-card heat borders and the per-band heat washes — described a layout this view no longer has. The
-   matchup is now built on the shared compact overview (field.js's computeLayout + cards.js's
-   renderColumn), so its cards, rows, heat tints and band grouping are the SAME ones the whole-team page
-   uses and are styled once, in styles.css, rather than described a second time here and kept in step by
-   hand. What remains below is only what is genuinely particular to this view: the two-team header, the
-   bye-week picker, and the field wrapper's own two-team wash.
+/* The matchup is built on the shared compact overview (field.js's computeLayout + cards.js's renderColumn),
+   so its cards, rows, heat tints and band grouping are the SAME ones the whole-team page uses and are
+   styled once, in styles.css, rather than described a second time here and kept in step by hand. What
+   remains below is only what is genuinely particular to this view: the two-team header, the bye-week
+   picker, and the field wrapper's own two-team wash.
 
    The field is one canvas carrying two teams, so --team-primary/--team-secondary are set per COLUMN
    (matchup.js passes each one its own colours) rather than once on the wrapper. The wrapper still gets
@@ -75,9 +69,8 @@
 @keyframes matchup-pop { from { opacity:0; transform:scale(.97); } to { opacity:1; transform:scale(1); } }
 /* `forwards`, never `both`: `both` also applies the FROM keyframe before the animation starts, which holds
    the header at opacity 0 — and an animation only advances once the page is actually being composited, so
-   a hidden tab or a headless screenshot captured the whole team-colour header as a black hole (👁 QA
-   2026-09-15, item 7: what read as "the wash is too dark" was partly this). Every other entrance in the
-   app (.zoom-page, .field-outer) already animates without a backwards fill. */
+   a hidden tab or a headless screenshot would capture the whole team-colour header as a black hole. Every
+   other entrance in the app (.zoom-page, .field-outer) already animates without a backwards fill. */
 .matchup-head, .matchup-picker { animation:matchup-pop .18s ease-out forwards; }
 @media (prefers-reduced-motion: reduce) {
   .matchup-head, .matchup-picker { animation:none; }
@@ -90,7 +83,7 @@
 
 /* ---- landing page "Matchup" bar (public/js/landing.js) ---- */
 
-/* 👁 QA item 11: every pixel here comes out of the landing grid's own height budget. */
+/* Every pixel here comes out of the landing grid's own height budget. */
 .matchup-bar { display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding:6px 12px; margin-bottom:8px;
   background:var(--panel); border:1px solid #22282f; border-radius:10px; }
 .matchup-bar-label { font-size:12px; font-weight:800; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); flex:none; }

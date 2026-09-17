@@ -35,8 +35,7 @@ for (const b of OFF_BAND_ORDER) BAND_UNIT[b] = "OFF";
 for (const b of DEF_BAND_ORDER) BAND_UNIT[b] = "DEF";
 // D70: the group page's title and its nav crumb name the band, and so does the "not on chart" tray on
 // every field — one table for all of them (cards.js's BAND_DISPLAY), so a position cannot be called one
-// thing on the team page and another on its own group page. This file used to keep its own copy, which is
-// how "TE" became "Tight ends" here and stayed "TE" everywhere else.
+// thing on the team page and another on its own group page.
 const BAND_LABEL = BAND_DISPLAY;
 
 // ---- shared per-player helpers (deliberately duplicated from cards.js — not exported there) ----
@@ -57,7 +56,7 @@ function statusBadge(status) {
 // --tier-*, same thresholds as ratingTier() below) plus a secondary-emphasis span for the position rank —
 // identical treatment to cards.js's own ratingPill so a pill looks the same on every view.
 function ratingPill(rating) {
-  // 👁 QA: never a blank where a rating belongs — an unrated player (no EA entry) reads "NR", muted.
+  // Never a blank where a rating belongs — an unrated player (no EA entry) reads "NR", muted.
   if (!rating || rating.current == null) return `<span class="rating-pill tier-none" title="Not rated — no Madden entry for this player">NR</span>`;
   const rank = rating.posRank && rating.posCount
     ? `<span class="rating-pill-rank"> · #${rating.posRank} ${esc(rating.maddenPos || "")}</span>`.replace(/ (?=<\/span>)/, "")
@@ -81,9 +80,9 @@ function formatReturnDate(returnDate) {
   return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
-// 👁 QA, 2026-09-11: shortened from cards.js's original ("OUT · IR · back ~date") — at this build's
-// wider card widths the reason code made the banner text truncate. The reason still shows (it's the
-// corner status badge's own code/colour); the banner now only ever says "OUT · back ~date".
+// Shorter than cards.js's own banner text ("OUT · IR · back ~date") — at this build's wider card widths
+// the reason code made the banner text truncate. The reason still shows (it's the corner status badge's
+// own code/colour); the banner here only ever says "OUT · back ~date".
 function outBannerText(status) {
   const ret = formatReturnDate(status?.returnDate);
   const code = status?.code || "OUT";
@@ -103,22 +102,19 @@ function bannerHtml(p) {
   return "";
 }
 
-// Cross-view consistency (🎨 Polish, 2026-09-11): D48 calls for "a jersey crest with the number on each
-// card", but only the whole-team field's own cards.js actually drew one — this view fell back to plain
-// "#82" text, so a card looked like it came from a different builder depending on the zoom level.
-// Identical markup to cards.js's own jerseyCrest (that file doesn't export it) so the shield renders the
-// same way everywhere; only the size changes (zoom.css scopes .jersey-crest bigger for .zoom-group).
+// D48 calls for "a jersey crest with the number on each card". Identical markup to cards.js's own
+// jerseyCrest (that file doesn't export it) so the shield renders the same way everywhere; only the size
+// changes (zoom.css scopes .jersey-crest bigger for .zoom-group).
 function jerseyCrest(p) {
   return `<span class="jersey-crest">#${esc(p.number ?? "—")}</span>`;
 }
 
 // Quiet role tag under the label — D44/D12: makes it explicit the line-one card is the real, opening
-// starter (not just whoever the club currently ranks first).
-// 👁 QA: a co-starter who is OUT used to be tagged "STARTER" underneath his own red OUT banner, which is
-// a card saying two opposite things at once (PHI's Greenard). A man who will not play now reads OUT,
-// whether he got there by being demoted to STARTER_OUT or by keeping tier 1 with an out status. Note this
-// is a LABEL change only: D56 still says a healthy co-starter means nobody behind him is promoted, and
-// the compile step is what decides that (server/compile/starters.js's promoteFillIns).
+// starter (not just whoever the club currently ranks first). A co-starter who is OUT reads OUT here, never
+// STARTER underneath his own red OUT banner — a card must not say two opposite things at once — whether he
+// got there by being demoted to STARTER_OUT or by keeping tier 1 with an out status. This is a LABEL choice
+// only: D56 still says a healthy co-starter means nobody behind him is promoted, and the compile step is
+// what decides that (server/compile/starters.js's promoteFillIns).
 function roleTagHtml(p) {
   // D60: a scratch reads INACTIVE, not OUT - the tag must agree with the grey banner directly above it.
   if (isScratch(p)) return `<span class="role-tag role-tag-inactive">INACTIVE</span>`;
@@ -236,18 +232,16 @@ function fullCard(p, teamAbbr, opts = {}) {
   // .zoom-card-sm / .zoom-card-lg are size-tier markers ONLY (no width/height/tier-color rules of their
   // own — that stays inline per-instance) so zoom.css can target "the compact side-view backup cards"
   // or "the big group-view cards" specifically, without a selector that could ever reach a card drawn
-  // by another builder's view elsewhere in the app (👁 QA, 2026-09-11).
+  // by another builder's view elsewhere in the app.
   const sizeCls = opts.compact ? " zoom-card-sm" : opts.big ? " zoom-card-lg" : "";
-  // 🎨 Polish (2026-09-11, round 2, CRITICAL fix): this used to be a fixed `height:${h}px`, and every
-  // banner card (OUT / ACTIVE) used the SAME height as a plain card even though the banner needs ~24px
-  // more room — under `.card{overflow:hidden}` that hid the rating pill completely on an OUT starter
-  // (item 1: PHI's Greenard, HOU's E.J. Speed). `min-height` lets a banner card grow the extra room it
-  // needs instead of clipping; the LINE_ONE/PAIR_ONE/GROUP_* constants below were also bumped so the
-  // common case already fits without relying on the growth.
+  // `min-height`, not a fixed height: a banner card (OUT / ACTIVE) needs ~24px more room than a plain card,
+  // and under `.card{overflow:hidden}` a fixed height clips the rating pill clean off an OUT starter's card.
+  // min-height lets a banner card grow the extra room it needs instead of clipping; the LINE_ONE/PAIR_ONE/
+  // GROUP_* constants below are sized so the common case already fits without relying on the growth.
   // `fluid` sizes the card to its column instead of to a fixed pixel width; the cap lives on the column
   // (zoom.css's .zoom-stack-body, --card-cap) so a plain card, a co-starter pair and an out-starter stack
-  // all end up exactly the same width with the same left edge (👁 round 3 item 1). Everything else keeps
-  // its exact inline width as before.
+  // all end up exactly the same width with the same left edge. Everything else keeps its exact inline
+  // width as before.
   const widthStyle = opts.fluid ? "width:100%" : `width:${w}px`;
   return `<a class="${cardClasses(p)}${sizeCls}" href="#/team/${esc(teamAbbr)}/player/${encodeURIComponent(p.playerKey)}" data-player-key="${esc(p.playerKey)}" title="${title}" style="${widthStyle};min-height:${h}px">
     ${bannerHtml(p)}
@@ -273,9 +267,9 @@ function fullCard(p, teamAbbr, opts = {}) {
 // ---- header ----
 
 // Wires the controls inside the shared team.js header ("Refresh now") the same way team.js's own
-// renderTeam does — 👁 QA, 2026-09-11: reusing headerHtml's markup without wiring this would ship a dead
-// button. D59: the team switcher moved out to the shared nav strip (nav.js's own wireNav, called
-// separately by each render function below) — this function no longer touches it.
+// renderTeam does — reusing headerHtml's markup without wiring this would ship a dead button. D59: the
+// team switcher moved out to the shared nav strip (nav.js's own wireNav, called separately by each render
+// function below) — this function no longer touches it.
 // `onRefresh()` re-renders this exact view in place once a refresh completes — it must be a direct call,
 // not a hash change, since the hash doesn't change on a refresh.
 // `page` (D75, "team"/"off"/"def"/"group") rides along on window.__nflView so main.js's openPlayerPanel
@@ -288,9 +282,9 @@ function wireHeaderControls(root, A, view, team, onRefresh, page) {
   root.querySelector(".refresh-btn")?.addEventListener("click", (e) => {
     window.NFLRefresh?.trigger(e.currentTarget);
   });
-  // 🔵 review: `{ once: true }` only removes the listener after it FIRES. Every re-render (team switch,
-  // zoom step, refresh) added another one that never fired, so a single refresh eventually woke a stack of
-  // stale closures. The previous one is now explicitly dropped before a new one is registered.
+  // `{ once: true }` only removes the listener after it FIRES. Without dropping the previous one first,
+  // every re-render (team switch, zoom step, refresh) would add another that never fired, so a single
+  // refresh would eventually wake a stack of stale closures.
   if (zoomRefreshListener) window.removeEventListener("nfl:data-refreshed", zoomRefreshListener);
   zoomRefreshListener = () => {
     if (window.__nflView?.abbr !== A) return; // navigated away before the refresh finished — stale, ignore
@@ -341,7 +335,7 @@ const SIDE_LAYOUT = {
 
 export async function renderZoomSide(root, search, abbr, unit) {
   search.hidden = true;
-  disposeCurrentView(); // the outgoing view's observers must not outlive its DOM (🔵 review 1)
+  disposeCurrentView(); // the outgoing view's observers must not outlive its DOM
   const A = (abbr || "").toUpperCase();
   const { teams } = await getTeams();
   const team = teams.find((t) => t.abbr === A);
@@ -391,42 +385,38 @@ export async function renderZoomSide(root, search, abbr, unit) {
 // D49: the group view is one zoom step in from the side view, so its cards are noticeably bigger — the
 // first (line-one) row biggest of all, the rest a size down. D72 turned the side view into scaled-up
 // overview ROWS with a 28px headshot on line one, so these are now the only real photo cards in the app
-// and the zoom ladder (group > side > whole team) still reads as one step per level.
-// 🎨 Polish (2026-09-11, round 2): widened (180->210, item 12: "bigger headshot") and heightened
-// (230->256 / 198->220, item 1: the group view's big card adds a bio line AND a role tag on top of the
-// same head/crest/name/label stack the side view has, plus a bigger rating pill — 230 undershot that).
-// RULING E (Adam, 2026-09-13): "the group view fills the screen with the big cards as now (it has one
-// band, so it already fits - verify)." Verified, and it did NOT: HOU's corner group is three deep and
-// its third card fell off the bottom of a 900px window. These are still the biggest cards in the app by
-// a wide margin (D49's zoom ladder is intact - group > side > whole team), just sized so three tiers of
-// them fit the window. Deeper than GROUP_MAX_ROWS collapses behind a "+N more" that expands on click.
-// 👁 QA A1: the group grid spans the whole container, one equal fraction per slot, so a lone QB column
-// is a large card rather than a 220px sliver marooned in a sea of black. `fluid` makes the card fill its
-// grid cell up to a sane cap (a single column must not become a 1500px-wide card); fitToViewport's fill
-// mode then scales the whole grid so the cards also consume the leftover HEIGHT.
+// and the zoom ladder (group > side > whole team) still reads as one step per level. Sized tall enough for
+// a bio line AND a role tag on top of the head/crest/name/label stack the side view has, plus a bigger
+// rating pill.
+// RULING E: the group view fills the screen with its big cards — a deep group (three-plus rows) can
+// otherwise fall off the bottom of a 900px window. These stay the biggest cards in the app by a wide
+// margin (D49's zoom ladder is intact — group > side > whole team), just sized so three tiers of them fit
+// the window. Deeper than GROUP_MAX_ROWS collapses behind a "+N more" that expands on click.
+// The group grid spans the whole container, one equal fraction per slot, so a lone QB column is a large
+// card rather than a narrow sliver marooned in a sea of black. `fluid` makes the card fill its grid cell up
+// to a sane cap (a single column must not become a 1500px-wide card); fitToViewport's fill mode then
+// scales the whole grid so the cards also consume the leftover HEIGHT.
 const GROUP_LINE_ONE = { height: 196, headSize: 78, big: true, fluid: true };
 const GROUP_REST = { height: 168, headSize: 56, big: true, fluid: true };
-// 👁 QA item 3: a shallow WIDE group (QB, or a safety pair — at most GROUP_WIDE_MAX slots) has a lot of
-// vertical budget and only 3-4 rows to spend it on, so the fitToViewport fill-mode scale-up alone left
-// ~120px dead at the bottom. Taller rows for the wide layout only (portrait groups are already tuned to
-// their own budget — HOU's three-deep corners already fell off the bottom once, 👁 round 3) spend that
-// budget directly instead of relying on the scale factor to find it.
+// A shallow WIDE group (QB, or a safety pair — at most GROUP_WIDE_MAX slots) has a lot of vertical budget
+// and only 3-4 rows to spend it on, so the fitToViewport fill-mode scale-up alone can leave dead space at
+// the bottom. Taller rows for the wide layout only (portrait groups are already tuned to their own budget)
+// spend that budget directly instead of relying on the scale factor to find it.
 const GROUP_LINE_ONE_WIDE = { height: 214, headSize: 84, big: true, fluid: true };
 const GROUP_REST_WIDE = { height: 180, headSize: 60, big: true, fluid: true };
 // The cap on a fluid card's width, by how many slots share the row. A ten-column group wants narrow
-// cards; a one-column group (QB) wants a genuinely big one, since the alternative is a 220px sliver
-// stranded in the middle of the screen - but not a 1500px-wide card either (👁 QA A1's own wording).
-// 👁 QA round 3 item 2: with one or two slots the group switches to a HORIZONTAL card (headshot left,
-// everything else stacked against it on the right - see .group-wide in zoom.css) and is allowed to run
-// wider, because that layout actually fills the width instead of centring a narrow column of text in it.
+// cards; a one-column group (QB) wants a genuinely big one, since the alternative is a narrow sliver
+// stranded in the middle of the screen — but not a 1500px-wide card either.
+// With one or two slots the group switches to a HORIZONTAL card (headshot left, everything else stacked
+// against it on the right — see .group-wide in zoom.css) and is allowed to run wider, because that layout
+// actually fills the width instead of centring a narrow column of text in it.
 const GROUP_WIDE_MAX = 2;
 // The cap is applied to the COLUMN, not to each card (zoom.css's .zoom-stack-body): a rank row can be a
-// single card, a co-starter pair or an out-starter/fill-in stack, and capping each of those separately is
-// exactly how they ended up different widths with different left edges (👁 round 3 item 1).
-// 👁 QA item 3: a single-column group (QB) only reached 1120px of a ~1650px-wide field — 1120 was sized
-// for the old portrait card, but a lone slot now draws the WIDE horizontal card (group-wide, above), which
-// is built to fill real width without going strange. Raised so it actually reaches the container HOU's
-// three-column WR group already reaches (x≈1522) instead of stopping two-thirds of the way there.
+// single card, a co-starter pair or an out-starter/fill-in stack, and capping each of those separately
+// would let them end up different widths with different left edges.
+// A single-column group (QB) draws the WIDE horizontal card (group-wide, above), which is built to fill
+// real width without going strange, so its cap is raised to actually reach the container rather than
+// stopping two-thirds of the way there.
 const groupCardCap = (n) => (n <= 1 ? 1600 : n === 2 ? 720 : 400);
 const GROUP_MAX_ROWS = 3;
 
@@ -447,17 +437,15 @@ const starterLed = (slot) => {
   return !!lineOne && (lineOne.coStarter === true || STARTER_LED_ROLES.has(lineOne.role));
 };
 
-// D93 on the GROUP page (👁, 2026-09-15). The team, offense and matchup pages all draw their receivers
-// through field.js's layoutPassCatchers, which lifts the men who play inside into their own WR · Slot
-// column and renumbers what survives WR1, WR2 down the row. This page built its stacks straight from the
-// API's own slots instead, so Washington read WR1 McLaurin / WR · Slot Diggs / WR2 Burks on every other
-// view and WR1 / WR2 / WR3 here — and each big card repeated the club number under the player's name.
-// D70 ("names consistent everywhere") makes the regrouped column the chart on every view, so the WR band
-// now goes through the SAME regrouper, handed the same input the field hands it (the club's own column
-// order), and is drawn in the same left-to-right order the field's pass-catcher row uses.
+// D93 on the GROUP page. The team, offense and matchup pages all draw their receivers through field.js's
+// layoutPassCatchers, which lifts the men who play inside into their own WR · Slot column and renumbers
+// what survives WR1, WR2 down the row. D70 ("names consistent everywhere") makes the regrouped column the
+// chart on every view, so the WR band here goes through the SAME regrouper, handed the same input the
+// field hands it (the club's own column order), and is drawn in the same left-to-right order the field's
+// pass-catcher row uses — rather than building its stacks straight from the API's own unregrouped slots.
 //
 // A column is `{ slot, label, reason }`: `label` is the pill AND the position line on every card standing
-// in it (field.js calls the same thing `displayLabel`), and `reason` the tooltip sentence — the D86/D89
+// in it (field.js calls the same thing `displayLabel`), and `reason` the tooltip sentence — the D86
 // "who plays inside" sentence on the derived column, columnRankReason's provenance sentence on a club one.
 // Every other band, and a receiver chart with nobody over the slot bar, comes back exactly as the API
 // listed it, labels and all.
@@ -509,28 +497,26 @@ export function renderGroupStack(col, teamAbbr, wide = false, unit, gamesPlayed)
     const p = players[i];
     const next = players[i + 1];
     const size = rowIndex === 0 ? lineOne : rest;
-    // 👁 QA correction (D44/D12, 2026-09-11): an OUT starter and his ACTIVE fill-in read as tier "1" side
-    // by side, exactly like an explicit coStarter pair — not "0"/"1" as sequential rows. This covers BOTH
-    // conventions the compile step uses for "starter out, someone else filling in" (isFullyOut's own
-    // comment above has the full explanation): an explicit coStarter:true pair, or a plain STARTER_OUT
-    // role followed by an ACTIVE one. `(p.tier || i + 1)` (not `??`) also fixes the "0" itself directly —
-    // a tier value of 0 is never meaningful for a real depth slot, so it falls back the same as a missing one.
+    // D44/D12: an OUT starter and his ACTIVE fill-in read as tier "1" side by side, exactly like an
+    // explicit coStarter pair — not "0"/"1" as sequential rows. This covers BOTH conventions the compile
+    // step uses for "starter out, someone else filling in" (isFullyOut's own comment above has the full
+    // explanation): an explicit coStarter:true pair, or a plain STARTER_OUT role followed by an ACTIVE one.
     const isCoPair = p.coStarter && next?.coStarter;
     const isOutFillIn = !isCoPair && isFullyOut(p) && next?.role === "ACTIVE";
     if (isCoPair || isOutFillIn) {
-      // 👁 QA item 10: a co-starter PAIR is two men sharing one job, so they sit side by side. An out
-      // starter and his ACTIVE fill-in are not a pair — they are D44's "how good was the hurt man, how
-      // good is his replacement", which only reads as a comparison when the two ratings sit one directly
-      // above the other. Rendering them side by side also left a hole in the grid under the fill-in.
+      // A co-starter PAIR is two men sharing one job, so they sit side by side. An out starter and his
+      // ACTIVE fill-in are not a pair — they are D44's "how good was the hurt man, how good is his
+      // replacement", which only reads as a comparison when the two ratings sit one directly above the
+      // other, so they stack instead.
       const body = isCoPair
         ? `<div class="costarter-pair">${fullCard(p, teamAbbr, size)}${fullCard(next, teamAbbr, size)}</div>`
         : `<div class="outfillin-stack">${fullCard(p, teamAbbr, size)}${fullCard(next, teamAbbr, size)}</div>`;
       rows.push(tierRow(rowIndex + 1, body));
       i += 2;
     } else {
-      // 👁 QA B2: numbered by DEPTH POSITION in this column (1, 2, 3...), not by the club chart's own
-      // tier value. Two men listed at the same tier - which the clubs do all the time, and which a
-      // co-starter pair or an out-starter/fill-in row collapses further - used to print "1, 2, 2".
+      // Numbered by DEPTH POSITION in this column (1, 2, 3...), not by the club chart's own tier value —
+      // two men listed at the same tier is common, and a co-starter pair or an out-starter/fill-in row
+      // collapses two rows into one, so the club's own tier numbers would repeat.
       rows.push(tierRow(rowIndex + 1, fullCard(p, teamAbbr, size)));
       i += 1;
     }
@@ -574,7 +560,7 @@ function renderUnlistedStack(entries, teamAbbr) {
 
 export async function renderZoomGroup(root, search, abbr, bandParam) {
   search.hidden = true;
-  disposeCurrentView(); // the outgoing view's observers must not outlive its DOM (🔵 review 1)
+  disposeCurrentView(); // the outgoing view's observers must not outlive its DOM
   const A = (abbr || "").toUpperCase();
   const band = String(bandParam || "").toUpperCase();
   const unit = BAND_UNIT[band];
@@ -627,8 +613,8 @@ export async function renderZoomGroup(root, search, abbr, bandParam) {
     ${topOfUnitHtml(slots)}
     <div class="fit-outer"><div class="fit-inner"><div class="zoom zoom-group${wide ? " group-wide" : ""}" style="--group-cols:${Math.max(columns.length, 1)};--card-cap:${groupCardCap(columns.length)}px">${stacksHtml || `<div class="placeholder">No ${esc(bandLabel)} slots on this chart.</div>`}${trayHtml}</div></div></div>
   </div>`;
-  // 👁 QA A1: fill mode - the grid is laid out at the container's own width and scaled so the cards use
-  // the leftover height too, instead of a fixed design width that left most of the screen black.
+  // Fill mode: the grid is laid out at the container's own width and scaled so the cards use the leftover
+  // height too, instead of a fixed design width that would leave most of the screen black.
   fitToViewport(root, { fill: true });
   wireDepthToggles(root); // ruling E: the "+N more" tail on a group stack deeper than GROUP_MAX_ROWS
   wireNav(root); // D59: switcher routes to the same band on the newly picked team
