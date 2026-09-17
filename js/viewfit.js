@@ -15,6 +15,10 @@
 //     callback somehow outlives its disposer.
 //   fitToViewport(...)     - the flow-layout equivalent for the side and group views.
 
+// D138: the list mode's second threshold is "too narrow to draw the field at the floor", which is the
+// design canvas times that floor — read from field.js rather than written down twice.
+import { LAYOUT_WIDTH } from "./field.js";
+
 // ---- view registry ----------------------------------------------------------------------------
 
 let disposeView = null;
@@ -72,6 +76,20 @@ const SETTLE_DELAYS = [0, 80, 250, 700];
 // 🔵 A4: a diagnostic trail of every cascade decision — {pass, step, top, scrollY, width, headerGain, scales}
 // on window.__fitTrace — behind `?fittrace=1` and nothing else, so a normal load neither collects nor keeps it.
 const TRACE = typeof location !== "undefined" && /[?&]fittrace=1(&|$)/.test(location.search || "");
+
+// 🔵 A0-1: THE SCROLL POSITION MUST SURVIVE A REFIT. Measuring collapses the field to zero height and a
+// redraw replaces it outright, so for an instant the document is shorter than the window — at which point the
+// browser clamps the scroll position to 0 and never puts it back. A page in D134's scrolling state, a deep
+// link part-way through its scrollIntoView, or any scrolled page that opened a panel snapped to the top.
+// Capture and restore are in ONE synchronous block, so the only thing that can have moved the position in
+// between is that clamp: a real user scroll cannot land inside it, and an unmoved page is never written to.
+function keepScroll(fn) {
+  const x = window.scrollX;
+  const y = window.scrollY;
+  try { return fn(); } finally {
+    if (window.scrollX !== x || window.scrollY !== y) window.scrollTo(x, y);
+  }
+}
 
 // Runs `fn` on the settle schedule. `isDead()` is checked before every call INCLUDING the fonts.ready
 // continuation, which cannot be cancelled any other way: a promise callback armed by a view that has since
@@ -131,7 +149,68 @@ export const FIT_HYSTERESIS = 1.05;
 // header on one cold load and not the next, decided by which measurement won by a pixel. Much narrower than
 // the hysteresis on purpose — a real laptop (1536x864) measures 1.4 percent under and does need its step.
 export const FIT_STEP_MARGIN = 1.02;
+// D138: about 1320 — the widest window that still cannot draw the field readably when held upright.
+export const LIST_PORTRAIT_WIDTH = Math.round(LAYOUT_WIDTH * MIN_READABLE_SCALE) + 24;
 const STEP_RANK = { none: 0, header: 1, depth: 2, scroll: 3 };
+
+// ---- D138: the phone/tablet LIST, the step before all the others -------------------------------
+//
+// D138 (Adam, 2026-09-17, for "people I share the link with"): "I would like this to auto-properly appear
+// on phones." An upright phone gets no field at all — a vertical list by position group — and so does a
+// tablet held upright. The decision is a MEASUREMENT of the window and nothing else: no user-agent string,
+// no device sniffing, and no CSS media query (a query may STYLE the list; it may not decide the mode, or
+// the page and the code would hold two different opinions about which view is on screen).
+//
+// Two windows take the list:
+//   width < LIST_MAX_WIDTH                     any phone, whichever way up it is held
+//   portrait AND width < LIST_PORTRAIT_WIDTH   a window taller than it is wide that could not draw the
+//                                              field readably even at D134's floor (a tablet upright)
+// LIST_PORTRAIT_WIDTH is the design canvas at the readable floor plus the page's own side chrome, so it
+// moves with the floor instead of being a number that quietly goes stale.
+export const LIST_MAX_WIDTH = 700;
+// D138 IS PARKED (Adam, 2026-09-17: "phone step 1 doesn't need to happen yet, let's get the main thing
+// looking right first"). THE ONE SWITCH: while it is false the list is unreachable and every window on
+// every page behaves exactly as it did before the phone work — isListWindow below is the single point any
+// caller can reach the list through, so nothing else needs a guard. `?phone=1` in the URL forces it on for
+// QA of the unfinished work; the URL is read once, at startup, and never again.
+// PARKED ON PURPOSE (D138; Adam, 2026-09-17): the phone list is written but switched off. PROJECT.md Part 4 holds
+// the inventory; tests/docs.test.mjs fails if that inventory and this switch ever disagree.
+export const PHONE_LIST_ENABLED = false;
+const PHONE_LIST_FORCED = typeof location !== "undefined" && /[?&]phone=1(&|$)/.test(location.search || "");
+export const phoneListOn = () => PHONE_LIST_ENABLED || PHONE_LIST_FORCED;
+
+// The rule itself, exported so the ruling stays under test while the feature is parked: turning the switch
+// on must not be the first time anybody finds out what these two bars do.
+// A sideways phone is NOT a list window (its width clears both bars), which is D138 decision (1): it keeps
+// the field, and step 5 will give it drag-to-pan.
+export function listWindowRule(width, height, current = "none") {
+  // Once the list is in force it is only given back when the window is comfortably big enough for the
+  // field, exactly as every other step in this file is (FIT_HYSTERESIS): a window dragged across the
+  // threshold cannot flip the whole page back and forth. Leaving the list at 700 x 1.05 = 735.
+  const slack = current === "list" ? FIT_HYSTERESIS : 1;
+  if (width < LIST_MAX_WIDTH * slack) return true;
+  return height > width && width < LIST_PORTRAIT_WIDTH * slack;
+}
+
+// What every caller actually asks. With the switch off this is `false` for every window there is.
+export function isListWindow(width, height, current = "none") {
+  return phoneListOn() && listWindowRule(width, height, current);
+}
+
+// The mode the app is in NOW. The list and the field are two different renders rather than two states of
+// one view, so the hysteresis above needs somewhere to remember which one is on screen; every entry point
+// (the team page's first render, the list's own resize watcher) goes through this one function.
+let currentViewMode = "field";
+export function decideViewMode(width = window.innerWidth, height = window.innerHeight) {
+  currentViewMode = isListWindow(width, height, currentViewMode) ? "list" : "field";
+  return currentViewMode;
+}
+
+// D140 (lead, 2026-09-17) — THE SWITCH THE OWN-HEIGHT RULING SITS BEHIND. `true`: in the SCROLLING state
+// only, the canvas is the club's own natural height (field.js's `ownHeight` option) while the scale stays
+// pinned to the floor, so every club still draws at one size and only the page length differs. `false`
+// restores D107's one constant canvas in every state, and nothing else in this file or field.js changes.
+export const SCROLL_STATE_OWN_HEIGHT = true;
 // 🔵 A2(a): how much bigger a step has to make the field before it is worth taking. K_EPSILON is what this
 // file already calls "too small to see", so a step that buys less than that buys nothing.
 const STEP_GAIN = K_EPSILON;
@@ -144,10 +223,17 @@ const STEP_GAIN = K_EPSILON;
 //   full/reduced  the natural (unspread) canvas at the full and reduced depth caps
 //   steps         which steps this page offers at all (the side pages offer only the floor)
 //   current       the step in force now, for the hysteresis above
+//   own           D140: the same two canvases at THIS club's own natural height, used in the scrolling
+//                 state alone (null on a page that has no constant height to narrow)
 // The scale is `min(width fit, height fit)` on the UNSPREAD canvas, which is exactly what mountScaledField
 // ends up applying: the spread is chosen to make the canvas fill the width at the height fit, so a
 // height-bound page lands on the height fit and a width-bound one on the width fit either way.
-export function chooseFitStep({ width, height, headerGain = 0, full, reduced = null, floor = 0, steps = {}, current = "none" }) {
+export function chooseFitStep({ width, height, headerGain = 0, full, reduced = null, floor = 0, steps = {}, current = "none", own = null,
+  winWidth = width, winHeight = height }) {
+  // D138: the list is decided before any scale arithmetic — a window this narrow cannot draw a readable
+  // field at all, so no step below can help it. It is asked of the WINDOW (winWidth/winHeight), never of
+  // the field's own box: an open 440px panel narrows the box without making the window a phone.
+  if (steps.list && isListWindow(winWidth, winHeight, current)) return { step: "list", scale: 0, scrolls: false };
   const scaleAt = (h, p) => capToWidthFit(width / p.layoutWidth, h / p.layoutHeight);
   const useHeader = !!steps.header;
   const useDepth = !!(steps.depth && reduced);
@@ -181,10 +267,15 @@ export function chooseFitStep({ width, height, headerGain = 0, full, reduced = n
   // ever, so a floor can never raise a horizontal scrollbar). Measured against the DEEPEST step that was
   // worth taking, so a step dropped above is not silently reintroduced here.
   const deepest = useful[useful.length - 1].step;
-  const probe = deepest === "depth" ? reduced : full;
   const h = deepest === "none" ? height : compactHeight;
-  const scale = capToWidthFit(width / probe.layoutWidth, Math.max(h / probe.layoutHeight, floor));
-  return { step: "scroll", scale, scrolls: probe.layoutHeight * scale > h + 0.5 };
+  // D140: here — and only here — the canvas may be the club's OWN natural height instead of the constant
+  // every club shares, so a short chart stops scrolling past empty field. The scale is then pinned to the
+  // floor rather than to that shorter canvas's own height fit, which is what keeps every club one size.
+  const ownProbe = SCROLL_STATE_OWN_HEIGHT && own ? (deepest === "depth" ? own.reduced : own.full) || null : null;
+  const probe = ownProbe || (deepest === "depth" ? reduced : full);
+  const scale = capToWidthFit(width / probe.layoutWidth, ownProbe ? floor : Math.max(h / probe.layoutHeight, floor));
+  const out = { step: "scroll", scale, scrolls: probe.layoutHeight * scale > h + 0.5 };
+  return ownProbe ? { ...out, own: true } : out;
 }
 
 // 🔵 A3: what a step decision actually CHANGED, as arithmetic rather than as a side effect of how many times
@@ -194,8 +285,11 @@ export function chooseFitStep({ width, height, headerGain = 0, full, reduced = n
 // on a cold laptop load. The only question that matters is whether the MARKUP is different now, which is
 // whether the depth cap moved; `changed` adds the states that only need a re-measure. Pure, so it is tested
 // directly rather than through a browser.
-export function stepOutcome({ was, step, wasScrolling, scrolls, depthBefore, depthAfter }) {
-  const redraw = depthAfter !== depthBefore;
+export function stepOutcome({ was, step, wasScrolling, scrolls, depthBefore, depthAfter, ownBefore = false, ownAfter = false }) {
+  // D140: the own-height canvas is different MARKUP too (a different layout height and row placement), so it
+  // is a redraw on the same terms the depth cap is. Defaulted to false, so a caller that never asks for it
+  // gets exactly the answer this function gave before the ruling.
+  const redraw = depthAfter !== depthBefore || ownAfter !== ownBefore;
   return { changed: redraw || step !== was || scrolls !== wasScrolling, redraw };
 }
 
@@ -233,7 +327,10 @@ function availableBox(el, main, panel, backRow, reserveBelow, compact = false) {
 // the live boxes rather than predicted from the layout, because the expansion is a CSS class toggle the
 // layout engine never hears about.
 function expansionOverlaps(el) {
-  const columns = [...el.querySelectorAll(".column")];
+  // 🔵 A0-3: a "not on chart" tray sits a few units under the deepest column of its band, so an expansion
+  // that ran over it was painted on top of the extra names with no fallback taken. A tray is an obstacle
+  // exactly as another column is.
+  const columns = [...el.querySelectorAll(".column, .tray")];
   // 🔵 A5: `.field-outer` is overflow:hidden and the last row ends a margin above its bottom edge, so a
   // bottom-row column (a running back's "+2 more") ran its extra names off the canvas and they were simply
   // clipped — invisible, with no sign anything was missing. Running past the field is an overlap too.
@@ -309,7 +406,7 @@ export function mountScaledField({ root, probe, build, onDraw, onText, panel = n
   // D134 cascade state: which step is in force, what folding the chrome away was actually worth, whether
   // the page is in the floor-and-scroll state, and whether an expanded column has forced full depth back.
   const floor = cascade?.floor || 0;
-  const steps = { header: !!cascade?.setCompact, depth: !!(cascade?.setDepth && cascade?.reduced) };
+  const steps = { header: !!cascade?.setCompact, depth: !!(cascade?.setDepth && cascade?.reduced), list: !!cascade?.setList };
   let step = "none";
   // D134: the cascade is held back until the chrome has settled. A cold load measures the header before its
   // stylesheet and font are in, reads the budget short, and folds a window that fits — and folding it back
@@ -319,6 +416,8 @@ export function mountScaledField({ root, probe, build, onDraw, onText, panel = n
   let scrolls = false;
   let depthOn = false;
   let expandedFullDepth = false;
+  // D140: whether the canvas being drawn is this club's own natural height (the scrolling state only).
+  let ownOn = false;
 
   // The single guard every entry point starts with. `document.contains` is what makes an orphaned
   // callback harmless rather than destructive: a disposer that was somehow missed can no longer find its
@@ -328,7 +427,12 @@ export function mountScaledField({ root, probe, build, onDraw, onText, panel = n
   const boxOf = (node) => availableBox(node, main, panel, backRow, reserveBelow, step !== "none");
   // D134: the reduced state draws a different canvas, so the spread arithmetic has to measure against the
   // canvas actually being drawn rather than the full-depth probe it started from.
-  const activeProbe = () => (depthOn ? cascade.reduced : probe);
+  // D140: and in the scrolling state that canvas may be the club's own-height pair instead of the constant.
+  const activeProbe = () => {
+    const own = ownOn ? cascade?.own : null;
+    if (own) return (depthOn ? own.reduced : own.full) || own.full;
+    return depthOn ? cascade.reduced : probe;
+  };
 
   // The spread that makes the canvas exactly fill the width once it is scaled to fit the height.
   const idealSpread = (node) => {
@@ -336,7 +440,8 @@ export function mountScaledField({ root, probe, build, onDraw, onText, panel = n
     const p = activeProbe();
     // D134: in the floor state the canvas is drawn at the floor, not at the height fit, so the spread has
     // to fill the width at THAT scale or the field would be left narrow with black turf down both sides.
-    const kH = scrolls ? Math.max(height / p.layoutHeight, floor) : height / p.layoutHeight;
+    // D140: an own-height canvas is drawn at the floor exactly, even when its own height fit is larger.
+    const kH = ownOn ? floor : (scrolls ? Math.max(height / p.layoutHeight, floor) : height / p.layoutHeight);
     const kW = width / p.layoutWidth;
     return kW > kH ? Math.min(kW / kH, MAX_SPREAD) : 1;
   };
@@ -382,6 +487,7 @@ export function mountScaledField({ root, probe, build, onDraw, onText, panel = n
     const was = step;
     const wasScrolling = scrolls;
     const depthBefore = depthOn;
+    const ownBefore = ownOn; // D140
     if (fresh && step !== "none") { applyStep("none"); headerGain = 0; }
     const node = el ?? mountPoint;
     // 🔵 A6: every measurement in this decision is taken with the field collapsed to nothing, so the document
@@ -403,8 +509,18 @@ export function mountScaledField({ root, probe, build, onDraw, onText, panel = n
         reduced: expandedFullDepth ? null : (cascade?.reduced || null),
         floor, steps: expandedFullDepth ? { ...steps, depth: false } : steps,
         current: memoryless ? "none" : current,
+        own: cascade?.own || null, // D140: read only in the scrolling state, and only when the page offers it
+        // D138: the list is a question about the WINDOW, not about the box this field was given.
+        winWidth: window.innerWidth, winHeight: window.innerHeight,
       });
       decision = ask(step);
+      // D138: a window that has become a list window is no longer this view's problem — the page re-renders
+      // as the list and this mount is disposed with it. Deferred out of the measuring path so nothing is
+      // re-entered halfway through a decision.
+      if (decision.step === "list") {
+        setTimeout(() => { if (!dead) cascade.setList(); }, 0);
+        return { changed: false, redraw: false };
+      }
       // What folding the header away is worth is MEASURED, not remembered, on every fresh decision: it is
       // folded once, measured for real, and the decision then made on that number. Remembering it across
       // loads is what let one cold load decide on a stale zero and take a step further down the cascade than
@@ -419,7 +535,8 @@ export function mountScaledField({ root, probe, build, onDraw, onText, panel = n
     }
     applyStep(decision.step);
     scrolls = decision.scrolls;
-    const outcome = stepOutcome({ was, step, wasScrolling, scrolls, depthBefore, depthAfter: depthOn });
+    ownOn = !!decision.own; // D140: set by the decision itself, so it clears the moment the step leaves "scroll"
+    const outcome = stepOutcome({ was, step, wasScrolling, scrolls, depthBefore, depthAfter: depthOn, ownBefore, ownAfter: ownOn });
     if (TRACE) {
       window.__fitTrace = window.__fitTrace || [];
       window.__fitTrace.push({ pass: window.__fitTrace.length, step, top: layoutTop(node), scrollY: window.scrollY,
@@ -432,7 +549,7 @@ export function mountScaledField({ root, probe, build, onDraw, onText, panel = n
     if (dead) return;
     const target = el ?? mountPoint;
     if (!document.contains(target)) return;
-    const built = build(spread, minHeight);
+    const built = build(spread, minHeight, ownOn); // D140: the third argument is the own-height flag
     layout = built.layout;
     target.outerHTML = built.html;
     el = root.querySelector(".field-outer");
@@ -457,7 +574,9 @@ export function mountScaledField({ root, probe, build, onDraw, onText, panel = n
     // D134: in the floor state the scale stops falling and the page scrolls instead. Never above the width
     // fit — capToWidthFit is what guarantees no canvas is ever wider than the window (and so no horizontal
     // scrollbar); outside that state this is exactly the arithmetic it always was.
-    const k = capToWidthFit(width / layout.layoutWidth, scrolls ? Math.max(heightFit, floor) : heightFit);
+    // D140: an own-height canvas is a different height per club, so its scale is the floor exactly — never
+    // that canvas's own height fit, which would make a club with a short chart draw BIGGER than its rivals.
+    const k = capToWidthFit(width / layout.layoutWidth, ownOn ? floor : (scrolls ? Math.max(heightFit, floor) : heightFit));
     // apply() resizes .field-outer, which wakes the ResizeObserver that called it - bailing out on a
     // scale that hasn't meaningfully moved breaks that feedback loop instead of ping-ponging forever.
     if (lastK !== null && Math.abs(k - lastK) < K_EPSILON) return;
@@ -489,19 +608,21 @@ export function mountScaledField({ root, probe, build, onDraw, onText, panel = n
   // out, hence the timer; a collision drops the depth cap for good until the next resize.
   const onExpandClick = (e) => {
     if (!e.target.closest(".depth-more")) return;
-    setTimeout(() => {
+    setTimeout(() => keepScroll(() => {
       if (!alive() || expandedFullDepth || !expansionOverlaps(el)) return;
       expandedFullDepth = true;
       step = "none"; // force applyStep to run the transition rather than short-circuit on an equal step
       applyStep("scroll");
       scrolls = true;
+      ownOn = SCROLL_STATE_OWN_HEIGHT && !!cascade?.own; // D140: the scrolling state, so the club's own height
+
       spread = idealSpread(el);
       draw();
       apply();
-    }, 0);
+    }), 0);
   };
 
-  const refit = (fresh = false, memoryless = false) => {
+  const refit = (fresh = false, memoryless = false) => keepScroll(() => {
     if (!alive()) return;
     // D114/D134: a step change is redrawn at the EXACT ideal spread rather than left inside the rebuild
     // tolerance, so the page lands on one number whatever order the settle passes and the step happened in
@@ -517,7 +638,7 @@ export function mountScaledField({ root, probe, build, onDraw, onText, panel = n
       if (spreadOff || minOff) { rebuilds++; spread = ideal; minHeight = idealMin; draw(); }
     }
     apply();
-  };
+  });
 
   // The rebuild budget is spent by the cold-load settle, so without this a later panel toggle or window
   // resize could only ever re-scale an already-wrong canvas. A genuine user
@@ -563,13 +684,13 @@ export function mountScaledField({ root, probe, build, onDraw, onText, panel = n
   // 🔵 A4: and it is a FRESH, memoryless decision rather than only a redraw, so the state the page finishes
   // in is the one this window's settled chrome actually asks for, whatever a mid-settle frame chose. A page
   // that is at "none" and stays there is still not touched at all, which is what keeps a big window exact.
-  const finalTimer = floor ? setTimeout(() => {
+  const finalTimer = floor ? setTimeout(() => keepScroll(() => {
     if (dead || !alive()) return;
     const { changed } = chooseStep(true, true);
     if (!changed && step === "none") { refitText(); return; }
     redrawAtIdealSpread();
     apply();
-  }, SETTLE_DELAYS[SETTLE_DELAYS.length - 1] + 60) : null;
+  }), SETTLE_DELAYS[SETTLE_DELAYS.length - 1] + 60) : null;
   window.addEventListener("resize", refitFresh);
   let ro = null;
   if (typeof ResizeObserver !== "undefined") {
@@ -583,17 +704,25 @@ export function mountScaledField({ root, probe, build, onDraw, onText, panel = n
   // ResizeObserver has no box to report) until it opens, and .field-outer is a fixed-width box nothing
   // else resizes. A timer, not requestAnimationFrame - see the settle comment for why.
   let mo = null;
+  let panelTimer = null;
   if (panel && typeof MutationObserver !== "undefined") {
     // 🔵 A2(b): opening or closing the 440px panel is a FRESH question about the whole cascade, not an
     // ordinary refit — an ordinary one re-decides from the folded header it is already in and strands the
     // page in a reduced state after the panel closes again.
-    mo = new MutationObserver(() => setTimeout(() => { if (!dead) { rebuilds = 0; refit(true); } }, 0));
-    mo.observe(panel, { attributes: true, attributeFilter: ["hidden", "style", "class"], childList: true });
+    // 🔵 A0-1 follow-up: one open or close fires several mutations (hidden, then the panel's own content),
+    // and each used to run a whole fresh cascade decision. They are coalesced into one, and "style" is off the
+    // filter because the only thing that writes it is apply()'s own maxHeight — i.e. this observer's own echo.
+    mo = new MutationObserver(() => {
+      if (panelTimer) return;
+      panelTimer = setTimeout(() => { panelTimer = null; if (!dead) { rebuilds = 0; refit(true); } }, 0);
+    });
+    mo.observe(panel, { attributes: true, attributeFilter: ["hidden", "class"], childList: true });
   }
 
   const dispose = () => {
     dead = true;
     clearTimeout(resizeTimer);
+    clearTimeout(panelTimer);
     clearTimeout(cascadeTimer);
     clearTimeout(finalTimer);
     stopSettle();

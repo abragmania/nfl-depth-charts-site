@@ -2,6 +2,10 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<!-- D138/B3 is PARKED with the rest of the phone view (viewfit.js's PHONE_LIST_ENABLED): the phone step
+     wants `viewport-fit=cover` here, which only pays off once the app bar carries the notch's own
+     env(safe-area-inset-*) padding, so the meta goes back in with that step rather than ahead of it.
+     Whenever it lands: never user-scalable=no — a reader must always be able to pinch a depth chart. -->
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- D67: tools/publish.mjs rewrites this to "1" in the published copy. "1" means "there is no server":
      public/js/api.js reads the pre-rendered files under api/ and refresh.js hides the Refresh control. -->
@@ -11,6 +15,7 @@
 <link rel="stylesheet" href="css/panel.css">
 <link rel="stylesheet" href="css/zoom.css">
 <link rel="stylesheet" href="css/matchup.css">
+<link rel="stylesheet" href="css/phone.css">
 </head>
 <body>
 <header class="topbar">

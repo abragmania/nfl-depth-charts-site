@@ -18,7 +18,7 @@
 // Finding 6: rating, status, and roster designation are already computed on the compiled card and are
 // NEVER refetched here — only bio (draft round, full season/college stats) comes from the network, via
 // GET /api/player/{espnId} (server/api/player.js).
-import { esc, snapHistoryHtml } from "./cards.js";
+import { esc, snapHistoryHtml, espnPlacement, espnSchemeOf } from "./cards.js";
 import { renderHistory } from "./history.js";
 import { getPlayer, getHistory } from "./api.js";
 
@@ -150,6 +150,43 @@ function snapShareHtml(card) {
     <span class="panel-snaps-bar"><span class="panel-snaps-fill" style="width:${pct}%"></span></span>
     <span class="panel-snaps-pct">${pct}%</span>
   </div>`;
+}
+
+// D142 (Adam, 2026-09-17): "ESPN lists him elsewhere can appear in his player card, don't think it's
+// necessary to see on the main page." The dashed ring is gone from the cards; the fact is this one muted
+// line, in words. Exported so the wording is tested directly — this project has no DOM in its test runner.
+//
+// The verdict itself is cards.js's espnPlacement, the same rule the rings used (and with it 🔵 A0-2's fix:
+// ESPN's codes are read in ESPN's OWN formation, which is not always the club's). The column this man is
+// standing in is found in the compiled TeamView, so the sentence can name what the club charts him as.
+const ORDINALS = ["", "first", "second", "third", "fourth", "fifth"];
+const ordinal = (n) => (n % 100 >= 11 && n % 100 <= 13 ? `${n}th` : `${n}${["th", "st", "nd", "rd"][n % 10] ?? "th"}`);
+function slotHolding(teamView, playerKey) {
+  for (const unit of ["OFF", "DEF"]) {
+    for (const slot of teamView?.units?.[unit] || []) {
+      if ((slot.players || []).some((p) => p.playerKey === playerKey)) return slot;
+    }
+  }
+  return null;
+}
+export function espnPlacementLine(card, teamView) {
+  const slot = card && slotHolding(teamView, card.playerKey);
+  if (!slot) return "";
+  const v = espnPlacement(card, slot.band, teamView?.scheme, slot.labelSource, espnSchemeOf(teamView));
+  if (!v) return "";
+  const club = String(slot.label || slot.band || "").toUpperCase();
+  const rank = v.rank != null ? ordinal(v.rank) : null;
+  // Rank only: ESPN agrees about the position group and differs about where in it he stands, so naming the
+  // position twice would read as a contradiction that isn't there.
+  if (!v.bandDiffers) {
+    const clubRank = v.clubRank != null ? (ORDINALS[v.clubRank] || ordinal(v.clubRank)) : null;
+    return `ESPN ranks him ${rank || "differently"} at ${club}${clubRank ? `; the club lists him ${clubRank}` : ""}.`;
+  }
+  return `ESPN lists him at ${v.code}${rank ? ` (${rank})` : ""}; the club charts him at ${club}.`;
+}
+function espnPlacementHtml(card, teamView) {
+  const line = espnPlacementLine(card, teamView);
+  return line ? `<div class="panel-espn-note">${esc(line)}</div>` : "";
 }
 
 function statusBlockHtml(card) {
@@ -388,7 +425,7 @@ function renderStats(asideEl, data, family) {
 }
 
 // --- public API ------------------------------------------------------------------------------------------
-function panelShellHtml(card, season, teamMeta) {
+function panelShellHtml(card, season, teamMeta, teamView = null) {
   const wordmark = teamMeta?.wordmarkUrl ? `<img class="panel-wordmark" src="${esc(teamMeta.wordmarkUrl)}" alt="${esc(teamMeta.abbr || "")}">` : "";
   return `<div class="panel-inner" style="--team-primary:${esc(teamMeta?.colourPrimary || "#333")};--team-secondary:${esc(teamMeta?.colourSecondary || "#777")}">
     <button type="button" class="panel-close" aria-label="Close player panel">&times;</button>
@@ -404,6 +441,7 @@ function panelShellHtml(card, season, teamMeta) {
     ${bioRowHtml(card)}
     ${snapShareHtml(card)}
     ${statusBlockHtml(card)}
+    ${espnPlacementHtml(card, teamView)}
     <div class="panel-position-line" data-history>history loading…</div>
     <div class="panel-stats" data-stats>${card.espnId ? `<div class="panel-loading">Loading season stats…</div>` : ""}</div>
   </div>`;
@@ -426,7 +464,7 @@ export function openPanel(asideEl, card, teamView, teamMeta) {
   asideEl.dataset.originHash = fromTeamContext ? lastOldHash : `#/team/${abbr}`;
 
   asideEl.hidden = false;
-  asideEl.innerHTML = panelShellHtml(card, teamView?.season, teamMeta);
+  asideEl.innerHTML = panelShellHtml(card, teamView?.season, teamMeta, teamView);
   { const h = asideEl.querySelector("[data-history]"); if (h) renderHistory(h, card, teamMeta, { abbr: teamView?.abbr ?? teamMeta?.abbr }); }
 
   // D115: independent of the ESPN-bio fetch below (gated on card.espnId) — games/starts come from

@@ -26,6 +26,13 @@ export const BAND_DISPLAY = {
 };
 export const bandDisplay = (band) => BAND_DISPLAY[band] || band || "";
 
+// D143: when the club's own chart calls a linebacker row Sam, Mike, Will or Rush, the server puts that word
+// on the slot as `clubRole` and leaves the LABEL the plain baseline (MLB / OLB / ILB). It prints after the
+// label exactly the way "CB · Nickel" and "WR · Slot" read (D70) — "OLB · Rush", "ILB · Will". The plain
+// label is what every layout rule still reads (field.js's isMikeLabel/isEndLabel), so this composes for
+// DISPLAY only, in one place shared by the column pill and by each card's position line.
+export const withClubRole = (label, slot) => (slot?.clubRole ? `${label} · ${slot.clubRole}` : label);
+
 const STATUS_CLASS = {
   Q: "badge-q", D: "badge-d", OUT: "badge-out", IR: "badge-out", PUP: "badge-out", NFI: "badge-out",
   SUSP: "badge-susp", EXEMPT: "badge-susp", INACTIVE: "badge-inactive",
@@ -63,12 +70,20 @@ function initials(p) {
   return (a + b).toUpperCase();
 }
 
-export function headshotHtml(p, size) {
+// D138 (Adam, 2026-09-17): "no photos on phone; only for players rated 90 or above." `opts.minRating` is
+// that floor — a man under it (or with no Madden rating at all) gets NO photo and NO initials disc, so the
+// width goes to his name instead. Absent, which is every other caller, means "always draw one" and this
+// function is byte-for-byte what it was.
+export const PHONE_HEADSHOT_MIN_RATING = 90;
+export function headshotHtml(p, size, opts = {}) {
+  if (opts.minRating != null && !(p.rating?.current >= opts.minRating)) return "";
   const ini = esc(initials(p));
   const boxStyle = `width:${size}px;height:${size}px`;
   const fallback = `this.replaceWith(Object.assign(document.createElement('div'),{className:'headshot-fallback',textContent:'${ini}',style:'${boxStyle};font-size:${Math.round(size * 0.34)}px'}))`;
   if (!p.headshot) return `<div class="headshot-fallback" style="${boxStyle};font-size:${Math.round(size * 0.34)}px">${ini}</div>`;
-  return `<span class="headshot-box" style="${boxStyle}"><img class="headshot" src="${esc(p.headshot)}" alt="" loading="lazy" onerror="${fallback}"></span>`;
+  // `decoding="async"` and the intrinsic width/height keep a list of photos off the main thread and stop
+  // the rows reflowing as each one lands; both match the box the style attribute already sets.
+  return `<span class="headshot-box" style="${boxStyle}"><img class="headshot" src="${esc(p.headshot)}" alt="" width="${size}" height="${size}" loading="lazy" decoding="async" onerror="${fallback}"></span>`;
 }
 
 function statusBadge(status) {
@@ -200,9 +215,33 @@ const FRONT_BANDS = new Set(["DL", "EDGE"]);
 // row deliberately, so ESPN's band for that man cannot disagree with anything. Only the rank comparison survives.
 const BODY_DERIVED = new Set(["roster-body", "starter-of-record", "off-ball"]);
 
-// Exported for the tests (D137): the dashed ring is a claim about a real player's real placement, so the
+// 🔵 A0-2: ESPN's position codes belong to ESPN's OWN formation, not the club's. D133 lets a club chart that
+// plainly prints its front overrule ESPN's unit name (Arizona reads 3-4 while ESPN files it "Base 4-3 D"), and
+// the compiled view records both in `schemeOverride` — so the code map below must be read in ESPN's scheme or
+// every wlb/slb in such a club is mapped to the wrong band. Falls back to the club's scheme when they agree.
+export function espnSchemeOf(view) {
+  return view?.schemeOverride?.espn?.match(/\b[34]-[34]\b/)?.[0] ?? view?.scheme;
+}
+
+// D142: the same verdict, plus the one extra fact the panel's sentence needs — whether ESPN disagrees about
+// the POSITION GROUP or only about the rank inside it. Derived from the same mapping espnDisagrees uses, so
+// the rule the rings used and the line the panel prints can never part company.
+export function espnPlacement(p, slotBand, scheme, labelSource, espnScheme = scheme) {
+  if (!espnDisagrees(p, slotBand, scheme, labelSource, espnScheme)) return null;
+  const key = String(p.espnSlot).toLowerCase();
+  const mapped = mapEspnSlotToBand(p.espnSlot, espnScheme);
+  const bandDiffers = !BODY_DERIVED.has(labelSource)
+    && !(ESPN_END_CODES.has(key) && FRONT_BANDS.has(slotBand))
+    && !!mapped && mapped !== slotBand;
+  return { code: String(p.espnSlot).toUpperCase(), rank: p.espnRank ?? null, clubRank: p.tier ?? null, bandDiffers };
+}
+
+// Exported for the tests (D137): the verdict is a claim about a real player's real placement, so the
 // rule that decides it is asserted directly rather than only through a rendered page.
-export function espnDisagrees(p, slotBand, scheme, labelSource) {
+// 🔵 A0-2: `espnScheme` is the formation ESPN itself files this club under (espnSchemeOf above); it decides
+// what ESPN's own codes MEAN. It defaults to the club's scheme, which is the right answer whenever the two
+// agree — 31 of 32 clubs today — so a caller that has only one scheme to give is unchanged.
+export function espnDisagrees(p, slotBand, scheme, labelSource, espnScheme = scheme) {
   if (!p.espnSlot) return false;
   // A tier of 0 is not a rank: it is the sentinel starters.js stamps on a man it INSERTED onto line one from
   // the roster because today's chart does not list him at all (D61), and a null tier is the same for a reserve
@@ -213,7 +252,7 @@ export function espnDisagrees(p, slotBand, scheme, labelSource) {
   if (BODY_DERIVED.has(labelSource)) return rankDiffers;
   const key = String(p.espnSlot).toLowerCase();
   if (ESPN_END_CODES.has(key) && FRONT_BANDS.has(slotBand)) return rankDiffers;
-  const mapped = mapEspnSlotToBand(p.espnSlot, scheme);
+  const mapped = mapEspnSlotToBand(p.espnSlot, espnScheme);
   if (mapped) return mapped !== slotBand || rankDiffers;
   return rankDiffers; // can't map this ESPN code to a band -> fall back to the rank comparison alone
 }
@@ -309,8 +348,10 @@ function isLineOneStarter(p) {
 // one row, because that is the man the page is about and the only row with the height to carry a photo.
 function overviewLineOne(p, teamAbbr, opts = {}) {
   const style = opts.style || {};
-  const disagrees = espnDisagrees(p, opts.band, opts.scheme, opts.labelSource);
-  const espnRing = disagrees ? " espn-flag" : "";
+  // D142 (Adam, 2026-09-17): "ESPN lists him elsewhere can appear in his player card, don't think it's
+  // necessary to see on the main page." The dashed teal ring is gone from every page; the verdict survives
+  // in this row's own tooltip and, in full words, in the player panel (panel.js's espnPlacementLine).
+  const disagrees = espnDisagrees(p, opts.band, opts.scheme, opts.labelSource, opts.espnScheme);
   // No role tag here: on the overview the bold top row IS the starter, and an out or filling-in player
   // says so on his own banner.
   const badges = [
@@ -323,7 +364,13 @@ function overviewLineOne(p, teamAbbr, opts = {}) {
   // The banner sits INSIDE this anchor, inset from its edges (.prow-one .card-banner in styles.css), and
   // a bannered row takes the banner's own colour on its border, so it unmistakably belongs to the man
   // underneath it rather than reading as a divider between two rows.
-  const head = style.headshot ? `<span class="prow-head">${headshotHtml(p, style.headshot)}</span>` : "";
+  // D138: the phone list draws these same rows with a photo the LAYOUT never reserved (it is a CSS flow
+  // there, not a scaled canvas), and only for a man over the rating floor — so the size and the floor may
+  // come from the caller as well as from the layout style. Without `opts.headshot` this is exactly what it
+  // was: the photo the layout reserved, or none.
+  const headSize = opts.headshot?.size ?? style.headshot;
+  const photo = headSize ? headshotHtml(p, headSize, opts.headshot || {}) : "";
+  const head = photo ? `<span class="prow-head">${photo}</span>` : "";
   // `column-no-starter` (see isLineOneStarter above) keeps the exact same box — same tag, same classes
   // otherwise, same inline min-height straight off field.js's lineOneHeight — so the column's height and
   // everything stacked under it (the pass-catcher cluster included) sits exactly where the layout engine
@@ -335,7 +382,7 @@ function overviewLineOne(p, teamAbbr, opts = {}) {
   // under the pill — so a long name on a headshot row keeps its full row width instead of eating into the
   // trio's space. CSS alone can't single out "every flex item but the first" without these wrapper spans,
   // so cards.js has to add them.
-  return `<a class="${overviewClasses(p, "prow prow-one")}${starterCls}${espnRing}" href="#/team/${esc(teamAbbr)}/player/${encodeURIComponent(p.playerKey)}" data-player-key="${esc(p.playerKey)}" title="${overviewTitle(p, disagrees)}" style="min-height:${lineOneHeight(p, style)}px">
+  return `<a class="${overviewClasses(p, "prow prow-one")}${starterCls}" href="#/team/${esc(teamAbbr)}/player/${encodeURIComponent(p.playerKey)}" data-player-key="${esc(p.playerKey)}" title="${overviewTitle(p, disagrees)}" style="min-height:${lineOneHeight(p, style)}px">
     ${bannerHtml(p)}
     <span class="prow-line">
       ${head}
@@ -648,7 +695,9 @@ export function renderColumn(col, teamAbbr, opts = {}) {
   // "WR · Slot" regardless of his rank (D70: the rank moved into the tooltip, see slotReason in field.js's
   // regroupSlotReceivers), since which man plays inside is the question that row answers. The slot's own label
   // is still the identity everywhere else (the group link, the "also listed at" chips).
-  const baseLabel = col.displayLabel || slot.label;
+  // D143: and the club's own Sam/Mike/Will/Rush word follows the label it qualifies, the way the nickel's
+  // "CB · Nickel" does. `ownLabel` below stays the raw slot label, which is what alsoListedChips matches on.
+  const baseLabel = withClubRole(col.displayLabel || slot.label, slot);
   const labelText = pair ? `${baseLabel} · co-starters` : baseLabel;
   // D70: the band hue on the pill comes from data-band (styles.css maps it to --band-color), one fixed
   // colour per position group across every team and every view — not the team tint the rest of the pill

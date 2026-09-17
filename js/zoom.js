@@ -18,7 +18,7 @@
 // card-banner, banner-out, banner-active, badge*, rating-pill, column-shaded, tray-label/tray-chip)
 // rather than inventing parallel styles.
 import { getTeams, getTeam, invalidateTeam } from "./api.js";
-import { esc, BAND_DISPLAY, headshotHtml, wireDepthToggles, isFullyOut, isScratch, psBadge, snapHistoryHtml } from "./cards.js";
+import { esc, BAND_DISPLAY, headshotHtml, wireDepthToggles, isFullyOut, isScratch, psBadge, snapHistoryHtml, withClubRole } from "./cards.js";
 import { headerHtml, mountTeamField, teamBodyHtml } from "./team.js";
 import { SIDE_CARD_W, SIDE_MAX_DEPTH_ROWS, regroupSlotReceivers, columnRankReason } from "./field.js";
 import { fitToViewport, disposeCurrentView, SIDE_MIN_READABLE_SCALE } from "./viewfit.js";
@@ -313,6 +313,9 @@ function errorHtml(team, e) {
 function unitView(view, unit) {
   return {
     scheme: view.scheme,
+    // 🔵 A0-2: and the club's ESPN-vs-club scheme disagreement, which decides what ESPN's own position
+    // codes mean wherever this page's cards are judged against them (cards.js's espnSchemeOf).
+    schemeOverride: view.schemeOverride ?? null,
     units: { [unit]: view.units?.[unit] || [] },
     unlisted: { [unit]: view.unlisted?.[unit] || {} },
   };
@@ -452,7 +455,9 @@ const starterLed = (slot) => {
 // Every other band, and a receiver chart with nobody over the slot bar, comes back exactly as the API
 // listed it, labels and all.
 export function groupColumns(slots, band) {
-  const plain = () => slots.map((slot) => ({ slot, label: slot.label, reason: null }));
+  // D143: the club's own Sam/Mike/Will/Rush word rides on the label here too, so the group page's pill and
+  // every card's position line in it read the same "OLB · Rush" the field's column pill prints.
+  const plain = () => slots.map((slot) => ({ slot, label: withClubRole(slot.label, slot), reason: null }));
   if (band !== "WR") return plain();
   const grouped = regroupSlotReceivers(slots);
   if (!grouped) return plain();

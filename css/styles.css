@@ -643,7 +643,6 @@ a.back { color:var(--muted); }
 .prow-active { border-left-color:#2f9e63 !important; }
 .prow-costarter { border-style:solid; }
 .prow-shaded { background-image:repeating-linear-gradient(45deg, rgba(255,255,255,.06) 0 5px, rgba(255,255,255,0) 5px 10px); }
-.prow.espn-flag { border-color:#4fd1c5; border-style:dashed; }
 /* The "+N more" tail (ruling E's depth cap): deliberately quiet, and it links through to the position
    group view — the screen that does show every player at the position, stacked 1, 2, 3… (D45). */
 .prow-more { display:flex; align-items:center; justify-content:center; min-height:18px; font-size:9.5px; font-style:italic;
@@ -768,7 +767,6 @@ a.back { color:var(--muted); }
 /* Amended D48: a soft glow in the TEAM's own colour on the selected card, on top of the gold outline
    that says "this is the one you clicked" — the two read as distinct signals. */
 .card.selected { outline:3px solid #ffd54a; outline-offset:2px; box-shadow:0 0 18px 2px color-mix(in srgb, var(--team-primary,#333) 70%, transparent); }
-.card.espn-flag { border-style:dashed; border-color:#4fd1c5; border-width:2px; }
 .card-badges { position:absolute; top:4px; right:4px; display:flex; gap:2px; z-index:2; }
 /* D102: "read as a rail or tag, not a full-width warning stripe" — inset on both sides and fully rounded
    (was flush edge-to-edge with only the top corners rounded), with a slight vertical gradient instead of a

@@ -9,7 +9,7 @@
 // Route #/matchup/:a/:b renders A-offense-over-B-defense; #/matchup/:a alone resolves B from A's
 // header.nextOpponent (this week's schedule) and redirects, or shows a picker on a bye week.
 import { getTeams, getTeam } from "./api.js";
-import { esc, renderColumn, renderTray, fitNames, wireDepthToggles } from "./cards.js";
+import { esc, renderColumn, renderTray, fitNames, wireDepthToggles, espnSchemeOf } from "./cards.js";
 import { computeLayout, renderFieldSvg, renderLevelLabels, FIELD_VARIANT, SECONDARY_ONE_ROW } from "./field.js";
 import { mountScaledField, disposeCurrentView, MIN_READABLE_SCALE } from "./viewfit.js";
 import { navStripHtml, wireNav } from "./nav.js";
@@ -38,6 +38,9 @@ function slotLookupFor(viewA, viewB) {
 function facingView(viewA, viewB) {
   return {
     scheme: viewB.scheme,
+    // 🔵 A0-2: the defending club's ESPN-vs-club scheme disagreement travels with its front, or this page
+    // would read ESPN's linebacker codes in the wrong formation (cards.js's espnSchemeOf).
+    schemeOverride: viewB.schemeOverride ?? null,
     units: { OFF: viewA.units?.OFF || [], DEF: viewB.units?.DEF || [] },
     unlisted: { OFF: viewA.unlisted?.OFF || {}, DEF: viewB.unlisted?.DEF || {} },
   };
@@ -95,14 +98,16 @@ function halfBannerHtml(team, unitWord, pos) {
 // Each column is tinted with the colours of the team it actually belongs to, so a glance at any row says
 // whose players those are without reading the header — the one thing a single shared field wash cannot do
 // when two teams are on it.
-function fieldHtml(viewA, viewB, teamA, teamB, spread, depthOpts = null) {
+function fieldHtml(viewA, viewB, teamA, teamB, spread, depthOpts = null, ownHeight = false) {
   const view = facingView(viewA, viewB);
-  const layout = computeLayout(view, { ...(depthOpts || {}), spread });
+  // D140: `ownHeight` is the fit engine's scrolling-state flag — the canvas takes these two clubs' own
+  // natural height instead of the constant every club shares, so the page ends where the chart ends.
+  const layout = computeLayout(view, { ...(depthOpts || {}), spread, ownHeight });
   const slotLookup = slotLookupFor(viewA, viewB);
   const colour = (t) => `--team-primary:${t.colourPrimary};--team-secondary:${t.colourSecondary}`;
   const columnsHtml = layout.columns.map((c) => {
     const team = c.unit === "OFF" ? teamA : teamB;
-    return renderColumn(c, team.abbr, { slotLookup, scheme: view.scheme, colourStyle: colour(team) });
+    return renderColumn(c, team.abbr, { slotLookup, scheme: view.scheme, espnScheme: espnSchemeOf(view), colourStyle: colour(team) });
   }).join("");
   const traysHtml = layout.trays.map((t) => renderTray(t, (t.unit === "OFF" ? teamA : teamB).abbr)).join("");
   // D98 part 2: B defends (top half), A is on offense (bottom half) — see facingView above.
@@ -371,15 +376,18 @@ function matchupReserveBelow(root) {
 function mountMatchupField(root, viewA, viewB, teamA, teamB) {
   const view = facingView(viewA, viewB);
   let depthOpts = null; // D134: set by the cascade's setDepth hook, read by every build from here on
+  // D140: the same two canvases at these clubs' own natural height, measured once, for the scrolling state.
+  const own = { full: computeLayout(view, { ownHeight: true }), reduced: computeLayout(view, { ...REDUCED_DEPTH_OPTS, ownHeight: true }) };
   return mountScaledField({
     root,
     probe: computeLayout(view),
-    build: (spread) => fieldHtml(viewA, viewB, teamA, teamB, spread, depthOpts),
+    build: (spread, minHeight, ownHeight) => fieldHtml(viewA, viewB, teamA, teamB, spread, depthOpts, ownHeight),
     observe: [root.querySelector(".nav-strip"), root.querySelector(".matchup-head")],
     reserveBelow: () => matchupReserveBelow(root), // D114: account for the bottom half-banner strip
     cascade: {
       floor: MIN_READABLE_SCALE,
       reduced: computeLayout(view, REDUCED_DEPTH_OPTS),
+      own, // D140
       setCompact: (on) => setMatchupCompact(root, on),
       setDepth: (on) => { depthOpts = on ? REDUCED_DEPTH_OPTS : null; },
     },

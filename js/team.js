@@ -1,8 +1,9 @@
 import { getTeams, getTeam, invalidateTeam } from "./api.js";
 import { computeLayout, renderFieldSvg, renderLevelLabels, FIELD_VARIANT, SECONDARY_ONE_ROW, REDUCED_DEPTH_ROWS } from "./field.js";
-import { renderColumn, renderTray, esc, fitNames, wireDepthToggles } from "./cards.js";
-import { mountScaledField, disposeCurrentView, MIN_READABLE_SCALE } from "./viewfit.js";
+import { renderColumn, renderTray, esc, fitNames, wireDepthToggles, espnSchemeOf } from "./cards.js";
+import { mountScaledField, disposeCurrentView, MIN_READABLE_SCALE, decideViewMode } from "./viewfit.js";
 import { navStripHtml, wireNav } from "./nav.js";
+import { renderPhoneList } from "./phonelist.js";
 
 const dash = "—";
 const STALE_HOURS = 36;
@@ -139,7 +140,8 @@ function fieldHtml(view, team, layoutOpts = {}) {
   const teamAbbr = team.abbr;
   const layout = computeLayout(view, layoutOpts);
   const slotLookup = slotLookupFor(view);
-  const opts = { slotLookup, scheme: view.scheme };
+  // 🔵 A0-2: `scheme` places the front (the club's own), `espnScheme` reads ESPN's codes (ESPN's own).
+  const opts = { slotLookup, scheme: view.scheme, espnScheme: espnSchemeOf(view) };
   const columnsHtml = layout.columns.map((c) => renderColumn(c, teamAbbr, opts)).join("");
   const traysHtml = layout.trays.map((t) => renderTray(t, teamAbbr)).join("");
   const levelsHtml = renderLevelLabels(layout.levels, layout.layoutWidth);
@@ -188,22 +190,34 @@ export const REDUCED_DEPTH_OPTS = { maxDepthRows: REDUCED_DEPTH_ROWS, depthChip:
 
 // `cascadeOpts` (D134): `floor` is this page's own readable-scale floor, `depth` whether it offers the
 // less-depth step, `setCompact` its own chrome-folding hook. A page that passes none of them keeps the
-// team page's own defaults.
+// team page's own defaults. D138 adds `setList`: only a page that knows how to draw itself as the phone
+// list offers that step, which today is the Team page alone (step 1).
 export function mountTeamField(root, view, team, teamAbbr, layoutOpts = {}, cascadeOpts = {}) {
   const panel = root.querySelector(".player-panel");
   let depthOpts = null; // set by the cascade's setDepth hook below; read by every build from here on
+  const probe = computeLayout(view, layoutOpts); // pure and cheap: the natural (unspread) canvas, for the spread maths
+  // D140: the same two canvases at THIS club's own natural height, for the scrolling state alone. Only a
+  // two-sided canvas has a constant height to narrow — a single-unit page (Offense/Defense, no line of
+  // scrimmage) is already drawn at its own rows' height, so it is handed none and behaves exactly as before.
+  const ownHeightOpts = { ...layoutOpts, ownHeight: true };
+  const own = probe.losY == null ? null : {
+    full: computeLayout(view, ownHeightOpts),
+    reduced: cascadeOpts.depth ? computeLayout(view, { ...ownHeightOpts, ...REDUCED_DEPTH_OPTS }) : null,
+  };
   return mountScaledField({
     root,
-    probe: computeLayout(view, layoutOpts), // pure and cheap: the natural (unspread) canvas, for the spread maths
-    build: (spread, minHeight) => fieldHtml(view, team, { ...layoutOpts, ...(depthOpts || {}), spread, minHeight }),
+    probe,
+    build: (spread, minHeight, ownHeight) => fieldHtml(view, team, { ...layoutOpts, ...(depthOpts || {}), spread, minHeight, ownHeight }),
     fillHeight: !!layoutOpts.fillHeight, // D72: single-unit pages spend spare height on air between rows
     panel,
     observe: [root.querySelector(".nav-strip"), root.querySelector(".teamhead"), root.querySelector(".legend")],
     cascade: {
       floor: cascadeOpts.floor ?? MIN_READABLE_SCALE,
       reduced: cascadeOpts.depth ? computeLayout(view, { ...layoutOpts, ...REDUCED_DEPTH_OPTS }) : null,
+      own, // D140
       setDepth: cascadeOpts.depth ? (on) => { depthOpts = on ? REDUCED_DEPTH_OPTS : null; } : null,
       setCompact: cascadeOpts.setCompact || null,
+      setList: cascadeOpts.setList || null, // D138: a window that has become a phone window re-renders the page
     },
     onDraw: (el) => { wireFieldClicks(el, teamAbbr); wireDepthToggles(el); fitNames(el); },
     // 🔵 A9: the names are fitted when the markup is drawn, and again once the real font has landed — the
@@ -279,15 +293,33 @@ export async function renderTeam(root, search, abbr, playerKey) {
     return;
   }
 
-  // The field is mounted EMPTY first so mountTeamField can measure the real box (header height, legend
-  // wrapping, the window) before it decides how wide a canvas to ask field.js for — see mountTeamField.
-  // D59: the shared nav strip renders first, directly under the app bar, on every team-context page.
-  root.innerHTML = `
-    ${navStripHtml({ teams, abbr: A, page: "team", primary: team.colourPrimary, secondary: team.colourSecondary })}
-    ${headerHtml(team, view, fromFixture, teams, true)}
-    ${SECONDARY_ONE_ROW ? "" : legendHtml()}
-    ${teamBodyHtml(team)}
-    `;
+  // D138 step 1: an upright phone, or a tablet held upright, gets the vertical list instead of the field.
+  // ONE decision function makes that call — viewfit.js's own cascade, measuring the window, never a
+  // user-agent string and never a CSS media query. Everything below the branch is the field page,
+  // untouched by the ruling.
+  const nav = navStripHtml({ teams, abbr: A, page: "team", primary: team.colourPrimary, secondary: team.colourSecondary });
+  const asList = decideViewMode() === "list";
+  if (asList) {
+    // The nav strip, the club header and the key are this module's markup; the list is handed them as
+    // strings so the two files never import each other. The header goes in without its banner legend
+    // (phonelist puts the key's own chip in the phone header instead, so the page is identical whichever
+    // way D111's SECONDARY_ONE_ROW switch is set).
+    renderPhoneList(root, {
+      view, team, abbr: A,
+      chrome: { nav, header: headerHtml(team, view, fromFixture, teams, false), legend: legendHtml("legend-banner legend-collapsed") },
+      rerender: () => renderTeam(root, search, A, playerKey),
+    });
+  } else {
+    // The field is mounted EMPTY first so mountTeamField can measure the real box (header height, legend
+    // wrapping, the window) before it decides how wide a canvas to ask field.js for — see mountTeamField.
+    // D59: the shared nav strip renders first, directly under the app bar, on every team-context page.
+    root.innerHTML = `
+      ${nav}
+      ${headerHtml(team, view, fromFixture, teams, true)}
+      ${SECONDARY_ONE_ROW ? "" : legendHtml()}
+      ${teamBodyHtml(team)}
+      `;
+  }
 
   // The router keys the player panel off whichever view last rendered, not off this module specifically —
   // main.js reads this cache to open/close the panel without re-rendering the view underneath it. zoom.js
@@ -298,7 +330,7 @@ export async function renderTeam(root, search, abbr, playerKey) {
   // still applies to them, unchanged.
   window.__nflView = { abbr: A, view, teamMeta: team, page: "team" };
 
-  wireNav(root); // D59: switcher routes to the equivalent page on the newly picked team
+  if (!asList) wireNav(root); // D59: switcher routes to the equivalent page on the newly picked team (the list wires its own)
 
   // "Refresh now" kicks off a server-side refresh cycle (window.NFLRefresh, from refresh.js — main.js
   // imports it for this side effect) and reloads this team once it's done. The listener is added once per
@@ -317,8 +349,14 @@ export async function renderTeam(root, search, abbr, playerKey) {
   };
   window.addEventListener("nfl:data-refreshed", teamRefreshListener, { once: true });
 
+  if (asList) { highlightSelected(root, playerKey); return; }
   // D134: the whole-team page offers all three steps — fold the legend into its chip, then one backup per
-  // column behind a "+N more" chip, then the readable floor with the page scrolling.
-  mountTeamField(root, view, team, A, {}, { depth: true, setCompact: (on) => setTeamCompact(root, on) });
+  // column behind a "+N more" chip, then the readable floor with the page scrolling. D138 adds a fourth
+  // answer above all of them: a window narrow enough for the list re-renders this page as the list.
+  mountTeamField(root, view, team, A, {}, {
+    depth: true,
+    setCompact: (on) => setTeamCompact(root, on),
+    setList: () => renderTeam(root, search, A, playerKey),
+  });
   highlightSelected(root, playerKey);
 }

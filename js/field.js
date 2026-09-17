@@ -58,6 +58,13 @@ export const FIELD_VARIANT = "A";
 // untouched: corners/nickel/safeties keep the x's mirrorLandmarks always gave them.
 export const SECONDARY_ONE_ROW = true;
 
+// D141 — THE SWITCH THE ONE-ROW-FRONT RULING SITS BEHIND. `true` draws the off-ball LINEBACKERS and the
+// EDGE rushers on a single row (backers on the row's top line, edge columns a FRONT_LB_LIFT step below, so
+// the two groups still read apart), which drops the defence another row and shortens the canvas with it.
+// `false` restores the two rows everywhere, byte for byte. Horizontal placement is untouched but for the one
+// shape the ruling names: a club charting a LONE edge column takes the left edge spot on the shared row.
+export const FRONT_ONE_ROW = true;
+
 // ---- compact overview geometry (ruling E) -------------------------------------------------------
 // A column is a stack of text rows, not photo cards, so its width is set by how much room a real name
 // plus a rating pill needs, not by a headshot diameter. WIDTH is free: LAYOUT_WIDTH is fixed and the fit
@@ -152,33 +159,70 @@ const OFF_BANDS = {
 // Each row is tagged with the LEVEL it belongs to (DL on the line, LBs next, then DBs) so computeLayout
 // can open a bigger gap at a level boundary than between rows inside one level, and hand back one label
 // per level. Ruling A: the LINE row is the DL band, which now includes every defensive end.
-// The two row models are written out in full rather than patched, so reading either one tells you the
+// The four row models are written out in full rather than patched, so reading any one of them tells you the
 // whole defensive layout it produces. `order` is nearest-the-LOS first; `bands` says which compiled bands
 // each row draws; `level` groups consecutive rows into the levels the stripes and labels are printed from.
-const DEF_ROWS_ONE_ROW_SECONDARY = {
-  order: ["LINE", "EDGE", "LB", "SECONDARY"],
-  bands: { LINE: ["DL"], EDGE: ["EDGE"], LB: ["LB"], SECONDARY: ["CB", "NB", "S"] },
-  level: { LINE: "LINE", EDGE: "EDGE", LB: "LB", SECONDARY: "SEC" },
-};
-const DEF_ROWS_TWO_ROW_SECONDARY = {
+// Which one a club draws is the two switches, decided independently: a club whose own columns will not fit
+// on a merged row falls back on THAT row alone (D111's secondary fallback, D141's front fallback).
+const DEF_ROWS_SPLIT_SEC_SPLIT_FRONT = {
   order: ["LINE", "EDGE", "LB", "CB_NB", "S"],
   bands: { LINE: ["DL"], EDGE: ["EDGE"], LB: ["LB"], CB_NB: ["CB", "NB"], S: ["S"] },
   level: { LINE: "LINE", EDGE: "EDGE", LB: "LB", CB_NB: "SEC", S: "SEC" },
 };
-const DEF_ROWS = SECONDARY_ONE_ROW ? DEF_ROWS_ONE_ROW_SECONDARY : DEF_ROWS_TWO_ROW_SECONDARY;
+const DEF_ROWS_ONE_SEC_SPLIT_FRONT = {
+  order: ["LINE", "EDGE", "LB", "SECONDARY"],
+  bands: { LINE: ["DL"], EDGE: ["EDGE"], LB: ["LB"], SECONDARY: ["CB", "NB", "S"] },
+  level: { LINE: "LINE", EDGE: "EDGE", LB: "LB", SECONDARY: "SEC" },
+};
+const DEF_ROWS_SPLIT_SEC_ONE_FRONT = {
+  order: ["LINE", "FRONT", "CB_NB", "S"],
+  bands: { LINE: ["DL"], FRONT: ["EDGE", "LB"], CB_NB: ["CB", "NB"], S: ["S"] },
+  level: { LINE: "LINE", FRONT: "FRONT", CB_NB: "SEC", S: "SEC" },
+};
+const DEF_ROWS_ONE_SEC_ONE_FRONT = {
+  order: ["LINE", "FRONT", "SECONDARY"],
+  bands: { LINE: ["DL"], FRONT: ["EDGE", "LB"], SECONDARY: ["CB", "NB", "S"] },
+  level: { LINE: "LINE", FRONT: "FRONT", SECONDARY: "SEC" },
+};
+const defRowModel = (secOneRow, frontOneRow) => (secOneRow
+  ? (frontOneRow ? DEF_ROWS_ONE_SEC_ONE_FRONT : DEF_ROWS_ONE_SEC_SPLIT_FRONT)
+  : (frontOneRow ? DEF_ROWS_SPLIT_SEC_ONE_FRONT : DEF_ROWS_SPLIT_SEC_SPLIT_FRONT));
+const DEF_ROWS = defRowModel(SECONDARY_ONE_ROW, FRONT_ONE_ROW);
 const DEF_ROW_ORDER = DEF_ROWS.order; // nearest LOS -> farthest
 const DEF_ROW_BANDS = DEF_ROWS.bands;
 const DEF_ROW_LEVEL = DEF_ROWS.level;
-const DEF_LEVEL_LABEL = { LINE: "LINE", EDGE: "EDGE", LB: "LINEBACKERS", SEC: "SECONDARY" };
+// D141: the merged row carries ONE label naming both groups, in the order they read down the field. It is
+// narrower than the LABEL_CLEAR_X gutter the lift rule already reserves, so it prints on one line at every
+// scale, and the alternative (stacking the two words) is not needed.
+const DEF_LEVEL_LABEL = { LINE: "LINE", EDGE: "EDGE", LB: "LINEBACKERS", FRONT: "LINEBACKERS · EDGE", SEC: "SECONDARY" };
 
-// D121, raised 22 -> 34 by D125 — inside D111's one SECONDARY row the corners and the nickel start this far
-// BELOW the row's shared top line while the safeties keep it. Only CB/NB move: the row's top line, stripe and
-// "SECONDARY" label are untouched, and the two-row secondary gets none of it (its corners have their own row).
-const SECONDARY_CORNER_DROP = 34;
-const SECONDARY_DROP_BANDS = new Set(["CB", "NB"]);
-const secondaryDropOf = (rowModel, rowKey, band) =>
-  rowModel === DEF_ROWS_ONE_ROW_SECONDARY && rowKey === "SECONDARY" && SECONDARY_DROP_BANDS.has(band)
-    ? SECONDARY_CORNER_DROP : 0;
+// THE STAGGER INSIDE A MERGED ROW. Both merged rows share one top line and start SOME of their bands' columns
+// a step below it, so two groups read as two groups without costing a row:
+//   SECONDARY  the corners and the nickel step below the safeties. D121 opened 22 units, D125 raised it to 34,
+//              and D141 raises it to a full card — LABEL_RESERVE + CARD_H1 (40) plus air — so the corner's own
+//              label pill sits BELOW the bottom of the safety's line-one card rather than beside it.
+//   FRONT      the edge rushers step below the off-ball linebackers (D141), which is what makes the backers
+//              read as the higher, further-from-the-line group they are.
+// A two-row model has neither: its corners and its edge rushers have rows of their own.
+const SECONDARY_CORNER_DROP = 46;
+const FRONT_LB_LIFT = 18;
+const ROW_DROPS = {
+  SECONDARY: { bands: new Set(["CB", "NB"]), drop: SECONDARY_CORNER_DROP },
+  FRONT: { bands: new Set(["EDGE"]), drop: FRONT_LB_LIFT },
+};
+const rowDropOf = (rowKey, band) => {
+  const d = ROW_DROPS[rowKey];
+  return d && d.bands.has(band) ? d.drop : 0;
+};
+// D141: the merged front row names only the groups actually standing on it, in the order they read down the
+// field. Ruling A leaves a 4-3 whose ends are linemen with no EDGE column at all, and that row is plainly the
+// linebackers — it must not be captioned with a group nobody can see.
+function frontRowLabel(cols) {
+  const parts = [];
+  if (cols.some((c) => c.band === "LB")) parts.push(DEF_LEVEL_LABEL.LB);
+  if (cols.some((c) => c.band === "EDGE")) parts.push(DEF_LEVEL_LABEL.EDGE);
+  return parts.join(" · ") || DEF_LEVEL_LABEL.FRONT;
+}
 
 // D107 — ONE FIELD SCALE FOR EVERY CLUB, on the team and matchup pages alike. A both-sides canvas used to
 // be exactly as tall as the club's own chart needed, and because the fit engine scales the canvas to the
@@ -216,21 +260,22 @@ function defRowFullH(style = {}) {
   return LABEL_RESERVE + CARD_H1 + cap * (rowH + gap) + (style.depthChip ? DEPTH_CHIP_H + gap + BANNER_H : 0);
 }
 const DEF_ROW_FULL_H = defRowFullH();
-// D111/D121: with the secondary on one row, DEF_ROW_ORDER.length is 4 rather than 5, and D121's corner drop
-// is reserved on top of it — BOTH_SIDES_HALF/BOTH_SIDES_HEIGHT are currently 467 / 1014 and stay DERIVED,
-// never hardcoded, so a future ruling that adds or removes a defensive row moves the canvas with it.
+// D111/D141: with the secondary AND the front each on one row, DEF_ROW_ORDER.length is 3 rather than 5, and
+// both stagger steps are reserved on top of it — BOTH_SIDES_HALF/BOTH_SIDES_HEIGHT are currently 385 / 850
+// and stay DERIVED, never hardcoded, so a future ruling that adds or removes a defensive row moves the
+// canvas with it (with both switches off the same arithmetic gives D109's 535 / 1106 exactly).
 const DEF_LEVEL_BOUNDARIES = DEF_ROW_ORDER.reduce(
   (n, key, i) => (i && DEF_ROW_LEVEL[key] !== DEF_ROW_LEVEL[DEF_ROW_ORDER[i - 1]] ? n + 1 : n), 0);
-// D121: the SECONDARY row's own reserved height grows by the drop (its deepest column may now be a dropped
-// corner), so the constant half grows with it — one number for every club (D107), never per club, and the
-// offensive half matches it (D96). Zero when the two-row secondary is in force, which has no drop.
+// D121/D141: a merged row's own reserved height grows by its stagger step (its deepest column may be a
+// dropped corner, or a dropped edge rusher), so the constant half grows with it — one number for every club
+// (D107), never per club, and the offensive half matches it (D96). Zero for a row model that has no stagger.
 // D134: the constant is now a function of the depth cap the page is drawing at, derived exactly the way it
-// always was; with no style it is the full-depth number every club renders on today (467 / 1014).
+// always was; with no style it is the full-depth number every club renders on today.
 export function bothSidesHalf(style = {}) {
   return DEF_ROW_ORDER.length * defRowFullH(style)
     + (DEF_ROW_ORDER.length - 1) * bandGapOf(style)
     + DEF_LEVEL_BOUNDARIES * levelGapOf(style)
-    + (SECONDARY_ONE_ROW ? SECONDARY_CORNER_DROP : 0);
+    + DEF_ROW_ORDER.reduce((sum, key) => sum + (ROW_DROPS[key]?.drop ?? 0), 0);
 }
 export function bothSidesHeight(style = {}) {
   const half = bothSidesHalf(style);
@@ -891,9 +936,10 @@ function placeLineColumns(slots, lm) {
     if (slots.length === 3) return [lm.LT, lm.C, lm.RT];
     return slots.map((_, i) => lm.C + (i - (slots.length - 1) / 2) * lm.pitch);
   }
-  // A two-column line sits in the gaps either side of the centre in printed order, whatever its labels
-  // (Atlanta charts NT, DE: D132 keeps Atlanta exactly as the club prints it).
-  if (slots.length === 2) return [lm.C - 0.5 * lm.pitch, lm.C + 0.5 * lm.pitch];
+  // 🔵 on e2a0c34: a two-column line of TWO ENDS is two ends, so it takes the two tackle spots — D132's rule
+  // does not stop applying because the line is short. Any OTHER two-column line sits in the gaps either side
+  // of the centre in printed order (Atlanta charts NT, DE: D132 keeps Atlanta exactly as the club prints it).
+  if (slots.length === 2) return ends.length === 2 ? [lm.LT, lm.RT] : [lm.C - 0.5 * lm.pitch, lm.C + 0.5 * lm.pitch];
   // D132 (Adam): ends go on the ends, tackles in the middle. A three-man line with ONE end (Arizona, New
   // Orleans) used to stand him on the centre between the tackles. He takes the tackle spot on the side the
   // club printed him (right only when printed last); a lone nose, else the first interior man, takes the centre.
@@ -912,7 +958,9 @@ function placeLineColumns(slots, lm) {
   // D127: an end keeps his tackle's landmark unless the interior cluster has grown out to within MIN_PITCH
   // of it, in which case he steps OUT (away from the centre) by exactly the shortfall.
   // D132: a LONE end in a wider line takes the tackle on the side the club printed him, never the centre.
-  const endXs = ends.length === 1
+  // 🔵 on e2a0c34: "a wider line" means more than one column — a chart with a single DE row and nothing else
+  // has no side to be on, so he sits on the centre where the only man on the line belongs.
+  const endXs = ends.length === 1 && slots.length > 1
     ? [ends[0] >= slots.length / 2 ? lm.RT : lm.LT]
     : placeOuterInner(ends.length, lm.LT, lm.RT, lm.LG, lm.RG);
   ends.forEach((idx, k) => {
@@ -960,15 +1008,19 @@ function placeLbColumns(slots, lm) {
 // D111 changes NONE of the x's below — the one-row secondary is just the CB, NB and S bands drawn on a
 // single y. Left to right that reads corner, nickel, safety, safety, corner; at the five-man shape every
 // real club charts the gaps come out 242, 242, 290, 484 against a MIN_PITCH of 242, so nothing is re-pitched
-// and no card touches another. secondaryFitsOneRow below keeps that honest for a shape nobody charts yet.
-function mirrorDefXs(band, slots, scheme, lm) {
+// and no card touches another. colsFitOneRow below keeps that honest for a shape nobody charts yet.
+function mirrorDefXs(band, slots, scheme, lm, frontOneRow = false) {
   const count = slots.length;
   if (count <= 0) return [];
   switch (band) {
     case "DL": return placeLineColumns(slots, lm);
-    case "EDGE": return scheme === "3-4"
-      ? placeOuterInner(count, lm.EDGE_L, lm.EDGE_R, lm.LG, lm.RG)
-      : spanPoints(lm.EDGE_L, lm.EDGE_R, count);
+    // D141: on the MERGED front row a club charting ONE edge column (Las Vegas) takes the LEFT edge spot
+    // rather than the midpoint spanPoints would give it — the centre there is the linebackers' own ground,
+    // and a lone rusher reads as a rusher only when he is wide, exactly as a lone end does under D132.
+    case "EDGE": if (frontOneRow && count === 1) return [lm.EDGE_L];
+      return scheme === "3-4"
+        ? placeOuterInner(count, lm.EDGE_L, lm.EDGE_R, lm.LG, lm.RG)
+        : spanPoints(lm.EDGE_L, lm.EDGE_R, count);
     // D128(1): by label, Mike on the centre (placeLbColumns). Its no-Mike fallback is D116's own rule —
     // a 3-4's ILB pair moves in to ILB_L/ILB_R, any other row spreads across the guards, which keeps
     // WLB/SLB outside rather than pushing them tighter than the inside backers they flank.
@@ -1010,14 +1062,15 @@ function enforceNoOverlap(cols) {
   for (const c of sorted) c.x += shift;
 }
 
-// D111: confirms a club's OWN secondary can be drawn on one row before committing to it — stricter than
-// "do the cards overlap", since enforceNoOverlap would happily shove a crowded row apart by re-pitching
-// the corners off their landmark or pushing a card off the sideline. A club that fails this falls back to
-// the two-row secondary instead of silently drawing a wrong one.
-// Measured against the league as compiled today, the widest secondary anybody charts is 2 corners + 1
-// nickel + 2 safeties (11 clubs chart four, with no nickel) — nothing reaches this check today; it exists
-// for a chart that adds a third corner or a fourth safety.
-function secondaryFitsOneRow(cols) {
+// D111/D141: confirms a club's OWN columns can be drawn on one merged row before committing to it — stricter
+// than "do the cards overlap", since enforceNoOverlap would happily shove a crowded row apart by re-pitching
+// a column off its landmark or pushing a card off the sideline. A club that fails this falls back to the two
+// rows it had before, on that row alone, instead of silently drawing a wrong one.
+// Measured against the league as compiled today: the widest secondary anybody charts is 2 corners + 1 nickel
+// + 2 safeties, which nothing reaches (it exists for a chart that adds a third corner or a fourth safety);
+// on the front, 30 of 32 clubs fit, and Pittsburgh — three edge columns, the middle one on the centre between
+// its two inside backers — is the one club that does not.
+function colsFitOneRow(cols) {
   if (cols.length < 2) return true;
   const sorted = cols.slice().sort((a, b) => a.x - b.x);
   for (let i = 1; i < sorted.length; i++) {
@@ -1042,13 +1095,33 @@ function unlistedByBand(unlisted, unit) {
 // label would otherwise land straight on top of that column's own label pill now that ruling B puts every
 // column's pill at the top of its box. Lifting the label into the empty gap above the row — the same trick
 // the old merged line row used — keeps both readable without moving either the stripe or the cards.
-const LABEL_CLEAR_X = 190; // roughly the widest level label ("LINEBACKERS") plus its left inset
+// Roughly the widest level label plus its left inset — D141's merged "LINEBACKERS · EDGE" is the widest
+// there is and still measures under this at the level type's own size, so the gutter did not have to grow.
+const LABEL_CLEAR_X = 190;
 // Enough to clear the column pill below it AND leave visible air: the gap above any row is at least
 // BAND_GAP, and at a level boundary BAND_GAP + LEVEL_GAP_EXTRA, so a 22-unit lift always lands the label
 // inside empty turf rather than tight against the pill (👁 self-check: at 15 the level caption and
 // the "WR1" pill under it read as one two-line block). computeLayout clamps the lift on the offensive
 // side so it can never cross back over the line of scrimmage.
 const LABEL_LIFT = 27;
+
+// D138 (the phone list): this engine's own rows, merged into LEVELS and in reading order — offence LINE,
+// PASS CATCHERS, BACKFIELD (D130); defence LINE, EDGE, LINEBACKERS, SECONDARY. Derived from the very lists
+// the field is drawn from (OFF_ROW_GROUPS, DEF_ROW_ORDER and their level maps), so a ruling that reorders
+// the field reorders the list with it and the order is never written down a second time. Consecutive rows
+// of one level merge (the two-row secondary behind SECONDARY_ONE_ROW=false is one SECONDARY level here).
+export function levelGroups(unit) {
+  const rows = unit === "OFF"
+    ? OFF_ROW_GROUPS.map((g) => ({ level: OFF_ROW_LEVEL[g.key], label: OFF_LEVEL_LABEL[OFF_ROW_LEVEL[g.key]], bands: g.bands }))
+    : DEF_ROW_ORDER.map((key) => ({ level: DEF_ROW_LEVEL[key], label: DEF_LEVEL_LABEL[DEF_ROW_LEVEL[key]], bands: DEF_ROW_BANDS[key] }));
+  const out = [];
+  for (const row of rows) {
+    const last = out[out.length - 1];
+    if (last && last.level === row.level) last.bands.push(...row.bands);
+    else out.push({ level: row.level, label: row.label, bands: [...row.bands] });
+  }
+  return out;
+}
 
 // ---- the layout ----------------------------------------------------------------------------------
 
@@ -1090,35 +1163,42 @@ export function computeLayout(teamView, opts = {}) {
   // Ruling A: a band with no slots at all (a 4-3's EDGE band, now that its ends are linemen) takes ZERO
   // height — no floor, no stripe, no label, no level gap — even when it still has UNLISTED players (ATL
   // carries an edge rusher on the roster but no chart row); the row is dropped and its tray re-homed by
-  // planTrays. Rebuilt fresh every call since the D111 fit check below may build a candidate SECONDARY row
-  // and throw it away, and buildRow mutates the x's it is given.
-  const defColsFor = (bands) => bands.flatMap((band) => {
+  // planTrays. Rebuilt fresh every call since the D111/D141 fit checks below build candidate merged rows and
+  // throw them away, and buildRow mutates the x's it is given.
+  // `frontOneRow` is the only thing a column's x depends on (D141's lone edge rusher), so it is asked for
+  // explicitly rather than read off whichever row model has been chosen so far.
+  const defColsFor = (bands, frontOneRow = false) => bands.flatMap((band) => {
     const slots = defSlots.filter((s) => s.band === band).slice().sort(byColumnOrder);
-    const xs = mirrorDefXs(band, slots, scheme, lm);
+    const xs = mirrorDefXs(band, slots, scheme, lm, frontOneRow);
     return slots.map((slot, i) => ({ slot, x: xs[i], height: slotContentHeight(slot, style), band, width: colWidth(style) }));
   });
 
-  // D111: the one-row secondary is used unless this club's own secondary cannot be drawn on one row without
-  // being re-pitched or hanging off the sideline (secondaryFitsOneRow) — none in the league today. Such a
-  // club falls back to the two-row model, which makes its defence five rows again and taller than
-  // BOTH_SIDES_HALF, so D107's `half` floor grows ITS canvas rather than drawing its rows through each other.
-  let defRows = DEF_ROWS;
-  if (SECONDARY_ONE_ROW && !secondaryFitsOneRow(defColsFor(DEF_ROWS_ONE_ROW_SECONDARY.bands.SECONDARY))) {
-    defRows = DEF_ROWS_TWO_ROW_SECONDARY;
-    console.warn("[field] this chart's secondary is too wide for one row; falling back to the two-row secondary (D111)");
-  }
+  // D111/D141: each merged row is used unless THIS club's own columns cannot be drawn on it without being
+  // re-pitched or hanging off the sideline (colsFitOneRow). The two questions are asked separately, so a club
+  // that fails one keeps the merged row it does fit. A fallback makes that club's defence a row taller than
+  // BOTH_SIDES_HALF, so D107's `half` floor grows ITS canvas rather than drawing its rows through each other
+  // — no club fails the secondary check today; Pittsburgh alone fails the front one.
+  const secOneRow = SECONDARY_ONE_ROW
+    && colsFitOneRow(defColsFor(DEF_ROWS_ONE_SEC_ONE_FRONT.bands.SECONDARY));
+  if (SECONDARY_ONE_ROW && !secOneRow) console.warn("[field] this chart's secondary is too wide for one row; falling back to the two-row secondary (D111)");
+  const frontOneRow = FRONT_ONE_ROW
+    && colsFitOneRow(defColsFor(DEF_ROWS_ONE_SEC_ONE_FRONT.bands.FRONT, true));
+  if (FRONT_ONE_ROW && !frontOneRow) console.warn("[field] this chart's edge rushers and linebackers are too wide for one row; falling back to two front rows (D141)");
+  const defRows = defRowModel(secOneRow, frontOneRow);
 
-  // D121: the corners and nickel of a ONE-ROW secondary are stamped with their drop before the row is
-  // measured, so the reserved box, the trays below it and the row under it all see the same number. A club
-  // that fell back to DEF_ROWS_TWO_ROW_SECONDARY above gets none (secondaryDropOf returns 0 for it).
+  // D121/D141: the staggered bands of a merged row are stamped with their step before the row is measured, so
+  // the reserved box, the trays below it and the row under it all see the same number. A club that fell back
+  // to a two-row model above gets none of it (rowDropOf only knows the merged rows' own keys).
   const defRowsTopDown = defRows.order.slice().reverse().map((key) => {
     const bands = defRows.bands[key];
-    const cols = defColsFor(bands);
+    const cols = defColsFor(bands, frontOneRow);
     for (const c of cols) {
-      const drop = secondaryDropOf(defRows, key, c.band);
+      const drop = rowDropOf(key, c.band);
       if (drop) c.drop = drop;
     }
-    return buildRow(key, bands, "DEF", defRows.level[key], cols);
+    const row = buildRow(key, bands, "DEF", defRows.level[key], cols);
+    if (key === "FRONT") row.label = frontRowLabel(cols);
+    return row;
   }).filter((row) => row.cols.length);
 
   const offRowCols = { PASS_CATCHERS: passCatcherCols, LINE: olCols, BACKFIELD: backfieldCols };
@@ -1176,7 +1256,10 @@ export function computeLayout(teamView, opts = {}) {
     // above): a club taller than the constant grows its own canvas instead of compressing its rows.
     const defMin = naturalSpanHeight(defRowsTopDown);
     const offMin = naturalSpanHeight(offRowsTopDown);
-    const half = Math.max(bothSidesHalf(style), defMin, offMin);
+    // D140 (small screens only): `opts.ownHeight` drops the constant and gives the canvas THIS club's own
+    // natural half, so D134's scrolling page ends where the club's chart ends instead of at empty field. The
+    // halves stay equal (D96) and the scale stays pinned to the floor (viewfit.js's SCROLL_STATE_OWN_HEIGHT).
+    const half = Math.max(opts.ownHeight ? 0 : bothSidesHalf(style), defMin, offMin);
     const spreadGap = (rows, natural) => (rows.length > 1 && half > natural) ? (half - natural) / (rows.length - 1) : 0;
     placeSpan(defRowsTopDown, MARGIN_TOP, spreadGap(defRowsTopDown, defMin));
     // D107: the half boundaries are the constant's, not the rows' — a defence with fewer rows than the
@@ -1293,7 +1376,10 @@ function planTrays(rows, unlisted) {
     for (const [band, entries] of unlistedByBand(unlisted, unit)) {
       const own = unitRows.find((r) => r.bands.includes(band));
       const row = own ?? unitRows[unitRows.length - 1];
-      row.trays.push({ band, unit, entries, homed: !own });
+      // D141: a MERGED row carries the EDGE band in its model even for a club that charts no edge column at
+      // all, so the "these men are not standing under columns of their own" marker (styles.css's dashed
+      // `.tray-homed`) asks whether the row actually DRAWS the band, not whether the model lists it.
+      row.trays.push({ band, unit, entries, homed: !row.cols.some((c) => c.band === band) });
     }
     for (const row of unitRows) {
       row.trayHeight = row.trays.length ? TRAY_GAP + row.trays.length * TRAY_H + (row.trays.length - 1) * TRAY_STACK_GAP : 0;
@@ -1351,7 +1437,9 @@ function summarizeLevels(rowsTopDown, labelMap, minLabelTop = -Infinity) {
   let stripeIndex = 0;
   for (const row of rowsTopDown) {
     if (!cur || cur.level !== row.level) {
-      cur = { level: row.level, label: labelMap[row.level] || row.level, unit: row.unit, top: row.top, bottom: row.bottom, firstRow: row, stripeIndex: stripeIndex++ };
+      // D141: a row may carry its OWN caption (the merged front row names only the groups actually on it);
+      // every other row is named by its level, exactly as before.
+      cur = { level: row.level, label: row.label || labelMap[row.level] || row.level, unit: row.unit, top: row.top, bottom: row.bottom, firstRow: row, stripeIndex: stripeIndex++ };
       out.push(cur);
     } else {
       cur.bottom = Math.max(cur.bottom, row.bottom);
@@ -1440,5 +1528,5 @@ export function renderFieldSvg(layoutHeight, losY, layoutWidth = LAYOUT_WIDTH, c
 // Exported so tests read these numbers from here instead of hardcoding literals that go stale silently the
 // moment a ruling moves a constant — a test states the RELATIONSHIP (a corner is CB_PITCH_FROM_CENTER pitches
 // off the centre; two cards never come closer than MIN_CARD_GAP) rather than a specific number.
-export const geometry = { CARD_W, CARD_H1, ROW_H, SIDE_ROW_H, CARD_GAP, SIDE_CARD_GAP, BANNER_H, OUT_RAIL_H, LABEL_RESERVE, MAX_DEPTH_ROWS, REDUCED_DEPTH_ROWS, DEPTH_CHIP_H, HEADSHOT_SIZE, BAND_GAP, LEVEL_GAP_EXTRA, REDUCED_BAND_GAP, REDUCED_LEVEL_GAP_EXTRA, LOS_HALF_GAP, MARGIN_TOP, MARGIN_BOTTOM, SIDE_INSET, DEF_ROW_FULL_H, DEF_ROW_COUNT: DEF_ROW_ORDER.length, DEF_LEVEL_BOUNDARIES, BOTH_SIDES_HALF, BOTH_SIDES_HEIGHT, MIN_PITCH, MIN_CARD_GAP, EDGE_PITCH_OUT, ILB_PITCH_FROM_CENTER, PASS_CATCHER_PITCH, SECONDARY_CORNER_DROP,
+export const geometry = { CARD_W, CARD_H1, ROW_H, SIDE_ROW_H, CARD_GAP, SIDE_CARD_GAP, BANNER_H, OUT_RAIL_H, LABEL_RESERVE, MAX_DEPTH_ROWS, REDUCED_DEPTH_ROWS, DEPTH_CHIP_H, HEADSHOT_SIZE, BAND_GAP, LEVEL_GAP_EXTRA, REDUCED_BAND_GAP, REDUCED_LEVEL_GAP_EXTRA, LOS_HALF_GAP, MARGIN_TOP, MARGIN_BOTTOM, SIDE_INSET, DEF_ROW_FULL_H, DEF_ROW_COUNT: DEF_ROW_ORDER.length, DEF_LEVEL_BOUNDARIES, BOTH_SIDES_HALF, BOTH_SIDES_HEIGHT, MIN_PITCH, MIN_CARD_GAP, EDGE_PITCH_OUT, ILB_PITCH_FROM_CENTER, PASS_CATCHER_PITCH, SECONDARY_CORNER_DROP, FRONT_LB_LIFT,
   S_PITCH_FROM_CENTER, NB_PITCH_FROM_CENTER, CB_PITCH_FROM_CENTER };
