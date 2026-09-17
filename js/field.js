@@ -413,6 +413,16 @@ const ILB_PITCH_FROM_CENTER = 0.85;
 // drawn through him and then shoved clear by enforceNoOverlap anyway. Taking the max here puts him at the
 // same place deliberately instead of by accident, and still reads as "inside the corner, outside the box".
 const NB_PITCH_OUT = 1;
+// D119 (Adam, 2026-09-16, the DEFENSE side page alone): "offense looks better than defense — defense is
+// too spread out and the CBs are too far to the outside of the page." On the team and matchup pages the
+// corners MUST reach both sidelines (D71/D110), because the offence is on the same canvas; a defence drawn
+// on its own has no such duty, so its front and secondary are pitched off the CENTRE instead of off the
+// tackles. The outermost column then sits 2.5 pitches out (~1210 units across) against the offense page's
+// ~1162, so the two pages read as the same size chart. Only a defence-with-no-offence layout reads these.
+const SIDE_DEF_CB_PITCH_FROM_CENTER = 2.5;
+const SIDE_DEF_NB_PITCH_FROM_CENTER = 1.5;  // one pitch inside the left corner, one outside the left safety
+const SIDE_DEF_S_PITCH_FROM_CENTER = 0.5;   // two safeties exactly MIN_PITCH apart, straddling the centre
+const SIDE_DEF_EDGE_PITCH_FROM_CENTER = 1.9; // was the tackles ∓ EDGE_PITCH_OUT, i.e. 2.2 pitches off centre
 // Vertical air between two columns stacked on the same x (TE2 under TE1).
 const STACK_GAP = 8;
 // D72: the margin left on each side of a cropped single-unit canvas, so the outermost column is not flush
@@ -1071,7 +1081,12 @@ function layoutBackfieldRow(offSlots, lm, style) {
 // corners over the left hash with the safeties still centred). So the corners go back to a fixed 1.4
 // pitches outside the tackles, the nickel to the gap between the left corner and the box, and a defensive
 // row's shape no longer depends on how many receivers the club happens to chart.
-function mirrorLandmarks(olCols) {
+//
+// D119: `sideDefense` is true only for the single-unit DEFENSE page (a layout carrying defensive slots and
+// no offensive ones — zoom.js's unitView(view, "DEF"), and nothing else in the app produces that shape).
+// It is the ONLY thing that switches the tighter, centre-pitched landmarks on, so the team, matchup and
+// offense pages keep every x they have today.
+function mirrorLandmarks(olCols, sideDefense = false) {
   const olXs = olCols.map((c) => c.x).sort((a, b) => a - b);
 
   let LT, LG, C, RG, RT;
@@ -1084,17 +1099,25 @@ function mirrorLandmarks(olCols) {
   }
   const pitch = Math.max(LG - LT, MIN_PITCH);
   // D112/D116: edge rushers stand just outside the tackle, not out at the corner's landmark.
-  const EDGE_L = LT - EDGE_PITCH_OUT * pitch;
-  const EDGE_R = RT + EDGE_PITCH_OUT * pitch;
+  // D119: on the defense page alone they come in another 0.3 of a pitch, measured off the centre.
+  const EDGE_L = sideDefense ? C - SIDE_DEF_EDGE_PITCH_FROM_CENTER * pitch : LT - EDGE_PITCH_OUT * pitch;
+  const EDGE_R = sideDefense ? C + SIDE_DEF_EDGE_PITCH_FROM_CENTER * pitch : RT + EDGE_PITCH_OUT * pitch;
   // D116: the inside linebackers stand just inside the guards, not on top of them, so they read as clearly
   // inside their neighbouring EDGE column rather than sharing a landmark with the safeties (which stay on
   // the guards themselves — see the "S" case below, untouched by this ruling).
   const ILB_L = C - ILB_PITCH_FROM_CENTER * pitch;
   const ILB_R = C + ILB_PITCH_FROM_CENTER * pitch;
-  const CB_L = LT - CB_PITCH_OUT * pitch;
-  const CB_R = RT + CB_PITCH_OUT * pitch;
-  const NB_X = Math.max(LT - NB_PITCH_OUT * pitch, CB_L + MIN_PITCH);
-  return { LT, LG, C, RG, RT, pitch, EDGE_L, EDGE_R, ILB_L, ILB_R, CB_L, CB_R, NB_X };
+  // D119: the defense page's corners, nickel and safeties are all pitched off the centre; every other page
+  // keeps D71/D110's corners outside the tackles, D71's nickel inside the corner and the safeties on the
+  // guards (S_L/S_R ARE the guards there, so mirrorDefXs's "S" case is the same placement it always was).
+  const CB_L = sideDefense ? C - SIDE_DEF_CB_PITCH_FROM_CENTER * pitch : LT - CB_PITCH_OUT * pitch;
+  const CB_R = sideDefense ? C + SIDE_DEF_CB_PITCH_FROM_CENTER * pitch : RT + CB_PITCH_OUT * pitch;
+  const NB_X = sideDefense
+    ? C - SIDE_DEF_NB_PITCH_FROM_CENTER * pitch
+    : Math.max(LT - NB_PITCH_OUT * pitch, CB_L + MIN_PITCH);
+  const S_L = sideDefense ? C - SIDE_DEF_S_PITCH_FROM_CENTER * pitch : LG;
+  const S_R = sideDefense ? C + SIDE_DEF_S_PITCH_FROM_CENTER * pitch : RG;
+  return { LT, LG, C, RG, RT, pitch, EDGE_L, EDGE_R, ILB_L, ILB_R, CB_L, CB_R, NB_X, S_L, S_R };
 }
 
 // Ruling A: the LINE row places by LABEL, not by count, because it can now hold 3-5 columns of two
@@ -1163,7 +1186,10 @@ function mirrorDefXs(band, slots, scheme, lm) {
     // "a second nickel". (D48/D57: which specific side is not football-important, only that it is wide.)
     case "CB": return count === 1 ? [spanPoints(lm.CB_L, lm.CB_R, 2)[0]] : spanPoints(lm.CB_L, lm.CB_R, count);
     case "NB": return spanPoints(lm.NB_X, lm.NB_X, count);
-    case "S": return spanPoints(lm.LG, lm.RG, count);
+    // D119: S_L/S_R are the guards everywhere except the defense-only side page, where they are half a
+    // pitch either side of the centre — so two safeties land exactly MIN_PITCH apart, one lands on the
+    // centre and a third shape spreads on the centre and one pitch either side of it.
+    case "S": return spanPoints(lm.S_L, lm.S_R, count);
     default: return spanPoints(lm.C, lm.C, count);
   }
 }
@@ -1256,8 +1282,13 @@ export function computeLayout(teamView, opts = {}) {
   // no offense at all (D72's defense page) simply takes mirrorLandmarks' own fallback comb, which is the
   // same centred five-column grid a real offensive line produces — so a defense is drawn identically
   // whether or not the offense is on screen beside it.
+  // D119: a layout carrying a defence and no offence IS the defense side page (zoom.js's unitView; the
+  // matchup page always builds both units, and the team page always has both). That single-unit page gets
+  // the tighter, centre-pitched landmarks — computed here, once, so the D111 one-row-secondary fit check
+  // below and every row that follows are all measured against the landmarks the page will actually use.
+  const sideDefense = defSlots.length > 0 && offSlots.length === 0;
   const olCols = layoutOlColumns(offSlots, style);
-  const lm = mirrorLandmarks(olCols);
+  const lm = mirrorLandmarks(olCols, sideDefense);
   const passCatcherCols = layoutPassCatchers(offSlots, lm, style);
   const backfieldCols = layoutBackfieldRow(offSlots, lm, style);
 
@@ -1651,4 +1682,5 @@ export function renderFieldSvg(layoutHeight, losY, layoutWidth = LAYOUT_WIDTH, c
 // D111 adds the DEFENSIVE ROW COUNT to the bag for the same reason: the canvas constant is derived from it,
 // so a test that wants to state "the canvas is this many full rows plus its gaps" can read the count from
 // here instead of hard-coding the 5 that D111 turned into a 4.
-export const geometry = { CARD_W, CARD_H1, ROW_H, SIDE_ROW_H, CARD_GAP, SIDE_CARD_GAP, BANNER_H, OUT_RAIL_H, LABEL_RESERVE, MAX_DEPTH_ROWS, HEADSHOT_SIZE, BAND_GAP, LEVEL_GAP_EXTRA, LOS_HALF_GAP, MARGIN_TOP, MARGIN_BOTTOM, SIDE_INSET, DEF_ROW_FULL_H, DEF_ROW_COUNT: DEF_ROW_ORDER.length, DEF_LEVEL_BOUNDARIES, BOTH_SIDES_HALF, BOTH_SIDES_HEIGHT, MIN_PITCH, MIN_CARD_GAP, CB_PITCH_OUT, EDGE_PITCH_OUT, ILB_PITCH_FROM_CENTER, PASS_CATCHER_PITCH };
+export const geometry = { CARD_W, CARD_H1, ROW_H, SIDE_ROW_H, CARD_GAP, SIDE_CARD_GAP, BANNER_H, OUT_RAIL_H, LABEL_RESERVE, MAX_DEPTH_ROWS, HEADSHOT_SIZE, BAND_GAP, LEVEL_GAP_EXTRA, LOS_HALF_GAP, MARGIN_TOP, MARGIN_BOTTOM, SIDE_INSET, DEF_ROW_FULL_H, DEF_ROW_COUNT: DEF_ROW_ORDER.length, DEF_LEVEL_BOUNDARIES, BOTH_SIDES_HALF, BOTH_SIDES_HEIGHT, MIN_PITCH, MIN_CARD_GAP, CB_PITCH_OUT, EDGE_PITCH_OUT, ILB_PITCH_FROM_CENTER, PASS_CATCHER_PITCH,
+  SIDE_DEF_CB_PITCH_FROM_CENTER, SIDE_DEF_NB_PITCH_FROM_CENTER, SIDE_DEF_S_PITCH_FROM_CENTER, SIDE_DEF_EDGE_PITCH_FROM_CENTER };
