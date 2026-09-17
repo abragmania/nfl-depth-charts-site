@@ -61,8 +61,10 @@ export const SECONDARY_ONE_ROW = true;
 // D141 — THE SWITCH THE ONE-ROW-FRONT RULING SITS BEHIND. `true` draws the off-ball LINEBACKERS and the
 // EDGE rushers on a single row (backers on the row's top line, edge columns a FRONT_LB_LIFT step below, so
 // the two groups still read apart), which drops the defence another row and shortens the canvas with it.
-// `false` restores the two rows everywhere, byte for byte. Horizontal placement is untouched but for the one
-// shape the ruling names: a club charting a LONE edge column takes the left edge spot on the shared row.
+// `false` restores the two rows and their column spots everywhere. It does NOT put the corner drop back:
+// SECONDARY_CORNER_DROP stays at D141's full card, so the undo state is 24 units taller than the pre-D141
+// canvas. Horizontal placement is untouched but for the one shape the ruling names: a club charting a LONE
+// edge column takes the left edge spot on the shared row.
 export const FRONT_ONE_ROW = true;
 
 // ---- compact overview geometry (ruling E) -------------------------------------------------------
@@ -1175,9 +1177,10 @@ export function computeLayout(teamView, opts = {}) {
 
   // D111/D141: each merged row is used unless THIS club's own columns cannot be drawn on it without being
   // re-pitched or hanging off the sideline (colsFitOneRow). The two questions are asked separately, so a club
-  // that fails one keeps the merged row it does fit. A fallback makes that club's defence a row taller than
-  // BOTH_SIDES_HALF, so D107's `half` floor grows ITS canvas rather than drawing its rows through each other
-  // — no club fails the secondary check today; Pittsburgh alone fails the front one.
+  // that fails one keeps the merged row it does fit. A fallback adds a row to that club's defence; if that
+  // ever outgrew BOTH_SIDES_HALF, D107's `half` floor would grow ITS canvas rather than draw its rows through
+  // each other. No club fails the secondary check today; Pittsburgh alone fails the front one, and its two
+  // front rows still fit inside BOTH_SIDES_HALF (about 20 units to spare), so it draws at everyone's size.
   const secOneRow = SECONDARY_ONE_ROW
     && colsFitOneRow(defColsFor(DEF_ROWS_ONE_SEC_ONE_FRONT.bands.SECONDARY));
   if (SECONDARY_ONE_ROW && !secOneRow) console.warn("[field] this chart's secondary is too wide for one row; falling back to the two-row secondary (D111)");
@@ -1382,10 +1385,45 @@ function planTrays(rows, unlisted) {
       row.trays.push({ band, unit, entries, homed: !row.cols.some((c) => c.band === band) });
     }
     for (const row of unitRows) {
+      combineRowTrays(row);
       row.trayHeight = row.trays.length ? TRAY_GAP + row.trays.length * TRAY_H + (row.trays.length - 1) * TRAY_STACK_GAP : 0;
       row.height = row.contentHeight + row.trayHeight;
     }
   }
+}
+
+// ONE TRAY STRIP PER ROW (🔵 on d5ea26c). D111/D141 merged two and three bands onto one row, and a row used to
+// stack one TRAY_H strip per BAND that had unlisted men under it: New Orleans charts a spare corner AND a spare
+// safety, so its one SECONDARY row grew two strips (22 + 4 + 22) where a two-row secondary had grown one under
+// each row. That is height nobody reads as height — the same men, on two lines — and because the reserve every
+// club is measured against (defRowFullH) deliberately knows nothing about trays, it pushed New Orleans's own
+// half past the D107 constant and made the whole club draw about 6.6 percent smaller than the other 31.
+//
+// So a row's trays are DRAWN as one strip spanning that row's columns, with each band's own name printed inside
+// it in front of its own men ("not on chart · CB  #29 …  · Safety  #40 …", cards.js's renderTray). A row with one
+// band's tray is untouched and renders byte for byte as it always did.
+//
+// The escape hatch is width: the strip is one line (styles.css pins `flex-wrap:nowrap`), so a combined strip
+// whose own estimated text is wider than the canvas would have names clipped off its right-hand end. Such a row
+// keeps today's stacked strips, which cost height but lose nothing.
+//
+// `homed` — styles.css's stronger dashed outline for "these men have no row of their own" — is true of the
+// combined strip only when it is true of EVERY band on it, so a strip that is partly a visitor is not labelled
+// as wholly one. No club mixes the two in one row today (New Orleans's corner and safety are both homed).
+function combineRowTrays(row) {
+  if (row.trays.length < 2) return;
+  const first = row.trays[0];
+  const combined = {
+    // A strip carrying two bands has no single band, and `band: null` is what every reader of a tray already
+    // understands: cards.js prints each group's own name instead of one label, and trayBounds spans the row's
+    // whole set of columns rather than one band's, which is exactly where a shared strip belongs.
+    band: null, unit: first.unit,
+    entries: row.trays.flatMap((t) => t.entries ?? []),
+    homed: row.trays.every((t) => t.homed),
+    groups: row.trays.map((t) => ({ band: t.band, entries: t.entries })),
+  };
+  if (trayNaturalWidth(combined) > LAYOUT_WIDTH) return;
+  row.trays = [combined];
 }
 
 // A tray is ONE strip TRAY_H tall. A single-column band's row is often not wide enough for "NOT ON CHART ·
@@ -1398,13 +1436,32 @@ const TRAY_ITEM_GAP = 8;       // .tray's flex gap
 const TRAY_LABEL_CHAR_W = 6.2; // 10px uppercase, .08em letter-spacing
 const TRAY_CHIP_CHAR_W = 6.0;  // 11.5px italic
 const TRAY_CHIP_PAD = 18;      // .tray-chip's own padding
+// One chip's estimated width — the piece the plain and the combined strip both need.
+function trayChipWidth(p) {
+  const text = `#${p.number ?? "—"} ${p.name ?? ""}${p.onActiveRoster === false ? " PS" : ""}`;
+  return TRAY_ITEM_GAP + TRAY_CHIP_PAD + text.length * TRAY_CHIP_CHAR_W;
+}
+// A combined strip (combineRowTrays above) prints one label per band inside it — "not on chart · CB" in front of
+// the corners, then "· Safety" in front of the safeties — so its estimate is the same arithmetic with a label
+// per group. The rendered label is the band's DISPLAY name (cards.js's bandDisplay: "S" prints "Safety", "NB"
+// prints "CB · Nickel"), and this module cannot read that table — cards.js already imports this file, and a
+// circular import to estimate a string width is not worth having — so every group's band name is costed at the
+// longest display name there is. The estimate is then never short, and erring long only ever sends a row back
+// to today's stacked strips, which is the safe side of the decision.
+const TRAY_BAND_NAME_CHARS = "CB · Nickel".length;
 function trayNaturalWidth(tray) {
+  if (tray.groups?.length) {
+    let w = TRAY_TEXT_PAD;
+    tray.groups.forEach((g, i) => {
+      const label = (i ? "· " : "not on chart · ").length + TRAY_BAND_NAME_CHARS;
+      w += (i ? TRAY_ITEM_GAP : 0) + label * TRAY_LABEL_CHAR_W;
+      for (const p of g.entries ?? []) w += trayChipWidth(p);
+    });
+    return w;
+  }
   const label = tray.band ? `not on chart · ${tray.band}` : "not on chart";
   let w = TRAY_TEXT_PAD + label.length * TRAY_LABEL_CHAR_W;
-  for (const p of tray.entries ?? []) {
-    const text = `#${p.number ?? "—"} ${p.name ?? ""}${p.onActiveRoster === false ? " PS" : ""}`;
-    w += TRAY_ITEM_GAP + TRAY_CHIP_PAD + text.length * TRAY_CHIP_CHAR_W;
-  }
+  for (const p of tray.entries ?? []) w += trayChipWidth(p);
   return w;
 }
 
@@ -1417,7 +1474,9 @@ function fitTrayWidth({ left, right }, natural) {
   return { left: l, right: l + width };
 }
 
-// A tray spans its own band's columns where the band has any, else the whole row it borrowed.
+// A tray spans its own band's columns where the band has any, else the whole row it borrowed. A COMBINED strip
+// (combineRowTrays) carries no single band, so the null it passes here takes that same whole-row span, which is
+// where a strip serving two of the row's bands belongs.
 function trayBounds(row, band) {
   const bandCols = row.cols.filter((c) => c.band === band);
   const cols = bandCols.length ? bandCols : row.cols;

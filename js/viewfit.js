@@ -79,10 +79,16 @@ const TRACE = typeof location !== "undefined" && /[?&]fittrace=1(&|$)/.test(loca
 
 // 🔵 A0-1: THE SCROLL POSITION MUST SURVIVE A REFIT. Measuring collapses the field to zero height and a
 // redraw replaces it outright, so for an instant the document is shorter than the window — at which point the
-// browser clamps the scroll position to 0 and never puts it back. A page in D134's scrolling state, a deep
-// link part-way through its scrollIntoView, or any scrolled page that opened a panel snapped to the top.
-// Capture and restore are in ONE synchronous block, so the only thing that can have moved the position in
+// browser clamps the scroll position to 0 and never puts it back. A page in D134's scrolling state, a page the
+// reader has scrolled, or one whose deep link has already finished scrolling to its card, all snapped to the
+// top. Capture and restore are in ONE synchronous block, so the only thing that can have moved the position in
 // between is that clamp: a real user scroll cannot land inside it, and an unmoved page is never written to.
+//
+// WHAT THIS DOES NOT COVER (🔵, correcting what this comment used to claim): a SMOOTH scroll still in flight.
+// team.js's player deep link calls scrollIntoView({ behavior: "smooth" }), and the restore below is an instant
+// window.scrollTo, which CANCELS an animated scroll rather than riding over it — so a refit landing part-way
+// through one leaves the page at the position the capture found and the card is never reached. Nothing here
+// fixes that; it is written down so the next reader does not assume it is already handled.
 function keepScroll(fn) {
   const x = window.scrollX;
   const y = window.scrollY;
@@ -147,7 +153,10 @@ export const SIDE_MIN_READABLE_SCALE = READABLE_NAME_PX / 11;
 export const FIT_HYSTERESIS = 1.05;
 // ...and a narrow band the other way up: a window sitting exactly on the floor would otherwise fold its
 // header on one cold load and not the next, decided by which measurement won by a pixel. Much narrower than
-// the hysteresis on purpose — a real laptop (1536x864) measures 1.4 percent under and does need its step.
+// the hysteresis on purpose: the band absorbs a pixel, never a real shortfall, so a window genuinely under the
+// floor still takes its step (tests/viewfit.test.mjs pins both sides — 1 percent under stays at "none", 4
+// percent under steps). D134 cited the 1536x864 laptop as the window that needed one; since D141 shortened the
+// canvas that laptop draws its team page at 0.768, well clear of the floor, and takes no step at all.
 export const FIT_STEP_MARGIN = 1.02;
 // D138: about 1320 — the widest window that still cannot draw the field readably when held upright.
 export const LIST_PORTRAIT_WIDTH = Math.round(LAYOUT_WIDTH * MIN_READABLE_SCALE) + 24;
@@ -503,7 +512,8 @@ export function mountScaledField({ root, probe, build, onDraw, onText, panel = n
       const expandedHeight = step === "none" ? box.height : box.height - headerGain;
       // 🔵 A1: while an overlapping expansion has forced full depth back, the "less depth" step is off the
       // table — the reduced probe would otherwise win the next ordinary refit and report "depth"/"scroll"
-      // with scrolls:false, drawing the FULL 1014-unit canvas below the floor with no way to scroll to it.
+      // with scrolls:false, drawing the FULL canvas (field.js's BOTH_SIDES_HEIGHT, 850 units since D141)
+      // below the floor with no way to scroll to it.
       const ask = (current) => chooseFitStep({
         width: box.width, height: expandedHeight, headerGain, full: probe,
         reduced: expandedFullDepth ? null : (cascade?.reduced || null),
@@ -671,11 +681,16 @@ export function mountScaledField({ root, probe, build, onDraw, onText, panel = n
   // since fonts.ready never resolves in some capture environments), with one refit to act on it.
   // ...and it touches the page only when a step actually changes: on a window that needs no step this adds
   // no measurement, no rebuild and no redraw, which is what keeps a big window's render exactly as it is.
-  const cascadeOpen = () => {
+  // 🔵: chooseStep COLLAPSES the field to zero height to measure it, which is exactly the moment the browser
+  // clamps a scrolled page to the top, so every caller of it has to run inside keepScroll. refit, onExpandClick
+  // and the final pass all do; this one did not, and it is the pass a scrolled page is most likely to be in the
+  // middle of (it fires on fonts.ready, a beat after load). The inner refit's own keepScroll nests harmlessly —
+  // it restores the same position, so the outer block then finds nothing to write.
+  const cascadeOpen = () => keepScroll(() => {
     if (dead || cascadeReady || !alive()) return;
     cascadeReady = true;
     if (chooseStep(true, true).changed) refit(true, true);
-  };
+  });
   const cascadeTimer = floor ? setTimeout(cascadeOpen, SETTLE_DELAYS[2]) : null;
   if (floor) document.fonts?.ready.then(cascadeOpen).catch(() => {});
   // One last pass, after every settle pass has run, for a page that DID take a step: its spread was chosen

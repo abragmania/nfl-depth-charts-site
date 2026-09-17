@@ -72,8 +72,10 @@ function initials(p) {
 
 // D138 (Adam, 2026-09-17): "no photos on phone; only for players rated 90 or above." `opts.minRating` is
 // that floor — a man under it (or with no Madden rating at all) gets NO photo and NO initials disc, so the
-// width goes to his name instead. Absent, which is every other caller, means "always draw one" and this
-// function is byte-for-byte what it was.
+// width goes to his name instead. Absent, which is every other caller, means "always draw one", so the option
+// itself changes nothing for any of them. It is no longer true that the markup they get is byte for byte what
+// it was when D138 landed: a desktop img tag has since grown `width`, `height` and `decoding="async"` (see the
+// note on the return line below). This option did not add them and does not touch them.
 export const PHONE_HEADSHOT_MIN_RATING = 90;
 export function headshotHtml(p, size, opts = {}) {
   if (opts.minRating != null && !(p.rating?.current >= opts.minRating)) return "";
@@ -795,7 +797,7 @@ export function renderTray(tray, teamAbbr) {
   // D91: a tray chip carries no rating pill for the trio to sit "beside", so it sits beside the name
   // instead — tray.unit (renderColumn's own colOpts.unit source: field.js stamps both from the same
   // row.unit) is read the same way every other renderer here reads it, never guessed from the entry.
-  const chips = tray.entries.map((p) => `<a class="tray-chip" href="#/team/${esc(teamAbbr)}/player/${encodeURIComponent(p.playerKey)}" data-player-key="${esc(p.playerKey)}" title="Carried on the roster but not on the club depth chart">
+  const chips = (entries) => (entries ?? []).map((p) => `<a class="tray-chip" href="#/team/${esc(teamAbbr)}/player/${encodeURIComponent(p.playerKey)}" data-player-key="${esc(p.playerKey)}" title="Carried on the roster but not on the club depth chart">
       #${esc(p.number ?? "—")} ${esc(p.name)}${(psBadge(p, false) ? " " + psBadge(p, false) : "")}${snapHistoryHtml(p, { unit: tray.unit })}
     </a>`).join("");
   // 👁 QA: the tray carries its band's name. It normally hangs under that band's own columns so the name
@@ -803,11 +805,19 @@ export function renderTray(tray, teamAbbr) {
   // and its tray is re-homed onto a neighbouring row — at which point the name is the only thing saying
   // these are, say, the edge rushers rather than more defensive linemen.
   // D70: the NAME, not the internal code, so the tray label stays consistent with the column pill above it.
-  const label = tray.band ? `not on chart · ${esc(bandDisplay(tray.band))}` : "not on chart";
+  //
+  // 🔵 on d5ea26c: one of D111/D141's merged rows can be the home of two bands' spare men at once (New Orleans
+  // charts a spare corner and a spare safety under its one SECONDARY row). field.js hands those over as ONE
+  // strip carrying a `groups` list rather than two strips stacked under the row, so each band prints its own
+  // small label inside the strip, in front of its own men: "not on chart · CB  #29 …  · Safety  #40 …". A strip
+  // serving one band has no `groups` and renders exactly as it always did.
+  const body = tray.groups?.length
+    ? tray.groups.map((g, i) => `<span class="tray-label">${i ? "· " : "not on chart · "}${esc(bandDisplay(g.band))}</span>${chips(g.entries)}`).join("")
+    : `<span class="tray-label">${tray.band ? `not on chart · ${esc(bandDisplay(tray.band))}` : "not on chart"}</span>${chips(tray.entries)}`;
   // data-unit so a click on one of these chips can be attributed to the right TEAM: the matchup view
   // draws two teams on one field, and a tray is not inside a `.column`, so it is the only thing that can
   // say which half of the ball it belongs to (🔵 review finding 4).
   return `<div class="tray${tray.homed ? " tray-homed" : ""}" data-unit="${esc(tray.unit || "")}" style="left:${tray.left}px;width:${tray.right - tray.left}px;top:${tray.top}px;height:${tray.bottom - tray.top}px">
-    <span class="tray-label">${label}</span>${chips}
+    ${body}
   </div>`;
 }
