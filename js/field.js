@@ -117,13 +117,9 @@ const EDGE_CHROME = SECONDARY_ONE_ROW ? 22 : 0;
 const MARGIN_TOP = 8 + EDGE_CHROME;
 const MARGIN_BOTTOM = 8 + EDGE_CHROME;
 const LOS_HALF_GAP = 10; // half the empty gutter straddling the line of scrimmage, same both sides
-// MIN_PITCH (242) is built to CLEAR the card rather than merely floor it: CARD_W (216) + MIN_CARD_GAP
-// (26) = 242, so this constant and enforceNoOverlap's own minimum are the same number by construction
-// and no row is ever re-pitched after its placement function has chosen its x's — which is what D71's
-// landmarks depend on. Review requirement B: never let two columns sit closer than this. It is also the
-// lever for how much of the canvas the chart covers — the widest row (the corners, D110's 1.15 pitches
-// outside the tackles) still reaches close to both sidelines at this pitch, so ruling E's height-bound
-// scale doesn't leave a dead strip of unused width.
+// MIN_PITCH (242) is built to CLEAR the card rather than merely floor it: CARD_W (216) + MIN_CARD_GAP (26),
+// so this constant and enforceNoOverlap's own minimum are the same number by construction and no row is ever
+// re-pitched after its placement function chose its x's — which is what the D125 landmarks depend on.
 const MIN_PITCH = 242;
 const TRAY_H = 22; // height of an "unlisted" tray strip, when a band has one
 const TRAY_GAP = 6;
@@ -158,12 +154,10 @@ const DEF_ROW_BANDS = DEF_ROWS.bands;
 const DEF_ROW_LEVEL = DEF_ROWS.level;
 const DEF_LEVEL_LABEL = { LINE: "LINE", EDGE: "EDGE", LB: "LINEBACKERS", SEC: "SECONDARY" };
 
-// D121 — inside D111's one SECONDARY row, the corners and the nickel start this far BELOW the row's shared
-// top line while the safeties keep it, so the coverage reads as a deliberate stagger rather than a flat
-// row. 22 units is about half a line-one card plus its label pill, big enough not to read as a misalignment.
-// Only CB/NB move: the row's top line, its level stripe and its "SECONDARY" label are untouched, and the
-// two-row secondary gets none of this because its corners already have a row of their own.
-const SECONDARY_CORNER_DROP = 22;
+// D121, raised 22 -> 34 by D125 — inside D111's one SECONDARY row the corners and the nickel start this far
+// BELOW the row's shared top line while the safeties keep it. Only CB/NB move: the row's top line, stripe and
+// "SECONDARY" label are untouched, and the two-row secondary gets none of it (its corners have their own row).
+const SECONDARY_CORNER_DROP = 34;
 const SECONDARY_DROP_BANDS = new Set(["CB", "NB"]);
 const secondaryDropOf = (rowModel, rowKey, band) =>
   rowModel === DEF_ROWS_ONE_ROW_SECONDARY && rowKey === "SECONDARY" && SECONDARY_DROP_BANDS.has(band)
@@ -189,7 +183,7 @@ const secondaryDropOf = (rowModel, rowKey, band) =>
 // than draw its rows through each other.
 const DEF_ROW_FULL_H = LABEL_RESERVE + CARD_H1 + MAX_DEPTH_ROWS * (ROW_H + CARD_GAP);
 // D111/D121: with the secondary on one row, DEF_ROW_ORDER.length is 4 rather than 5, and D121's corner drop
-// is reserved on top of it — BOTH_SIDES_HALF/BOTH_SIDES_HEIGHT are currently 455 / 990 and stay DERIVED,
+// is reserved on top of it — BOTH_SIDES_HALF/BOTH_SIDES_HEIGHT are currently 467 / 1014 and stay DERIVED,
 // never hardcoded, so a future ruling that adds or removes a defensive row moves the canvas with it.
 const DEF_LEVEL_BOUNDARIES = DEF_ROW_ORDER.reduce(
   (n, key, i) => (i && DEF_ROW_LEVEL[key] !== DEF_ROW_LEVEL[DEF_ROW_ORDER[i - 1]] ? n + 1 : n), 0);
@@ -220,15 +214,12 @@ const OFF_ROW_GROUPS = [
 const OFF_ROW_LEVEL = { PASS_CATCHERS: "PASS_CATCHERS", LINE: "LINE", BACKFIELD: "BACKFIELD" };
 const OFF_LEVEL_LABEL = { PASS_CATCHERS: "PASS CATCHERS", LINE: "LINE", BACKFIELD: "BACKFIELD" };
 
-// D71: the corners are fixed off the tackles regardless of what the receivers do — the receivers are a
-// centred cluster (D71) that would drag the secondary into the middle of the field if the corners still
-// mirrored it.
-// D110: 1.4 -> 1.15. The corners are the widest thing on the field, so they decide whether a 216-wide
-// card fits at all: at the new 242 MIN_PITCH, 1.4 pitches would push a corner's card off the canvas,
-// while 1.15 lands its outer edge ~30 units inside the sideline — the secondary still reaches both
-// sidelines. Knock-on: the nickel (floored at one pitch inside the corner) now sits noticeably closer to
-// the tackle than it used to.
-const CB_PITCH_OUT = 1.15;
+// D125 — the whole secondary is pitched off the CENTRE of the line, with ONE set of numbers on every page
+// that draws a defence, each landmark exactly one pitch outside the next. 0.6 is the floor while a card is
+// 216 wide (neighbours need a full pitch between centres); it supersedes D71/D110's and D119/D122's numbers.
+const S_PITCH_FROM_CENTER = 0.6;
+const NB_PITCH_FROM_CENTER = 1.6;
+const CB_PITCH_FROM_CENTER = 2.6;
 // D116: edge rushers sit 0.2 pitches outside the tackle — essentially over the tackle itself, where a
 // real edge defender's hand is in the dirt — tightened down from D112's first cut (1.0 -> 0.6 -> 0.2)
 // after Adam reported the pair still read as too far apart on a 1700px screen. The widest real EDGE row
@@ -238,23 +229,6 @@ const EDGE_PITCH_OUT = 0.2;
 // pulled in from sitting ON them — so an EDGE column stays clearly outside its neighbouring ILB with a
 // visible margin, and the two ILB columns themselves still clear MIN_CARD_GAP.
 const ILB_PITCH_FROM_CENTER = 0.85;
-// D71: the nickel sits nominally one pitch outside the left tackle, floored so two columns closer than
-// MIN_PITCH never overlap — the corner is already at CB_PITCH_OUT, so a literal one-pitch nickel would
-// be drawn through him and then shoved clear by enforceNoOverlap anyway; taking the max puts him there
-// deliberately. Reads as "inside the corner, outside the box" either way.
-const NB_PITCH_OUT = 1;
-// D119 (the DEFENSE side page alone): with no offence sharing the canvas, the corners have no duty to
-// reach both sidelines (D71/D110's reason for pitching them off the tackles), so this page pitches the
-// whole secondary off the CENTRE instead — tighter than the team/matchup pages' ~1162-unit spread. Card
-// size is unchanged (the side pages share one uncropped canvas, D75); only the spacing tightens. The
-// front is untouched: edge rushers keep D116's spot outside the tackles on every page, so a 3-4's OLBs
-// never draw inside their own defensive ends.
-// D122 amends D119: every landmark moves out a quarter pitch (2.5/1.5/0.5 -> 2.75/1.75/0.75) because two
-// safeties at half a pitch apiece sat exactly MIN_PITCH apart — legal, but reading as one pair of touching
-// boxes. At 0.75 they sit 1.5 pitches apart, and corner/nickel/safety still clear MIN_PITCH by construction.
-const SIDE_DEF_CB_PITCH_FROM_CENTER = 2.75;
-const SIDE_DEF_NB_PITCH_FROM_CENTER = 1.75; // one pitch inside the left corner, one outside the left safety
-const SIDE_DEF_S_PITCH_FROM_CENTER = 0.75;  // two safeties 1.5 pitches apart, straddling the centre (D122)
 // Vertical air between two columns stacked on the same x (TE2 under TE1).
 const STACK_GAP = 8;
 // D72: the margin left on each side of a cropped single-unit canvas, so the outermost column is not flush
@@ -801,17 +775,10 @@ function layoutBackfieldRow(offSlots, lm, style) {
 }
 
 // Derives the defensive front's and secondary's mirror-grid landmarks from the OL row (exact tackle/
-// guard/centre positions, since ruling D made the line row the five linemen alone).
-//
-// D71: the WIDE landmarks (corners, nickel) are decided HERE and nowhere else, not mirrored off wherever
-// the receivers land — D71's centred receiver cluster would drag the whole secondary into the middle of
-// the field if it were. Corners are fixed at CB_PITCH_OUT pitches outside the tackles, nickel in the gap
-// between the left corner and the box, so a defensive row's shape no longer depends on the club's chart.
-//
-// D119: `sideDefense` is true only for the single-unit DEFENSE page (zoom.js's unitView(view, "DEF")) and
-// is the ONLY thing that switches on the tighter, centre-pitched landmarks — team, matchup and offense
-// pages keep every x they have today.
-function mirrorLandmarks(olCols, sideDefense = false) {
+// guard/centre positions, since ruling D made the line row the five linemen alone). D71: the secondary's
+// landmarks are decided HERE and nowhere else, never mirrored off the receivers — their centred cluster
+// would otherwise drag the whole secondary into the middle of the field.
+function mirrorLandmarks(olCols) {
   const olXs = olCols.map((c) => c.x).sort((a, b) => a - b);
 
   let LT, LG, C, RG, RT;
@@ -824,24 +791,20 @@ function mirrorLandmarks(olCols, sideDefense = false) {
   }
   const pitch = Math.max(LG - LT, MIN_PITCH);
   // D112/D116: edge rushers stand just outside the tackle, not out at the corner's landmark — the same on
-  // every page, including the D119 defense-only side page (only the secondary tightens there, below).
+  // every page, which D125 left untouched.
   const EDGE_L = LT - EDGE_PITCH_OUT * pitch;
   const EDGE_R = RT + EDGE_PITCH_OUT * pitch;
   // D116: the inside linebackers stand just inside the guards, not on top of them, so they read as clearly
-  // inside their neighbouring EDGE column rather than sharing a landmark with the safeties, which stay on
-  // the guards themselves (the "S" case below, untouched by this ruling).
+  // inside their neighbouring EDGE column.
   const ILB_L = C - ILB_PITCH_FROM_CENTER * pitch;
   const ILB_R = C + ILB_PITCH_FROM_CENTER * pitch;
-  // D119: the defense page's corners, nickel and safeties are all pitched off the centre; every other page
-  // keeps D71/D110's corners outside the tackles, D71's nickel inside the corner and the safeties on the
-  // guards (S_L/S_R ARE the guards there, so mirrorDefXs's "S" case is unchanged).
-  const CB_L = sideDefense ? C - SIDE_DEF_CB_PITCH_FROM_CENTER * pitch : LT - CB_PITCH_OUT * pitch;
-  const CB_R = sideDefense ? C + SIDE_DEF_CB_PITCH_FROM_CENTER * pitch : RT + CB_PITCH_OUT * pitch;
-  const NB_X = sideDefense
-    ? C - SIDE_DEF_NB_PITCH_FROM_CENTER * pitch
-    : Math.max(LT - NB_PITCH_OUT * pitch, CB_L + MIN_PITCH);
-  const S_L = sideDefense ? C - SIDE_DEF_S_PITCH_FROM_CENTER * pitch : LG;
-  const S_R = sideDefense ? C + SIDE_DEF_S_PITCH_FROM_CENTER * pitch : RG;
+  // D125: corners, nickel and safeties hang off the CENTRE by the same three numbers on every page, each one
+  // pitch clear of the landmark inside it — the nickel now sits inside the left tackle, not outside it.
+  const CB_L = C - CB_PITCH_FROM_CENTER * pitch;
+  const CB_R = C + CB_PITCH_FROM_CENTER * pitch;
+  const NB_X = C - NB_PITCH_FROM_CENTER * pitch;
+  const S_L = C - S_PITCH_FROM_CENTER * pitch;
+  const S_R = C + S_PITCH_FROM_CENTER * pitch;
   return { LT, LG, C, RG, RT, pitch, EDGE_L, EDGE_R, ILB_L, ILB_R, CB_L, CB_R, NB_X, S_L, S_R };
 }
 
@@ -868,14 +831,12 @@ function placeLineColumns(slots, scheme, lm) {
 
 // The per-band mirroring rule: the LINE row places by label (above); a 3-4's outside linebackers sit just
 // outside the tackles and any other stand-up edge label spreads between them; MLB over the centre, OLB/ILB
-// at ILB_PITCH_FROM_CENTER pitches off it (D116); CB wide of the tackles, NB inside the left corner (D71 —
-// both fixed off the line, not mirrored off the receivers); safeties deepest, centred over the guards.
+// at ILB_PITCH_FROM_CENTER pitches off it (D116); CB, NB and S on D125's centre-pitched landmarks.
 //
 // D111 changes NONE of the x's below — the one-row secondary is just the CB, NB and S bands drawn on a
-// single y, each keeping the place it already had. Left to right that reads corner, nickel, safety,
-// safety, corner. At the standard five-man shape every real club charts, the gaps come out 242, 278, 484,
-// 520 units against a MIN_PITCH of 242, so nothing is re-pitched and no card touches another;
-// computeLayout's secondaryFitsOneRow check below is what keeps that honest for a shape nobody charts yet.
+// single y. Left to right that reads corner, nickel, safety, safety, corner; at the five-man shape every
+// real club charts the gaps come out 242, 242, 290, 484 against a MIN_PITCH of 242, so nothing is re-pitched
+// and no card touches another. secondaryFitsOneRow below keeps that honest for a shape nobody charts yet.
 function mirrorDefXs(band, slots, scheme, lm) {
   const count = slots.length;
   if (count <= 0) return [];
@@ -899,9 +860,9 @@ function mirrorDefXs(band, slots, scheme, lm) {
     // important, only that it is wide.)
     case "CB": return count === 1 ? [spanPoints(lm.CB_L, lm.CB_R, 2)[0]] : spanPoints(lm.CB_L, lm.CB_R, count);
     case "NB": return spanPoints(lm.NB_X, lm.NB_X, count);
-    // D119/D122: S_L/S_R are the guards everywhere except the defense-only side page, where they are
-    // 0.75 pitches either side of the centre — two safeties land 1.5 pitches apart, one lands on the
-    // centre, and three spread on the centre and one pitch either side (MIN_PITCH floors that shape).
+    // D125: two safeties land S_PITCH_FROM_CENTER either side of the centre (1.2 pitches apart, ~74 units of
+    // air between the cards), one lands on the centre, and three spread on the centre and one pitch either
+    // side — MIN_PITCH floors that last shape, which is why three safeties keep today's wider spacing.
     case "S": return spanPoints(lm.S_L, lm.S_R, count);
     default: return spanPoints(lm.C, lm.C, count);
   }
@@ -930,7 +891,7 @@ function enforceNoOverlap(cols) {
 
 // D111: confirms a club's OWN secondary can be drawn on one row before committing to it — stricter than
 // "do the cards overlap", since enforceNoOverlap would happily shove a crowded row apart by re-pitching
-// the corners off CB_PITCH_OUT or pushing a card off the sideline. A club that fails this falls back to
+// the corners off their landmark or pushing a card off the sideline. A club that fails this falls back to
 // the two-row secondary instead of silently drawing a wrong one.
 // Measured against the league as compiled today, the widest secondary anybody charts is 2 corners + 1
 // nickel + 2 safeties (11 clubs chart four, with no nickel) — nothing reaches this check today; it exists
@@ -982,13 +943,10 @@ export function computeLayout(teamView, opts = {}) {
   // The OL row is computed first — every defensive x mirrors its tackle/guard/centre grid, the backfield
   // row hangs off the same centre, and D71's receiver cluster is centred on it. A view with no offense at
   // all (D72's defense page) takes mirrorLandmarks' own fallback comb, the same centred five-column grid a
-  // real offensive line produces, so a defense draws identically whether or not the offense is on screen.
-  // D119: a layout carrying a defence and no offence IS the defense side page (zoom.js's unitView), the
-  // only shape that gets the tighter, centre-pitched landmarks — computed once here so every row and the
-  // D111 fit check below are measured against the landmarks the page will actually use.
-  const sideDefense = defSlots.length > 0 && offSlots.length === 0;
+  // real offensive line produces, so a defense draws identically whether or not the offense is on screen —
+  // which is what makes D125's one set of secondary landmarks land on the same x's on all three pages.
   const olCols = layoutOlColumns(offSlots, style);
-  const lm = mirrorLandmarks(olCols, sideDefense);
+  const lm = mirrorLandmarks(olCols);
   const passCatcherCols = layoutPassCatchers(offSlots, lm, style);
   const backfieldCols = layoutBackfieldRow(offSlots, lm, style);
 
@@ -1149,8 +1107,8 @@ export function computeLayout(teamView, opts = {}) {
 }
 
 // D72: shrink-wraps the canvas around the columns actually on it. The full-width canvas exists because the
-// whole-team field genuinely uses it (corners reach both sidelines), but a single unit spans only a little
-// over half of it — cropping keeps every card the same size in layout units and just moves the canvas
+// whole-team field genuinely uses most of it (the corners are its widest row), but a single unit spans only
+// a little over half of it — cropping keeps every card the same size in layout units and just moves the canvas
 // edges in, so the fit engine's spread/scale arithmetic does the enlarging instead of leaving dead turf.
 function cropLayout(layout) {
   let min = Infinity;
@@ -1355,7 +1313,7 @@ export function renderFieldSvg(layoutHeight, losY, layoutWidth = LAYOUT_WIDTH, c
 }
 
 // Exported so tests read these numbers from here instead of hardcoding literals that go stale silently the
-// moment a ruling moves a constant — a test states the RELATIONSHIP (a corner is CB_PITCH_OUT pitches
-// outside the tackle; two cards never come closer than MIN_CARD_GAP) rather than a specific number.
-export const geometry = { CARD_W, CARD_H1, ROW_H, SIDE_ROW_H, CARD_GAP, SIDE_CARD_GAP, BANNER_H, OUT_RAIL_H, LABEL_RESERVE, MAX_DEPTH_ROWS, HEADSHOT_SIZE, BAND_GAP, LEVEL_GAP_EXTRA, LOS_HALF_GAP, MARGIN_TOP, MARGIN_BOTTOM, SIDE_INSET, DEF_ROW_FULL_H, DEF_ROW_COUNT: DEF_ROW_ORDER.length, DEF_LEVEL_BOUNDARIES, BOTH_SIDES_HALF, BOTH_SIDES_HEIGHT, MIN_PITCH, MIN_CARD_GAP, CB_PITCH_OUT, EDGE_PITCH_OUT, ILB_PITCH_FROM_CENTER, PASS_CATCHER_PITCH, SECONDARY_CORNER_DROP,
-  SIDE_DEF_CB_PITCH_FROM_CENTER, SIDE_DEF_NB_PITCH_FROM_CENTER, SIDE_DEF_S_PITCH_FROM_CENTER };
+// moment a ruling moves a constant — a test states the RELATIONSHIP (a corner is CB_PITCH_FROM_CENTER pitches
+// off the centre; two cards never come closer than MIN_CARD_GAP) rather than a specific number.
+export const geometry = { CARD_W, CARD_H1, ROW_H, SIDE_ROW_H, CARD_GAP, SIDE_CARD_GAP, BANNER_H, OUT_RAIL_H, LABEL_RESERVE, MAX_DEPTH_ROWS, HEADSHOT_SIZE, BAND_GAP, LEVEL_GAP_EXTRA, LOS_HALF_GAP, MARGIN_TOP, MARGIN_BOTTOM, SIDE_INSET, DEF_ROW_FULL_H, DEF_ROW_COUNT: DEF_ROW_ORDER.length, DEF_LEVEL_BOUNDARIES, BOTH_SIDES_HALF, BOTH_SIDES_HEIGHT, MIN_PITCH, MIN_CARD_GAP, EDGE_PITCH_OUT, ILB_PITCH_FROM_CENTER, PASS_CATCHER_PITCH, SECONDARY_CORNER_DROP,
+  S_PITCH_FROM_CENTER, NB_PITCH_FROM_CENTER, CB_PITCH_FROM_CENTER };
