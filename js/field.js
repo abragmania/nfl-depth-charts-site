@@ -824,9 +824,16 @@ function placeLineColumns(slots, lm) {
   const xs = new Array(slots.length);
   const ends = [], interior = [];
   slots.forEach((s, i) => (isEndLabel(s) ? ends : interior).push(i));
-  // D127 follow-up: a line charting THREE or more ends (Kansas City: DE, DT, DT, DE, DE) has no label-led
-  // shape to fill, so the whole row draws in the club's chart order, one pitch apart, centred on the centre.
-  if (ends.length >= 3) return slots.map((_, i) => lm.C + (i - (slots.length - 1) / 2) * lm.pitch);
+  // D127 follow-up: a line charting THREE or more ends has no label-led shape to fill, so it draws in the
+  // club's chart order: a three-column line on tackle, centre, tackle like every other three-man line
+  // (Minnesota charts DE, DE, DE); anything wider one pitch apart, centred on the centre.
+  if (ends.length >= 3) {
+    if (slots.length === 3) return [lm.LT, lm.C, lm.RT];
+    return slots.map((_, i) => lm.C + (i - (slots.length - 1) / 2) * lm.pitch);
+  }
+  // A two-column line sits in the gaps either side of the centre in printed order, whatever its labels
+  // (Atlanta charts NT, DE: D132 keeps Atlanta exactly as the club prints it).
+  if (slots.length === 2) return [lm.C - 0.5 * lm.pitch, lm.C + 0.5 * lm.pitch];
   // D132 (Adam): ends go on the ends, tackles in the middle. A three-man line with ONE end (Arizona, New
   // Orleans) used to stand him on the centre between the tackles. He takes the tackle spot on the side the
   // club printed him (right only when printed last); a lone nose, else the first interior man, takes the centre.
@@ -844,7 +851,10 @@ function placeLineColumns(slots, lm) {
   const innerR = interior.length ? Math.max(...interior.map((idx) => xs[idx])) : lm.C;
   // D127: an end keeps his tackle's landmark unless the interior cluster has grown out to within MIN_PITCH
   // of it, in which case he steps OUT (away from the centre) by exactly the shortfall.
-  const endXs = placeOuterInner(ends.length, lm.LT, lm.RT, lm.LG, lm.RG);
+  // D132: a LONE end in a wider line takes the tackle on the side the club printed him, never the centre.
+  const endXs = ends.length === 1
+    ? [ends[0] >= slots.length / 2 ? lm.RT : lm.LT]
+    : placeOuterInner(ends.length, lm.LT, lm.RT, lm.LG, lm.RG);
   ends.forEach((idx, k) => {
     const x = endXs[k];
     if (!interior.length || Math.abs(x - lm.C) < 0.5) xs[idx] = x;
