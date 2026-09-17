@@ -201,20 +201,41 @@ const DEF_LEVEL_LABEL = { LINE: "LINE", EDGE: "EDGE", LB: "LINEBACKERS", FRONT: 
 // THE STAGGER INSIDE A MERGED ROW. Both merged rows share one top line and start SOME of their bands' columns
 // a step below it, so two groups read as two groups without costing a row:
 //   SECONDARY  the corners and the nickel step below the safeties. D121 opened 22 units, D125 raised it to 34,
-//              and D141 raises it to a full card — LABEL_RESERVE + CARD_H1 (40) plus air — so the corner's own
-//              label pill sits BELOW the bottom of the safety's line-one card rather than beside it.
+//              and D141 raises it to a full card — LABEL_RESERVE + a line-one row, plus air — so the corner's
+//              own label pill sits BELOW the bottom of the safety's line-one card rather than beside it.
 //   FRONT      the edge rushers step below the off-ball linebackers (D141), which is what makes the backers
 //              read as the higher, further-from-the-line group they are.
 // A two-row model has neither: its corners and its edge rushers have rows of their own.
-const SECONDARY_CORNER_DROP = 46;
+//
+// THE CORNER STEP IS THE PAGE'S OWN CARD, NOT ONE NUMBER FOR ALL PAGES (👁 Visual QA, 2026-09-17). It shipped
+// as a flat 46 — LABEL_RESERVE 17 + CARD_H1 23 + 6 of air — which is a full card on the team and matchup
+// pages and 5 units SHORT of one on the Offense/Defense pages, where line one carries a headshot and is 34
+// units tall instead of 23. On every club's Defense page the corner's pill therefore started about 7px above
+// the bottom of the safety's card: the step Adam asked for, drawn too small. D141 applies to every page that
+// draws a defence, so the step is now derived from the style the page is drawing at:
+//   team / matchup   17 + 23 + 6 air        = 46  (D141's own number, unchanged)
+//   offense/defense  17 + 34 + 13           = 64
+// The side pages spend a BANNER_H (13) on the last term where the team page spends 6 units of air, which is
+// what puts the pill under a safety whose card wears a D44 banner too — Pittsburgh's FILLING IN safety, the
+// one club where the flat 46 was 25px short rather than 7. They can afford it: those pages leave about 245px
+// of turf idle under the corners and are width-bound, so nothing shrinks to pay for it. The team and matchup
+// canvas is height-bound and every unit there is a tax on the size of every card, so it keeps the plain card
+// Adam approved and a bannered safety still reaches a few units past the corner's pill, exactly as it does today.
+const SECONDARY_CORNER_AIR = 6;
+export function secondaryCornerDrop(style = {}) {
+  return LABEL_RESERVE + lineOneBase(style) + (style.headshot ? BANNER_H : SECONDARY_CORNER_AIR);
+}
+const SECONDARY_CORNER_DROP = secondaryCornerDrop();
 const FRONT_LB_LIFT = 18;
+// `drop` is a FUNCTION of the style now, not a number, so every reader (the reserved row height, the
+// constant canvas, the placement pass) asks the same question about the page actually being drawn.
 const ROW_DROPS = {
-  SECONDARY: { bands: new Set(["CB", "NB"]), drop: SECONDARY_CORNER_DROP },
-  FRONT: { bands: new Set(["EDGE"]), drop: FRONT_LB_LIFT },
+  SECONDARY: { bands: new Set(["CB", "NB"]), drop: secondaryCornerDrop },
+  FRONT: { bands: new Set(["EDGE"]), drop: () => FRONT_LB_LIFT },
 };
-const rowDropOf = (rowKey, band) => {
+const rowDropOf = (rowKey, band, style = {}) => {
   const d = ROW_DROPS[rowKey];
-  return d && d.bands.has(band) ? d.drop : 0;
+  return d && d.bands.has(band) ? d.drop(style) : 0;
 };
 // D141: the merged front row names only the groups actually standing on it, in the order they read down the
 // field. Ruling A leaves a 4-3 whose ends are linemen with no EDGE column at all, and that row is plainly the
@@ -277,7 +298,7 @@ export function bothSidesHalf(style = {}) {
   return DEF_ROW_ORDER.length * defRowFullH(style)
     + (DEF_ROW_ORDER.length - 1) * bandGapOf(style)
     + DEF_LEVEL_BOUNDARIES * levelGapOf(style)
-    + DEF_ROW_ORDER.reduce((sum, key) => sum + (ROW_DROPS[key]?.drop ?? 0), 0);
+    + DEF_ROW_ORDER.reduce((sum, key) => sum + (ROW_DROPS[key] ? ROW_DROPS[key].drop(style) : 0), 0);
 }
 export function bothSidesHeight(style = {}) {
   const half = bothSidesHalf(style);
@@ -439,8 +460,13 @@ export function layoutStyle(opts = {}) {
 // the headshot plus its air. cards.js imports this function (rather than keeping its own copy of the sum,
 // which is how the two used to drift) so the rendered row is never taller than the box reserved for it.
 export function lineOneHeight(p, style = {}) {
-  const base = style.headshot ? Math.max(CARD_H1, style.headshot + HEADSHOT_PAD) : CARD_H1;
-  return base + (isFullyOut(p) || p.role === "ACTIVE" ? BANNER_H : 0);
+  return lineOneBase(style) + (isFullyOut(p) || p.role === "ACTIVE" ? BANNER_H : 0);
+}
+// The same row WITHOUT its player: how tall a line-one row is on this page before any banner. Pulled out
+// because the corner step (secondaryCornerDrop, above) has to reserve a line-one card on a page where no
+// particular player is in hand, and the two must never disagree about what a line-one row measures.
+function lineOneBase(style = {}) {
+  return style.headshot ? Math.max(CARD_H1, style.headshot + HEADSHOT_PAD) : CARD_H1;
 }
 
 // D104: how many of the players standing at the TOP of a slot are fully-out starters with somebody active
@@ -1196,7 +1222,7 @@ export function computeLayout(teamView, opts = {}) {
     const bands = defRows.bands[key];
     const cols = defColsFor(bands, frontOneRow);
     for (const c of cols) {
-      const drop = rowDropOf(key, c.band);
+      const drop = rowDropOf(key, c.band, style);
       if (drop) c.drop = drop;
     }
     const row = buildRow(key, bands, "DEF", defRows.level[key], cols);
@@ -1262,7 +1288,23 @@ export function computeLayout(teamView, opts = {}) {
     // D140 (small screens only): `opts.ownHeight` drops the constant and gives the canvas THIS club's own
     // natural half, so D134's scrolling page ends where the club's chart ends instead of at empty field. The
     // halves stay equal (D96) and the scale stays pinned to the floor (viewfit.js's SCROLL_STATE_OWN_HEIGHT).
-    const half = Math.max(opts.ownHeight ? 0 : bothSidesHalf(style), defMin, offMin);
+    // 👁 Visual QA (2026-09-17): SPEND SPARE HEIGHT WHEN THE WIDTH IS WHAT BINDS. With the player panel open
+    // the box is 440px narrower, so the canvas is scaled to fit the WIDTH and the height fit goes unused —
+    // the field ended about 127px above the bottom of Adam's window with a bare strip of turf under it. The
+    // single-unit pages have spent that height on air between their rows since D72 (`opts.minHeight`, the
+    // `else` branch below); this is the same lever on the two-sided canvas, and the only one that fits D96 and
+    // D107: BOTH halves grow by the same amount, so the line of scrimmage stays on the canvas midpoint and
+    // every club still draws at one size (the number depends on the window, never on the club). It can only
+    // ever GROW the canvas past the constant, so a height-bound page — every page with no panel open, Adam's
+    // 2560 monitor included — asks for a minHeight under the constant and nothing here moves.
+    // The ceiling is the single-unit page's own MAX_EXTRA_GAP per gap, and a side with one row (nothing to
+    // spread) sets it to that side's natural height, which is to say: no growth at all.
+    const spreadRoom = (rows, natural) => (rows.length > 1 ? natural + (rows.length - 1) * MAX_EXTRA_GAP : natural);
+    const fillHalf = opts.minHeight > 0
+      ? Math.min((opts.minHeight - MARGIN_TOP - MARGIN_BOTTOM - 2 * LOS_HALF_GAP) / 2,
+        spreadRoom(defRowsTopDown, defMin), spreadRoom(offRowsTopDown, offMin))
+      : 0;
+    const half = Math.max(opts.ownHeight ? 0 : bothSidesHalf(style), defMin, offMin, fillHalf);
     const spreadGap = (rows, natural) => (rows.length > 1 && half > natural) ? (half - natural) / (rows.length - 1) : 0;
     placeSpan(defRowsTopDown, MARGIN_TOP, spreadGap(defRowsTopDown, defMin));
     // D107: the half boundaries are the constant's, not the rows' — a defence with fewer rows than the
@@ -1587,5 +1629,9 @@ export function renderFieldSvg(layoutHeight, losY, layoutWidth = LAYOUT_WIDTH, c
 // Exported so tests read these numbers from here instead of hardcoding literals that go stale silently the
 // moment a ruling moves a constant — a test states the RELATIONSHIP (a corner is CB_PITCH_FROM_CENTER pitches
 // off the centre; two cards never come closer than MIN_CARD_GAP) rather than a specific number.
-export const geometry = { CARD_W, CARD_H1, ROW_H, SIDE_ROW_H, CARD_GAP, SIDE_CARD_GAP, BANNER_H, OUT_RAIL_H, LABEL_RESERVE, MAX_DEPTH_ROWS, REDUCED_DEPTH_ROWS, DEPTH_CHIP_H, HEADSHOT_SIZE, BAND_GAP, LEVEL_GAP_EXTRA, REDUCED_BAND_GAP, REDUCED_LEVEL_GAP_EXTRA, LOS_HALF_GAP, MARGIN_TOP, MARGIN_BOTTOM, SIDE_INSET, DEF_ROW_FULL_H, DEF_ROW_COUNT: DEF_ROW_ORDER.length, DEF_LEVEL_BOUNDARIES, BOTH_SIDES_HALF, BOTH_SIDES_HEIGHT, MIN_PITCH, MIN_CARD_GAP, EDGE_PITCH_OUT, ILB_PITCH_FROM_CENTER, PASS_CATCHER_PITCH, SECONDARY_CORNER_DROP, FRONT_LB_LIFT,
-  S_PITCH_FROM_CENTER, NB_PITCH_FROM_CENTER, CB_PITCH_FROM_CENTER };
+export const geometry = { CARD_W, CARD_H1, ROW_H, SIDE_ROW_H, CARD_GAP, SIDE_CARD_GAP, BANNER_H, OUT_RAIL_H, LABEL_RESERVE, MAX_DEPTH_ROWS, REDUCED_DEPTH_ROWS, DEPTH_CHIP_H, HEADSHOT_SIZE, BAND_GAP, LEVEL_GAP_EXTRA, REDUCED_BAND_GAP, REDUCED_LEVEL_GAP_EXTRA, LOS_HALF_GAP, MARGIN_TOP, MARGIN_BOTTOM, SIDE_INSET, DEF_ROW_FULL_H, DEF_ROW_COUNT: DEF_ROW_ORDER.length, DEF_LEVEL_BOUNDARIES, BOTH_SIDES_HALF, BOTH_SIDES_HEIGHT, MIN_PITCH, MIN_CARD_GAP, EDGE_PITCH_OUT, ILB_PITCH_FROM_CENTER, PASS_CATCHER_PITCH, SECONDARY_CORNER_DROP, SECONDARY_CORNER_AIR, secondaryCornerDrop, FRONT_LB_LIFT,
+  S_PITCH_FROM_CENTER, NB_PITCH_FROM_CENTER, CB_PITCH_FROM_CENTER,
+  // 👁 (2026-09-17): SECONDARY_CORNER_DROP is the TEAM/MATCHUP number (46). A test or a caller asking about
+  // an Offense/Defense page has to ask secondaryCornerDrop(style) instead — the step is a line-one card on
+  // the page it is drawn on, and a line-one card there carries a headshot.
+  lineOneBase };

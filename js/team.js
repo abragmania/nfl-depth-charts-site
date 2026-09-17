@@ -1,7 +1,7 @@
 import { getTeams, getTeam, invalidateTeam } from "./api.js";
 import { computeLayout, renderFieldSvg, renderLevelLabels, FIELD_VARIANT, SECONDARY_ONE_ROW, REDUCED_DEPTH_ROWS } from "./field.js";
 import { renderColumn, renderTray, esc, fitNames, wireDepthToggles, espnSchemeOf } from "./cards.js";
-import { mountScaledField, disposeCurrentView, MIN_READABLE_SCALE, decideViewMode } from "./viewfit.js";
+import { mountScaledField, disposeCurrentView, MIN_READABLE_SCALE, decideViewMode, HEADER_FOLD_WIDTH } from "./viewfit.js";
 import { navStripHtml, wireNav } from "./nav.js";
 import { renderPhoneList } from "./phonelist.js";
 
@@ -189,7 +189,8 @@ function fieldHtml(view, team, layoutOpts = {}) {
 export const REDUCED_DEPTH_OPTS = { maxDepthRows: REDUCED_DEPTH_ROWS, depthChip: true };
 
 // `cascadeOpts` (D134): `floor` is this page's own readable-scale floor, `depth` whether it offers the
-// less-depth step, `setCompact` its own chrome-folding hook. A page that passes none of them keeps the
+// less-depth step, `setCompact` its own chrome-folding hook, and `foldWidth` (D107) the window width below
+// which that hook is held on for every club however well this one fits. A page that passes none of them keeps the
 // team page's own defaults. D138 adds `setList`: only a page that knows how to draw itself as the phone
 // list offers that step, which today is the Team page alone (step 1).
 export function mountTeamField(root, view, team, teamAbbr, layoutOpts = {}, cascadeOpts = {}) {
@@ -217,6 +218,10 @@ export function mountTeamField(root, view, team, teamAbbr, layoutOpts = {}, casc
       own, // D140
       setDepth: cascadeOpts.depth ? (on) => { depthOpts = on ? REDUCED_DEPTH_OPTS : null; } : null,
       setCompact: cascadeOpts.setCompact || null,
+      // D107: the whole-team page hands in the width below which the key folds for EVERY club (see
+      // HEADER_FOLD_WIDTH). The Offense/Defense pages print no key and pass nothing, so they never fold on
+      // width alone — their header is one line at every width by CSS.
+      foldWidth: cascadeOpts.foldWidth || 0,
       setList: cascadeOpts.setList || null, // D138: a window that has become a phone window re-renders the page
     },
     onDraw: (el) => { wireFieldClicks(el, teamAbbr); wireDepthToggles(el); fitNames(el); },
@@ -353,8 +358,15 @@ export async function renderTeam(root, search, abbr, playerKey) {
   // D134: the whole-team page offers all three steps — fold the legend into its chip, then one backup per
   // column behind a "+N more" chip, then the readable floor with the page scrolling. D138 adds a fourth
   // answer above all of them: a window narrow enough for the list re-renders this page as the list.
-  mountTeamField(root, view, team, A, {}, {
+  // 👁 (2026-09-17): `fillHeight` — with the player panel open the field is WIDTH-bound and the height fit
+  // goes unused, so the rows spread into it instead of leaving a bare strip under the field (field.js's
+  // bothSides branch). It is inert whenever the height binds, which is every window with the panel shut.
+  mountTeamField(root, view, team, A, { fillHeight: true }, {
     depth: true,
+    // D107 (👁, 2026-09-17): below this width the key folds into its chip for every one of the 32 clubs,
+    // whether or not this club's own header would have wrapped, so the field starts at the same y and draws
+    // at the same scale on every club's page.
+    foldWidth: HEADER_FOLD_WIDTH,
     setCompact: (on) => setTeamCompact(root, on),
     setList: () => renderTeam(root, search, A, playerKey),
   });

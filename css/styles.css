@@ -125,7 +125,15 @@ main.page-landing { padding:10px 20px 12px; }
    spend on a 96px crest and a stacked control column came straight out of the field's height budget.
    Nothing was dropped, only re-flowed; the chips wrap to a second line only when there genuinely are
    chips (a heat summary, an ESPN-fallback warning), which is the rare case. */
-.teamhead { display:flex; align-items:center; gap:14px; padding:5px 14px; border-radius:10px; color:#fff; flex-wrap:wrap;
+/* D107 (👁 Visual QA, 2026-09-17): THIS HEADER IS ONE LINE HIGH ON EVERY CLUB'S PAGE, ALWAYS. It used to
+   wrap, and an unfolded header that wraps is as tall as the club's own details make it — Houston's ran to
+   three lines (87px), New England's to two (69px), Buffalo's to one (48px) — which put the field's top at
+   four different heights and drew the 32 clubs at seven different sizes on a 1536x864 laptop. The nowrap and
+   give-ground rules below used to belong to `.teamhead-compact` alone; they are the plain state now, so the
+   header is one crest-high line whatever the club is called and however long its next fixture reads. What is
+   left of the compact state is the fold itself (the key becomes its chip, viewfit.js's HEADER_FOLD_WIDTH
+   decides when from the WINDOW) and 2px less padding. */
+.teamhead { display:flex; align-items:center; gap:14px; padding:5px 14px; border-radius:10px; color:#fff; flex-wrap:nowrap;
   background:linear-gradient(110deg, var(--team-primary) 0 60%, var(--team-secondary) 160%); }
 .teamhead img { width:38px; height:38px; object-fit:contain; flex:none; }
 /* D134 step 1 on the whole-team page: with the key folded into its chip the banner is back to the height
@@ -136,14 +144,11 @@ main.page-landing { padding:10px 20px 12px; }
    "as of" chip goes (its timestamp is on the Refresh button's tooltip, team.js's headerHtml), the meta line
    stays on one row, and the club name truncates last. No overflow:hidden anywhere — the collapsed key's
    popover is an absolutely-positioned child of this box and would be clipped by it. */
-.teamhead-compact { padding:3px 14px; flex-wrap:nowrap; }
-.teamhead-compact .teamhead-main { flex:0 1 auto; min-width:0; flex-wrap:nowrap; }
-.teamhead-compact h1 { min-width:0; overflow:hidden; text-overflow:ellipsis; }
-.teamhead-compact .meta { flex-wrap:nowrap; min-width:0; }
+.teamhead-compact { padding:3px 14px; }
 .teamhead-compact .asof-chip { display:none; }
-.teamhead h1 { margin:0; font-size:19px; white-space:nowrap; }
-.teamhead-main { min-width:0; display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
-.teamhead .meta { display:flex; gap:14px; align-items:center; color:rgba(255,255,255,.88); font-size:12.5px; flex-wrap:wrap; }
+.teamhead h1 { margin:0; font-size:19px; white-space:nowrap; min-width:0; overflow:hidden; text-overflow:ellipsis; }
+.teamhead-main { flex:0 1 auto; min-width:0; display:flex; align-items:center; gap:14px; flex-wrap:nowrap; }
+.teamhead .meta { display:flex; gap:14px; align-items:center; color:rgba(255,255,255,.88); font-size:12.5px; flex-wrap:nowrap; min-width:0; }
 .opp { display:inline-flex; align-items:center; gap:5px; }
 .opp-logo { width:17px !important; height:17px !important; }
 /* Ruling E: these must stay on the header's single line. min-width:0 plus the ellipsis on .chip below
@@ -373,13 +378,17 @@ a.back { color:var(--muted); }
    first cut of this rule. A small flex-basis makes the hypothetical size 200px, which always fits, and the
    flex-grow then hands the block whatever room is actually left between the club's details and its
    controls (602px at 1700x900) for it to wrap inside.
-   There is deliberately NO max-height on it. One was tried, at the 38px of the crest, so that the banner
-   could not grow whatever happened; on a 1366-wide window the key needs four lines in the 381px it is left
-   and the fourth was simply cut off, which loses an item of the key rather than a pixel of chrome. Growing
-   is the better failure: at the sizes the ruling is about the banner measures exactly the 48px it did
-   before (1700x900 and 2000x980, both measured), and on a window narrow enough to push it past that it is
-   still shorter than the banner plus the separate legend line it replaced. */
-.legend-banner { margin:0; flex:1 1 200px; min-width:0; justify-content:flex-end;
+   D107 (👁, 2026-09-17) settles what happens when the room runs out, which the paragraph above used to
+   answer with "the banner grows": IT NO LONGER GROWS. A banner that grows is a header that grows, and a
+   header whose height depends on how long this club's name and next fixture are drew the 32 clubs at seven
+   different sizes on a laptop. The key sits on ONE line here (flex-wrap:nowrap) and the whole key folds into
+   its "Legend" chip below viewfit.js's HEADER_FOLD_WIDTH — a decision about the window, so it is the same
+   decision on all 32 pages. The overflow guard is a backstop for a club whose details grow past that width
+   before anyone re-measures it: the club's own block shrinks about three times faster than this one (its
+   flex basis is its ~600px of content against this block's 200px), so the club NAME ellipsises long before
+   an item of the key is clipped. `.legend-collapsed` sets overflow back to visible, which it must: the
+   folded key's popover is an absolutely-positioned child of this box. */
+.legend-banner { margin:0; flex:1 1 200px; min-width:0; justify-content:flex-end; flex-wrap:nowrap; overflow:hidden;
   gap:3px 9px; font-size:9.5px; line-height:1.15; color:rgba(255,255,255,.88);
   background:rgba(0,0,0,.26); border-radius:8px; padding:3px 9px; }
 .legend-banner b { color:#fff; }
@@ -740,7 +749,11 @@ a.back { color:var(--muted); }
    badge and the snap trio are untouched at every step (the give-up list lives in cards.js). */
 .prow-tight .prow-line { gap:2px; }
 .prow-one.prow-tight .prow-main { gap:2px; }
-.prow-tight .prow-num { min-width:0; }
+/* 👁 Visual QA (2026-09-17): the jersey number is right-aligned, so dropping its gutter left the digits
+   butting straight against the name ("90Tyrion Ingram-Dawkins", "22Jacory Croskey-Merritt"). The margin
+   puts a floor of 4 units — the row's own 2px gap plus this — between the number and the name, so however
+   squeezed a row is, the two never read as one word. It costs the name 2 units and is worth it. */
+.prow-tight .prow-num { min-width:0; margin-right:2px; }
 .prow-one.prow-tight .prow-head { margin-right:0; }
 /* An extra the row has handed over to its own name. `display:none` rather than a width tweak: it has to
    stop costing its flex gap as well as its own width, and it must come back the moment the row is

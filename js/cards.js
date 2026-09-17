@@ -578,14 +578,13 @@ const ROW_GIVE_UPS = [".sig-LOW_SNAPS", ".signal-glyph", ".chip-ghost", ".chip-w
 // and a row whose name already fits is never touched — so a page with no cut names renders exactly as it
 // did before this ruling.
 function fitOneName(row, el) {
-  // 🔵 A9: a row already in its default state is left alone — no text or class write at all — so a page with
-  // no cut names costs one measurement per row and wakes nothing that observes the field.
-  if (el.textContent !== el.dataset.full) el.textContent = el.dataset.full;
-  if (row.classList.contains("prow-tight")) row.classList.remove("prow-tight");
-  for (const n of row.querySelectorAll(".prow-given-up")) n.classList.remove("prow-given-up");
-  if (!textOverflows(el)) return;
-  row.classList.add("prow-tight");
-  if (!textOverflows(el)) return;
+  // Puts the row back to its untouched state: full spacing, every extra shown. 🔵 A9: guarded, so a row
+  // already in that state is left alone — no class write at all — and a page with no cut names costs one
+  // measurement per row and wakes nothing that observes the field.
+  const loosen = () => {
+    if (row.classList.contains("prow-tight")) row.classList.remove("prow-tight");
+    for (const n of row.querySelectorAll(".prow-given-up")) n.classList.remove("prow-given-up");
+  };
   // An emptied wrapper still costs the row a flex gap, so it goes with the last thing inside it.
   const dropEmptyWrappers = () => {
     for (const w of row.querySelectorAll(".prow-signals, .prow-badges")) {
@@ -593,16 +592,41 @@ function fitOneName(row, el) {
       w.classList.toggle("prow-given-up", !live);
     }
   };
-  for (const sel of ROW_GIVE_UPS) {
-    let gave = false;
-    for (const n of row.querySelectorAll(sel)) {
-      if (!n.classList.contains("prow-given-up")) { n.classList.add("prow-given-up"); gave = true; }
+  // D135's ladder for whatever name is in the row RIGHT NOW: pull the photo, number and name tight, then
+  // give up the quiet extras one kind at a time, re-measuring at every step. Returns true as soon as the
+  // name fits, so the row keeps everything it has not had to hand over.
+  const squeeze = () => {
+    if (!textOverflows(el)) return true;
+    row.classList.add("prow-tight");
+    if (!textOverflows(el)) return true;
+    for (const sel of ROW_GIVE_UPS) {
+      let gave = false;
+      for (const n of row.querySelectorAll(sel)) {
+        if (!n.classList.contains("prow-given-up")) { n.classList.add("prow-given-up"); gave = true; }
+      }
+      if (!gave) continue;
+      dropEmptyWrappers();
+      if (!textOverflows(el)) return true;
     }
-    if (!gave) continue;
-    dropEmptyWrappers();
-    if (!textOverflows(el)) return;
+    return !textOverflows(el);
+  };
+
+  if (el.textContent !== el.dataset.full) el.textContent = el.dataset.full;
+  loosen();
+  if (squeeze()) return;
+  // D135: the name itself is the LAST thing to give, and only now. 👁 Visual QA (2026-09-17): the row used to
+  // keep every concession it had made on the way down once the short form went in, so "J. Schmitz Jr." was
+  // printed in a squeezed row with the jersey number against the name and 30 to 65px of the row still idle
+  // on the right ("61J. Schmitz Jr.", "0D. Overshown"). A short name is a DIFFERENT question, so the ladder
+  // is asked again from the top: a row that fits "J. Schmitz Jr." at full spacing gets its gutter and its
+  // part-time marker back, and a row that still does not fit gives the same things up again in the same
+  // order. D135 is untouched by this — a name is still never cut while its row has room, because the short
+  // form is still only reached after every concession has failed on the full one.
+  if (el.dataset.short && el.dataset.short !== el.dataset.full) {
+    el.textContent = el.dataset.short;
+    loosen();
+    squeeze();
   }
-  if (el.dataset.short && el.dataset.short !== el.dataset.full) el.textContent = el.dataset.short;
 }
 
 // 👁 V2: `.row-name` (the 40px compactRow the side, group and matchup card views draw) is fitted by the same

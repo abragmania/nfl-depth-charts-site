@@ -156,8 +156,37 @@ export const FIT_HYSTERESIS = 1.05;
 // the hysteresis on purpose: the band absorbs a pixel, never a real shortfall, so a window genuinely under the
 // floor still takes its step (tests/viewfit.test.mjs pins both sides — 1 percent under stays at "none", 4
 // percent under steps). D134 cited the 1536x864 laptop as the window that needed one; since D141 shortened the
-// canvas that laptop draws its team page at 0.768, well clear of the floor, and takes no step at all.
+// canvas that laptop draws its team page at 0.7976, well clear of the floor, and takes no CASCADE step at all
+// — its key is folded by the width rule below (D107), which is not a step and buys the page nothing.
 export const FIT_STEP_MARGIN = 1.02;
+
+// ---- D107: ONE HEADER HEIGHT FOR EVERY CLUB AT A GIVEN WINDOW WIDTH ----------------------------
+//
+// D107 (Adam): every club draws at the same size. 👁 Visual QA, 2026-09-17: on a 1536x864 laptop the 32
+// Team pages drew at SEVEN different scales (0.7407 New Orleans to 0.7929 Buffalo). Nothing about the
+// CHART differed — the HEADER did. Since D141 the page fits without D134's compact step, so the header was
+// left unfolded, and an unfolded header is as tall as its own content needs: Houston's long club details
+// plus its injury chip pushed the key onto a third line (87px), New England's onto a second (69px), Buffalo's
+// fitted on one (48px). The field's top therefore sat at 150, 157, 171 or 189px depending on the club, and
+// the height-bound scale followed it. Flipping between clubs moved the whole field up and down.
+//
+// THE RULE: whether the chrome folds is a question about the WINDOW and nothing else. Below this width every
+// club folds its key into the "Legend" chip, above it no club does — never "fold when THIS club's own header
+// would wrap", which is precisely what made the answer club-dependent. The number is the widest window at
+// which the worst club's unfolded header still needs a second line, measured on the live page over all 32
+// clubs (2026-09-17: Houston 1800, then Washington 1700, New England / Philadelphia / Green Bay 1660, down
+// to Miami / the Giants / Chicago at 1420). It is a ceiling, so a club whose details grow by a few pixels
+// between now and next week still folds at the same place as every other club.
+//
+// AND IT IS BELT AND BRACES, not the only guard: styles.css gives `.teamhead` itself `flex-wrap:nowrap`
+// (the rules the compact state used to own), so an UNFOLDED header is one crest-high line for every club at
+// every width — a club whose details outgrow this constant ellipsises its own name rather than growing the
+// header and moving the field. D107 therefore holds even if this number goes stale.
+export const HEADER_FOLD_WIDTH = 1800;
+export function headerFoldsAt(width, foldWidth = HEADER_FOLD_WIDTH) {
+  return foldWidth > 0 && width < foldWidth;
+}
+
 // D138: about 1320 — the widest window that still cannot draw the field readably when held upright.
 export const LIST_PORTRAIT_WIDTH = Math.round(LAYOUT_WIDTH * MIN_READABLE_SCALE) + 24;
 const STEP_RANK = { none: 0, header: 1, depth: 2, scroll: 3 };
@@ -393,7 +422,9 @@ function expansionOverlaps(el) {
 //             is exact for the team and side pages - they have no such wrapper.
 // Returns a dispose function; also registers it, so the caller usually needs nothing further.
 //   cascade   D134: the three-step answer to a window too short to draw the field readably —
-//             { floor, reduced, setCompact(on), setDepth(on) }. `floor` is this page's own
+//             { floor, reduced, foldWidth, setCompact(on), setDepth(on) }. `foldWidth` (D107) is the window
+//             width below which the chrome folds for every club whatever the cascade decides.
+//             `floor` is this page's own
 //             MIN_READABLE_SCALE (0 or absent switches the whole cascade off), `reduced` the natural canvas
 //             at the reduced depth cap, and the two setters are the page's own chrome/markup hooks; a page
 //             that offers neither still gets the floor and the scrolling state (the side pages).
@@ -417,6 +448,11 @@ export function mountScaledField({ root, probe, build, onDraw, onText, panel = n
   const floor = cascade?.floor || 0;
   const steps = { header: !!cascade?.setCompact, depth: !!(cascade?.setDepth && cascade?.reduced), list: !!cascade?.setList };
   let step = "none";
+  // D107: the width below which this page's chrome folds for EVERY club, whatever its own header would do
+  // (HEADER_FOLD_WIDTH; 0 or absent leaves the fold to the cascade alone, which is what the side pages and
+  // the matchup page do). Held separately from `step` because it is not a step: it is not bought by a short
+  // window and it is never given back to buy scale.
+  const foldWidth = cascade?.foldWidth || 0;
   // D134: the cascade is held back until the chrome has settled. A cold load measures the header before its
   // stylesheet and font are in, reads the budget short, and folds a window that fits — and folding it back
   // spends the rebuild budget, which moved a 2560x1300 render that must not move at all.
@@ -462,8 +498,15 @@ export function mountScaledField({ root, probe, build, onDraw, onText, panel = n
   const idealMinHeight = (node) => {
     if (!fillHeight) return 0;
     const { width, height } = boxOf(node);
-    const kW = width / activeProbe().layoutWidth;
-    return kW > 0 ? height / kW : 0;
+    const p = activeProbe();
+    const kW = width / p.layoutWidth;
+    const want = kW > 0 ? height / kW : 0;
+    // 👁 (2026-09-17): 0 unless the fill would actually do something. field.js ignores a minHeight at or under
+    // the canvas's natural height (that is a HEIGHT-bound page, where the spread lever has the job instead),
+    // so reporting one only makes the refit below think the height lever has moved and spend a rebuild on an
+    // identical canvas. This is what lets the two-sided pages ask for the fill at all: they are height-bound
+    // almost always, and must not pay a rebuild for it.
+    return want > p.layoutHeight ? want : 0;
   };
 
   // Puts one step of the cascade in force. Only the page knows how to fold its own chrome away or to draw
@@ -477,10 +520,24 @@ export function mountScaledField({ root, probe, build, onDraw, onText, panel = n
     if (next === step) return;
     step = next;
     const wantDepth = steps.depth && (step === "depth" || step === "scroll") && !expandedFullDepth;
-    cascade.setCompact?.(step !== "none");
+    syncChrome();
     depthOn = wantDepth;
     cascade.setDepth?.(wantDepth);
   };
+
+  // D107: the chrome is folded when EITHER the window is narrow enough that every club folds (foldWidth,
+  // above) OR the cascade has taken a step that wants the room. Written as its own function, and called from
+  // the resize and decision paths as well as from applyStep, because the window half of that answer can
+  // change while the step does not — a page that never leaves "none" still has to fold when the window
+  // crosses the width. The last-applied value is remembered so a repeated call writes nothing, which keeps
+  // the ResizeObserver that watches the header from being woken by a no-op class toggle.
+  let chromeCompact = null;
+  function syncChrome() {
+    const want = step !== "none" || headerFoldsAt(window.innerWidth, foldWidth);
+    if (want === chromeCompact) return;
+    chromeCompact = want;
+    cascade?.setCompact?.(want);
+  }
 
   // Decides the step from the measured box. `fresh` (a real resize, or the first mount) first puts the
   // chrome back to full size so the decision is made on honest numbers and the gain is re-learned; an
@@ -492,6 +549,9 @@ export function mountScaledField({ root, probe, build, onDraw, onText, panel = n
   // across the threshold from flipping back and forth, and a page that is still settling has no history
   // worth protecting — without this, a decision made before the stylesheet had landed stayed locked in.
   const chooseStep = (fresh, memoryless = false) => {
+    // D107: the window's own answer first, so every measurement below is taken with the chrome at the height
+    // this WINDOW gives every club — not at the height this club's details happen to ask for.
+    syncChrome();
     if (!floor || !el && !mountPoint) return { changed: false, redraw: false };
     const was = step;
     const wasScrolling = scrolls;
@@ -662,9 +722,17 @@ export function mountScaledField({ root, probe, build, onDraw, onText, panel = n
     // D134: a real resize is a new question about the whole cascade too, so the step is re-decided from an
     // un-folded header (`refit(true)`) rather than from whatever the last window needed.
     resizeTimer = setTimeout(() => { if (dead) return; rebuilds = 0; expandedFullDepth = false; refit(true); }, RESIZE_DEBOUNCE);
+    // D107: the fold is a pure function of the window's width, so it is answered on the very first resize
+    // frame rather than at the end of the debounce — otherwise apply() below spends 180ms scaling the field
+    // against a header that is about to change height.
+    syncChrome();
     apply(); // respond immediately at the current spread; the rebuild follows once the drag settles
   };
 
+  // D107: before the very first measurement, not at the end of the settle. The fold needs no measuring — it
+  // is the window's width — so the field is built against the header this window gives every club from the
+  // first frame, and a laptop never flashes an unfolded header it is about to fold.
+  syncChrome();
   spread = idealSpread(mountPoint);
   minHeight = idealMinHeight(mountPoint);
   draw();
