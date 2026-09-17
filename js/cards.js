@@ -380,6 +380,13 @@ function overviewMore(n, teamAbbr, band) {
   return `<a class="prow prow-more" href="#/team/${esc(teamAbbr)}/group/${esc(String(band || "").toLowerCase())}" title="See all ${n} more players at this position">+${n} more</a>`;
 }
 
+// D134's reduced state instead EXPANDS the column in place, so the tail is the same `.depth-more` button and
+// `.depth-extra` span the group view already uses (wireDepthToggles drives both); the rows behind it are
+// rendered, just not displayed, so expanding costs no re-render and loses no open panel or scroll position.
+function depthMoreChip(rowsHtml, n) {
+  return `<button type="button" class="prow-more depth-more" aria-expanded="false" title="Show the other ${n} players in this column">+${n} more</button><span class="depth-extra">${rowsHtml}</span>`;
+}
+
 // One compact 40px row for a backup stacked below (offense) or above (defense) the line-one card. Falls
 // back to "F. Last" whenever a badge/chip is present — that's exactly when the full name doesn't fit
 // (D37b: the fill-in row is the most important row on the chart and must stay readable). Every row also
@@ -491,12 +498,50 @@ function textOverflows(el) {
   return range.getBoundingClientRect().width > avail + 0.5;
 }
 
+// D135 (Adam, 2026-09-17): what a row gives up, in order, before its name is touched. The part-time marker
+// goes first (the ◐ glyph that says this man plays a low share of the snaps), then the other quiet signals,
+// then the purely descriptive chips. The rating pill, the status badges (Q/D/OUT/IR/PUP/SUSP/INACTIVE), the
+// PS badge and the D91 snap trio are NOT on this list: each is a fact about whether and how much the man
+// plays, which is what the row is for.
+const ROW_GIVE_UPS = [".sig-LOW_SNAPS", ".signal-glyph", ".chip-ghost", ".chip-wk1", ".badge-slot"];
+
+// D135: a name is never cut while its row still has room. The row first pulls the photo, number and name
+// tight (`prow-tight` drops the jersey number's reserved gutter and the wide gaps around it — worth ~25px
+// on a side-page row), then gives up ROW_GIVE_UPS one kind at a time, and only then falls back to
+// "F. Surname" and, last of all, to the browser's ellipsis. Every step is re-measured rather than guessed,
+// and a row whose name already fits is never touched — so a page with no cut names renders exactly as it
+// did before this ruling.
+function fitOneName(row, el) {
+  el.textContent = el.dataset.full;
+  row.classList.remove("prow-tight");
+  for (const n of row.querySelectorAll(".prow-given-up")) n.classList.remove("prow-given-up");
+  if (!textOverflows(el)) return;
+  row.classList.add("prow-tight");
+  if (!textOverflows(el)) return;
+  // An emptied wrapper still costs the row a flex gap, so it goes with the last thing inside it.
+  const dropEmptyWrappers = () => {
+    for (const w of row.querySelectorAll(".prow-signals, .prow-badges")) {
+      const live = [...w.children].some((c) => !c.classList.contains("prow-given-up"));
+      w.classList.toggle("prow-given-up", !live);
+    }
+  };
+  for (const sel of ROW_GIVE_UPS) {
+    let gave = false;
+    for (const n of row.querySelectorAll(sel)) {
+      if (!n.classList.contains("prow-given-up")) { n.classList.add("prow-given-up"); gave = true; }
+    }
+    if (!gave) continue;
+    dropEmptyWrappers();
+    if (!textOverflows(el)) return;
+  }
+  if (el.dataset.short && el.dataset.short !== el.dataset.full) el.textContent = el.dataset.short;
+}
+
 export function fitNames(root) {
   for (const el of root.querySelectorAll(".prow-name[data-short]")) {
-    const full = el.dataset.full ?? el.textContent;
-    el.dataset.full = full;
-    el.textContent = full;
-    if (el.dataset.short && el.dataset.short !== full && textOverflows(el)) el.textContent = el.dataset.short;
+    el.dataset.full = el.dataset.full ?? el.textContent;
+    const row = el.closest(".prow");
+    if (row) fitOneName(row, el);
   }
 }
 
@@ -612,23 +657,38 @@ export function renderColumn(col, teamAbbr, opts = {}) {
   // asks "who is the starter of record here" still reads the compiled players[0].
   const ordered = displayOrder(players);
   const bold = lineOneCount(players);
-  const visible = visibleDepthRows(players, style.maxDepthRows);
   const depth = ordered.slice(bold);
   const demoted = outFillInDemotion(players);
   const outRows = demoted ? depth.slice(depth.length - demoted) : [];
-  const hiddenCount = depth.length - visible;
-  const shownDepth = hiddenCount > 0 ? keepOutRowsVisible(depth, Math.max(visible - 1, 0), outRows) : depth;
-  // The "+N more" tail stands for the healthy depth that was collapsed, so it belongs with that depth —
-  // above the out man, not under him. Printing it last would put a dotted "+2 more" line beneath the red
-  // rail and cost the ruling the one thing it is for: the bottom of the column is the injury.
   const railed = new Set(outRows);
-  const shownOut = shownDepth.filter((p) => railed.has(p));
-  const shownRest = shownDepth.filter((p) => !railed.has(p));
+  const depthRow = (p) => overviewDepth(p, teamAbbr, p && railed.has(p) ? { ...colOpts, outRail: true } : colOpts);
+  let shownRest, shownOut, tail;
+  if (style.depthChip) {
+    // D134's reduced state: one backup per column plus the chip, and the OUT rail, the fill-in and the
+    // co-starters are all still drawn — the rail and the fill-in are never candidates for collapsing
+    // (the rail rides behind the cap, the fill-in and co-starters are line-one rows, D104/D56).
+    const cap = style.maxDepthRows ?? 1;
+    const ordinary = depth.filter((p) => !railed.has(p));
+    shownRest = ordinary.slice(0, cap);
+    shownOut = outRows;
+    const hidden = ordinary.slice(cap);
+    tail = hidden.length ? depthMoreChip(hidden.map(depthRow).join(""), hidden.length) : "";
+  } else {
+    const visible = visibleDepthRows(players, style.maxDepthRows);
+    const hiddenCount = depth.length - visible;
+    const shownDepth = hiddenCount > 0 ? keepOutRowsVisible(depth, Math.max(visible - 1, 0), outRows) : depth;
+    // The "+N more" tail stands for the healthy depth that was collapsed, so it belongs with that depth —
+    // above the out man, not under him. Printing it last would put a dotted "+2 more" line beneath the red
+    // rail and cost the ruling the one thing it is for: the bottom of the column is the injury.
+    shownOut = shownDepth.filter((p) => railed.has(p));
+    shownRest = shownDepth.filter((p) => !railed.has(p));
+    tail = hiddenCount > 0 && visible > 0 ? overviewMore(depth.length - shownDepth.length, teamAbbr, slot.band) : "";
+  }
   const body = [
     ...ordered.slice(0, bold).map((p) => overviewLineOne(p, teamAbbr, colOpts)),
-    ...shownRest.map((p) => overviewDepth(p, teamAbbr, colOpts)),
-    hiddenCount > 0 && visible > 0 ? overviewMore(depth.length - shownDepth.length, teamAbbr, slot.band) : "",
-    ...shownOut.map((p) => overviewDepth(p, teamAbbr, { ...colOpts, outRail: true })),
+    ...shownRest.map(depthRow),
+    tail,
+    ...shownOut.map(depthRow),
   ].join("");
 
 // Ruling B (Adam, 2026-09-13): "put the backup boxes under the starters." Every column, offense and

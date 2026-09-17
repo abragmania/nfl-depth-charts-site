@@ -1,7 +1,7 @@
 import { getTeams, getTeam, invalidateTeam } from "./api.js";
-import { computeLayout, renderFieldSvg, renderLevelLabels, FIELD_VARIANT, SECONDARY_ONE_ROW } from "./field.js";
-import { renderColumn, renderTray, esc, fitNames } from "./cards.js";
-import { mountScaledField, disposeCurrentView } from "./viewfit.js";
+import { computeLayout, renderFieldSvg, renderLevelLabels, FIELD_VARIANT, SECONDARY_ONE_ROW, REDUCED_DEPTH_ROWS } from "./field.js";
+import { renderColumn, renderTray, esc, fitNames, wireDepthToggles } from "./cards.js";
+import { mountScaledField, disposeCurrentView, MIN_READABLE_SCALE } from "./viewfit.js";
 import { navStripHtml, wireNav } from "./nav.js";
 
 const dash = "—";
@@ -105,14 +105,21 @@ export function headerHtml(team, view, fromFixture = false, teams, withLegend = 
 // does not grow and the line the legend used to occupy goes to the field. With SECONDARY_ONE_ROW false it is
 // emitted under the banner as its own `.legend` line exactly as before, which is what makes the ruling undo
 // in one edit.
+// D134 (Adam, 2026-09-17): "the legend must never wrap to a second or third line." On a window too short to
+// draw the field readably the key collapses to the one "Legend" chip below, which shows the whole key on
+// hover or tap (styles.css's `.legend-collapsed`). `.legend-items` is `display:contents` until then, so the
+// six items stay direct flex children of `.legend` and every window big enough today renders identically.
 export function legendHtml(extraClass = "") {
   return `<div class="legend${extraClass ? " " + extraClass : ""}">
+    <button type="button" class="legend-chip" aria-label="Show the key">Legend</button>
+    <span class="legend-items">
     <span><b>Bold top row</b> = opening-day starter</span>
     <span><span class="sw sw-out"></span><b>OUT</b> starter out</span>
     <span><span class="sw sw-active"></span><b>FILLING IN</b> active replacement</span>
     <span><span class="sw sw-q"></span>Q <span class="sw sw-d"></span>D <span class="sw sw-out"></span>OUT IR PUP NFI SUSP <span class="sw sw-inactive"></span>INACTIVE</span>
     <span><span class="sw sw-shaded"></span>▨ part-time</span>
     <span><span class="tier-strip"><span style="background:var(--tier-elite)"></span><span style="background:var(--tier-strong)"></span><span style="background:var(--tier-avg)"></span><span style="background:var(--tier-weak)"></span><span style="background:var(--tier-flat)"></span></span>▬ row tint = rating</span>
+    </span>
   </div>`;
 }
 
@@ -171,21 +178,44 @@ function fieldHtml(view, team, layoutOpts = {}) {
 // D72: exported, because the offense and defense pages are this same field — zoom.js hands it a TeamView
 // carrying one unit plus the single-unit layout options, and gets the identical measure/spread/draw/
 // rescale/settle loop, delegated card clicks and name-fitting pass rather than a parallel implementation.
-export function mountTeamField(root, view, team, teamAbbr, layoutOpts = {}) {
+// D134: the options that put a page into the "less depth" step — one backup per column and an expanding
+// "+N more" chip. One object, imported by whoever mounts a field, so the reduced probe the cascade measures
+// and the markup the page then draws can never be computed from different numbers.
+export const REDUCED_DEPTH_OPTS = { maxDepthRows: REDUCED_DEPTH_ROWS, depthChip: true };
+
+// `cascadeOpts` (D134): `floor` is this page's own readable-scale floor, `depth` whether it offers the
+// less-depth step, `setCompact` its own chrome-folding hook. A page that passes none of them keeps the
+// team page's own defaults.
+export function mountTeamField(root, view, team, teamAbbr, layoutOpts = {}, cascadeOpts = {}) {
   const panel = root.querySelector(".player-panel");
+  let depthOpts = null; // set by the cascade's setDepth hook below; read by every build from here on
   return mountScaledField({
     root,
     probe: computeLayout(view, layoutOpts), // pure and cheap: the natural (unspread) canvas, for the spread maths
-    build: (spread, minHeight) => fieldHtml(view, team, { ...layoutOpts, spread, minHeight }),
+    build: (spread, minHeight) => fieldHtml(view, team, { ...layoutOpts, ...(depthOpts || {}), spread, minHeight }),
     fillHeight: !!layoutOpts.fillHeight, // D72: single-unit pages spend spare height on air between rows
     panel,
     observe: [root.querySelector(".nav-strip"), root.querySelector(".teamhead"), root.querySelector(".legend")],
-    onDraw: (el) => { wireFieldClicks(el, teamAbbr); fitNames(el); },
+    cascade: {
+      floor: cascadeOpts.floor ?? MIN_READABLE_SCALE,
+      reduced: cascadeOpts.depth ? computeLayout(view, { ...layoutOpts, ...REDUCED_DEPTH_OPTS }) : null,
+      setDepth: cascadeOpts.depth ? (on) => { depthOpts = on ? REDUCED_DEPTH_OPTS : null; } : null,
+      setCompact: cascadeOpts.setCompact || null,
+    },
+    onDraw: (el) => { wireFieldClicks(el, teamAbbr); wireDepthToggles(el); fitNames(el); },
     // A name that fits at one scale can stop fitting at another (a webfont swap, a window resize, the
     // panel opening), so the abbreviate-don't-truncate pass runs on every scale change, not only when the
     // markup is rebuilt.
     onScale: (el) => fitNames(el),
   });
+}
+
+// D134 step 1 on the whole-team page: the banner's key folds to its "Legend" chip (legendHtml above) and
+// the banner stops being the tallest thing above the field. Nothing else in the header moves — the club,
+// its record, next opponent, bye, scheme and controls all stay exactly where they are.
+function setTeamCompact(root, on) {
+  root.querySelector(".teamhead")?.classList.toggle("teamhead-compact", on);
+  root.querySelector(".legend-banner")?.classList.toggle("legend-collapsed", on);
 }
 
 // D75: the field-plus-panel shell every team-context page mounts a field into — the whole-team page and,
@@ -284,6 +314,8 @@ export async function renderTeam(root, search, abbr, playerKey) {
   };
   window.addEventListener("nfl:data-refreshed", teamRefreshListener, { once: true });
 
-  mountTeamField(root, view, team, A); // registers its own teardown with viewfit.js
+  // D134: the whole-team page offers all three steps — fold the legend into its chip, then one backup per
+  // column behind a "+N more" chip, then the readable floor with the page scrolling.
+  mountTeamField(root, view, team, A, {}, { depth: true, setCompact: (on) => setTeamCompact(root, on) });
   highlightSelected(root, playerKey);
 }

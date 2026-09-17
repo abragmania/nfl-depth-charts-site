@@ -110,15 +110,92 @@ export function heightBudget(innerHeight, fieldTop, backRowHeight, reserveBelow 
   return Math.max(innerHeight - fieldTop - (backRowHeight + BOTTOM_RESERVE + extra), 240);
 }
 
+// ---- D134: the too-short-window cascade --------------------------------------------------------
+
+// D134 (Adam, 2026-09-17): the field must never be scaled so small that a BACKUP row's name stops being
+// readable. "Readable" is about 9 CSS px of type, and the two row families print that name at different
+// sizes, so each gets its own floor rather than one number that is wrong for one of them:
+//   team / matchup  styles.css `.column-compact .prow-name` is 12.5px -> 9 / 12.5   = 0.72
+//   offense/defense styles.css `.prow-name` (a backup row draws the base size) 11px -> 9 / 11 = 0.818
+const READABLE_NAME_PX = 9;
+export const MIN_READABLE_SCALE = READABLE_NAME_PX / 12.5;
+export const SIDE_MIN_READABLE_SCALE = READABLE_NAME_PX / 11;
+// Once a step has been taken it is only given back when the window is comfortably big enough for the step
+// below it, so a window dragged across the threshold cannot flip the page back and forth on every frame.
+export const FIT_HYSTERESIS = 1.05;
+// ...and a narrow band the other way up: a window sitting exactly on the floor would otherwise fold its
+// header on one cold load and not the next, decided by which measurement won by a pixel. Much narrower than
+// the hysteresis on purpose — a real laptop (1536x864) measures 1.4 percent under and does need its step.
+export const FIT_STEP_MARGIN = 1.02;
+const STEP_RANK = { none: 0, header: 1, depth: 2, scroll: 3 };
+
+// The whole cascade decision, as arithmetic on measured numbers: which of D134's steps this window needs,
+// what scale it lands on, and whether the page ends up scrolling. Pure, so it is unit-tested directly
+// rather than only through a browser.
+//   width/height  the measured box, with the page's chrome at its FULL (uncompacted) size
+//   headerGain    the height step (1) frees by folding that chrome away
+//   full/reduced  the natural (unspread) canvas at the full and reduced depth caps
+//   steps         which steps this page offers at all (the side pages offer only the floor)
+//   current       the step in force now, for the hysteresis above
+// The scale is `min(width fit, height fit)` on the UNSPREAD canvas, which is exactly what mountScaledField
+// ends up applying: the spread is chosen to make the canvas fill the width at the height fit, so a
+// height-bound page lands on the height fit and a width-bound one on the width fit either way.
+export function chooseFitStep({ width, height, headerGain = 0, full, reduced = null, floor = 0, steps = {}, current = "none" }) {
+  const scaleAt = (h, p) => capToWidthFit(width / p.layoutWidth, h / p.layoutHeight);
+  const useHeader = !!steps.header;
+  const useDepth = !!(steps.depth && reduced);
+  const compactHeight = height + (useHeader ? headerGain : 0);
+  const candidates = [{ step: "none", scale: scaleAt(height, full) }];
+  if (useHeader) candidates.push({ step: "header", scale: scaleAt(compactHeight, full) });
+  if (useDepth) candidates.push({ step: "depth", scale: scaleAt(compactHeight, reduced) });
+  for (const c of candidates) {
+    const need = STEP_RANK[c.step] < (STEP_RANK[current] ?? 0) ? floor * FIT_HYSTERESIS : floor / FIT_STEP_MARGIN;
+    if (!(floor > 0) || c.scale >= need) return { ...c, scrolls: false };
+  }
+  // The floor. The scale stops falling and the PAGE scrolls instead — but never past the width fit, which
+  // is the one invariant every mode in this file obeys (capToWidthFit: no canvas wider than the window,
+  // ever, so a floor can never raise a horizontal scrollbar).
+  const probe = useDepth ? reduced : full;
+  const h = useHeader ? compactHeight : height;
+  const scale = capToWidthFit(width / probe.layoutWidth, Math.max(h / probe.layoutHeight, floor));
+  return { step: "scroll", scale, scrolls: probe.layoutHeight * scale > h + 0.5 };
+}
+
 // How much room a field actually has, measured rather than guessed, so a wrapped header or a second chip
 // line is accounted for automatically instead of silently pushing the field off the bottom.
-function availableBox(el, main, panel, backRow, reserveBelow) {
+// D134: the `?? 26` is an allowance for a "back to team" link under the field that D59 removed from every
+// page, so on a window too short to draw the field readably the compact step stops reserving 26px for an
+// element that is not there. A full-size window keeps the allowance, and therefore its exact scale.
+function availableBox(el, main, panel, backRow, reserveBelow, compact = false) {
   const cs = getComputedStyle(main);
   const width = Math.max(main.clientWidth - parseFloat(cs.paddingLeft || 0) - parseFloat(cs.paddingRight || 0)
     - (panel && !panel.hidden ? panel.offsetWidth + 12 : 0), 320);
   const extra = typeof reserveBelow === "function" ? (reserveBelow() || 0) : (reserveBelow || 0);
-  const height = heightBudget(window.innerHeight, el.getBoundingClientRect().top, backRow?.offsetHeight ?? 26, extra);
+  // ...all but a few pixels of it: apply() rounds the scaled canvas UP to the next pixel, and a budget spent
+  // to the last one turns that rounding into a scrollbar, which narrows the page and starts the feedback
+  // loop D114 exists to prevent (SAFETY_MARGIN's own reason, a size larger).
+  const backRowH = backRow?.offsetHeight ?? (compact ? 8 : 26);
+  const height = heightBudget(window.innerHeight, el.getBoundingClientRect().top, backRowH, extra);
   return { width, height };
+}
+
+// D134: an expanded column may run down over empty turf, but it must not cover another card. Measured on
+// the live boxes rather than predicted from the layout, because the expansion is a CSS class toggle the
+// layout engine never hears about.
+function expansionOverlaps(el) {
+  const columns = [...el.querySelectorAll(".column")];
+  for (const extra of el.querySelectorAll(".depth-extra.is-open")) {
+    const col = extra.closest(".column");
+    const stack = col?.querySelector(".column-stack");
+    if (!stack) continue;
+    const r = stack.getBoundingClientRect();
+    for (const other of columns) {
+      if (other === col) continue;
+      const o = other.getBoundingClientRect();
+      if (o.left < r.right - 1 && o.right > r.left + 1 && o.top < r.bottom - 1 && o.bottom > r.top + 1) return true;
+    }
+  }
+  return false;
 }
 
 // ---- the scaled-field mount --------------------------------------------------------------------
@@ -150,7 +227,12 @@ function availableBox(el, main, panel, backRow, reserveBelow) {
 //             it stays correct even if the reserved element's own height can change. Defaults to 0, which
 //             is exact for the team and side pages - they have no such wrapper.
 // Returns a dispose function; also registers it, so the caller usually needs nothing further.
-export function mountScaledField({ root, probe, build, onDraw, onScale, panel = null, observe = [], fillHeight = false, reserveBelow = 0 }) {
+//   cascade   D134: the three-step answer to a window too short to draw the field readably —
+//             { floor, reduced, setCompact(on), setDepth(on) }. `floor` is this page's own
+//             MIN_READABLE_SCALE (0 or absent switches the whole cascade off), `reduced` the natural canvas
+//             at the reduced depth cap, and the two setters are the page's own chrome/markup hooks; a page
+//             that offers neither still gets the floor and the scrolling state (the side pages).
+export function mountScaledField({ root, probe, build, onDraw, onScale, panel = null, observe = [], fillHeight = false, reserveBelow = 0, cascade = null }) {
   const mountPoint = root.querySelector(".field-outer");
   if (!mountPoint) return () => {};
   const main = mountPoint.closest("main") ?? document.body;
@@ -162,21 +244,41 @@ export function mountScaledField({ root, probe, build, onDraw, onScale, panel = 
   let layout = null;
   let lastK = null;
   let rebuilds = 0;
+  let draws = 0;
   let spread = 1;
   let minHeight = 0;
+  // D134 cascade state: which step is in force, what folding the chrome away was actually worth, whether
+  // the page is in the floor-and-scroll state, and whether an expanded column has forced full depth back.
+  const floor = cascade?.floor || 0;
+  const steps = { header: !!cascade?.setCompact, depth: !!(cascade?.setDepth && cascade?.reduced) };
+  let step = "none";
+  // D134: the cascade is held back until the chrome has settled. A cold load measures the header before its
+  // stylesheet and font are in, reads the budget short, and folds a window that fits — and folding it back
+  // spends the rebuild budget, which moved a 2560x1300 render that must not move at all.
+  let cascadeReady = false;
+  let headerGain = 0;
+  let scrolls = false;
+  let depthOn = false;
+  let expandedFullDepth = false;
 
   // The single guard every entry point starts with. `document.contains` is what makes an orphaned
   // callback harmless rather than destructive: a disposer that was somehow missed can no longer find its
   // element in the document, so it returns instead of rewriting whatever view is on screen now.
   const alive = () => !dead && el !== null && document.contains(el);
 
-  const boxOf = (node) => availableBox(node, main, panel, backRow, reserveBelow);
+  const boxOf = (node) => availableBox(node, main, panel, backRow, reserveBelow, step !== "none");
+  // D134: the reduced state draws a different canvas, so the spread arithmetic has to measure against the
+  // canvas actually being drawn rather than the full-depth probe it started from.
+  const activeProbe = () => (depthOn ? cascade.reduced : probe);
 
   // The spread that makes the canvas exactly fill the width once it is scaled to fit the height.
   const idealSpread = (node) => {
     const { width, height } = boxOf(node);
-    const kH = height / probe.layoutHeight;
-    const kW = width / probe.layoutWidth;
+    const p = activeProbe();
+    // D134: in the floor state the canvas is drawn at the floor, not at the height fit, so the spread has
+    // to fill the width at THAT scale or the field would be left narrow with black turf down both sides.
+    const kH = scrolls ? Math.max(height / p.layoutHeight, floor) : height / p.layoutHeight;
+    const kW = width / p.layoutWidth;
     return kW > kH ? Math.min(kW / kH, MAX_SPREAD) : 1;
   };
 
@@ -187,8 +289,59 @@ export function mountScaledField({ root, probe, build, onDraw, onScale, panel = 
   const idealMinHeight = (node) => {
     if (!fillHeight) return 0;
     const { width, height } = boxOf(node);
-    const kW = width / probe.layoutWidth;
+    const kW = width / activeProbe().layoutWidth;
     return kW > 0 ? height / kW : 0;
+  };
+
+  // Puts one step of the cascade in force. Only the page knows how to fold its own chrome away or to draw
+  // a shallower column, so this only flips the flags and calls the page's hooks; the caller redraws when
+  // the depth changed, since that is the one step whose markup is different.
+  const applyStep = (next) => {
+    if (next === step) return false;
+    step = next;
+    const wantDepth = steps.depth && (step === "depth" || step === "scroll") && !expandedFullDepth;
+    cascade.setCompact?.(step !== "none");
+    const redraw = wantDepth !== depthOn;
+    depthOn = wantDepth;
+    cascade.setDepth?.(wantDepth);
+    return redraw;
+  };
+
+  // Decides the step from the measured box. `fresh` (a real resize, or the first mount) first puts the
+  // chrome back to full size so the decision is made on honest numbers and the gain is re-learned; an
+  // ordinary refit reuses what folding it away was worth last time instead of flickering it open again.
+  // Returns { changed, redraw }: `changed` when the page is in a different state than it was (so the field
+  // has to be re-measured), `redraw` when that state also draws different markup (the depth step). A window
+  // that needs nothing returns neither, and the mount then behaves exactly as it did before this ruling.
+  // `memoryless` drops the hysteresis for the cold-load passes: it exists to stop a window being DRAGGED
+  // across the threshold from flipping back and forth, and a page that is still settling has no history
+  // worth protecting — without this, a decision made before the stylesheet had landed stayed locked in.
+  const chooseStep = (fresh, memoryless = false) => {
+    if (!floor || !el && !mountPoint) return { changed: false, redraw: false };
+    const was = step;
+    const wasScrolling = scrolls;
+    let redraw = false;
+    if (fresh && step !== "none") { redraw = applyStep("none") || redraw; headerGain = 0; }
+    const node = el ?? mountPoint;
+    const box = boxOf(node);
+    const expandedHeight = step === "none" ? box.height : box.height - headerGain;
+    const ask = (current) => chooseFitStep({
+      width: box.width, height: expandedHeight, headerGain, full: probe, reduced: cascade?.reduced || null,
+      floor, steps, current: memoryless ? "none" : current,
+    });
+    let decision = ask(step);
+    // What folding the header away is worth is MEASURED, not remembered, on every fresh decision: it is
+    // folded once, measured for real, and the decision then made on that number. Remembering it across
+    // loads is what let one cold load decide on a stale zero and take a step further down the cascade than
+    // the same window took on the load before it.
+    if (decision.step !== "none" && steps.header && fresh && step === "none") {
+      redraw = applyStep("header") || redraw;
+      headerGain = Math.max(boxOf(node).height - box.height, 0);
+      decision = ask("header");
+    }
+    redraw = applyStep(decision.step) || redraw;
+    scrolls = decision.scrolls;
+    return { changed: redraw || step !== was || scrolls !== wasScrolling, redraw };
   };
 
   const draw = () => {
@@ -204,14 +357,23 @@ export function mountScaledField({ root, probe, build, onDraw, onScale, panel = 
     lastK = null;
     // A rebuild must not replay the field's entrance animation (styles.css's `field-in` fade/scale):
     // replacing the element restarts it, which flashed the whole chart dark a beat after it appeared.
-    if (rebuilds) el.style.animation = "none";
+    // Counted per DRAW, not per spread rebuild (D134): a cascade step redraws too, and an entrance
+    // animation started late is held at its opening frame in a headless capture — an empty field.
+    if (draws++) el.style.animation = "none";
+    // D134: the "+N more" chips expand their own column in place; an expansion that would cover another
+    // card instead drops the depth cap and takes the floor-and-scroll state, where every row is drawn.
+    if (steps.depth) el.addEventListener("click", onExpandClick);
     onDraw?.(el, layout);
   };
 
   const apply = () => {
     if (!alive()) return;
     const { width, height } = boxOf(el);
-    const k = capToWidthFit(width / layout.layoutWidth, height / layout.layoutHeight);
+    const heightFit = height / layout.layoutHeight;
+    // D134: in the floor state the scale stops falling and the page scrolls instead. Never above the width
+    // fit — capToWidthFit is what guarantees no canvas is ever wider than the window (and so no horizontal
+    // scrollbar); outside that state this is exactly the arithmetic it always was.
+    const k = capToWidthFit(width / layout.layoutWidth, scrolls ? Math.max(heightFit, floor) : heightFit);
     // apply() resizes .field-outer, which wakes the ResizeObserver that called it - bailing out on a
     // scale that hasn't meaningfully moved breaks that feedback loop instead of ping-ponging forever.
     if (lastK !== null && Math.abs(k - lastK) < K_EPSILON) return;
@@ -230,8 +392,38 @@ export function mountScaledField({ root, probe, build, onDraw, onScale, panel = 
     onScale?.(el, layout, k);
   };
 
-  const refit = () => {
+  // Rebuilds the canvas at the spread the CURRENT box asks for, with a fresh rebuild budget. Used whenever
+  // the page changes state under the cascade — the old spread was chosen for a different amount of room.
+  const redrawAtIdealSpread = () => {
     if (!alive()) return;
+    rebuilds = 0;
+    spread = idealSpread(el);
+    minHeight = idealMinHeight(el);
+    draw();
+  };
+
+  // The click that expands a column. The overlap is measured after the browser has laid the extra rows
+  // out, hence the timer; a collision drops the depth cap for good until the next resize.
+  const onExpandClick = (e) => {
+    if (!e.target.closest(".depth-more")) return;
+    setTimeout(() => {
+      if (!alive() || expandedFullDepth || !expansionOverlaps(el)) return;
+      expandedFullDepth = true;
+      step = "none"; // force applyStep to run the transition rather than short-circuit on an equal step
+      applyStep("scroll");
+      scrolls = true;
+      spread = idealSpread(el);
+      draw();
+      apply();
+    }, 0);
+  };
+
+  const refit = (fresh = false, memoryless = false) => {
+    if (!alive()) return;
+    // D114/D134: a step change is redrawn at the EXACT ideal spread rather than left inside the rebuild
+    // tolerance, so the page lands on one number whatever order the settle passes and the step happened in
+    // — two renders of the same window have to come out identical.
+    if (cascadeReady && chooseStep(fresh, memoryless).changed) redrawAtIdealSpread();
     if (rebuilds < MAX_REBUILDS) {
       const ideal = idealSpread(el);
       const idealMin = idealMinHeight(el);
@@ -253,7 +445,9 @@ export function mountScaledField({ root, probe, build, onDraw, onScale, panel = 
   const refitFresh = () => {
     if (dead) return;
     clearTimeout(resizeTimer);
-    resizeTimer = setTimeout(() => { if (dead) return; rebuilds = 0; refit(); }, RESIZE_DEBOUNCE);
+    // D134: a real resize is a new question about the whole cascade too, so the step is re-decided from an
+    // un-folded header (`refit(true)`) rather than from whatever the last window needed.
+    resizeTimer = setTimeout(() => { if (dead) return; rebuilds = 0; expandedFullDepth = false; refit(true); }, RESIZE_DEBOUNCE);
     apply(); // respond immediately at the current spread; the rebuild follows once the drag settles
   };
 
@@ -262,7 +456,28 @@ export function mountScaledField({ root, probe, build, onDraw, onScale, panel = 
   draw();
   apply();
 
-  const stopSettle = settle(refit, () => dead);
+  // D134: the settle passes re-decide the STEP from an un-folded header too (`refit(true)`), so a state a
+  // mis-measured frame chose is never inherited — a page cannot stay compact on a window that fits.
+  const stopSettle = settle(() => refit(true, true), () => dead);
+  // ...and the cascade itself opens once the real font has landed (or a beat later, whichever comes first,
+  // since fonts.ready never resolves in some capture environments), with one refit to act on it.
+  // ...and it touches the page only when a step actually changes: on a window that needs no step this adds
+  // no measurement, no rebuild and no redraw, which is what keeps a big window's render exactly as it is.
+  const cascadeOpen = () => {
+    if (dead || cascadeReady || !alive()) return;
+    cascadeReady = true;
+    if (chooseStep(true, true).changed) refit(true, true);
+  };
+  const cascadeTimer = floor ? setTimeout(cascadeOpen, SETTLE_DELAYS[2]) : null;
+  if (floor) document.fonts?.ready.then(cascadeOpen).catch(() => {});
+  // One last pass, after every settle pass has run, for a page that DID take a step: its spread was chosen
+  // somewhere in the middle of folding the header away, and the rebuild tolerance would leave it there. A
+  // page at step "none" is not touched at all, so a window that needs nothing renders exactly as it did.
+  const finalTimer = floor ? setTimeout(() => {
+    if (dead || !alive() || step === "none") return;
+    redrawAtIdealSpread();
+    apply();
+  }, SETTLE_DELAYS[SETTLE_DELAYS.length - 1] + 60) : null;
   window.addEventListener("resize", refitFresh);
   let ro = null;
   if (typeof ResizeObserver !== "undefined") {
@@ -284,6 +499,8 @@ export function mountScaledField({ root, probe, build, onDraw, onScale, panel = 
   const dispose = () => {
     dead = true;
     clearTimeout(resizeTimer);
+    clearTimeout(cascadeTimer);
+    clearTimeout(finalTimer);
     stopSettle();
     window.removeEventListener("resize", refitFresh);
     ro?.disconnect();

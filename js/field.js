@@ -90,6 +90,13 @@ const OUT_RAIL_H = 15;
 // margin, on the team, matchup AND side pages alike.
 const LABEL_RESERVE = 17;
 export const MAX_DEPTH_ROWS = 3; // ruling E: at most three depth rows, the third becoming "+N more"
+// D134 (Adam, 2026-09-17): the small-screen "less depth" step draws one backup per column and collapses the
+// rest behind a "+N more" chip that EXPANDS THAT COLUMN in place, so the chip is an extra line of its own
+// rather than ruling E's tail replacing the last row. It carries one short italic word, no jersey number,
+// rating pill or snap trio, so it is reserved (and drawn — styles.css's `.prow-more.depth-more`) shorter
+// than a player row; every unit it costs is a unit off the constant canvas every club is scaled to (D107).
+export const REDUCED_DEPTH_ROWS = 1;
+const DEPTH_CHIP_H = 14;
 // D72: the single-unit (offense/defense) pages draw half as many rows, so the fit engine scales them to
 // roughly 1.3-1.8x — room for a small headshot on line one, the SAME row renderer widened by an option
 // (cards.js's overviewLineOne), never a second card type. HEADSHOT_PAD is the air above/below it, so the
@@ -181,7 +188,24 @@ const secondaryDropOf = (rowModel, rowKey, band) =>
 // starter's row, and a "not on chart" tray — so the half is actually max(BOTH_SIDES_HALF, this club's own
 // natural halves): no club reaches the constant today, and one that did would grow its own canvas rather
 // than draw its rows through each other.
-const DEF_ROW_FULL_H = LABEL_RESERVE + CARD_H1 + MAX_DEPTH_ROWS * (ROW_H + CARD_GAP);
+// D134: the same sum for whatever depth cap the page is drawing at — the reduced state's chip is an extra
+// short line, so a full column there is the label, the line-one row, one backup and the chip. The default
+// argument reproduces today's number exactly, so nothing about the full-depth canvas moves.
+//
+// The reduced state also reserves D44's BANNER on that line-one row, which the full-depth constant leaves
+// to slack. Measured across the league (2026-09-17): at the bare cap 10 of 32 clubs drew a taller canvas
+// than the constant, because an out starter's banner costs more than the cap saves; reserving it brings 29
+// of 32 onto one canvas, which is the same standing an ordinary club has today (New Orleans already draws
+// taller than the full-depth constant). A column carrying D104's rail as well is still taller than any
+// constant that would be worth having — 121 units against this 87 — so those clubs grow their own canvas
+// exactly the way a too-tall club always has.
+function defRowFullH(style = {}) {
+  const cap = style.maxDepthRows ?? MAX_DEPTH_ROWS;
+  const rowH = style.rowH ?? ROW_H;
+  const gap = style.cardGap ?? CARD_GAP;
+  return LABEL_RESERVE + CARD_H1 + cap * (rowH + gap) + (style.depthChip ? DEPTH_CHIP_H + gap + BANNER_H : 0);
+}
+const DEF_ROW_FULL_H = defRowFullH();
 // D111/D121: with the secondary on one row, DEF_ROW_ORDER.length is 4 rather than 5, and D121's corner drop
 // is reserved on top of it — BOTH_SIDES_HALF/BOTH_SIDES_HEIGHT are currently 467 / 1014 and stay DERIVED,
 // never hardcoded, so a future ruling that adds or removes a defensive row moves the canvas with it.
@@ -190,11 +214,20 @@ const DEF_LEVEL_BOUNDARIES = DEF_ROW_ORDER.reduce(
 // D121: the SECONDARY row's own reserved height grows by the drop (its deepest column may now be a dropped
 // corner), so the constant half grows with it — one number for every club (D107), never per club, and the
 // offensive half matches it (D96). Zero when the two-row secondary is in force, which has no drop.
-export const BOTH_SIDES_HALF = DEF_ROW_ORDER.length * DEF_ROW_FULL_H
-  + (DEF_ROW_ORDER.length - 1) * BAND_GAP
-  + DEF_LEVEL_BOUNDARIES * LEVEL_GAP_EXTRA
-  + (SECONDARY_ONE_ROW ? SECONDARY_CORNER_DROP : 0);
-export const BOTH_SIDES_HEIGHT = MARGIN_TOP + BOTH_SIDES_HALF + 2 * LOS_HALF_GAP + BOTH_SIDES_HALF + MARGIN_BOTTOM;
+// D134: the constant is now a function of the depth cap the page is drawing at, derived exactly the way it
+// always was; with no style it is the full-depth number every club renders on today (467 / 1014).
+export function bothSidesHalf(style = {}) {
+  return DEF_ROW_ORDER.length * defRowFullH(style)
+    + (DEF_ROW_ORDER.length - 1) * BAND_GAP
+    + DEF_LEVEL_BOUNDARIES * LEVEL_GAP_EXTRA
+    + (SECONDARY_ONE_ROW ? SECONDARY_CORNER_DROP : 0);
+}
+export function bothSidesHeight(style = {}) {
+  const half = bothSidesHalf(style);
+  return MARGIN_TOP + half + 2 * LOS_HALF_GAP + half + MARGIN_BOTTOM;
+}
+export const BOTH_SIDES_HALF = bothSidesHalf();
+export const BOTH_SIDES_HEIGHT = bothSidesHeight();
 
 // D108 — a single-unit side page's rows used to sit flush against MARGIN_TOP/MARGIN_BOTTOM, reading as
 // pinned to the frame. One row pitch (BAND_GAP + LEVEL_GAP_EXTRA) is now inset above the first row and
@@ -332,6 +365,9 @@ export function layoutStyle(opts = {}) {
   const side = !!opts.headshot;
   return {
     headshot: side ? HEADSHOT_SIZE : 0,
+    // D134: `depthChip` is the reduced state's own flag — the "+N more" chip becomes an expanding extra
+    // line instead of ruling E's tail, and a demoted OUT starter's rail is never collapsed behind it.
+    depthChip: !!opts.depthChip,
     maxDepthRows: opts.maxDepthRows ?? MAX_DEPTH_ROWS,
     cardWidth: opts.cardWidth ?? CARD_W,
     rowH: side ? SIDE_ROW_H : ROW_H,
@@ -391,18 +427,32 @@ export function visibleDepthRows(players, maxRows = MAX_DEPTH_ROWS) {
   return Math.min(Math.max(players.length - lineOneCount(players), 0), maxRows);
 }
 
-// D104: how many of the demoted OUT rows are actually DRAWN, which is what the reserved box has to pay the
-// OUT_RAIL_H for. The "+N more" tail spends one of the visible places whenever anything is hidden, so the
-// out rows can only fill what is left of the cap. This is the same arithmetic cards.js's renderColumn does
-// when it decides how many places keepOutRowsVisible may fill — the two are kept in step deliberately, the
-// way lineOneCount/visibleDepthRows already are, so the box and the markup cannot drift apart.
-export function shownOutRows(players, style = {}) {
-  const demoted = outFillInDemotion(players);
-  if (!demoted) return 0;
-  const visible = visibleDepthRows(players, style.maxDepthRows);
+// How a column's depth rows divide up, in ONE place, so the reserved box (slotContentHeight below) and the
+// drawn markup (cards.js's renderColumn) can never disagree about them:
+//   rows   how many slim rows are drawn under the line-one block
+//   rails  how many of those carry D104's red OUT rail (and therefore cost OUT_RAIL_H more)
+//   chip   whether a "+N more" tail is drawn at all
+// Ruling E's normal state is unchanged: the tail REPLACES the last visible row, and the rails take their
+// places inside the cap (keepOutRowsVisible's own arithmetic). D134's reduced state instead draws `cap`
+// ordinary rows, never collapses a rail, and gives the chip a short line of its own.
+export function depthPlan(players, style = {}) {
   const depthCount = Math.max(players.length - lineOneCount(players), 0);
-  const places = depthCount > visible ? Math.max(visible - 1, 0) : visible;
-  return Math.min(demoted, places);
+  const cap = style.maxDepthRows ?? MAX_DEPTH_ROWS;
+  const demoted = outFillInDemotion(players);
+  if (!style.depthChip) {
+    const rows = Math.min(depthCount, cap);
+    const places = depthCount > rows ? Math.max(rows - 1, 0) : rows;
+    return { rows, rails: Math.min(demoted, places), chip: depthCount > rows, chipRow: false };
+  }
+  const rails = demoted; // D134: the injury rail is the column's whole point; it is never hidden
+  const rows = Math.min(Math.max(depthCount - rails, 0), cap) + rails;
+  return { rows, rails, chip: depthCount > rows, chipRow: depthCount > rows };
+}
+
+// D104: how many of the demoted OUT rows are actually DRAWN, which is what the reserved box has to pay the
+// OUT_RAIL_H for. Kept as its own name because the tests and cards.js both ask exactly this question.
+export function shownOutRows(players, style = {}) {
+  return depthPlan(players, style).rails;
 }
 
 // A slot's real rendered content height: the column's own label pill (which lives inside this box —
@@ -417,12 +467,12 @@ function slotContentHeight(slot, style) {
   const cardGap = style.cardGap ?? CARD_GAP;
   let h = LABEL_RESERVE;
   for (let i = 0; i < bold; i++) h += lineOneHeight(ordered[i], style) + (i ? cardGap : 0);
-  const visible = visibleDepthRows(players, style.maxDepthRows);
   // D104: the demoted OUT rows are slim rows that also carry a red rail, so they each cost OUT_RAIL_H more
   // than the healthy rows beside them. They are never the rows that collapse behind "+N more" (that is the
   // whole point of moving them), so the count is known here without knowing which players they are.
-  const outRows = shownOutRows(players, style);
-  h += visible * (rowH + cardGap) + outRows * OUT_RAIL_H;
+  const plan = depthPlan(players, style);
+  h += plan.rows * (rowH + cardGap) + plan.rails * OUT_RAIL_H;
+  if (plan.chipRow) h += DEPTH_CHIP_H + cardGap; // D134: the expanding chip is its own short line
   return h;
 }
 
@@ -1112,7 +1162,7 @@ export function computeLayout(teamView, opts = {}) {
     // above): a club taller than the constant grows its own canvas instead of compressing its rows.
     const defMin = naturalSpanHeight(defRowsTopDown);
     const offMin = naturalSpanHeight(offRowsTopDown);
-    const half = Math.max(BOTH_SIDES_HALF, defMin, offMin);
+    const half = Math.max(bothSidesHalf(style), defMin, offMin);
     const spreadGap = (rows, natural) => (rows.length > 1 && half > natural) ? (half - natural) / (rows.length - 1) : 0;
     placeSpan(defRowsTopDown, MARGIN_TOP, spreadGap(defRowsTopDown, defMin));
     // D107: the half boundaries are the constant's, not the rows' — a defence with fewer rows than the
@@ -1376,5 +1426,5 @@ export function renderFieldSvg(layoutHeight, losY, layoutWidth = LAYOUT_WIDTH, c
 // Exported so tests read these numbers from here instead of hardcoding literals that go stale silently the
 // moment a ruling moves a constant — a test states the RELATIONSHIP (a corner is CB_PITCH_FROM_CENTER pitches
 // off the centre; two cards never come closer than MIN_CARD_GAP) rather than a specific number.
-export const geometry = { CARD_W, CARD_H1, ROW_H, SIDE_ROW_H, CARD_GAP, SIDE_CARD_GAP, BANNER_H, OUT_RAIL_H, LABEL_RESERVE, MAX_DEPTH_ROWS, HEADSHOT_SIZE, BAND_GAP, LEVEL_GAP_EXTRA, LOS_HALF_GAP, MARGIN_TOP, MARGIN_BOTTOM, SIDE_INSET, DEF_ROW_FULL_H, DEF_ROW_COUNT: DEF_ROW_ORDER.length, DEF_LEVEL_BOUNDARIES, BOTH_SIDES_HALF, BOTH_SIDES_HEIGHT, MIN_PITCH, MIN_CARD_GAP, EDGE_PITCH_OUT, ILB_PITCH_FROM_CENTER, PASS_CATCHER_PITCH, SECONDARY_CORNER_DROP,
+export const geometry = { CARD_W, CARD_H1, ROW_H, SIDE_ROW_H, CARD_GAP, SIDE_CARD_GAP, BANNER_H, OUT_RAIL_H, LABEL_RESERVE, MAX_DEPTH_ROWS, REDUCED_DEPTH_ROWS, DEPTH_CHIP_H, HEADSHOT_SIZE, BAND_GAP, LEVEL_GAP_EXTRA, LOS_HALF_GAP, MARGIN_TOP, MARGIN_BOTTOM, SIDE_INSET, DEF_ROW_FULL_H, DEF_ROW_COUNT: DEF_ROW_ORDER.length, DEF_LEVEL_BOUNDARIES, BOTH_SIDES_HALF, BOTH_SIDES_HEIGHT, MIN_PITCH, MIN_CARD_GAP, EDGE_PITCH_OUT, ILB_PITCH_FROM_CENTER, PASS_CATCHER_PITCH, SECONDARY_CORNER_DROP,
   S_PITCH_FROM_CENTER, NB_PITCH_FROM_CENTER, CB_PITCH_FROM_CENTER };

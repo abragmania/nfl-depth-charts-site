@@ -9,12 +9,13 @@
 // Route #/matchup/:a/:b renders A-offense-over-B-defense; #/matchup/:a alone resolves B from A's
 // header.nextOpponent (this week's schedule) and redirects, or shows a picker on a bye week.
 import { getTeams, getTeam } from "./api.js";
-import { esc, renderColumn, renderTray, fitNames } from "./cards.js";
+import { esc, renderColumn, renderTray, fitNames, wireDepthToggles } from "./cards.js";
 import { computeLayout, renderFieldSvg, renderLevelLabels, FIELD_VARIANT, SECONDARY_ONE_ROW } from "./field.js";
-import { mountScaledField, disposeCurrentView } from "./viewfit.js";
+import { mountScaledField, disposeCurrentView, MIN_READABLE_SCALE } from "./viewfit.js";
 import { navStripHtml, wireNav } from "./nav.js";
 import { isLightWash } from "./landing.js";
-import { legendHtml } from "./team.js"; // D111: one legend, drawn on both pages (see matchupLegendHtml)
+// D111: one legend, drawn on both pages (see matchupLegendHtml). D134: one reduced-depth option object too.
+import { legendHtml, REDUCED_DEPTH_OPTS } from "./team.js";
 
 const dash = "\u2014";
 const record = (r) => (r ? `${r.wins}-${r.losses}${r.ties ? "-" + r.ties : ""}` : dash);
@@ -94,9 +95,9 @@ function halfBannerHtml(team, unitWord, pos) {
 // Each column is tinted with the colours of the team it actually belongs to, so a glance at any row says
 // whose players those are without reading the header — the one thing a single shared field wash cannot do
 // when two teams are on it.
-function fieldHtml(viewA, viewB, teamA, teamB, spread) {
+function fieldHtml(viewA, viewB, teamA, teamB, spread, depthOpts = null) {
   const view = facingView(viewA, viewB);
-  const layout = computeLayout(view, { spread });
+  const layout = computeLayout(view, { ...(depthOpts || {}), spread });
   const slotLookup = slotLookupFor(viewA, viewB);
   const colour = (t) => `--team-primary:${t.colourPrimary};--team-secondary:${t.colourSecondary}`;
   const columnsHtml = layout.columns.map((c) => {
@@ -145,6 +146,18 @@ function logoPlate(team, extraClass) {
 // OUT_STATUS_CODES.
 const matchupLegendHtml = () => (SECONDARY_ONE_ROW ? legendHtml("legend-matchup") : "");
 
+// D134 step 1 on this page: on a window too short to draw the field readably the two 32px half banners fold
+// away, and the one thing they alone were saying — which club is on offense and which on defense (D113) —
+// becomes a small chip beside that club's own name in the header, which is always rendered and only shown
+// in the compact state (styles.css's `.matchup.is-compact`). So the fact never disappears, it just moves.
+const unitChipHtml = (unit) => `<span class="matchup-unit-chip">${esc(unit)}</span>`;
+
+// The compact state itself: one class on the page root drives the banners, the key and the header's own
+// tighter type, so switching states re-renders nothing and the field underneath cannot shake (D114).
+function setMatchupCompact(root, on) {
+  root.querySelector(".matchup")?.classList.toggle("is-compact", on);
+}
+
 // D113 (Adam, 2026-09-16): the centre block used to print its own "A offense vs B defense" line here — the
 // exact small grey text that read as "Denver's positions rewritten" rather than "Jacksonville's defence".
 // That announcement now lives on the field itself, as a full-width banner in each club's own colours
@@ -161,7 +174,7 @@ function headerHtml(teamA, teamB, viewA, viewB, teams) {
     <div class="matchup-team matchup-team-a${inkA}" style="--team-primary:${teamA.colourPrimary};--team-secondary:${teamA.colourSecondary}">
       ${logoPlate(teamA)}
       <div class="matchup-team-info">
-        <div class="matchup-team-name">${esc(teamA.name)}</div>
+        <div class="matchup-team-name">${esc(teamA.name)}${unitChipHtml("OFFENSE")}</div>
         <div class="matchup-team-sub">Record ${record(recA)}</div>
         ${heatSummaryHtml(viewA)}
       </div>
@@ -175,7 +188,7 @@ function headerHtml(teamA, teamB, viewA, viewB, teams) {
     </div>
     <div class="matchup-team matchup-team-b${inkB}" style="--team-primary:${teamB.colourPrimary};--team-secondary:${teamB.colourSecondary}">
       <div class="matchup-team-info matchup-team-info-right">
-        <div class="matchup-team-name">${esc(teamB.name)}</div>
+        <div class="matchup-team-name">${esc(teamB.name)}${unitChipHtml("DEFENSE")}</div>
         <div class="matchup-team-sub">Record ${record(recB)}</div>
         ${heatSummaryHtml(viewB)}
       </div>
@@ -353,13 +366,21 @@ function matchupReserveBelow(root) {
 // team's page a click should open. Everything else — measure, spread, draw, rescale, rebuild, settle,
 // dispose — is viewfit.js's mountScaledField, shared with team.js.
 function mountMatchupField(root, viewA, viewB, teamA, teamB) {
+  const view = facingView(viewA, viewB);
+  let depthOpts = null; // D134: set by the cascade's setDepth hook, read by every build from here on
   return mountScaledField({
     root,
-    probe: computeLayout(facingView(viewA, viewB)),
-    build: (spread) => fieldHtml(viewA, viewB, teamA, teamB, spread),
+    probe: computeLayout(view),
+    build: (spread) => fieldHtml(viewA, viewB, teamA, teamB, spread, depthOpts),
     observe: [root.querySelector(".nav-strip"), root.querySelector(".matchup-head")],
     reserveBelow: () => matchupReserveBelow(root), // D114: account for the bottom half-banner strip
-    onDraw: (el) => { fitNames(el); wireMatchupClicks(el, teamA, teamB); },
+    cascade: {
+      floor: MIN_READABLE_SCALE,
+      reduced: computeLayout(view, REDUCED_DEPTH_OPTS),
+      setCompact: (on) => setMatchupCompact(root, on),
+      setDepth: (on) => { depthOpts = on ? REDUCED_DEPTH_OPTS : null; },
+    },
+    onDraw: (el) => { fitNames(el); wireDepthToggles(el); wireMatchupClicks(el, teamA, teamB); },
     onScale: (el) => fitNames(el),
   });
 }

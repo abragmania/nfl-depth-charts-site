@@ -128,6 +128,9 @@ main.page-landing { padding:10px 20px 12px; }
 .teamhead { display:flex; align-items:center; gap:14px; padding:5px 14px; border-radius:10px; color:#fff; flex-wrap:wrap;
   background:linear-gradient(110deg, var(--team-primary) 0 60%, var(--team-secondary) 160%); }
 .teamhead img { width:38px; height:38px; object-fit:contain; flex:none; }
+/* D134 step 1 on the whole-team page: with the key folded into its chip the banner is back to the height
+   of its own crest, and the padding tightens a shade. Everything the header says stays on it. */
+.teamhead-compact { padding:3px 14px; }
 .teamhead h1 { margin:0; font-size:19px; white-space:nowrap; }
 .teamhead-main { min-width:0; display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
 .teamhead .meta { display:flex; gap:14px; align-items:center; color:rgba(255,255,255,.88); font-size:12.5px; flex-wrap:wrap; }
@@ -377,6 +380,24 @@ a.back { color:var(--muted); }
 .legend-matchup .sw { width:8px; height:8px; border-radius:2px; margin-right:3px; }
 .legend-matchup .tier-strip { height:8px; width:42px; margin-right:3px; }
 
+/* D134 (Adam, 2026-09-17): on a window too short to draw the field readably the key must not wrap to a
+   second or third line — at 1536x800 it was taking four, and every one of them came out of the field. It
+   collapses to this one chip, which shows the whole key on hover or keyboard focus; `.legend-items` is
+   `display:contents` until then, so on every window big enough today the six items are still direct flex
+   children of `.legend` and the banner renders pixel-for-pixel as it did. */
+.legend-items { display:contents; }
+.legend-chip { display:none; font:inherit; font-weight:700; color:inherit; cursor:default;
+  background:rgba(0,0,0,.28); border:1px solid rgba(255,255,255,.22); border-radius:20px; padding:2px 10px; }
+.legend-collapsed { position:relative; flex:0 0 auto; background:none; padding:0; overflow:visible; }
+.legend-collapsed .legend-chip { display:inline-block; }
+.legend-collapsed .legend-items { display:flex; flex-wrap:wrap; gap:3px 9px; align-items:center;
+  position:absolute; right:0; top:calc(100% + 6px); z-index:6; width:max-content; max-width:min(560px, 80vw);
+  padding:7px 10px; border-radius:8px; background:#12161b; border:1px solid #2a323b;
+  box-shadow:0 8px 20px rgba(0,0,0,.55); color:var(--ink);
+  opacity:0; visibility:hidden; transition:opacity .12s ease; }
+.legend-collapsed:hover .legend-items, .legend-collapsed:focus-within .legend-items { opacity:1; visibility:visible; }
+.legend-collapsed .legend-items b { color:#fff; }
+
 /* Adam (2026-09-11): "levels of guys visually" — DL on the line, EDGE its own layer (D14), LBs next,
    then DBs, each with generous vertical separation (field.js's LEVEL_GAP_EXTRA) and one faint label at
    the field's left edge, vertically centred on that level's whole span. Non-interactive overlay, always
@@ -618,6 +639,13 @@ a.back { color:var(--muted); }
 .prow-more { display:flex; align-items:center; justify-content:center; min-height:18px; font-size:9.5px; font-style:italic;
   color:var(--muted); background:transparent; border:1px dashed #333b45; }
 .prow-more:hover { color:#c3cad2; border-color:#6b7885; }
+/* D134: the reduced state's own tail is a BUTTON that expands this column in place (cards.js's
+   depthMoreChip, wired by wireDepthToggles) rather than ruling E's link to the group page. It carries one
+   short word — no jersey number, rating pill or snap trio — so field.js reserves DEPTH_CHIP_H (14) for it
+   instead of a full row, and this pins the drawn chip to exactly that height so the two agree. */
+.column .prow-more.depth-more { min-height:14px; height:14px; padding:0 6px; font-size:10.5px; line-height:1;
+  border-radius:var(--r-row); align-self:auto; }
+.column .prow-more.depth-more[aria-expanded="true"] { border-style:solid; color:#c3cad2; }
 .prow-signals { flex:none; display:inline-flex; gap:1px; align-items:center; }
 /* The compact rows put a real badge in a 15px-tall line, so the shared .badge sizing is scaled down here
    (and only here — zoom.js/matchup.js badges keep their normal size). */
@@ -685,6 +713,24 @@ a.back { color:var(--muted); }
 /* D104's rail on the demoted OUT row at the foot of the column — the same step up, inside the OUT_RAIL_H
    field.js reserves for it (15: a 13px strip plus its 2px of margin, over a 20px row). */
 .column-compact .prow-outrail .card-banner { height:13px; line-height:13px; font-size:9.5px; }
+
+/* ---- D135: a name is never cut while its row still has room ----------------------------------------
+   Adam, 2026-09-17: Seattle's nickel read "N. Emmanw…" on the Defense page with about 25px of the row
+   unused between the headshot and the jersey number, while the Team page printed "Nick Emmanwori" in full.
+   Only a row whose name would otherwise be cut takes these rules — cards.js's fitNames measures first and
+   adds the class — so a row that already fits renders exactly as it did before the ruling. The width comes
+   back from the two places that were reserving it for nothing: the jersey number's fixed gutter (15/17px
+   for a one-digit number, right-aligned, which is what left the hole beside the photo) and the 4px gaps
+   either side of it. Nothing the row is FOR gives way here: the rating pill, the status badges, the PS
+   badge and the snap trio are untouched at every step (the give-up list lives in cards.js). */
+.prow-tight .prow-line { gap:2px; }
+.prow-one.prow-tight .prow-main { gap:2px; }
+.prow-tight .prow-num { min-width:0; }
+.prow-one.prow-tight .prow-head { margin-right:0; }
+/* An extra the row has handed over to its own name. `display:none` rather than a width tweak: it has to
+   stop costing its flex gap as well as its own width, and it must come back the moment the row is
+   re-measured at a size where it fits (fitNames clears these on every pass). */
+.prow-given-up { display:none !important; }
 
 /* Card surface. Height is set inline per card (field.js's geometry — normal or +banner) so CSS never
    fights the layout engine's own math; box-shadow/background below are the D43 rating-tier surface,
@@ -923,6 +969,30 @@ a.back { color:var(--muted); }
 .matchup-half-banner-text { font-size:15px; font-weight:800; letter-spacing:.04em; text-transform:uppercase;
   white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .matchup-half-banner-dot { opacity:.65; margin:0 2px; }
+
+/* ---- D134 step 1 on the matchup page: the compact header -------------------------------------------
+   Adam, 2026-09-17: on a window too short to draw the field readably (a backup's name was about 5px here)
+   the two 32px half banners and the key fold away and the header itself tightens — together about 130px of
+   chrome handed back to the field. Nothing the banners alone said is lost: D113's "which club is on
+   offense and which on defense" moves into the chip beside each club's own name, and the club names and
+   crests stay exactly where they were, just smaller. One class on `.matchup` drives all of it, so entering
+   or leaving the state re-renders nothing (D114: the field must not shake). */
+.matchup-unit-chip { display:none; font-size:10px; font-weight:800; letter-spacing:.08em; white-space:nowrap;
+  padding:2px 7px; border-radius:20px; background:rgba(0,0,0,.34); border:1px solid rgba(255,255,255,.25); }
+.matchup-team-light .matchup-unit-chip { background:rgba(255,255,255,.4); border-color:rgba(0,0,0,.22); }
+.matchup.is-compact .matchup-unit-chip { display:inline-block; }
+.matchup.is-compact .matchup-half-banner { display:none; }
+.matchup.is-compact .legend-matchup { display:none; }
+.matchup.is-compact .matchup-head { padding:5px 12px; gap:12px; }
+.matchup.is-compact .matchup-team { padding:4px 10px; gap:10px; }
+.matchup.is-compact .matchup-logo { width:34px; height:34px; padding:3px; }
+.matchup.is-compact .matchup-team-info { display:flex; align-items:baseline; gap:10px; }
+.matchup.is-compact .matchup-team-b .matchup-team-info { flex-direction:row-reverse; }
+.matchup.is-compact .matchup-team-name { font-size:15px; display:inline-flex; align-items:center; gap:8px; }
+.matchup.is-compact .matchup-team-sub { margin-top:0; }
+/* The injury line is the one thing that goes: it is a sentence, it is the tallest item in the block, and
+   the same summary is a chip on each club's own team page. */
+.matchup.is-compact .matchup-team-heat { display:none; }
 
 /* D113: the field engine's own tiny "DEFENSE"/"OFFENSE" corner caption (field.js's renderFieldSvg) is
    redundant with the full-width banner above and repeats it in the same corner — hidden on the matchup

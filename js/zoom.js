@@ -21,7 +21,7 @@ import { getTeams, getTeam, invalidateTeam } from "./api.js";
 import { esc, BAND_DISPLAY, headshotHtml, wireDepthToggles, isFullyOut, isScratch, psBadge, snapHistoryHtml } from "./cards.js";
 import { headerHtml, mountTeamField, teamBodyHtml } from "./team.js";
 import { SIDE_CARD_W, SIDE_MAX_DEPTH_ROWS, regroupSlotReceivers, columnRankReason } from "./field.js";
-import { fitToViewport, disposeCurrentView } from "./viewfit.js";
+import { fitToViewport, disposeCurrentView, SIDE_MIN_READABLE_SCALE } from "./viewfit.js";
 import { navStripHtml, wireNav } from "./nav.js";
 
 // Which unit a #/team/X/group/BAND route belongs to, and what each band is called in prose. D72 retired
@@ -377,7 +377,9 @@ export async function renderZoomSide(root, search, abbr, unit) {
   wireHeaderControls(root, A, view, team, () => renderZoomSide(root, search, A, unit), unit === "OFF" ? "off" : "def");
   // mountTeamField registers its own teardown with viewfit.js. It is the team page's own mount: the same
   // measure/spread/draw/rescale/settle loop, the same delegated card clicks, the same name-fitting pass.
-  if (hasSlots) mountTeamField(root, sideView, team, A, SIDE_LAYOUT);
+  // D134: these pages take step (3) only — no chrome to fold and no depth to give up, since they already
+  // fit at laptop sizes. Their own floor, because a backup row here prints at the base 11px, not 12.5px.
+  if (hasSlots) mountTeamField(root, sideView, team, A, SIDE_LAYOUT, { floor: SIDE_MIN_READABLE_SCALE });
 }
 
 // ---- group view (one position group, every slot side by side) ----
