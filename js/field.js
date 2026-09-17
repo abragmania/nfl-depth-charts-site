@@ -416,13 +416,15 @@ const NB_PITCH_OUT = 1;
 // D119 (Adam, 2026-09-16, the DEFENSE side page alone): "offense looks better than defense — defense is
 // too spread out and the CBs are too far to the outside of the page." On the team and matchup pages the
 // corners MUST reach both sidelines (D71/D110), because the offence is on the same canvas; a defence drawn
-// on its own has no such duty, so its front and secondary are pitched off the CENTRE instead of off the
-// tackles. The outermost column then sits 2.5 pitches out (~1210 units across) against the offense page's
-// ~1162, so the two pages read as the same size chart. Only a defence-with-no-offence layout reads these.
+// on its own has no such duty, so its SECONDARY is pitched off the CENTRE instead of off the tackles. The
+// outermost column then sits 2.5 pitches out (~1210 units across) against the offense page's ~1162. The
+// side pages share one uncropped canvas (D75), so card size never changed — only the spacing tightens.
+// The front is untouched: edge rushers keep D116's spot just outside the tackles on every page, so a 3-4's
+// outside linebackers never draw inside their own defensive ends. Only a defence-with-no-offence layout
+// reads these.
 const SIDE_DEF_CB_PITCH_FROM_CENTER = 2.5;
 const SIDE_DEF_NB_PITCH_FROM_CENTER = 1.5;  // one pitch inside the left corner, one outside the left safety
 const SIDE_DEF_S_PITCH_FROM_CENTER = 0.5;   // two safeties exactly MIN_PITCH apart, straddling the centre
-const SIDE_DEF_EDGE_PITCH_FROM_CENTER = 1.9; // was the tackles ∓ EDGE_PITCH_OUT, i.e. 2.2 pitches off centre
 // Vertical air between two columns stacked on the same x (TE2 under TE1).
 const STACK_GAP = 8;
 // D72: the margin left on each side of a cropped single-unit canvas, so the outermost column is not flush
@@ -1100,8 +1102,8 @@ function mirrorLandmarks(olCols, sideDefense = false) {
   const pitch = Math.max(LG - LT, MIN_PITCH);
   // D112/D116: edge rushers stand just outside the tackle, not out at the corner's landmark.
   // D119: on the defense page alone they come in another 0.3 of a pitch, measured off the centre.
-  const EDGE_L = sideDefense ? C - SIDE_DEF_EDGE_PITCH_FROM_CENTER * pitch : LT - EDGE_PITCH_OUT * pitch;
-  const EDGE_R = sideDefense ? C + SIDE_DEF_EDGE_PITCH_FROM_CENTER * pitch : RT + EDGE_PITCH_OUT * pitch;
+  const EDGE_L = LT - EDGE_PITCH_OUT * pitch;
+  const EDGE_R = RT + EDGE_PITCH_OUT * pitch;
   // D116: the inside linebackers stand just inside the guards, not on top of them, so they read as clearly
   // inside their neighbouring EDGE column rather than sharing a landmark with the safeties (which stay on
   // the guards themselves — see the "S" case below, untouched by this ruling).
@@ -1683,4 +1685,4 @@ export function renderFieldSvg(layoutHeight, losY, layoutWidth = LAYOUT_WIDTH, c
 // so a test that wants to state "the canvas is this many full rows plus its gaps" can read the count from
 // here instead of hard-coding the 5 that D111 turned into a 4.
 export const geometry = { CARD_W, CARD_H1, ROW_H, SIDE_ROW_H, CARD_GAP, SIDE_CARD_GAP, BANNER_H, OUT_RAIL_H, LABEL_RESERVE, MAX_DEPTH_ROWS, HEADSHOT_SIZE, BAND_GAP, LEVEL_GAP_EXTRA, LOS_HALF_GAP, MARGIN_TOP, MARGIN_BOTTOM, SIDE_INSET, DEF_ROW_FULL_H, DEF_ROW_COUNT: DEF_ROW_ORDER.length, DEF_LEVEL_BOUNDARIES, BOTH_SIDES_HALF, BOTH_SIDES_HEIGHT, MIN_PITCH, MIN_CARD_GAP, CB_PITCH_OUT, EDGE_PITCH_OUT, ILB_PITCH_FROM_CENTER, PASS_CATCHER_PITCH,
-  SIDE_DEF_CB_PITCH_FROM_CENTER, SIDE_DEF_NB_PITCH_FROM_CENTER, SIDE_DEF_S_PITCH_FROM_CENTER, SIDE_DEF_EDGE_PITCH_FROM_CENTER };
+  SIDE_DEF_CB_PITCH_FROM_CENTER, SIDE_DEF_NB_PITCH_FROM_CENTER, SIDE_DEF_S_PITCH_FROM_CENTER };

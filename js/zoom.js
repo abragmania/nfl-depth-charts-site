@@ -328,8 +328,8 @@ function unitView(view, unit) {
 // rather than a second engine:
 //   crop          shrink-wrap the canvas to this unit's own columns, so the fit engine can scale a short
 //                 chart up to fill the window instead of being pinned by a canvas it is not using;
-//   fillHeight    and where the width still pins the scale (a defense, whose corners reach both
-//                 sidelines over only four rows), spend the leftover height as air between the rows;
+//   fillHeight    and where the width still pins the scale (a defense drawn over only four rows),
+//                 spend the leftover height as air between the rows;
 //   headshot      at the ~1.3-1.8x scale that produces, a line-one row has room for a small photo;
 //   cardWidth     which it pays for out of a wider column, not out of the player's name;
 //   maxDepthRows  and one more backup before the "+N more" tail.
