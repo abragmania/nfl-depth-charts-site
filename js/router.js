@@ -1,4 +1,4 @@
-// Hash router. Routes: #/  |  #/team/KC  |  #/team/KC/player/{id} (the player panel sub-route arrives in milestone 6).
+// Hash router. Routes: #/  |  #/team/KC  |  #/team/KC/player/{id}
 const routes = [];
 
 export function on(pattern, handler) {

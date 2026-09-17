@@ -23,9 +23,8 @@ function switcherOptionsHtml(teams, abbr) {
 //   bandSlug       group page only — the band's route segment (lower-cased band code), for the switcher
 //   opponentAbbr   matchup page only — team B, for the "A team page · B team page" links
 //   primary/secondary  the team's colours, so the strip is tinted like the rest of the page's chrome
-// The D50 one-line injury summary does NOT render here (Adam, 2026-09-14 follow-up): it already shows once
-// as the red chip in the team header, and this strip used to print the same text a second time (inherited
-// from zoom.js's old breadcrumb, which sat right next to that same header). Shows once now, in the header.
+// The D50 one-line injury summary does NOT render here: it already shows once, as the red chip in the
+// team header.
 export function navStripHtml({ teams, abbr, page, unit, bandLabel, bandSlug, opponentAbbr, primary, secondary }) {
   const A = esc(abbr);
   const offLit = page === "off" || (page === "group" && unit === "OFF");

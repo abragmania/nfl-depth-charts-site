@@ -121,10 +121,10 @@ function tierOf(v) {
 
 // PFF-inspired (Adam, 2026-09-11): a quick-scan strip of year->OVR chips, newest first, above the full
 // table — launch-only seasons get a small superscript "L" instead of the table's fuller "launch" tag.
-// 🔵 review of D87, finding 3: the chip shows the LIVE rating when the row has one (r.ovrCurrent, the number on
-// the card header right now), falling back to the launch number - so the strip, the table's right-hand number
-// and the card all say the same thing. A row whose live rating has moved off the launch capture is no longer a
-// "launch only" season either, so it loses the superscript L.
+// D87: the chip shows the LIVE rating when the row has one (r.ovrCurrent, the number on the card header
+// right now), falling back to the launch number, so the strip, the table's right-hand number and the card
+// all agree. A row whose live rating has moved off the launch capture is no longer "launch only" either,
+// so it loses the superscript L.
 function stripHtml(rows) {
   const chips = rows.filter((r) => (r.ovrCurrent ?? r.ovr) != null).map((r) => {
     const v = r.ovrCurrent ?? r.ovr;
@@ -153,16 +153,15 @@ function rowHtml(r, teams) {
   }).join(`<span class="hist-teamsep">/</span>`);
   const teamHtml = stints.length ? `<span class="hist-team">${logos}${old}</span>` : dash;
   const star = r.ovr != null && r.matchConfidence !== "id" ? `<span class="hist-star" title="matched by ${esc(r.matchMethod)}, not by player id">*</span>` : "";
-  // 🔵 review of D87, finding 4: a row carrying a live rating is not a "launch only" season - the launch tag
-  // (and the footnote that explains it, in historyHtml below) is for seasons where the launch capture is the
-  // only rating that exists, which this row has just disproved.
+  // D87: a row carrying a live rating is not a "launch only" season — the launch tag (and the footnote that
+  // explains it, in historyHtml below) is for seasons where the launch capture is the only rating that exists.
   const tag = r.ovr != null && r.ratingKind === "LAUNCH" && r.ovrCurrent == null ? `<span class="hist-tag launch" title="Only the launch rating exists for this season">launch</span>` : "";
   // D87: the season being played right now carries this year's Madden LAUNCH rating in r.ovr and, when the live
   // EA rating on the card has since moved off it, that live number in r.ovrCurrent - printed "99 → 97", launch
   // first then now. The server only ever sets r.ovrCurrent when it differs from r.ovr (server/history/index.js),
   // so an unchanged rating stays a single number and every completed season is untouched by this.
-  // 🔵 review finding 3: when this year's capture never listed the man there is no launch number to move off,
-  // and the live rating is all he has - printed on its own, with no arrow and nothing to compare it against.
+  // When this year's capture never listed the man there is no launch number to move off, and the live
+  // rating is all he has — printed on its own, with no arrow and nothing to compare it against.
   const now = r.ovr != null && r.ovrCurrent != null && r.ovrCurrent !== r.ovr
     ? `<span class="hist-arrow">→</span><span class="hist-ovr hist-now ${tierOf(r.ovrCurrent)}">${r.ovrCurrent}</span>` : "";
   const ovrNum = `<span class="hist-ovr ${tierOf(r.ovr)}">${r.ovr}${star}</span>`;
@@ -184,9 +183,8 @@ export function historyHtml(data, teamsMeta) {
   const notes = [];
   if (anyStar) notes.push("* rating matched by name, not by player id");
   if (anyLaunch) notes.push("launch = only the launch rating exists for that season");
-  // 🎨 Polish (2026-09-11, round 2, item 11): seasons before the player's career started rendered as one
-  // "— — — — —" row per year (rows sorted newest-first, so these trail at the end) — collapsed into a
-  // single plain-English line instead of a stack of dashes that reads like a data error.
+  // Seasons before the player's career started (rows sorted newest-first, so these trail at the end)
+  // collapse into a single plain-English line instead of a stack of "— — — — —" rows.
   let shownCount = rows.length;
   const blank = (r) => !r.team && r.ovr == null && r.ovrCurrent == null && !r.positionOfRecord; // same test rowHtml uses
   while (shownCount > 0 && blank(rows[shownCount - 1])) shownCount--;

@@ -3,11 +3,10 @@
 // lives here, behind the click). Two exports: openPanel(asideEl, card, teamView, teamMeta) fills and shows
 // the aside for one player; closePanel(asideEl) hides and clears it.
 //
-// Step-6 review (2026-09-11), finding 2: both functions are pure, idempotent DOM operations on the aside
-// element the caller passes in. This module never touches the field/columns/trays and never re-renders
-// anything outside the aside — opening or closing the panel must not trigger a field re-render. The lead's
-// integration note (see this builder's final report) tells team.js to call these two functions directly on
-// a route change between a team's player sub-route and its team-only route, not to re-run renderTeam().
+// Both functions are pure, idempotent DOM operations on the aside element the caller passes in. This
+// module never touches the field/columns/trays and never re-renders anything outside the aside — opening
+// or closing the panel must not trigger a field re-render. team.js calls these two functions directly on a
+// route change between a team's player sub-route and its team-only route, never re-running renderTeam().
 //
 // Finding 1: the route (`#/team/ABBR/player/{playerKey}`) carries the depth-chart playerKey (usually the
 // gsis id), never the ESPN id — resolving that key to a card is team.js's job (it already has the in-memory
@@ -74,15 +73,11 @@ function ratingTier(v) {
 // PFF-inspired (Adam, 2026-09-11): "a big rating number in a colour-scaled box, with '#4 of 119 at RB'
 // directly under it and the launch rating as a small delta" — replaces the old flat team-colour bar.
 // D34: season years only, never a Madden edition number.
-// 🔵 review follow-up (2026-09-15, D91 item 1): the grade box is where Adam's rating pill lives on this
-// view, so the last-three-games snap trio belongs right beside the big number, same as it already sits
-// beside every rating pill on the field/side/group views (cards.js's snapHistoryHtml, reused here rather
-// than duplicated). This panel is only ever handed the resolved `card` (see openPanel's contract in this
-// file's header) and never which side of the ball he's on — team.js's caller (public/js/main.js's
-// openPlayerPanel) passes just the card and the whole TeamView, with no unit alongside it, and the
-// compiled card itself carries no unit of its own (server/compile/chart.js's makeCard never stamps one on
-// it) — so this calls snapHistoryHtml with no `unit` in opts, which cards.js's own D91-item-2 fix (see that
-// file) now renders as "81% of snaps" rather than guessing "offensive".
+// D91: the last-three-games snap trio sits beside the big number here too (cards.js's snapHistoryHtml,
+// reused rather than duplicated). This panel is only ever handed the resolved `card` (see openPanel's
+// contract in this file's header), never which side of the ball he's on, and the compiled card carries no
+// unit of its own — so this calls snapHistoryHtml with no `unit`, which renders as "81% of snaps" rather
+// than guessing "offensive".
 function gradeBoxHtml(rating, season, card) {
   if (!rating || rating.current == null) return "";
   const tier = ratingTier(rating.current);
@@ -105,10 +100,9 @@ function gradeBoxHtml(rating, season, card) {
 // reads draftRaw.round/year/selection directly) — never parsed out of any bio "displayDraft" string. The
 // compiled card's own `bio.draft` (from the roster fetch) has no round yet, so the initial render below
 // shows what the card already has and fillDraftRound() upgrades it in place once /api/player responds.
-// 🎨 Polish (2026-09-11, round 2, item 11): "Drafted 2020, Rd 2, #53 (Philadelphia Eagles)" overflowed the
-// 12.5px bio-row cell and truncated to "Drafted 2020, Rd …" — nothing past the round survived. Shortened
-// to "2020 · R2 #53" (round as "R2", no team name — the cell already sits inside that team's own panel)
-// so the pick number that used to get cut off is now the part most likely to actually fit.
+// Formatted as "2020 · R2 #53" — round as "R2", no team name (the cell already sits inside that team's own
+// panel) — rather than "Drafted 2020, Rd 2, #53 (Philadelphia Eagles)", which overflows the 12.5px bio-row
+// cell and truncates before the pick number.
 function draftLine(draft) {
   if (!draft || draft.year == null) return null;
   const round = draft.round != null ? ` · R${esc(draft.round)}` : "";
@@ -127,9 +121,8 @@ function bioRowHtml(card) {
   const expNum = Number(b.exp);
   const exp = b.exp == null ? dash : Number.isFinite(expNum) ? `${expNum} yr${expNum === 1 ? "" : "s"}` : esc(b.exp); // "R" for rookies on some sources
   const draft = draftLine(b.draft) || dash;
-  // 🎨 Polish (2026-09-11, round 2, item 11): the "Drafted " prefix cost 8 of this narrow grid cell's
-  // characters for no real information (the whole row is obviously bio data) — dropping it is what
-  // finally lets "2020 · R2 #53" fit without the ellipsis eating the pick number.
+  // No "Drafted " prefix: it cost 8 of this narrow grid cell's characters for no real information (the
+  // whole row is obviously bio data), and dropping it is what lets "2020 · R2 #53" fit.
   // D115 (Adam, 2026-09-16): a seventh cell, spanning the grid's full width as its own row, for the games/
   // starts chip below (gamesChipData/patchGamesChip). The draft cell above already reads "—" for the many
   // undrafted men on file, which looked like a free slot, but that dash is a real answer ("undrafted") for
@@ -261,11 +254,9 @@ function noStatsMessage(family) {
   return family === "OL" ? "ESPN keeps no season stats for linemen." : "No ESPN season stats for this player.";
 }
 
-// Real failures (network error, 5xx, malformed JSON) still get the red error box, but as one short line —
-// Adam's screenshot (2026-09-16, Cowboys LG T.J. Bass) showed the full ESPN URL printed in red, which reads
-// like a crash even when it's just this one player missing a page. Strips any bare URL out of the message;
-// what's left (a status code, "network down", etc.) is still useful without dragging ESPN's internal
-// endpoint onto the screen.
+// Real failures (network error, 5xx, malformed JSON) still get the red error box, but as one short line:
+// a bare ESPN URL in the message reads like a crash even when it's just one player missing a page, so any
+// URL is stripped out; what's left (a status code, "network down", etc.) is still useful on its own.
 function shortErrorMessage(err) {
   const msg = String(err?.message ?? "").replace(/https?:\/\/\S+/g, "").trim();
   return `Couldn't load season stats${msg ? `: ${msg}` : ""}`;
@@ -290,12 +281,9 @@ if (typeof window !== "undefined") {
   });
 }
 
-// D75: a player panel can now open in place on the whole-team page OR either side page (offense/defense,
+// D75: a player panel can open in place on the whole-team page OR either side page (offense/defense,
 // since D72 put those on the same field-plus-aside shell as team.js's teamBodyHtml) — closing it must
-// return to WHICHEVER of those three the panel was opened from, not always the whole-team page. This used
-// to compare the pre-navigation hash only against `#/team/{abbr}`, so opening a panel from the defense
-// page (`#/team/{abbr}/def`) never matched, cameFromTeamRoute came back false, and closing always dropped
-// back to the whole-team page even though the defense page was what was actually on screen underneath.
+// return to WHICHEVER of those three the panel was opened from, not always the whole-team page.
 function isTeamContextHash(hash, abbr) {
   return hash === `#/team/${abbr}` || hash === `#/team/${abbr}/off` || hash === `#/team/${abbr}/def`;
 }

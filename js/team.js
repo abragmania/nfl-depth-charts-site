@@ -90,10 +90,8 @@ export function headerHtml(team, view, fromFixture = false, teams, withLegend = 
 }
 
 // D44 (Adam, 2026-09-11): a one-line, muted key above the field so a first-time viewer knows what the
-// banners/badges/shading/card surface mean without having to ask.
-// 🎨 Polish (2026-09-11, round 2, item 7): the legend used to cite internal decision numbers ("(D12)",
-// "(D22)") straight in the UI — meaningless to anyone but the build team, and it also wrapped onto three
-// lines at 1366px. Reworded to plain English and tightened to fit.
+// banners/badges/shading/card surface mean without having to ask, worded in plain English (never internal
+// decision numbers) and tight enough to fit on one line at 1366px.
 // Ruling E replaced the whole-team view's photo cards with text rows, so the first legend entry no longer
 // describes a visible "STARTER" tag — on the overview the STARTER is simply the bold top row of a column.
 // The wording follows the pixels rather than the other way round.
@@ -144,13 +142,12 @@ function fieldHtml(view, team, layoutOpts = {}) {
   // css's own light-plate layer can sit behind the crest in the same background-image stack (D95).
   // Root-relative: a relative url() inside a custom property resolves against the STYLESHEET's own URL
   // (styles.css lives at /css/), not the document's, so the plain "img/logos/WAS-dark.png" the API returns
-  // 404'd at /css/img/logos/WAS-dark.png and the watermark silently vanished (found via CDP computed-style
-  // inspection: getComputedStyle().backgroundImage showed the wrong resolved path).
+  // would 404 at /css/img/logos/WAS-dark.png and the watermark would silently vanish.
   let watermarkUrl = team.logoDark || team.logo || "";
   if (watermarkUrl && !/^https?:\/\//.test(watermarkUrl) && !watermarkUrl.startsWith("/")) watermarkUrl = "/" + watermarkUrl;
-  // 🎨 Polish: the field-variant's "B" wash lightens the surface around the real line of scrimmage, so it
-  // needs the same --los-pct a matchup page already carries; a single-unit side page has no losY (D72), so
-  // it falls back to the vertical middle rather than lighting up a spot that means nothing on that page.
+  // The field-variant's "B" wash lightens the surface around the real line of scrimmage, so it needs the
+  // same --los-pct a matchup page already carries; a single-unit side page has no losY (D72), so it falls
+  // back to the vertical middle rather than lighting up a spot that means nothing on that page.
   const losPct = layout.losY != null ? ((layout.losY / layout.layoutHeight) * 100).toFixed(2) + "%" : "50%";
   return {
     layout,
@@ -171,8 +168,6 @@ function fieldHtml(view, team, layoutOpts = {}) {
 // width goes into the columns rather than into black margins. All of that - the measuring, the spread,
 // the rebuild-if-the-first-measurement-was-wrong, the settle and the teardown - lives in viewfit.js's
 // mountScaledField, which the matchup view uses too; this function is only the team-page specifics.
-// 🔵 delta review: it used to be a second copy of that logic, which is how the two drifted and how the
-// missing teardown turned into "the team page's observer overwrites the matchup's field".
 // D72: exported, because the offense and defense pages are this same field — zoom.js hands it a TeamView
 // carrying one unit plus the single-unit layout options, and gets the identical measure/spread/draw/
 // rescale/settle loop, delegated card clicks and name-fitting pass rather than a parallel implementation.
@@ -186,20 +181,19 @@ export function mountTeamField(root, view, team, teamAbbr, layoutOpts = {}) {
     panel,
     observe: [root.querySelector(".nav-strip"), root.querySelector(".teamhead"), root.querySelector(".legend")],
     onDraw: (el) => { wireFieldClicks(el, teamAbbr); fitNames(el); },
-    // 🔵 review finding 8: a name that fits at one scale can stop fitting at another (a webfont swap, a
-    // window resize, the panel opening), so the abbreviate-don't-truncate pass runs on every scale
-    // change, not only when the markup is rebuilt.
+    // A name that fits at one scale can stop fitting at another (a webfont swap, a window resize, the
+    // panel opening), so the abbreviate-don't-truncate pass runs on every scale change, not only when the
+    // markup is rebuilt.
     onScale: (el) => fitNames(el),
   });
 }
 
-// D75 (2026-09-15): the field-plus-panel shell every team-context page mounts a field into — the whole-
-// team page and, since D72 put the offense/defense pages on this same engine, those pages too. Exported so
-// zoom.js's renderZoomSide can build the identical `<div class="team-body">` (empty `.field-outer` for
-// mountTeamField to replace, plus the `<aside class="player-panel">` mountTeamField already looks for and
-// panel.js already knows how to fill) instead of a second copy that quietly lacked the aside — which is
-// why clicking a card on the offense/defense pages used to re-render the whole-team page instead of
-// opening the panel in place.
+// D75: the field-plus-panel shell every team-context page mounts a field into — the whole-team page and,
+// since D72 put the offense/defense pages on this same engine, those pages too. Exported so zoom.js's
+// renderZoomSide can build the identical `<div class="team-body">` (empty `.field-outer` for mountTeamField
+// to replace, plus the `<aside class="player-panel">` mountTeamField already looks for and panel.js already
+// knows how to fill), so a card click on the offense/defense pages opens the panel in place instead of
+// re-rendering the whole-team page.
 export function teamBodyHtml(team) {
   return `<div class="team-body">
       <div class="field-outer" data-field-variant="${FIELD_VARIANT}" style="--team-primary:${team.colourPrimary};--team-secondary:${team.colourSecondary}"></div>
@@ -231,7 +225,7 @@ let teamRefreshListener = null;
 export async function renderTeam(root, search, abbr, playerKey) {
   search.hidden = true;
   // Whatever view was on screen goes first: this function is about to replace root.innerHTML, and an
-  // observer still pointed at the old DOM is exactly what let one page overwrite another (🔵 review 1).
+  // observer still pointed at the old DOM could let one page overwrite another.
   // The router guard disposes too; disposeCurrentView is idempotent, so both is deliberate.
   disposeCurrentView();
   const A = (abbr || "").toUpperCase();
@@ -262,9 +256,9 @@ export async function renderTeam(root, search, abbr, playerKey) {
     ${teamBodyHtml(team)}
     `;
 
-  // Integration task 1 (2026-09-11): the router keys the player panel off whichever view last rendered,
-  // not off this module specifically — main.js reads this cache to open/close the panel without
-  // re-rendering the view underneath it. zoom.js sets the same shape for its own views.
+  // The router keys the player panel off whichever view last rendered, not off this module specifically —
+  // main.js reads this cache to open/close the panel without re-rendering the view underneath it. zoom.js
+  // sets the same shape for its own views.
   // `page` (D75) tells main.js's openPlayerPanel whether the page currently on screen is one that carries
   // a `<aside class="player-panel">` it can open the panel into in place ("team"/"off"/"def") — the group
   // and matchup pages don't set this at all, so main.js's default fallback (re-render the whole-team page)

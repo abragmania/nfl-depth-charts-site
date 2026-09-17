@@ -1,14 +1,10 @@
-// D46 matchup view: one team's OFFENSE facing another team's DEFENSE across a line of scrimmage.
-//
-// 👁 QA item 1 (2026-09-13), which supersedes this file's original card-based layout: the matchup must fit
-// one 1700x900 screen. Two complete units of photo cards stacked vertically never could — it ran to ~1790px
-// and needed scrolling to see the defense at all. It is now built on exactly the same compact overview the
-// whole-team page uses: field.js's computeLayout plus cards.js's renderColumn, fed a SYNTHETIC TeamView
-// whose OFF unit is team A's and whose DEF unit is team B's. That is the whole implementation — the line
-// of scrimmage, the level stripes, the TE block under its own TIGHT ENDS label (QA item 7), the facing
-// order (offense reading bottom-up toward the ball, defense reading down from it, QA item 8) and the
-// fit-the-window scaling all come from the shared engine rather than from a parallel one here that had to
-// be kept in step with it by hand.
+// D46 matchup view: one team's OFFENSE facing another team's DEFENSE across a line of scrimmage. It has to
+// fit one 1700x900 screen, so it is built on exactly the same compact overview the whole-team page uses:
+// field.js's computeLayout plus cards.js's renderColumn, fed a SYNTHETIC TeamView whose OFF unit is team
+// A's and whose DEF unit is team B's. That is the whole implementation — the line of scrimmage, the level
+// stripes, the TE block under its own TIGHT ENDS label, the facing order (offense reading bottom-up toward
+// the ball, defense reading down from it) and the fit-the-window scaling all come from the shared engine
+// rather than from a parallel one here that had to be kept in step with it by hand.
 //
 // Route #/matchup/:a/:b renders A-offense-over-B-defense; #/matchup/:a alone resolves B from A's
 // header.nextOpponent (this week's schedule) and redirects, or shows a picker on a bye week.
@@ -25,10 +21,9 @@ const record = (r) => (r ? `${r.wins}-${r.losses}${r.ties ? "-" + r.ties : ""}` 
 
 // The two teams' slot labels, so a card's "also listed at" chip resolves against whichever unit it came
 // from (cards.js's alsoListedChips takes one lookup per column).
-// 🔵 review finding 7: slot ids are `${unit}-${band}-${n}`, so BOTH teams have an "OFF-WR-1" and a
-// "DEF-DL-1". Indexing all four half-views meant whichever team was walked last silently won every
-// lookup, and an "also listed at" chip could name the wrong team's slot. Only the two halves actually
-// drawn on this field are indexed, and they cannot collide with each other.
+// Slot ids are `${unit}-${band}-${n}`, so BOTH teams have an "OFF-WR-1" and a "DEF-DL-1" — indexing all
+// four half-views would let whichever team was walked last silently win every lookup, so only the two
+// halves actually drawn on this field are indexed, and they cannot collide with each other.
 function slotLookupFor(viewA, viewB) {
   const map = new Map();
   for (const sl of viewA?.units?.OFF || []) map.set(sl.slotId, sl.label);
@@ -79,17 +74,14 @@ function halfWatermarkHtml(layout, team, half) {
   return `<div class="matchup-watermark-crest" style="--wm-url:url('${esc(url)}');top:${topPct}%;height:${heightPct}%"></div>`;
 }
 
-// D113 (Adam, 2026-09-16): Adam read JAX's defence drawn on DEN's half of the field as "Denver's positions
-// rewritten" — a single shared field with no per-half ownership label reads that way no matter how the
-// columns are tinted. Each half now carries its own banner (top edge = the defending club, bottom edge =
-// the offensive club — the same split halfWatermarkHtml above already draws crests for), in that club's
-// own colours so the ownership is unmistakable without reading a column header.
-// 👁 QA follow-up (2026-09-16): the banner used to be drawn INSIDE `.field-scale`, sized off field.js's
-// MARGIN_TOP/MARGIN_BOTTOM in design pixels — the fit-to-window transform then shrank it along with the
-// whole canvas, so at a typical 1700x900 scale it rendered barely taller than its own text. It is now a
-// real, fixed-height DOM element OUTSIDE the scaled canvas (see fieldHtml/renderMatchup's
-// `.matchup-field-wrap`), so its height is exactly 32 real pixels at any window size, and it no longer
-// covers the "SECONDARY" level label that lives in that same margin band on the canvas itself.
+// D113: each half carries its own ownership banner (top edge = the defending club, bottom edge = the
+// offensive club — the same split halfWatermarkHtml above draws crests for), in that club's own colours,
+// so a single shared field with two teams on it doesn't read as one team's positions rewritten over the
+// other's. The banner is a real, fixed-height DOM element OUTSIDE the scaled canvas (see fieldHtml/
+// renderMatchup's `.matchup-field-wrap`), not inside `.field-scale`: sized in canvas units it would shrink
+// along with the fit-to-window transform and read as barely taller than its own text. Fixed outside, it
+// stays exactly 32 real pixels at any window size, and doesn't cover the "SECONDARY" level label that
+// lives in that same margin band on the canvas itself.
 function halfBannerHtml(team, unitWord, pos) {
   const url = watermarkUrl(team);
   const crest = url ? `<img class="matchup-half-banner-crest" src="${esc(url)}" alt="" onerror="this.remove()">` : "";
@@ -161,8 +153,8 @@ const matchupLegendHtml = () => (SECONDARY_ONE_ROW ? legendHtml("legend-matchup"
 function headerHtml(teamA, teamB, viewA, viewB, teams) {
   const recA = viewA?.header?.record ?? teamA.record;
   const recB = viewB?.header?.record ?? teamB.record;
-  // 👁 QA (2026-09-15, item 7): a club whose primary is pale (New Orleans' gold) gets dark ink on its
-  // panel, exactly as its landing tile does - same function, same threshold, so the two can never disagree.
+  // A club whose primary is pale (New Orleans' gold) gets dark ink on its panel, exactly as its landing
+  // tile does — same function, same threshold, so the two can never disagree.
   const inkA = isLightWash(teamA.colourPrimary) ? " matchup-team-light" : "";
   const inkB = isLightWash(teamB.colourPrimary) ? " matchup-team-light" : "";
   return `<div class="matchup-head">
@@ -315,14 +307,12 @@ export async function renderMatchup(root, search, aAbbr, bAbbr) {
 
   // Mounted empty first so mountField-style measuring can pick the horizontal spread from the real box
   // before the field is built (same two-phase approach as team.js — see its mountField comment).
-  // D59: the shared nav strip replaces this view’s old breadcrumb — team A’s switcher, the Matchup pill
-  // lit, and the "A team page · B team page" links the old breadcrumb carried, folded into the strip.
-  // D113 follow-up (👁 QA, 2026-09-16): the two half banners are real DOM siblings of `.field-outer`, not
-  // part of the scaled canvas (see halfBannerHtml/fieldHtml) — B defends the top half, A is on offense in
-  // the bottom half (the same split halfWatermarkHtml/facingView use), so they can never disagree about
-  // which half belongs to which club. `.matchup-field-wrap` (styles.css) gives the three a single rounded,
-  // bordered frame so the banners read as caps on the same card the field sits in rather than a separate
-  // element floating above it.
+  // D59: the shared nav strip replaces this view's old breadcrumb — team A's switcher, the Matchup pill
+  // lit, and the "A team page · B team page" links, folded into the strip.
+  // The two half banners are real DOM siblings of `.field-outer`, not part of the scaled canvas (see
+  // halfBannerHtml/fieldHtml) — B defends the top half, A is on offense in the bottom half (the same split
+  // halfWatermarkHtml/facingView use). `.matchup-field-wrap` (styles.css) gives the three a single rounded,
+  // bordered frame so the banners read as caps on the same card the field sits in.
   root.innerHTML = `
     <div class="matchup">
       ${navStripHtml({ teams, abbr: A, page: "matchup", opponentAbbr: B, primary: teamA.colourPrimary, secondary: teamA.colourSecondary })}
@@ -360,9 +350,8 @@ function matchupReserveBelow(root) {
 }
 
 // The team-page mount with two teams' worth of specifics: which colours each column takes, and which
-// team's page a click should open. Everything else - measure, spread, draw, rescale, rebuild, settle,
-// dispose - is viewfit.js's mountScaledField, shared with team.js (🔵 delta review: this used to be a
-// second copy of that logic, and the copy that lacked a teardown).
+// team's page a click should open. Everything else — measure, spread, draw, rescale, rebuild, settle,
+// dispose — is viewfit.js's mountScaledField, shared with team.js.
 function mountMatchupField(root, viewA, viewB, teamA, teamB) {
   return mountScaledField({
     root,
@@ -381,9 +370,8 @@ function wireMatchupClicks(el, teamA, teamB) {
     const hit = e.target.closest("[data-player-key]");
     if (!hit) return;
     e.preventDefault();
-    // 🔵 review finding 4: a tray chip lives in `.tray`, NOT in a `.column`, so asking for the closest
-    // column returned null for every unlisted player and the `? :` sent all of them to team B's page.
-    // The tray carries its own data-unit (cards.js's renderTray), which is checked first.
+    // A tray chip lives in `.tray`, NOT in a `.column`, so the closest column would be null for every
+    // unlisted player. The tray carries its own data-unit (cards.js's renderTray), checked first.
     const tray = hit.closest(".tray");
     const unit = tray ? tray.dataset.unit : hit.closest(".column")?.dataset.slotId?.split("-")[0];
     const abbr = unit === "OFF" ? teamA.abbr : teamB.abbr;

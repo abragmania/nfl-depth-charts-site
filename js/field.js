@@ -1,263 +1,129 @@
 // Depth-aware field layout engine. Pure geometry — no DOM here except the small SVG markup builder
 // at the bottom. Everything is computed in "layout units" on a fixed-width (LAYOUT_WIDTH) canvas;
-// team.js scales the whole result to the wrapper with a single CSS transform, so this module never has
-// to know the viewport size (👁 review requirement C: scale as one unit).
+// team.js scales the whole result to the wrapper with a single CSS transform (👁 requirement C: scale
+// as one unit).
 //
-// Why computed instead of fixed coordinates (🔵 review, 2026-09-11): a slot can carry any number of
-// players (D23 — no fixed roster cap), so a fixed y per band overlaps as soon as a column runs deep.
-// Heights below are therefore a function of the deepest column in each band, and columns are spaced
+// A slot can carry any number of players (D23 — no fixed roster cap), so row/column heights are a
+// function of the deepest column in each band rather than a fixed y per band, and columns are spread
 // across a band's x-range rather than pinned to literal pixel anchors (review requirement B).
 //
-// ---------------------------------------------------------------------------------------------------
-// RULING E (Adam, 2026-09-13) — "it does not fit on my monitor yet and I have a big monitor."
-// The whole-team page is now a COMPACT OVERVIEW, designed from the start to fit a 1700x900 CSS-pixel
-// viewport with no scrolling in either direction, rather than a big-card field that gets shrunk until
-// it fits. Concretely: no headshots, each column is a label pill + the starter as one bold row
-// (number, name, rating pill in its colour tier) + slim one-line rows for the backups, at most three
-// of those with a "+N more" tail. Status badges, the STARTER_OUT/ACTIVE treatment and the rating tier
-// colours all survive; levels, level stripes, level labels and the line of scrimmage all stay.
-// The constants below are sized so the finished canvas is short enough that team.js's scale lands near
-// 1.0 at 1700px wide — layout units are deliberately close to real screen pixels, so the type sizes in
-// styles.css read the same on screen as they do here.
+// RULING E — the whole-team page is a COMPACT OVERVIEW built to fit a 1700x900 viewport with no
+// scrolling: no headshots, each column is a label pill + a bold starter row + up to MAX_DEPTH_ROWS
+// slim backup rows with a "+N more" tail. Status badges, the STARTER_OUT/ACTIVE treatment, rating-tier
+// colours, levels, level stripes/labels and the line of scrimmage all still apply.
 //
-// RULING A (Adam, 2026-09-13, supersedes D14) — a defensive end is a DEFENSIVE LINEMAN. DE/LDE/RDE are
-// band DL and share the LINE row with the tackles, so that row now holds 3-5 columns and has to place
-// by LABEL, not by count (see placeLineColumns). A 4-3 whose ends are labelled DE therefore has an
-// EMPTY EDGE band — an empty row must vanish completely: no height, no stripe, no label, no level gap.
+// RULING A — a defensive end is a DEFENSIVE LINEMAN: DE/LDE/RDE share the LINE row with the tackles
+// and place by LABEL, not by count (placeLineColumns), so a 4-3 whose ends are DE has an EMPTY EDGE
+// band that draws nothing — no height, stripe, label or level gap.
 //
-// RULING B (Adam, 2026-09-13) — "put the backup boxes under the starters." Every column, offense and
-// defense, now reads top-down: label, starter, backups beneath, tray at the row's bottom edge. The old
-// `.column-stack.stack-reverse` / bottom-flush defensive rows are gone.
+// RULING B — every column, offense and defense, reads top-down: label, starter, backups beneath, tray
+// at the row's bottom edge.
 //
-// RULING D (Adam, 2026-09-13) — "it's not helpful to see a long row of offensive guys with WR and
-// offensive linemen combined", refined to "offensive line LT LG C RG RT go together; WRs go together,
-// TEs go near WRs but not with them." The offense was three rows: LINE (the five linemen alone, still
-// the grid the defense mirrors), BACKFIELD (QB on the centre with the backs flanking him) and RECEIVERS
-// (one tight WR cluster, a deliberate gap, then the TE block under its own "TIGHT ENDS" label).
+// Current offensive row order top-down from the LOS (D69, superseding ruling D's original three-row
+// shape and D63's on-the-line receiver comb): PASS CATCHERS (WR+TE — D71's evenly-pitched cluster
+// centred on the field's centre line, not field-accurate x's), LINE (OL alone: LT LG C RG RT),
+// BACKFIELD (QB centred, RB/FB flanking). Because the receivers are a centred cluster rather than real
+// alignments, the secondary is pitched off the tackles/centre instead of mirroring them
+// (mirrorLandmarks) — a defensive row's shape no longer changes with how many receivers a club charts.
 //
-// D63 (Adam, 2026-09-15), which supersedes ruling D's third row — the receivers belong ON the line,
-// where they actually line up. Left to right the comb reads: outside WR, slot WR, LT LG C RG RT, TE,
-// outside WR, every column one pitch from the next (so the slot really is the midpoint between the
-// left tackle and the outside receiver, and the right side mirrors that distance). A second tight-end
-// column stacks directly UNDER the first instead of taking a second x. The RECEIVERS row and the TIGHT
-// ENDS label are gone; BACKFIELD keeps QB/RB/FB.
-// The pay-off is on the other side of the ball: the secondary can mirror the REAL receiver positions
-// again (corners over the outside receivers, nickel over the slot) instead of the "two pitches outside
-// the tackles" approximation ruling D forced on it.
-//
-// D69 (Adam, 2026-09-15) — "the offense takes up so little of the screen and the defense so much" plus
-// "make a pass catchers section... visually separate from the linemen." First cut kept D63's single LINE
-// row and carved it into two labelled SEGMENTS (receivers left/right of the line). Adam's refinement,
-// given while that cut was already in progress, overrode it: "the pass catchers get their OWN ROW placed
-// ABOVE the offensive line... even though it technically isn't how they line up, it's easier visually." So
-// PASS CATCHERS is now a normal third offensive row — full width, its own stripe and label, exactly like
-// LINE and BACKFIELD — sitting BETWEEN the line of scrimmage and the LINE row rather than sharing a row
-// with it. Top-down from the LOS the offense now reads PASS CATCHERS, LINE, BACKFIELD (OFF_ROW_GROUPS).
-//
-// D71 (Adam, 2026-09-15), which supersedes D63's field-accurate receiver x's — "the pass catchers row is a
-// normal centred cluster, not spread to the sidelines". layoutPassCatchers no longer hangs the receivers
-// off the ends of the offensive-line comb: it places them as one evenly-pitched block centred on the
-// field's centre line, reading left to right as outside WR, WR · Slot (always INSIDE the outside man),
-// any further receivers, then the tight ends (TE2 still stacked under TE1 on one x). The knock-on is that
-// the receivers no longer tell the defense where to stand: the corners go back to a fixed 1.4 pitches
-// outside the tackles and the nickel to the gap between the left corner and the box, both computed once in
-// mirrorLandmarks, so a defensive row's shape no longer changes with how many receivers a club charts.
-//
-// D72 (Adam, 2026-09-15) — the OFFENSE and DEFENSE pages are this same engine drawing ONE unit (zoom.js
-// hands computeLayout a TeamView carrying only that unit, the way matchup.js already hands it a synthetic
-// two-team one). Three things change for a half-field, all driven by `opts` rather than by a second engine:
-// there is no line of scrimmage (losY is null and the canvas carries a single "OFFENSE"/"DEFENSE" caption
-// instead of one per half), the canvas is CROPPED to the columns actually on it so the fit engine can scale
-// a short chart up instead of being pinned by a full-width canvas it is not using, and the rows are drawn
-// at the bigger `style` a 1.3-1.8x scale affords — a small headshot on each line-one row and one more depth
-// row before the "+N" tail.
+// D72 — the OFFENSE and DEFENSE pages are this same engine drawing ONE unit (zoom.js hands
+// computeLayout a TeamView carrying only that unit). Driven entirely by `opts`: no line of scrimmage
+// (losY null, one "OFFENSE"/"DEFENSE" caption instead of a pair), the canvas is CROPPED to the columns
+// actually on it, and rows draw at a bigger `style` (a small headshot on line one, one extra depth row).
 
-// D110 (Adam, 2026-09-16) — "pull the columns closer together so the layout is narrower than the screen
-// ratio and the cards grow to fill it." The ruling named LAYOUT_WIDTH as the lever: take the canvas from
-// 1800 down toward ~1475 and every column, being a fixed share of a narrower canvas, comes out bigger on
-// screen. MEASURED, THAT LEVER IS ALREADY AT ITS STOP, and the canvas width therefore does NOT move.
-//
-// Why, in the fit engine's own terms (viewfit.js, which this ruling does not open). A team/matchup canvas
-// is far taller in proportion than the box it has to land in — 1800 x 1106 is 1.63:1 against a measured
-// 1619 x 584 field box at a 1700x900 window (2.77:1) and 1914 x 663 at Adam's 2000x980 (2.89:1). The
-// engine closes that gap with `spread`: it rebuilds the canvas horizontally by kW/kH so that the width fit
-// and the height fit land on the same scale, and a column's size on screen is then
-//     card px = CARD_W x spread x scale = CARD_W x (box width / LAYOUT_WIDTH)
-// — i.e. exactly the ratio the ruling is aiming at. BUT the spread is capped at MAX_SPREAD = 1.8, and the
-// measured spreads are already 1.70 at 1700x900 and 1.77 at Adam's 2000x980. Narrowing LAYOUT_WIDTH raises
-// the spread the engine ASKS for; past the cap it stops being granted, the formula above stops holding, and
-// the card stays frozen at CARD_W x 1.8 x scale while the canvas simply stops reaching the right-hand edge.
-// Concretely, at the ruling's own 1475 the cap binds on every screen: the card would come out 171 px at
-// 1700x900 and 194 px at 2000x980 (against the ruling's targets of 195-205 and ~230) with ~350 px of dead
-// turf down the sides of Adam's screen — the empty bands the ruling was raised to remove. The matchup page,
-// whose halves are taller than the constant, is at the cap TODAY, so for it a narrower canvas is pure loss.
-//
-// So the ruling's ARITHMETIC is delivered where it is not capped — through the card's share of the canvas,
-// CARD_W / LAYOUT_WIDTH, which is the one number that actually sets how big a column reads. The ruling asks
-// for 180/1475 = 0.122; this file now carries 216/1800 = 0.120, the same chart at the same proportions, on a
-// canvas wide enough that the fit engine can still spread onto it. The pitches come down in proportion
-// exactly as the ruling describes (a column is now a much bigger share of the turf between its neighbours),
-// and nothing vertical moves: D109's 1106 stands.
+// D110 — LAYOUT_WIDTH cannot narrow further to grow the cards: the fit engine's `spread` (viewfit.js)
+// is capped at MAX_SPREAD = 1.8, and real screens already measure ~1.70-1.77, so a narrower canvas
+// would just hit the cap and stop reaching the sidelines instead of growing anything (verified: at the
+// ruling's own proposed 1475 the cap binds on every screen, leaving dead turf down the sides). The
+// ruling's actual lever is a card's share of the canvas, CARD_W / LAYOUT_WIDTH: this file carries
+// 216/1800 (~0.120), the same proportions the ruling asked for, on a canvas the fit engine can still
+// spread onto. Vertical sizing (D109's 1106) is untouched.
 const REFERENCE_WIDTH = 1600; // the OFF_BANDS anchors below were tuned against this width
 export const LAYOUT_WIDTH = 1800;
 const SCALE = LAYOUT_WIDTH / REFERENCE_WIDTH;
 
-// 🎨 Polish (2026-09-16): Adam's call on the field surface, both variants live in styles.css behind
-// [data-field-variant="A"|"B"] — flip this one constant to switch every page (team/side/matchup) at once.
-// "A" = neutral charcoal field with the club's colour only as a soft edge vignette; "B" = one vertical
-// wash of the club's primary colour, darkest at the top/bottom edges, lighter at the line of scrimmage.
+// Both field-surface variants live in styles.css behind [data-field-variant="A"|"B"] — flip this one
+// constant to switch every page (team/side/matchup) at once. "A" = neutral charcoal field with the
+// club's colour as a soft edge vignette; "B" = one vertical wash of the club's primary colour, darkest
+// at the top/bottom edges, lighter at the line of scrimmage.
 export const FIELD_VARIANT = "A";
 
-// D111 (Adam, 2026-09-16) — THE ONE SWITCH THE WHOLE RULING SITS BEHIND. `true` draws the secondary as ONE
-// row (corners at the outer edges, the nickel inside the left corner, the safeties inside them, all on a
-// single y), shortens the canvas that follows from the row count, and moves the legend line INTO the team
-// banner / the matchup header's centre block. `false` restores exactly what shipped before it — the two-row
-// secondary (safeties on their own row above the corners), the taller canvas AND the separate legend line
-// under the banner. team.js and matchup.js import this same constant to decide where the legend goes, so
-// the whole ruling is undone by editing this one word and nothing else has to be touched to undo it.
-//
-// WHY ONE ROW. The secondary was the only level drawing two row bands, so a both-sides canvas had to reserve
-// FIVE defensive rows' worth of height (D107 computes the canvas from the row count alone, never from the
-// club's own chart). Collapsing the level to one row band takes that count from five to four, which takes
-// BOTH_SIDES_HALF from 535 units to 433 — and because the team and matchup field is scaled to fit its
-// HEIGHT, a shorter canvas is a bigger scale on screen, which is what the ruling is buying. Nothing
-// horizontal moves: the corners keep D71's 1.15 pitches outside the tackles, the nickel keeps its place
-// between the left corner and the box, and the safeties keep the x mirrorDefXs has always given them
-// (spread across the guards), so this is a vertical change only. Net of EDGE_CHROME below, the canvas goes
-// from 1106 units to 946.
+// D111 — THE SWITCH THE ONE-ROW-SECONDARY RULING SITS BEHIND. `true` draws CB/NB/S on a single row
+// (corners at the outer edges, nickel inside the left corner, safeties inside them) instead of two,
+// which drops the defense from five rows to four and shortens BOTH_SIDES_HALF/the canvas with it (D107
+// computes canvas height from the row count alone, so a shorter canvas is a bigger on-screen scale).
+// `false` restores the two-row secondary and taller canvas. team.js and matchup.js import this same
+// constant to decide where the legend line goes (in the banner when true, its own line under the
+// banner when false) — flipping this one word undoes the whole ruling. Horizontal placement is
+// untouched: corners/nickel/safeties keep the x's mirrorLandmarks always gave them.
 export const SECONDARY_ONE_ROW = true;
 
 // ---- compact overview geometry (ruling E) -------------------------------------------------------
-// A column is now a stack of text rows, not photo cards, so its width is set by how much room a real
-// name plus a rating pill needs ("Quinyon Mitchell" + "88") rather than by a headshot diameter.
-// D103 (Adam, 2026-09-16) — "the player cells are too small even on a super large screen; don't go crazy
-// blowing them up." The whole-team and matchup card is 15% wider (156 -> 180) and the row type scale goes
-// up with it (styles.css's `.column-compact` block, which is scoped so D72's side pages keep their own).
-// WIDTH is free here: LAYOUT_WIDTH is fixed and the fit engine spreads the canvas sideways to fill the
-// window, so a wider card is simply a bigger share of the same canvas — and two 180-wide cards plus
-// MIN_CARD_GAP still come to 192, inside MIN_PITCH's 200, so every column keeps exactly the x D71/D76
-// place it at and no pitch constant has to move.
-// D106 (Adam, 2026-09-16) corrects the claim above: 192 inside 200 left only a ~20-unit gap between two
-// neighbouring cards on the LINE/pass-catcher rows — not enough air, per Adam's report that the boxes read
-// as "super close together." A pitch constant DID have to move after all: MIN_PITCH is now 224 (see below).
-// HEIGHT is NOT free: this page's scale is height-bound (a real Washington canvas is ~1200 layout units
-// tall against ~584 CSS pixels of room), so every unit added to a row is handed straight back as a
-// smaller scale on screen. The heights below therefore grow only as far as the bigger type genuinely
-// needs: ROW_H by two units, while CARD_H1 and BANNER_H do not move at all, because a line-one row was
-// already carrying ~8 units of slack above its own content.
-//
-// D109 (Adam, 2026-09-16) — "the player display things are still really small even on my big screen; do
-// something about it." The whole-team and matchup canvas is HEIGHT-bound: the fit engine scales it so its
-// full height lands in the ~687 CSS pixels left under the page chrome, so every layout unit of canvas
-// height is a direct tax on the size everything renders at. The canvas was 1376 units tall, of which 506
-// were air — gaps between rows, the line-of-scrimmage gutter, the page margins, and slack reserved inside
-// each row that its own content never used. Those 506 were measured against the real rendered rows (with
-// every min-height dropped, on MIA/WAS/HOU and the WAS matchup) rather than estimated, and the heights
-// below are now the measured content plus one or two units, not a guess:
+// A column is a stack of text rows, not photo cards, so its width is set by how much room a real name
+// plus a rating pill needs, not by a headshot diameter. WIDTH is free: LAYOUT_WIDTH is fixed and the fit
+// engine spreads the canvas sideways to fill the window, so a wider card is simply a bigger share of the
+// same canvas. HEIGHT is NOT free: the whole-team/matchup canvas is HEIGHT-bound (the fit engine scales
+// it to fit the ~687 CSS px left under the page chrome), so every unit added to a row is a direct tax on
+// the size everything renders at. The heights below are measured content plus one or two units of slack
+// (D109), not guesses:
 //   line one   19 units of content (35 with a D44 banner)  -> CARD_H1 23  (+13 banner = 36)
 //   slim row   17 units of content                         -> ROW_H   18
 //   label pill 15 units plus its 2-unit margin             -> LABEL_RESERVE 17
 //   row gap    styles.css's .column-stack gap              -> CARD_GAP 1 on the team/matchup family
 // styles.css's `.column-compact` block carries the matching min-heights and stack gap, so the drawn row
-// and the box reserved for it still cannot disagree (the same contract D103 set up).
-// D110 (Adam, 2026-09-16): 180 -> 216, the whole of this ruling's size gain (see the LAYOUT_WIDTH note at
-// the top of the file for why it is spent here rather than on the canvas width). On screen a column is
-// CARD_W x box width / LAYOUT_WIDTH, so this is 194 px on a 1700x900 window and 230 px on Adam's 2000x980,
-// against 162 and 191 before. HEIGHT is untouched: the row heights, the type scale in styles.css and the
-// scale the fit engine applies all come off D109's 1106-unit canvas, so the text is exactly the size it was
-// and the extra 36 units go into the one thing that was short — the room a name has before it abbreviates.
+// and the reserved box cannot disagree.
 const CARD_W = 216;
 const CARD_H1 = 23;  // the starter's bold row: 19 units of content, 23 reserved (36 with a banner over 35)
 const ROW_H = 18;    // a slim backup row on the team/matchup pages: 17 units of content (D109)
 const SIDE_ROW_H = 18; // D72's offense/defense pages keep the slim-row height they already have
-// D109: the team/matchup family tightens its stack gap to 1 (styles.css `.column-compact .column-stack`),
-// which is three units off every full column; the side pages keep the 2 the shared `.column-stack` draws,
-// so the gap is a per-view option the way `rowH` already is rather than one number for both families.
+// The team/matchup family's stack gap is 1 (styles.css `.column-compact .column-stack`); the side pages
+// keep the shared `.column-stack` gap of 2 — a per-view option the way `rowH` already is.
 const CARD_GAP = 1;
 const SIDE_CARD_GAP = 2;
 const BANNER_H = 13; // extra strip on a line-one row carrying the red OUT / green FILLING IN banner
-// D104 (Adam, 2026-09-16): a starter who is out, once somebody active is filling in for him, renders as a
-// compact row at the BOTTOM of his column rather than on line one — still wearing his red OUT rail, so
-// "big injury here" still reads at a glance. The rail is a strip stacked above that row's own text, so the
-// box has to reserve height for it; a shade more than BANNER_H because a slim depth row, unlike a line-one
-// row, has no spare slack of its own to lend it.
+// D104: a starter who is out, once somebody active is filling in for him, renders as a compact row at
+// the BOTTOM of his column instead of on line one, still wearing his red OUT rail so "big injury here"
+// still reads at a glance. Costs a shade more than BANNER_H because a slim depth row has no slack of its
+// own to lend it.
 const OUT_RAIL_H = 15;
-// The column's own label pill, which lives inside the reserved box. D109 measured it rather than deriving
-// it from the type: the rendered pill is 15 units tall and carries a 2-unit margin under it, on the team,
-// matchup AND side pages alike, so 17 is the exact box it needs and the 18th unit was slack.
+// The column's own label pill inside the reserved box: rendered pill is 15 units tall plus a 2-unit
+// margin, on the team, matchup AND side pages alike.
 const LABEL_RESERVE = 17;
 export const MAX_DEPTH_ROWS = 3; // ruling E: at most three depth rows, the third becoming "+N more"
-// D72: the single-unit (offense / defense) pages draw half as many rows, so the fit engine scales them to
-// roughly 1.3-1.8x. At that size a line-one row has room for a small headshot at its left edge — the SAME
-// row renderer as everywhere else, widened by an option (cards.js's overviewLineOne), never a second card
-// type. HEADSHOT_PAD is the vertical air above and below it, so the row grows from CARD_H1 to 34.
+// D72: the single-unit (offense/defense) pages draw half as many rows, so the fit engine scales them to
+// roughly 1.3-1.8x — room for a small headshot on line one, the SAME row renderer widened by an option
+// (cards.js's overviewLineOne), never a second card type. HEADSHOT_PAD is the air above/below it, so the
+// row grows from CARD_H1 to 34.
 const HEADSHOT_SIZE = 28;
 const HEADSHOT_PAD = 6;
 export const SIDE_MAX_DEPTH_ROWS = 4; // D72: one more depth row than the whole-team overview's cap
-// D72: a headshot eats ~28 of a 156-unit row, and it eats it out of the one thing worth reading — the
-// name. ("Riq Woolen" came out as "R. Wo…" on the first defense render.) A single-unit page has half the
-// columns, so it can afford a wider one, and 180 was the widest that cost nothing: two 180-wide cards plus
-// MIN_CARD_GAP still fit inside MIN_PITCH, so the columns kept exactly the pitch D71 places them at.
-//
-// D94 (👁 finding, 2026-09-15) — two WAS starters still ellipsised on the headshot row even with the D91
-// snap trio moved off the name's line: "C. Okonkwo" (badge competing for the same ~134-unit text block)
-// and "J. Croskey-Merritt", a longer surname than the 180-wide card was ever budgeted for. Widened by 30
-// (180 -> 210), the smallest step that clears both on WAS off/def and the widest (four-WR-plus-TE) HOU
-// pass-catcher row. This does cross the 188 ceiling the comment above used to cite (cardWidth + MIN_CARD_GAP
-// > MIN_PITCH), so the offensive LINE row's own enforceNoOverlap pass now widens that row's five columns
-// from MIN_PITCH's 200 to 222 to keep them from touching — the one on-canvas consequence, verified by render
-// to still leave every row inside 1700x900 with no overlap. MIN_PITCH itself is untouched (it is shared with
-// the team/matchup/group pages, which must not move), so nothing outside this single-unit side page changes.
+// D94: the side-page card is 210 wide (up from 180) so a headshot row leaves enough room for a long
+// surname ("J. Croskey-Merritt") not to ellipsise. Two 210-wide columns plus MIN_CARD_GAP (236) still
+// clear MIN_PITCH's floor, so this shares the same pitch as every other view with no extra widening.
 export const SIDE_CARD_W = 210;
 
-// D109: halved. These four are the canvas's pure air — 266 of the 1376 units the canvas used to stand at,
-// which on a height-bound field is 266 units of card size handed back for nothing. A both-sides half still
-// opens BAND_GAP between two rows of one level and BAND_GAP + LEVEL_GAP_EXTRA at a level boundary, so the
-// levels still read as levels; on top of that every real club's rows are spread evenly across the half
-// (placeSpan's extra gap), which is where the visible separation between rows actually comes from.
+// D109: BAND_GAP/LEVEL_GAP_EXTRA halved to buy back canvas height. A both-sides half still opens
+// BAND_GAP between two rows of one level and BAND_GAP + LEVEL_GAP_EXTRA at a level boundary, so levels
+// still read as levels; placeSpan's fill pass then spreads a real club's rows evenly across the half,
+// which is where the visible separation between rows actually comes from.
 const BAND_GAP = 5; // vertical gap between adjacent rows inside one level
 const LEVEL_GAP_EXTRA = 10; // on top of BAND_GAP, only between two rows in DIFFERENT levels
-// D111: the top strip of the canvas used to be empty turf, because the nearest thing to it was the SAFETIES
-// row and safeties stand over the guards, in the middle of the field. With the secondary on one row the
-// TOP defensive row is the one carrying the two corners, whose cards sit 30 units off each sideline — and
-// the two pieces of chrome the canvas prints up there both live exactly where those cards now are: the
-// "SECONDARY" level label at the left edge (summarizeLevels lifts a crowded level's label into the gap
-// ABOVE its first row, and with no gap there it was lifted clean off the canvas — it simply stopped being
-// drawn) and renderFieldSvg's "DEFENSE" caption at the right edge (drawn under the cards, so the right
-// corner's card covered all but its last letter; both were caught on the first LV render). So the canvas
-// now opens a strip above its first row big enough for a 12.5px level label plus its lift and for the
-// caption, and — because D96 puts the line of scrimmage on the canvas midpoint, which holds only while the
-// two margins are equal — the same strip below the last offensive row, where the "OFFENSE" caption sits.
-// 22 units, not LABEL_LIFT's 27: the label lands at row.top - LABEL_LIFT = 3 and is ~14 units tall, so 22
-// clears it with air to spare, and every unit here is a unit of the size the ruling is buying back.
-// Zero when the switch is off, so the two-row secondary draws on exactly the margins it always had.
+// D111: with the secondary on one row, the TOP defensive row carries the two corners, whose cards sit
+// right where the canvas used to leave empty turf for the "SECONDARY" level label and the "DEFENSE"
+// caption. EDGE_CHROME opens a strip above the first row (and, since the LOS sits on the canvas
+// midpoint, an equal strip below the last offensive row for "OFFENSE") tall enough for the lifted level
+// label plus its height. Zero when the switch is off, since the two-row secondary never needed it.
 const EDGE_CHROME = SECONDARY_ONE_ROW ? 22 : 0;
 const MARGIN_TOP = 8 + EDGE_CHROME;
 const MARGIN_BOTTOM = 8 + EDGE_CHROME;
 const LOS_HALF_GAP = 10; // half the empty gutter straddling the line of scrimmage, same both sides
-// D106 (Adam, 2026-09-16) — "the boxes on the team page are super close together." D103 widened the card
-// from 156 to 180 but left this pitch at 200, so the clear turf between two neighbouring 180-wide columns
-// on the LINE and pass-catcher rows fell from ~44 units to ~20 (enforceNoOverlap's minDist was
-// max(180+12, 200) = 200, i.e. a 20-unit gap). Raised to 224 so that same pair is back to a ~44-unit gap
-// (224 - 180 = 44), restoring the air D103 ate. LAYOUT_WIDTH does not grow (D58): the widest rows this
-// pitch drives — five linemen, the five-wide Houston pass-catcher cluster, the corners 1.4 pitches outside
-// the tackles — all still land inside the fixed canvas (checked by the D103 geometry test and by render).
-// Review requirement B: never let two columns sit closer than this. Also the lever that decides how much
-// of the canvas the chart actually covers — ruling E scales the whole canvas to fit the window's HEIGHT,
-// so if the columns only spanned the middle of the canvas the page would waste the spare width. At 224
-// the widest row (corners, 1.4 pitches outside the tackles) still reaches close to both sidelines, so the
-// field keeps filling a 1700px window edge to edge instead of leaving a dead strip down one side.
-//
-// D110 (Adam, 2026-09-16) — 224 -> 242, and the clear turf between two neighbouring cards goes from 44
-// units to 26 with it, which is this ruling relaxing D106's 44 on purpose ("the D106 44-unit gap is
-// relaxed by this ruling"). The two numbers are the same trade seen from both ends: on a canvas whose
-// width the fit engine has already stretched as far as it can (see LAYOUT_WIDTH), every unit a card gains
-// is a unit of turf its neighbour loses. 26 units is not the drop it looks like — measured on screen it is
-// ~23 px of air at 1700x900, against the ~18 px that D106 was raised to fix and the ~24 px the ruling's own
-// numbers (a 180-wide card at a 202 pitch on a 1475 canvas) would have produced.
-// The pitch has to CLEAR the card rather than merely being a floor under it: 216 + MIN_CARD_GAP is 242, so
-// this constant and enforceNoOverlap's own minimum are now the same number by construction and no row is
-// ever re-pitched after its placement function has chosen its x's (which is what D71's landmarks depend on).
+// MIN_PITCH (242) is built to CLEAR the card rather than merely floor it: CARD_W (216) + MIN_CARD_GAP
+// (26) = 242, so this constant and enforceNoOverlap's own minimum are the same number by construction
+// and no row is ever re-pitched after its placement function has chosen its x's — which is what D71's
+// landmarks depend on. Review requirement B: never let two columns sit closer than this. It is also the
+// lever for how much of the canvas the chart covers — the widest row (the corners, D110's 1.15 pitches
+// outside the tackles) still reaches close to both sidelines at this pitch, so ruling E's height-bound
+// scale doesn't leave a dead strip of unused width.
 const MIN_PITCH = 242;
 const TRAY_H = 22; // height of an "unlisted" tray strip, when a band has one
 const TRAY_GAP = 6;
@@ -294,52 +160,28 @@ const DEF_ROW_BANDS = DEF_ROWS.bands;
 const DEF_ROW_LEVEL = DEF_ROWS.level;
 const DEF_LEVEL_LABEL = { LINE: "LINE", EDGE: "EDGE", LB: "LINEBACKERS", SEC: "SECONDARY" };
 
-// D107 (Adam, 2026-09-16) — "the JAX team display is still different than other teams." ONE FIELD SCALE FOR
-// EVERY CLUB, on the team page and the matchup page alike.
+// D107 — ONE FIELD SCALE FOR EVERY CLUB, on the team and matchup pages alike. A both-sides canvas used to
+// be exactly as tall as the club's own chart needed, and because the fit engine scales the canvas to the
+// window, a club with a shorter chart (e.g. a defense with no EDGE row) came out MAGNIFIED relative to
+// one with a taller chart — Jacksonville's cards were visibly bigger than Las Vegas's for no reason a
+// reader could see.
 //
-// Until now a both-sides canvas was exactly as tall as the club's own chart needed (D96: the taller half's
-// natural height, doubled). Ten clubs (ARI, CHI, CIN, CLE, HOU, IND, JAX, KC, SF, TEN) put all four of
-// their linemen on the LINE row, so their compiled chart has NO EDGE row and their defence is four rows
-// rather than five; other clubs differ again through banners, "+N more" tails and "not on chart" trays.
-// Measured across the 32 charts the canvas ran from 874 units (ARI) to 1280 (MIA) — and the fit engine
-// scales the canvas to the window, so a shorter canvas came out MAGNIFIED: Jacksonville's cards were
-// visibly bigger than Las Vegas's for no reason a reader could see.
+// So the both-sides canvas is a CONSTANT, computed from the row constants alone and never from a club's
+// own rows. BOTH_SIDES_HALF is the tallest defence this engine can draw at its natural pitch: every row
+// of DEF_ROW_ORDER, each as tall as a FULL column (label pill + one bold row + MAX_DEPTH_ROWS slim rows —
+// DEF_ROW_FULL_H; a "+N more" tail costs nothing extra since it REPLACES the last slim row instead of
+// adding one), spaced at BAND_GAP between rows in one level and + LEVEL_GAP_EXTRA at a level boundary.
+// D96 gives the offence a half of the same height, LOS on the canvas midpoint. A club shorter than the
+// constant (every real club today) spreads its rows across the half with placeSpan's extra gap.
 //
-// So the both-sides canvas is now a CONSTANT, computed from the row constants alone and never from the
-// club's own rows. BOTH_SIDES_HALF is the tallest defence this engine can draw at its natural pitch: EVERY
-// row of DEF_ROW_ORDER (five before D111, four after it collapsed the secondary to one row), each as tall
-// as a FULL column (its label pill, one bold starter row and the maximum number of slim depth rows), spaced
-// at the minimum pitch — BAND_GAP between two rows of one level, plus LEVEL_GAP_EXTRA at each of the three
-// level boundaries the defensive order contains (three either way: LINE, EDGE, LB and SEC are four levels
-// whether the secondary draws on one row or two, which is why only the ROW count moves). Per D96
-// the offence gets a half of exactly the same height, and the line of scrimmage sits on the boundary
-// between them, which is the canvas midpoint. Every club therefore draws on the same canvas, so the fit
-// engine hands every club the same scale, the same card size and the same half boundaries.
-//
-// A club whose half is SHORTER than the constant (every real club: the tallest measured half is Miami's
-// defence at 607 against the constant's 655, and the tallest offence is San Francisco's at 427) spreads
-// its rows evenly across the half with placeSpan's extra gap — which is exactly what D96 already did to
-// the shorter of the two sides, now applied to both.
-//
-// THE DEEP-COLUMN QUESTION, stated as D107 asks. A row is as tall as the deepest column in it, and the
-// deepest a column can be is its label plus a line-one row plus MAX_DEPTH_ROWS slim rows — which is
-// precisely what DEF_ROW_FULL_H is, so a "+N more" tail costs nothing extra (the tail REPLACES the last
-// slim row rather than adding one). Two things can still push a single row past it: the OUT rail D104
-// stacks on a demoted starter's row, and a "not on chart" tray. Those are a per-row surcharge the
-// constant does not attempt to predict, so the rule is kept honest by a floor rather than by arithmetic:
-// the half is max(BOTH_SIDES_HALF, this club's own natural halves). No club in the league reaches it
-// today (the 48 units of headroom above Miami cover several rails), and if one ever did it would grow its
-// own canvas instead of drawing its rows through each other.
+// Two things can still push a single row past DEF_ROW_FULL_H — the OUT rail D104 stacks on a demoted
+// starter's row, and a "not on chart" tray — so the half is actually max(BOTH_SIDES_HALF, this club's own
+// natural halves): no club reaches the constant today, and one that did would grow its own canvas rather
+// than draw its rows through each other.
 const DEF_ROW_FULL_H = LABEL_RESERVE + CARD_H1 + MAX_DEPTH_ROWS * (ROW_H + CARD_GAP);
-// D109 leaves this derivation exactly as D107 wrote it — the constant is still the tallest defence this
-// engine CAN draw, so no club's chart can push its own canvas past it — and moves the number by moving the
-// row constants underneath it: 111 units per full row became 97, and the per-half gaps 100 became 50, so
-// BOTH_SIDES_HALF falls from 655 to 535 and the canvas from 1376 to 1106.
-// D111 leaves it alone again and moves the number the same way, by moving what it is derived FROM: with the
-// secondary on one row DEF_ROW_ORDER.length is 4 rather than 5, so the half is 4*97 + 3*BAND_GAP +
-// 3*LEVEL_GAP_EXTRA = 433, and the canvas — the half twice over plus the LOS gutter and the two margins,
-// which D111 widens by EDGE_CHROME — is 946. The constants stay DERIVED — nobody may type 433 or 946 here
-// — so a future ruling that adds or removes a defensive row moves the canvas with it automatically.
+// D111: with the secondary on one row, DEF_ROW_ORDER.length is 4 rather than 5, which is the only thing
+// that moves BOTH_SIDES_HALF/BOTH_SIDES_HEIGHT (currently 433 / 946) — both stay DERIVED, never
+// hardcoded, so a future ruling that adds or removes a defensive row moves the canvas with it.
 const DEF_LEVEL_BOUNDARIES = DEF_ROW_ORDER.reduce(
   (n, key, i) => (i && DEF_ROW_LEVEL[key] !== DEF_ROW_LEVEL[DEF_ROW_ORDER[i - 1]] ? n + 1 : n), 0);
 export const BOTH_SIDES_HALF = DEF_ROW_ORDER.length * DEF_ROW_FULL_H
@@ -347,25 +189,16 @@ export const BOTH_SIDES_HALF = DEF_ROW_ORDER.length * DEF_ROW_FULL_H
   + DEF_LEVEL_BOUNDARIES * LEVEL_GAP_EXTRA;
 export const BOTH_SIDES_HEIGHT = MARGIN_TOP + BOTH_SIDES_HALF + 2 * LOS_HALF_GAP + BOTH_SIDES_HALF + MARGIN_BOTTOM;
 
-// D108 (Adam, 2026-09-16) — "the offense and defense pages need to breathe at the top and the bottom." On a
-// single-unit side page the first row sat on MARGIN_TOP and the last row on MARGIN_BOTTOM, i.e. hard against
-// the turf's own edges, while the fill pass poured all the spare height into the gaps BETWEEN the rows. The
-// content therefore read as pinned to the frame. One row pitch — the engine's own smallest unit of vertical
-// air, the BAND_GAP + LEVEL_GAP_EXTRA it opens at a level boundary — is now inset above the first row and
-// below the last, and the rows spread evenly inside what is left, so the block sits toward the middle of the
-// screen. Deliberately one pitch and no more (Adam: "pushed in a LITTLE BIT, not a ton"); the fill mode, the
-// card sizes and every x are untouched.
-// D109 halved BAND_GAP/LEVEL_GAP_EXTRA to buy the whole-team and matchup pages their height back. The side
-// pages are not height-bound (they crop to one unit and fill, so their rows are spread by the fill pass
-// anyway) and D108 is a settled ruling about how they look, so the inset keeps the 30 units it was shipped
-// at rather than tracking a pitch that moved for a different page's sake.
+// D108 — a single-unit side page's rows used to sit flush against MARGIN_TOP/MARGIN_BOTTOM, reading as
+// pinned to the frame. One row pitch (BAND_GAP + LEVEL_GAP_EXTRA) is now inset above the first row and
+// below the last, with the rows spread evenly in what's left (Adam: "pushed in a LITTLE BIT, not a ton").
+// The side pages are not height-bound (they crop to one unit and fill), so this inset keeps its own 30
+// units regardless of BAND_GAP/LEVEL_GAP_EXTRA moving elsewhere (D109).
 const SIDE_INSET = 30;
 
-// D69: THREE offensive rows now, listed here nearest-the-LOS first. This IS the one constant Adam asked to
-// be able to flip — reorder these entries and the whole offensive half reorders with them (levels,
-// stripes, labels and gaps all fall out of it). PASS CATCHERS (WR+TE) sits above LINE (OL alone) — not
-// real formation depth, a deliberate visual choice (D69) — so it prints its own full-width stripe and
-// label instead of sharing LINE's.
+// D69: three offensive rows, nearest-the-LOS first. Reordering these entries reorders the whole offensive
+// half — levels, stripes, labels and gaps all fall out of it. PASS CATCHERS (WR+TE) sits above LINE (OL
+// alone) as a deliberate visual choice, not real formation depth, with its own stripe and label.
 const OFF_ROW_GROUPS = [
   { key: "PASS_CATCHERS", bands: ["WR", "TE"] }, // outside WR, slot WR, TE(s), outside WR
   { key: "LINE", bands: ["OL"] },                // LT LG C RG RT
@@ -374,54 +207,35 @@ const OFF_ROW_GROUPS = [
 const OFF_ROW_LEVEL = { PASS_CATCHERS: "PASS_CATCHERS", LINE: "LINE", BACKFIELD: "BACKFIELD" };
 const OFF_LEVEL_LABEL = { PASS_CATCHERS: "PASS CATCHERS", LINE: "LINE", BACKFIELD: "BACKFIELD" };
 
-// D71: the corners keep the placement they have always had — 1.4 pitches outside the tackles — and they
-// keep it whatever the receivers do, because the receivers are now a centred cluster that would drag the
-// secondary into the middle of the field if the corners still mirrored it.
-// D110 (Adam, 2026-09-16) — 1.4 -> 1.15, which the ruling asks for in as many words ("corners about 1.2
-// pitches outside the tackles"). The corners are the widest thing on the field and therefore the row that
-// decides whether a 216-wide card fits at all: at the new 242 pitch the corner sits 278 units outside the
-// tackle, so its card's outer edge lands 30 units inside the sideline — roughly where a 180-wide card at
-// 1.4 x 224 used to land, i.e. the secondary still reaches both sidelines and the field still fills the
-// window. Leaving it at 1.4 would have pushed that edge 40 units OFF the canvas.
-// The knock-on to name below: a corner only 1.15 pitches out leaves less room between him and the box, so
-// the nickel's own floor (a full pitch inside the corner) now places him ~36 units outside the left tackle
-// rather than ~90. He still reads as "inside the corner, outside the box", which is what D71 asked for, but
-// he sits noticeably closer to the tackle than he did.
+// D71: the corners are fixed off the tackles regardless of what the receivers do — the receivers are a
+// centred cluster (D71) that would drag the secondary into the middle of the field if the corners still
+// mirrored it.
+// D110: 1.4 -> 1.15. The corners are the widest thing on the field, so they decide whether a 216-wide
+// card fits at all: at the new 242 MIN_PITCH, 1.4 pitches would push a corner's card off the canvas,
+// while 1.15 lands its outer edge ~30 units inside the sideline — the secondary still reaches both
+// sidelines. Knock-on: the nickel (floored at one pitch inside the corner) now sits noticeably closer to
+// the tackle than it used to.
 const CB_PITCH_OUT = 1.15;
-// D112 (Adam, 2026-09-16, team view): "the OLBs / edges are way too far to the outside of the screen"
-// (Eagles, Broncos, among others). The EDGE row used to sit on the same 1.0-pitch-out landmark as CB_PITCH_OUT's
-// near neighbour (lm.OUTSIDE_L/R), which reads fine for a corner but drags an edge rusher out past where a real
-// defensive end lines up. D112 first moved it to 0.6 pitches outside the tackle.
-// D116 (Adam, 2026-09-16): "the EDGE and/or OLBs are still too far outside, tighten them up... I don't want to
-// look the whole way across the screen to see the OLB/EDGE counterpart." 0.6 was still reading as "out past the
-// corner's own gravity" on a 1700px screen — the EDGE pair sat ~1170 units apart. 0.2 pitches outside the tackle
-// puts the column over the tackle itself, where a real edge defender's hand is actually in the dirt; the widest
-// real EDGE row in data/cache/compiled (a 3-4's three edge columns, e.g. BAL/NYG/PIT/SEA) still clears
-// MIN_CARD_GAP to its nearest neighbour at this value (see the D112 test below), so there was no floor stopping
-// it from coming in this far.
+// D116: edge rushers sit 0.2 pitches outside the tackle — essentially over the tackle itself, where a
+// real edge defender's hand is in the dirt — tightened down from D112's first cut (1.0 -> 0.6 -> 0.2)
+// after Adam reported the pair still read as too far apart on a 1700px screen. The widest real EDGE row
+// (a 3-4's three edge columns) still clears MIN_CARD_GAP to its nearest neighbour at this value.
 const EDGE_PITCH_OUT = 0.2;
-// D116: the LB band's two inside linebackers used to sit ON the guards (1.0 pitch off centre, same distance as
-// the safeties), which put them at or past where the new, tighter EDGE columns land and defeated the point of
-// tightening EDGE_PITCH_OUT — there was nothing between an EDGE man and his neighbouring ILB. Pulling the ILBs
-// in to 0.85 pitches off centre (just inside the guards) keeps an EDGE column clearly outside its neighbouring
-// ILB with a visible margin, and still clears MIN_CARD_GAP between the two ILB columns themselves (see the
-// D116 test below).
+// D116: the LB band's two inside linebackers sit 0.85 pitches off centre — just inside the guards,
+// pulled in from sitting ON them — so an EDGE column stays clearly outside its neighbouring ILB with a
+// visible margin, and the two ILB columns themselves still clear MIN_CARD_GAP.
 const ILB_PITCH_FROM_CENTER = 0.85;
-// D71: "the nickel sits between the corner and the box." Nominally one pitch outside the left tackle,
-// which is what Adam described; the floor below it is arithmetic, not taste — two columns closer than
-// MIN_PITCH overlap, and the corner is already at 1.4 pitches, so a literal one-pitch nickel would be
-// drawn through him and then shoved clear by enforceNoOverlap anyway. Taking the max here puts him at the
-// same place deliberately instead of by accident, and still reads as "inside the corner, outside the box".
+// D71: the nickel sits nominally one pitch outside the left tackle, floored so two columns closer than
+// MIN_PITCH never overlap — the corner is already at CB_PITCH_OUT, so a literal one-pitch nickel would
+// be drawn through him and then shoved clear by enforceNoOverlap anyway; taking the max puts him there
+// deliberately. Reads as "inside the corner, outside the box" either way.
 const NB_PITCH_OUT = 1;
-// D119 (Adam, 2026-09-16, the DEFENSE side page alone): "offense looks better than defense — defense is
-// too spread out and the CBs are too far to the outside of the page." On the team and matchup pages the
-// corners MUST reach both sidelines (D71/D110), because the offence is on the same canvas; a defence drawn
-// on its own has no such duty, so its SECONDARY is pitched off the CENTRE instead of off the tackles. The
-// outermost column then sits 2.5 pitches out (~1210 units across) against the offense page's ~1162. The
-// side pages share one uncropped canvas (D75), so card size never changed — only the spacing tightens.
-// The front is untouched: edge rushers keep D116's spot just outside the tackles on every page, so a 3-4's
-// outside linebackers never draw inside their own defensive ends. Only a defence-with-no-offence layout
-// reads these.
+// D119 (the DEFENSE side page alone): with no offence sharing the canvas, the corners have no duty to
+// reach both sidelines (D71/D110's reason for pitching them off the tackles), so this page pitches the
+// whole secondary off the CENTRE instead — tighter than the team/matchup pages' ~1162-unit spread. Card
+// size is unchanged (the side pages share one uncropped canvas, D75); only the spacing tightens. The
+// front is untouched: edge rushers keep D116's spot outside the tackles on every page, so a 3-4's OLBs
+// never draw inside their own defensive ends.
 const SIDE_DEF_CB_PITCH_FROM_CENTER = 2.5;
 const SIDE_DEF_NB_PITCH_FROM_CENTER = 1.5;  // one pitch inside the left corner, one outside the left safety
 const SIDE_DEF_S_PITCH_FROM_CENTER = 0.5;   // two safeties exactly MIN_PITCH apart, straddling the centre
@@ -431,15 +245,12 @@ const STACK_GAP = 8;
 // against the sideline the field SVG draws.
 const CROP_MARGIN = 26;
 // D72: the most spare height one gap between two rows may absorb on a single-unit page. Enough to turn a
-// four-row defense on a 1700x900 screen into a full page; beyond it the rows would start reading as
-// unrelated islands rather than as levels of one chart.
+// four-row defense on a 1700x900 screen into a full page; beyond it the rows would read as unrelated
+// islands rather than levels of one chart.
 const MAX_EXTRA_GAP = 220; // D75: a three-row offense page spreads its rows to fill the height rather than zooming
-// D76: receivers/TE cluster pitch as a multiple of MIN_PITCH. D110 (Adam, 2026-09-16) takes it 1.3 -> 1.2,
-// which on the bigger MIN_PITCH leaves the widest real cluster (five places — Cleveland's WR·Slot, WR1, WR2,
-// WR3 and a tight end, and Houston's five with its second tight end stacked on one x) almost exactly the
-// absolute width it has today, so the row still spreads across the turf rather than huddling on the centre,
-// while a hypothetical sixth place now fits inside the canvas with 66 units to spare instead of hanging off
-// the sideline. The clear air between two neighbouring receivers is 74 units, nearly three times the line's.
+// D76/D110: receivers/TE cluster pitch as a multiple of MIN_PITCH (1.2, down from 1.3) — the widest real
+// cluster (five places, e.g. Cleveland's WR·Slot/WR1/WR2/WR3/TE) still spreads across the turf rather
+// than huddling on the centre, and a hypothetical sixth place still fits inside the canvas.
 const PASS_CATCHER_PITCH = 1.2;
 const SLOT_COLUMN_MIN_RATE = 40; // D86: share of his OWN snaps a receiver must take inside to stand in the WR · Slot column; bar lowered from 50 to 40 by D118
 
@@ -668,72 +479,38 @@ function stackColumns(cols) {
   for (const c of cols.slice(1)) c.stackUnder = cols[0];
 }
 
-// WR · SLOT IS A REAL COLUMN OF SLOT RECEIVERS — D83 (Adam, 2026-09-15): "if he shows under WR · Slot,
-// don't show him again under WR1 or WR2." Until now the slot was a club column wearing a different pill
-// (D63/D64), so the man standing inside was also still the club's WR2 two boxes away. He is now lifted
-// out: every charted receiver who really plays inside moves into one synthetic column and is removed from
-// the club column he came from. Nobody over the bar is left behind and nobody
-// is drawn twice. A team with nobody over the bar has no Slot column at all and keeps WR1/WR2/WR3 exactly
-// as the club prints them — no archetype and no "last receiver" guesses, which is what D64 already ruled
-// out.
+// WR · SLOT IS A REAL COLUMN OF SLOT RECEIVERS (D83): every charted receiver who qualifies for the slot
+// is lifted out of his club column into one synthetic column and removed from the column he came from —
+// nobody over the bar is left behind, nobody is drawn twice. A team with nobody over the bar has no Slot
+// column at all and keeps WR1/WR2/WR3 exactly as the club prints them.
 //
-// D86 (Adam, 2026-09-15) replaces the membership and ordering rules D85 had put in D83's place. A charted
-// wide receiver moves into the column only when the slot is his MAIN alignment: at least
-// SLOT_COLUMN_MIN_RATE percent of his own snaps taken inside (D64/D77 — PlayerProfiler). There is no
-// volume or share test any more. D85 decided membership by each man's share of the TEAM's inside snaps,
-// which pulled plainly outside receivers into the slot on nothing but their workload — Justin Jefferson
-// lines up inside on 17% of his snaps and still takes the biggest share of his team's slot work — and,
-// ordering purely by snaps, could seat a club's number-one receiver underneath a lesser man.
+// Membership (D86, lowered 50 -> 40 by D118): a receiver qualifies once at least SLOT_COLUMN_MIN_RATE
+// percent of his OWN snaps are taken inside — not his share of the team's inside snaps, and not gated by
+// any minimum sample size (D117 retired D89's 100-snap floor: a thin sample is still evidence of where he
+// lines up).
 //
-// D89 (Adam, 2026-09-15) had AMENDED D86's membership rule with a floor: a rate only counted once it had
-// been measured over at least 100 inside snaps, else the man stayed in his club column whatever his rate
-// said — thin samples like LaJohntay Wester's 24 Baltimore snaps at 53.3%, Tom Kennedy's 26 in Detroit and
-// Jimmy Horn Jr.'s 75 in Carolina each invented a column, and in Baltimore's case hid Zay Flowers's own WR1
-// pill behind a fourth-stringer. D117 (Adam, 2026-09-16) RETIRES D89: "if they line up frequently in the
-// slot, they're a slot guy, who cares how often they are out there." Membership is the rate alone again
-// (D86, SLOT_COLUMN_MIN_RATE) — a rate with no snap count at all is now admitted on the rate, same as a
-// well-measured one; a thin sample is still evidence of where the man actually lines up, and D117 trusts it.
+// Ordering (D90): tier first (a listed-OUT starter's tier 0, then 1, then 2…, untiered last) so a backup
+// is never shown above a starter, then the rank of the column he came from, then slot snaps (most first,
+// null last), then the row the club printed him on.
 //
-// D118 (Adam, 2026-09-16) LOWERS D86's bar from 50 to 40 percent (SLOT_COLUMN_MIN_RATE): of 175 receivers
-// with 100+ offensive snaps in 2025, 42 (24%) were at 40 or more versus 26 (15%) at 50 or more, so the old
-// bar was screening out real slot men. D90's ordering and D93's whole-column move are unchanged; D117's
-// retirement of D89's snap floor stands.
+// Whole-column move (D93): when a club column's own STARTER qualifies (columnDecider below picks the
+// decider for a listed-OUT/ACTIVE-fill-in pair), the WHOLE column becomes the WR · Slot column — same
+// order, backups stacked under him — and vanishes from the club columns, rather than leaving behind a
+// column of nothing but backups. If two starters qualify, the higher-ranked column (lower columnOrder,
+// D92) wins and becomes the Slot column; the other starter moves in as an individual below it and HIS
+// backups stay behind in his own, now backup-led, club column — the one case that can still leave a club
+// column holding only backups, which is what D92's "backup-led columns sort last" below still covers.
+// Within the merged group, D90's tier rule still governs: qualifying starters from other columns join
+// directly under the source column's line-one block, ahead of its own carried backups.
 //
-// Ordering is the club's own chart, read tier first — D90 (Adam, 2026-09-15), amending D86's ordering: the
-// tier a man is listed on inside his column (tier 0, a listed-OUT starter, then tier 1, then tier 2 and so
-// on, a card with no tier at all last), then the rank of the column he came from (the ordinal position in
-// wrSlots — the first receiver column is rank 1), then slot snaps, most first, then the row the club
-// printed him on. D86 read the column before the tier, which put a BACKUP above a STARTER whenever the
-// backup happened to be listed in an earlier column: in Tennessee, Chimere Dike (the WR1 column's tier-2
-// man) stood above Wan'Dale Robinson (the WR2 column's tier-1 starter). Adam's principle is about the
-// depth of the chart, not the left-to-right order of its boxes, so tier now leads and a backup is never
-// shown above a starter; club rank still settles two men on the same tier, which is what keeps a club's
-// number-one receiver above an equally-listed team-mate.
-//
-// D93 (Adam, 2026-09-15) AMENDS what MOVES, leaving the bar itself exactly as D86/D89 set it. Until now every
-// qualifying man moved on his own and his backups stayed behind, which repeatedly left a club column holding
-// nothing but a fourth-stringer (Green Bay's second column was Skyy Moore alone). A club that charts its slot
-// receiver as the starter of a column has simply told us that column IS the slot: so when a column's own
-// starter qualifies, the WHOLE column becomes the WR · Slot column — same players, same order, his backups
-// stacked under him as the club listed them — and vanishes from the club columns. Backups elsewhere still move
-// as individuals and join BELOW that group in D90's order. See pass three below for the two-starters case.
-//
-// Every man is judged on the SAME window: the pooled 2025+2026 rate (slotRatePooled) when his card carries
-// one, otherwise the headline slotRate. The headline rate alone must not decide it — D77 switches a man to
-// his current season alone the week his own snaps pass SLOT_SAMPLE_MIN, so team-mates carry different
-// windows and a thin early-season sample could drop a season-long slot man out of his own column mid-year.
-//
-// This is a DISPLAY regrouping and nothing more: the compiled TeamView is the club's own chart and stays
-// untouched, which is why every slot object is shallow-cloned before its player list is trimmed. The
-// player cards themselves are carried across by reference, so the man in the Slot column is the very same
-// card object the club column held — his role, banner, badges and heat ride along unchanged.
-// A card's measured slot snaps over the pooled 2025+2026 window, or null when PlayerProfiler has no number
-// for him. slotSnapsPooled is the window every man is read on; the headline slotSnaps is the fallback only
-// for a card that carries no pooled count at all (an older compiled file, or a season whose total snaps
-// could not be worked out so it never joined the pool). This count ORDERS the column (D90) and fills the
-// tooltip's bracket; it no longer gates membership — D117 retired D89's floor, so a rate with no snap count
-// at all is admitted on the rate alone, same as a well-measured one, and simply sorts last, unchanged from
-// D90's null-snaps-sort-last rule.
+// Every man is judged on the same rate window: the pooled 2025+2026 rate when a card carries one, else
+// the headline rate (D77 can switch a man to his current season alone mid-year, so team-mates can carry
+// different windows). This is a DISPLAY regrouping only — the compiled TeamView is untouched; every slot
+// is shallow-cloned and player cards are carried by reference, so a man's role/banner/badges/heat in the
+// Slot column are the same object the club column held.
+// slotSnapsPooled is the count every man is ordered on (D90) and shown in the tooltip's bracket; the
+// headline slotSnaps is only the fallback for a card with no pooled count at all. It no longer gates
+// membership (D117), so a null count is admitted on the rate alone and simply sorts last.
 const snapCount = (v) => (typeof v === "number" && Number.isFinite(v) && v >= 0 ? v : null);
 const slotSnapsOf = (p) => snapCount(p?.slotSnapsPooled) ?? snapCount(p?.slotSnaps);
 // D86: the one rate window every man is judged on — the pooled 2025+2026 rate when the card carries one,
@@ -808,17 +585,14 @@ function lastName(name) {
 // the row), and `reason` the tooltip sentence naming every man in the column and the rate he plays inside
 // at. Exported for the tests — nothing else calls it.
 export function regroupSlotReceivers(wrSlots) {
-  // Pass one: every charted receiver PlayerProfiler has measured, deduped, each carrying where the club
-  // lists him — the rank of the column he came from and his tier inside it — because D86 orders the
-  // finished column by the club's own chart before it looks at any workload (D90: tier before column). wrSlots arrives in the club's
-  // column order, so the array position IS the rank: the first receiver column is rank 1.
+  // Pass one: every charted receiver PlayerProfiler has measured, deduped by card/playerKey (first listing
+  // wins — a chart that lists one man in two receiver columns; dedupSlots already resolves that on the
+  // server, this is belt and braces). wrSlots arrives in the club's own column order, so the array
+  // position IS the rank D90 orders by.
   const charted = [];
   const seen = new Set();
   wrSlots.forEach((s, rank) => {
     (s.players || []).forEach((p, row) => {
-      // Belt and braces against a chart that lists one man in two receiver columns (dedupSlots already
-      // resolves that on the server): one card object, and one playerKey, count once. The first listing
-      // wins, which is the higher of the two club columns.
       if (seen.has(p) || (p.playerKey != null && seen.has(p.playerKey))) return;
       const rate = rateOf(p);
       if (rate == null) return;
@@ -828,11 +602,8 @@ export function regroupSlotReceivers(wrSlots) {
     });
   });
 
-  // Pass two: the men who play at least SLOT_COLUMN_MIN_RATE of their own snaps inside — no minimum snap
-  // count any more (D117 retired D89's 100-snap floor; a rate with no snap count at all is admitted on the
-  // rate alone). Ordered tier first so a backup never sits above a starter (D90), then the rank of the club
-  // column he came from, then slot snaps with the bigger workload first (null snaps sort last), and the
-  // club's own printed order settles anything still tied.
+  // Pass two: everyone at or above SLOT_COLUMN_MIN_RATE, ordered per D90 (tier, then column rank, then
+  // slot snaps with the bigger workload first and null last, then the club's own printed row).
   const qualified = charted
     .filter((c) => c.rate >= SLOT_COLUMN_MIN_RATE)
     .sort((a, b) => a.tier - b.tier || a.rank - b.rank || (b.snaps ?? -1) - (a.snaps ?? -1) || a.row - b.row)
@@ -842,32 +613,17 @@ export function regroupSlotReceivers(wrSlots) {
   const qualKeys = new Set(qualified.map((p) => p.playerKey).filter((k) => k != null));
   const isQualified = (p) => !!p && (qualSet.has(p) || (p.playerKey != null && qualKeys.has(p.playerKey)));
 
-  // Pass three — D93 (Adam, 2026-09-15), which amends D86/D92. Up to here a qualifying man moved as an
-  // INDIVIDUAL and left his backups behind, which is how Green Bay ended up with a column holding nobody but
-  // Skyy Moore. Adam's ruling: when a club column's own STARTER plays inside, the club has simply charted its
-  // slot receiver in that column, so the WHOLE column becomes the WR · Slot column — same players, same
-  // order, his backups stacked under him exactly as the club listed them — and it disappears from the club
-  // columns. Which man counts as the starter is columnDecider's business (a listed-OUT starter is decided by
-  // his ACTIVE fill-in, and then moves with the column).
+  // Pass three (D93): a club column whose own STARTER qualifies (columnDecider decides who that is for a
+  // listed-OUT/ACTIVE-fill-in pair) takes its WHOLE column into the Slot column, same order, rather than
+  // leaving its backups behind in an orphaned column. With two qualifying starters, the higher-ranked
+  // column (lower columnOrder, D92) wins and becomes the Slot column; the other starter moves in as an
+  // individual and HIS backups stay behind in his own, now backup-led, club column — the one case that can
+  // still leave a club column holding nothing but backups (see the kept.sort below, D92).
   //
-  // If TWO starters qualify (rare), only one column can be the Slot column: the higher ESPN-ranked one wins
-  // — i.e. the lower columnOrder, because the server has already ordered the receiver columns by ESPN's rank
-  // of the man leading each (D92) — and the other starter moves as an individual below it, HIS backups
-  // staying in his own club column. That leftover is therefore the one case that can still leave a club
-  // column holding nothing but backups, which is why D92's "backup-led columns sort last" clause below is
-  // still live rather than dead code.
-  //
-  // Where that second starter lands inside the column is D90's binding principle, not the order the two
-  // groups happen to arrive in: a BACKUP never sits above a STARTER in any column. So the men who join the
-  // source column's group are split — qualifying starters go directly under the source column's LINE ONE
-  // block, ahead of the backups that column carried in, and qualifying backups go under all of them in D90's
-  // order. Buffalo therefore reads Shakir, Robinson, Atwell: the two starters together, the carried backup
-  // beneath them, rather than Robinson being stacked under another column's reserve.
-  //
-  // Accepted edge, low priority (Adam has not ruled on it and no real club hits it today): when the column
-  // that LOSES the two-starters tie is a [STARTER_OUT, ACTIVE] pair and only the ACTIVE fill-in qualifies,
-  // he moves into the Slot column alone and the out man is left leading his old column — whose `injury`
-  // block still names that fill-in as the man covering for him, now drawn one column over.
+  // Accepted edge, low priority (no real club hits it today): if the column that LOSES the two-starters tie
+  // is a [STARTER_OUT, ACTIVE] pair and only the fill-in qualifies, he moves in alone and the out man is
+  // left leading his old column, whose `injury` block still names that fill-in as covering for him, now
+  // drawn one column over.
   const starterColumns = wrSlots.filter((s) => starterLed(s) && isQualified(columnDecider(s)));
   const source = starterColumns.length
     ? starterColumns.reduce((a, b) => ((a.columnOrder ?? 0) <= (b.columnOrder ?? 0) ? a : b))
@@ -876,12 +632,12 @@ export function regroupSlotReceivers(wrSlots) {
   const inGroup = new Set(group);
   const groupKeys = new Set(group.map((p) => p.playerKey).filter((k) => k != null));
   // Men who qualify on their own, from every OTHER column, join the starter-led group in D90's order (tier,
-  // then the club column's rank, then slot snaps, then the printed row) — unchanged from D86 except for
-  // where they land relative to the backups the source column carried in, above.
+  // then column rank, then slot snaps, then printed row) — but split so a BACKUP never sits above a
+  // STARTER (D90): a second qualifying starter joins right under the source column's line-one block, ahead
+  // of the backups that column carried in.
   const individuals = qualified.filter((p) => !inGroup.has(p) && !(p.playerKey != null && groupKeys.has(p.playerKey)));
-  // A starter is a man his club lists on line one or two of a column (tier 0 or 1) or whom the server itself
-  // marks as leading one (D12/D44's listed-OUT starter and his ACTIVE fill-in, and a co-starter) — the same
-  // test starterLed applies to a whole column.
+  // A starter is a man his club lists on line one or two (tier 0/1) or whom the server marks as leading a
+  // column (D12/D44's listed-OUT starter + ACTIVE fill-in, or a co-starter) — the same test starterLed uses.
   const isStarter = (p) => tierOf(p) <= 1 || STARTER_LED_ROLES.has(p.role) || p?.coStarter === true;
   const head = group.slice(0, lineOneBlock(source));
   const carried = group.slice(head.length);
@@ -896,23 +652,16 @@ export function regroupSlotReceivers(wrSlots) {
     const players = (s.players || []).filter((p) => !moved.has(p) && !(p.playerKey != null && movedKeys.has(p.playerKey)));
     if (players.length) kept.push({ ...s, players });
   }
-  // D92 (Adam, 2026-09-15): the server orders the receiver columns by ESPN's rank of the man LEADING each of
-  // them, but lifting the slot men out can leave a column with nobody but backups in it. Under D93 that is no
-  // longer the everyday case — a qualifying starter takes his backups with him — but it survives for the
-  // two-starters-qualify shape above (the losing starter leaves his backups behind) and for a chart whose
-  // column was never starter-led to begin with. A column of backups is not a number-two receiver and must not
-  // be drawn ahead of a starter's column, so every column still led by a starter comes first and the
-  // backup-led ones follow, each group keeping the order the server gave it. Roles are the server's own
-  // (D12/D44): a co-starter, a listed-OUT starter and his ACTIVE fill-in all lead a starter's column.
+  // D92: lifting the slot men out can leave a column with nothing but backups in it (the losing starter
+  // above, or a chart never starter-led to begin with). That is not a number-two receiver and must not be
+  // drawn ahead of a starter's column, so starter-led columns sort first and backup-led ones follow, each
+  // group keeping the server's own order.
   kept.sort((a, b) => (starterLed(a) ? 0 : 1) - (starterLed(b) ? 0 : 1));
 
-  // D93: the derived column stands where the source club column stood, so it has to carry that column's own
-  // dressing with it — `injury` is what cards.js reads for the heat underline and glow, `rankSource`/
-  // `espnRank` and `clubLabel` are what columnRankReason quotes in the tooltip. Without them the Slot column
-  // would lose a club's injury heat the moment its starter qualified. With no source column (only backups
-  // qualified) there is nothing to carry and the fields are simply absent, as they were before D93.
-  // `sourceSlotId` is informational only — nothing reads it, and it is kept so a reader of the rendered view
-  // (or a future debugging aid) can see which club column this one was built out of.
+  // The derived column stands where the source club column stood, so it carries that column's own dressing
+  // with it — `injury` (cards.js's heat underline/glow) and `rankSource`/`espnRank`/`clubLabel`
+  // (columnRankReason's tooltip) — or the Slot column would lose a club's injury heat the moment its
+  // starter qualified. Absent when no starter column qualified. `sourceSlotId` is informational only.
   const slot = {
     slotId: "OFF-WR-SLOT", unit: "OFF", band: "WR", ordinal: 0, columnOrder: 0,
     label: "WR · Slot", derived: true, players: men,
@@ -920,22 +669,16 @@ export function regroupSlotReceivers(wrSlots) {
       ? { injury: source.injury, rankSource: source.rankSource, espnRank: source.espnRank, clubLabel: source.clubLabel, sourceSlotId: source.slotId }
       : {}),
   };
-  // D86: the tooltip leads with the number that put each man in the column — the rate the bar was read on
-  // — and carries his slot snaps in brackets behind it, in the column's own order. D117 retired D89's floor,
-  // so a man can reach the column on his rate alone with no snap count at all; the null-safe fallback below
-  // is what drops the bracket for him rather than printing an empty one.
+  // D86: the tooltip leads with the rate that qualified each man and carries his slot snaps in brackets
+  // behind it (dropped when null — D117 admits a man on rate alone with no snap count).
   const entryOf = (p) => {
     const snaps = slotSnapsOf(p);
     return `${lastName(p.name)} ${rateOf(p)}%${snaps == null ? "" : ` (${snaps} slot snaps)`}`;
   };
-  // D93: the column can now hold men who never cleared the bar — a qualifying starter's own backups, carried
-  // in with his column. The first sentence is a statement about who plays inside, so it names only the men the
-  // bar was actually read on, in the column's own top-to-bottom order; a 12%-inside fourth-stringer riding
-  // along under his starter would make it false. Those carried men are then named in a clause of their own, so
-  // that a reader who sees a name on the column and not in the sentence is not left wondering why he is there:
-  // he is in the column because the CLUB lists him in it, not because of anything he does inside.
-  // (For D12/D44's shape the decider is the ACTIVE fill-in, so a listed-OUT starter above him who did not
-  // clear the bar himself is named in this clause too — he is one of the men the column carried in.)
+  // D93: the column can hold men who never cleared the bar — a qualifying starter's own backups, carried in
+  // with his column. The first sentence names only the men the bar was actually read on, so it stays true;
+  // the carried men (including a listed-OUT starter above an ACTIVE fill-in who didn't clear the bar
+  // himself) are named in a clause of their own, so nobody on the column is left unexplained.
   const carriedOver = source ? men.filter((p) => inGroup.has(p) && !isQualified(p)) : [];
   const decider = source ? columnDecider(source) : null;
   const carriedClause = carriedOver.length && decider
@@ -945,26 +688,20 @@ export function regroupSlotReceivers(wrSlots) {
   return { slot, kept, reason };
 }
 
-// D92 (Adam, 2026-09-15): a receiver column's number is no longer the club's — it is ESPN's rank of the man
-// leading the column — so a leftover column's tooltip has to say where its number came from AND what the club
-// itself prints, or the pill and the tooltip would contradict each other. `rankSource` is the server's own
-// provenance: "espn" when ESPN ranked the leading man, "chart" when nothing but the printed order of the
-// chart we hold placed the column. The club's printed position is the number on its own label when the club
-// numbers its receiver rows, and otherwise the column's ordinal, which was counted off that printed order.
+// D92: a receiver column's number is ESPN's rank of the man leading it, not the club's, so a leftover
+// column's tooltip has to say where its number came from AND what the club itself prints, or the pill and
+// the tooltip would contradict each other. `rankSource` is the server's own provenance ("espn" when ESPN
+// ranked the leading man, "chart" when only the chart's printed order placed the column); the club's
+// printed position is the number on its own label, or the column's ordinal when the club doesn't number.
 //
-// D93 renumbers the surviving columns down their left-to-right order, so the pill on the box and the number
-// in this sentence can be two different numbers (pill WR1, server label WR2). `displayLabel` is what the box
-// actually prints: when it differs from the server's own label the sentence opens by saying so, or the
-// tooltip would read as a flat contradiction of the pill above it. Called without one — as the tests call it
-// directly — it is the plain provenance sentence it has always been.
+// D93 renumbers surviving columns down their left-to-right order, so the pill on the box and this sentence
+// can quote two different numbers (pill WR1, server label WR2) — `displayLabel` is what the box actually
+// prints, and when it differs from the server's own label the sentence opens by saying so.
 //
-// D94 (Adam, 2026-09-15): the WR band is now built straight off ESPN's own depth chart, not the club's page —
-// every WR column carries `clubLabel: "WR (ESPN)"` (server/compile/starters.js's ESPN_WR_CLUB_LABEL, inlined
-// here since this module takes no imports) and `labelSource: "espn"`. For those columns there is no club
-// position to quote: `printedOrdinal` would find no digit in "WR (ESPN)" and fall back to `slot.ordinal`,
-// which is just ESPN's own column count dressed up as something the club printed — a claim that is no longer
-// true. So an ESPN column drops the "the club prints it" clause entirely and says only what is true: ESPN
-// listed it at this number.
+// D94: WR columns built straight off ESPN's own chart carry `clubLabel: "WR (ESPN)"` and `labelSource:
+// "espn"`, and have no real club position to quote (printedOrdinal would otherwise fall back to
+// `slot.ordinal`, which is just ESPN's own column count dressed up as something the club printed). Such a
+// column drops the "the club prints it" clause and says only what's true: ESPN listed it at this number.
 // Exported for the tests — nothing else calls it.
 const ORDINAL_SUFFIX = (n) => (n % 100 >= 11 && n % 100 <= 13 ? "th" : ["th", "st", "nd", "rd"][n % 10] ?? "th");
 function printedOrdinal(slot) {
@@ -987,18 +724,14 @@ export function columnRankReason(slot, displayLabel = null) {
   return `${renumbered}${printed ? `printed ${printed} on the chart` : "printed in the chart's own order"}`;
 }
 
-// The PASS CATCHERS row (D69's own row, D71's x-maths, D97's left-to-right order). D63 hung these columns
-// off the ends of the offensive-line comb so the receivers stood where they really line up, two pitches
-// outside the tackles; D71 replaced that with what Adam actually wants to read — ONE evenly-pitched cluster
-// centred on the field's centre line, at the same MIN_PITCH every other row uses. D97 (Adam, 2026-09-16):
-// the pills must climb left to right, so it reads
+// The PASS CATCHERS row (D69's row, D71's x-maths, D97's left-to-right order): one evenly-pitched cluster
+// centred on the field's centre line, at the same MIN_PITCH every other row uses — not the field-accurate
+// "two pitches outside the tackles" placement D63 originally used. Reads left to right as
 //   WR1 · WR · Slot (if any) · WR2 · ... · TE(s) · WRlast
-// i.e. the club columns in their own ascending order, the Slot column (if any) right after WR1, and the
-// tight end(s) tucked inside the last receiver. A second tight end still stacks directly under the first on
-// one x, so a two-TE club takes no more width than a one-TE club.
-// Nothing is written back into `lm` any more: with the receivers in a cluster there is no receiver
-// position for the secondary to mirror, so the corners and the nickel are fixed off the tackles in
-// mirrorLandmarks instead (D71).
+// i.e. the club columns in ascending order, the Slot column (if any) right after WR1, tight end(s) tucked
+// inside the last receiver (a second TE stacks under the first on one x, so a two-TE club takes no extra
+// width). Nothing is written back into `lm`: with the receivers in a cluster there is no receiver position
+// for the secondary to mirror, so the corners/nickel are fixed off the tackles in mirrorLandmarks (D71).
 function layoutPassCatchers(offSlots, lm, style) {
   const col = (slot, band, extra = {}) => ({ slot, x: lm.C, height: slotContentHeight(slot, style), width: colWidth(style), band, ...extra });
   const wrSlots = offSlots.filter((s) => s.band === "WR").slice().sort(byColumnOrder);
@@ -1009,20 +742,12 @@ function layoutPassCatchers(offSlots, lm, style) {
   // in the comb and then hidden, it simply is not there.
   const grouped = regroupSlotReceivers(wrSlots);
   const slotCol = grouped ? col(grouped.slot, "WR", { displayLabel: "WR · Slot", derived: true, slotReason: grouped.reason }) : null;
-  // D93 (Adam, 2026-09-15), replacing D83's addendum: the leftover columns used to read a plain "WR" with no
-  // number at all, because with an inside man lifted out of the middle of the row "WR2" no longer described
-  // the box. Now that a qualifying starter takes his WHOLE column with him, what is left is a clean run of
-  // real receiver columns, so they are RENUMBERED WR1, WR2… down their existing left-to-right order (which is
-  // still ESPN's, D92) — Philadelphia reads WR1, WR · Slot, WR2, TE rather than WR, WR · Slot, WR. The
-  // renumbering is a display label only: the slot keeps the server's own `label`, so the tooltip can still say
-  // both numbers truthfully ("Numbered WR1 here…; ESPN ranks this column WR2; the club prints it 3rd"). With
-  // no Slot column at all nothing is regrouped and the server's WR1/WR2/WR3 pills stand exactly as before.
-  //
-  // Only a column still led by a STARTER takes a number. The two-starters case can leave a column holding
-  // nothing but the losing starter's backups (see regroupSlotReceivers), and D92 already sorts that column
-  // behind every starter's column precisely because it is not a number-two receiver — so it must not be
-  // handed a rank pill either. It prints a plain "WR", claiming no place in the club's receiver order, and
-  // the columns that ARE starter-led number straight through it: WR1, WR2, … WR.
+  // D93: once a qualifying starter's whole column moves into the Slot column, what's left is a clean run of
+  // real receiver columns, so they are RENUMBERED WR1, WR2… down their own left-to-right order (still
+  // ESPN's, D92) — a display label only: the slot keeps the server's own `label`, so the tooltip can still
+  // quote both numbers truthfully. A column left holding only the losing starter's backups (see
+  // regroupSlotReceivers, D92) is not a number-two receiver, so it prints a plain "WR" and takes no number;
+  // starter-led columns number straight through it.
   let wrRank = 0;
   const wrCols = grouped
     ? grouped.kept.map((s) => {
@@ -1033,13 +758,9 @@ function layoutPassCatchers(offSlots, lm, style) {
 
   stackColumns(teCols); // TE2 under TE1: the stack takes ONE place in the cluster, not two
   const te = teCols.length ? [teCols[0]] : [];
-  // D97 (Adam, 2026-09-16): the pills must read ascending left to right — WR1, WR2, WR3. The old order below
-  // hung the LAST club column off the far end only when a Slot column sat between WR1 and the rest; with no
-  // Slot column it instead read WR1, WR3, TE, WR2 (the Ravens), which is what D97 was raised against. Both
-  // cases now share one shape: the club columns stay in their own ascending order, the Slot column (if any)
-  // slots in right after WR1, and the tight end(s) stay tucked inside the last receiver exactly as D71/D76
-  // already placed them. One club column left keeps that single column with the Slot column right after it;
-  // none left (every charted receiver plays inside) leaves the Slot column alone with the TEs.
+  // D97: the pills must read ascending left to right (WR1, WR2, WR3…): the club columns stay in their own
+  // order, the Slot column (if any) slots in right after WR1, and the tight end(s) stay tucked inside the
+  // last receiver as D71/D76 place them.
   const placed = (wrCols.length > 1
     ? [wrCols[0], ...(slotCol ? [slotCol] : []), ...wrCols.slice(1, -1), ...te, wrCols[wrCols.length - 1]]
     : [...wrCols, ...(slotCol ? [slotCol] : []), ...te]
@@ -1072,22 +793,17 @@ function layoutBackfieldRow(offSlots, lm, style) {
   return cols;
 }
 
-// Derives the defensive front's and secondary's mirror-grid landmarks from the OL row. Ruling D made the
-// line row the five linemen alone, so the tackle/guard/centre landmarks are exact rather than being read
-// out of a ten-column mixed row.
+// Derives the defensive front's and secondary's mirror-grid landmarks from the OL row (exact tackle/
+// guard/centre positions, since ruling D made the line row the five linemen alone).
 //
-// D71: the WIDE landmarks (the two corners and the nickel) are decided HERE and nowhere else. D63 had
-// them overwritten further down by whatever x the receivers landed on, so a corner stood on the man he
-// covers; D71's centred receiver cluster killed that pairing — mirroring a cluster would drag the whole
-// secondary into the middle of the field, which is the failure ruling D hit once already (PHI's two
-// corners over the left hash with the safeties still centred). So the corners go back to a fixed 1.4
-// pitches outside the tackles, the nickel to the gap between the left corner and the box, and a defensive
-// row's shape no longer depends on how many receivers the club happens to chart.
+// D71: the WIDE landmarks (corners, nickel) are decided HERE and nowhere else, not mirrored off wherever
+// the receivers land — D71's centred receiver cluster would drag the whole secondary into the middle of
+// the field if it were. Corners are fixed at CB_PITCH_OUT pitches outside the tackles, nickel in the gap
+// between the left corner and the box, so a defensive row's shape no longer depends on the club's chart.
 //
-// D119: `sideDefense` is true only for the single-unit DEFENSE page (a layout carrying defensive slots and
-// no offensive ones — zoom.js's unitView(view, "DEF"), and nothing else in the app produces that shape).
-// It is the ONLY thing that switches the tighter, centre-pitched landmarks on, so the team, matchup and
-// offense pages keep every x they have today.
+// D119: `sideDefense` is true only for the single-unit DEFENSE page (zoom.js's unitView(view, "DEF")) and
+// is the ONLY thing that switches on the tighter, centre-pitched landmarks — team, matchup and offense
+// pages keep every x they have today.
 function mirrorLandmarks(olCols, sideDefense = false) {
   const olXs = olCols.map((c) => c.x).sort((a, b) => a - b);
 
@@ -1100,18 +816,18 @@ function mirrorLandmarks(olCols, sideDefense = false) {
     C = LAYOUT_WIDTH / 2; LG = C - MIN_PITCH; RG = C + MIN_PITCH; LT = C - 2 * MIN_PITCH; RT = C + 2 * MIN_PITCH;
   }
   const pitch = Math.max(LG - LT, MIN_PITCH);
-  // D112/D116: edge rushers stand just outside the tackle, not out at the corner's landmark.
-  // D119: on the defense page alone they come in another 0.3 of a pitch, measured off the centre.
+  // D112/D116: edge rushers stand just outside the tackle, not out at the corner's landmark — the same on
+  // every page, including the D119 defense-only side page (only the secondary tightens there, below).
   const EDGE_L = LT - EDGE_PITCH_OUT * pitch;
   const EDGE_R = RT + EDGE_PITCH_OUT * pitch;
   // D116: the inside linebackers stand just inside the guards, not on top of them, so they read as clearly
-  // inside their neighbouring EDGE column rather than sharing a landmark with the safeties (which stay on
-  // the guards themselves — see the "S" case below, untouched by this ruling).
+  // inside their neighbouring EDGE column rather than sharing a landmark with the safeties, which stay on
+  // the guards themselves (the "S" case below, untouched by this ruling).
   const ILB_L = C - ILB_PITCH_FROM_CENTER * pitch;
   const ILB_R = C + ILB_PITCH_FROM_CENTER * pitch;
   // D119: the defense page's corners, nickel and safeties are all pitched off the centre; every other page
   // keeps D71/D110's corners outside the tackles, D71's nickel inside the corner and the safeties on the
-  // guards (S_L/S_R ARE the guards there, so mirrorDefXs's "S" case is the same placement it always was).
+  // guards (S_L/S_R ARE the guards there, so mirrorDefXs's "S" case is unchanged).
   const CB_L = sideDefense ? C - SIDE_DEF_CB_PITCH_FROM_CENTER * pitch : LT - CB_PITCH_OUT * pitch;
   const CB_R = sideDefense ? C + SIDE_DEF_CB_PITCH_FROM_CENTER * pitch : RT + CB_PITCH_OUT * pitch;
   const NB_X = sideDefense
@@ -1143,73 +859,54 @@ function placeLineColumns(slots, scheme, lm) {
   return xs;
 }
 
-// The per-band mirroring rule (Adam, 2026-09-11), as amended by ruling A and D116: the LINE row places by
-// label (above); a 3-4's outside linebackers sit just outside the tackles and any other stand-up edge label
-// spreads between them; MLB over the centre, OLB/ILB at ILB_PITCH_FROM_CENTER pitches off it (D116 — just
-// inside the guards, not on top of them); CB wide of the tackles, NB inside the left corner (D71 — both
-// fixed off the line, no longer mirrored off the receivers); safeties deepest but still centred over the
-// guards (unmoved by D116 — only the LB band's landmark changed).
+// The per-band mirroring rule: the LINE row places by label (above); a 3-4's outside linebackers sit just
+// outside the tackles and any other stand-up edge label spreads between them; MLB over the centre, OLB/ILB
+// at ILB_PITCH_FROM_CENTER pitches off it (D116); CB wide of the tackles, NB inside the left corner (D71 —
+// both fixed off the line, not mirrored off the receivers); safeties deepest, centred over the guards.
 //
-// D111 (Adam, 2026-09-16) changes NONE of the x's below, which is the point of it: the one-row secondary is
-// the CB, NB and S bands drawn on a single y, each keeping exactly the place it already had. Left to right
-// that reads corner, nickel, safety, safety, corner — the corner 1.15 pitches outside the left tackle
-// (D71/D110), the nickel one pitch outside it but never closer than MIN_PITCH to the corner, and the two
-// safeties on the guards. At the standard five-man shape every real club charts, the gaps come out 242,
-// 278, 484, 520 units against a MIN_PITCH of 242, so nothing is re-pitched and no card touches another;
+// D111 changes NONE of the x's below — the one-row secondary is just the CB, NB and S bands drawn on a
+// single y, each keeping the place it already had. Left to right that reads corner, nickel, safety,
+// safety, corner. At the standard five-man shape every real club charts, the gaps come out 242, 278, 484,
+// 520 units against a MIN_PITCH of 242, so nothing is re-pitched and no card touches another;
 // computeLayout's secondaryFitsOneRow check below is what keeps that honest for a shape nobody charts yet.
 function mirrorDefXs(band, slots, scheme, lm) {
   const count = slots.length;
   if (count <= 0) return [];
   switch (band) {
     case "DL": return placeLineColumns(slots, scheme, lm);
-    // D112/D116: EDGE_L/EDGE_R sit EDGE_PITCH_OUT pitches outside the tackles (just outside, where a real
-    // defensive end lines up) - not on the corner's own, much-further-out landmark.
     case "EDGE": return scheme === "3-4"
       ? placeOuterInner(count, lm.EDGE_L, lm.EDGE_R, lm.LG, lm.RG)
       : spanPoints(lm.EDGE_L, lm.EDGE_R, count);
-    // D116: "the LB band's two inside linebackers" (Adam) is exactly the even-count case in this codebase —
-    // a 3-4's 2 ILBs, its only real shape today, since a 3-4's OLBs live on the EDGE band, not here. That
-    // pair moves in to ILB_L/ILB_R (ILB_PITCH_FROM_CENTER pitches off the centre) instead of the guards.
-    // A 4-3's odd-count row (WLB, MLB, SLB — outside backers flanking a true inside one) is left on the
-    // guards: placeFlankedCenter's odd branch splits the flank range into two HALVES and re-widens either
-    // half up to MIN_PITCH if it is narrower, so reusing ILB_L/ILB_R there would push WLB/SLB further out
-    // than intended instead of tighter — and Adam's ruling never named that shape as wrong. It was already
-    // comfortably inside the tightened EDGE landmarks (1 pitch off centre vs. EDGE's new 2.2) before this
-    // ruling and still is (see the D116 "3-LB row" test), so it does not need to move.
+    // D116: the even-count case is a 3-4's 2 ILBs (its only real shape — a 3-4's OLBs live on EDGE, not
+    // here), which move in to ILB_L/ILB_R. A 4-3's odd-count row (WLB, MLB, SLB) stays on the guards —
+    // reusing ILB_L/ILB_R there would push WLB/SLB further out instead of tighter, and that shape was
+    // already comfortably inside the tightened EDGE landmarks before this ruling and still is.
     case "LB": return count % 2 === 0
       ? placeFlankedCenter(count, lm.ILB_L, lm.ILB_R, lm.C)
       : placeFlankedCenter(count, lm.LG, lm.RG, lm.C);
-    // 👁 QA item 8: spanPoints(xMin,xMax,1) lands a single point on the exact MIDPOINT of its range — fine
-    // for a band that belongs in the middle (NB, S), wrong for CB, whose range is the two outside corners.
-    // A team whose chart carries only one combined CB slot (both corners stacked as one column, e.g. WAS)
-    // used to draw that corner dead centre, right on top of the nickel, leaving both real corner spots
-    // empty — the opposite of how a defensive backfield actually lines up. A lone CB now takes the same
-    // outside spot spanPoints(...,2) would give its first of two, so it still reads as "a corner", not
-    // "a second nickel". (D48/D57: which specific side is not football-important, only that it is wide.)
+    // spanPoints(xMin,xMax,1) lands a single point on the exact MIDPOINT of its range — fine for a band
+    // that belongs in the middle (NB, S), wrong for CB, whose range is the two outside corners: a chart
+    // with only one combined CB slot (e.g. WAS) would draw it dead centre, on top of the nickel, leaving
+    // both real corner spots empty. A lone CB instead takes the same outside spot spanPoints(...,2) would
+    // give its first of two, so it still reads as "a corner". (D48/D57: which side is not football-
+    // important, only that it is wide.)
     case "CB": return count === 1 ? [spanPoints(lm.CB_L, lm.CB_R, 2)[0]] : spanPoints(lm.CB_L, lm.CB_R, count);
     case "NB": return spanPoints(lm.NB_X, lm.NB_X, count);
     // D119: S_L/S_R are the guards everywhere except the defense-only side page, where they are half a
-    // pitch either side of the centre — so two safeties land exactly MIN_PITCH apart, one lands on the
-    // centre and a third shape spreads on the centre and one pitch either side of it.
+    // pitch either side of the centre — two safeties land exactly MIN_PITCH apart, one lands on the
+    // centre, a third shape spreads on the centre and one pitch either side of it.
     case "S": return spanPoints(lm.S_L, lm.S_R, count);
     default: return spanPoints(lm.C, lm.C, count);
   }
 }
 
 // Safety net applied to every row after its columns get an x: real depth charts occasionally carry an
-// unusual slot count (👁 review, 2026-09-11 — two DIFFERENT bands sharing one row, each computed
-// independently, can coincide in ways no single band's own placement function can see coming). This
-// sorts a row's columns by x, pushes any pair closer than their two half widths plus a small clearance
-// apart, then re-centres the group on its original midpoint so a rare fix-up doesn't drift the row.
-// The bare minimum turf between two adjacent cards, used only as the floor when a view's cards are wide
-// enough that MIN_PITCH alone would let them touch. D110 (Adam, 2026-09-16) makes it the number MIN_PITCH is
-// actually BUILT from rather than a slack floor sitting well under it: the team/matchup card is 216 and
-// MIN_PITCH is 242, so 216 + 26 = 242 and the two agree exactly. The Math.max below therefore still resolves
-// to MIN_PITCH on every row — no row is re-pitched after its own placement function has chosen its x's,
-// which is what D71's landmarks depend on — but now it does so by construction instead of by luck, and the
-// gap a reader actually sees between two cards is this constant rather than a number derived elsewhere.
-// D94's 210-wide side card is inside it too (210 + 26 = 236 < 242), so the offense/defense pages keep taking
-// their pitch from MIN_PITCH the same as every other view.
+// unusual slot count where two DIFFERENT bands sharing one row, each computed independently, can coincide
+// in ways no single band's own placement function can see coming. This sorts a row's columns by x, pushes
+// any pair closer than their two half widths plus a small clearance apart, then re-centres the group on
+// its original midpoint so a rare fix-up doesn't drift the row.
+// The bare minimum turf between two adjacent cards — see MIN_PITCH above for why the two constants agree
+// by construction (216 + 26 = 242) so this floor never actually re-pitches a row.
 const MIN_CARD_GAP = 26;
 function enforceNoOverlap(cols) {
   if (cols.length < 2) return;

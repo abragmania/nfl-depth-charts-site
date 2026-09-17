@@ -92,16 +92,13 @@ export async function getPlayer(espnId) {
 }
 
 // Per-team response cache, keyed by abbr (holds the in-flight/settled Promise, so two callers racing
-// for the same team share one fetch). Integration task 2 (2026-09-11): "Refresh now" must be able to
-// force a re-fetch, hence invalidateTeam() below — there was no cache to invalidate before this, so
-// this adds one rather than leaving the helper with nothing to do.
+// for the same team share one fetch). invalidateTeam() below lets "Refresh now" force a re-fetch.
 const teamCache = new Map();
 
-// GET /api/team/{abbr} — now live for all 32 teams. Contract: fall back to the bundled fixture only
+// GET /api/team/{abbr} — live for all 32 teams. Contract: fall back to the bundled fixture only
 // when the server itself says the team isn't compiled yet — 503, or 404 with error.code
-// "not_compiled" — never on a generic network failure or an unrelated 404 (👁 review, 2026-09-11:
-// the earlier broad fallback was a temporary shim for while the endpoint didn't exist at all; now
-// that it's live, masking a real failure behind sample data would hide genuine bugs).
+// "not_compiled" — never on a generic network failure or an unrelated 404, which would mask a
+// real failure behind sample data.
 export async function getTeam(abbr) {
   const A = String(abbr || "").toUpperCase();
   if (teamCache.has(A)) return teamCache.get(A);

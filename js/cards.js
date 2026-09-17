@@ -10,20 +10,16 @@
 // headshot cards and their own renderers (zoom.js's fullCard, matchup.js's matchupCard) — they come
 // through renderSlotBody below, which is deliberately untouched by this ruling.
 import { lineOneCount, lineOneHeight, visibleDepthRows, displayOrder, outFillInDemotion, OUT_STATUS_CODES, isFullyOut, isScratch } from "./field.js";
-// Re-exported so zoom.js and matchup.js can share the single definition rather than keeping their own
-// copies, which had all drifted from it (blue review: every copy was missing INACTIVE and EXEMPT, so a
-// game-day inactive starter got no red banner in any view). D60's isScratch rides the same route.
+// Re-exported so zoom.js and matchup.js share this single definition rather than keeping their own
+// copies. D60's isScratch rides the same route.
 export { OUT_STATUS_CODES, isFullyOut, isScratch };
 
 const ESC = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ESC[c]);
 
-// D70: "position names must read the same everywhere in the project." A band's internal CODE is not its
-// name — "NB" and "BACKFIELD" are storage, "CB · Nickel" and "Backfield" are what a reader sees — and the
-// two had drifted apart: the tray under a nickel column printed "NOT ON CHART · NB" while the pill over it
-// read "CB · Nickel", and zoom.js kept a second copy of the same table for its group pages. This is the
-// one table; anything that shows a band to a human reads it (renderTray below, zoom.js's group title and
-// nav crumb). An unknown code falls back to itself rather than to a blank.
+// D70: single source of truth for band display names — a band's internal CODE ("NB", "BACKFIELD") is not
+// what a reader sees ("CB · Nickel", "Backfield"). Anything that shows a band to a human reads this table
+// (renderTray below, zoom.js's group title and nav crumb). An unknown code falls back to itself, not a blank.
 export const BAND_DISPLAY = {
   QB: "QB", BACKFIELD: "Backfield", WR: "WR", TE: "TE", OL: "OL",
   DL: "DL", EDGE: "EDGE", LB: "LB", CB: "CB", NB: "CB · Nickel", S: "Safety",
@@ -59,9 +55,8 @@ function ratingTier(rating) {
 }
 
 // The one headshot renderer in the front end. zoom.js's group-view cards and D72's line-one overview rows
-// both draw the same circle at different sizes; this used to be a private copy in each file, which is
-// exactly the duplication the OUT_STATUS_CODES review found elsewhere. A player with no photo gets his
-// initials on a plain disc instead, and a photo that 404s swaps itself for the same disc at runtime.
+// both draw the same circle at different sizes. A player with no photo gets his initials on a plain disc
+// instead, and a photo that 404s swaps itself for the same disc at runtime.
 function initials(p) {
   const a = (p.first || p.name || "?").trim()[0] || "?";
   const b = (p.last || "").trim()[0] || "";
@@ -100,19 +95,10 @@ function weekOneChip(note) {
 // field.
 const UNIT_SNAP_WORD = { OFF: "offensive", DEF: "defensive" };
 
-// `opts.unit` is read off the column/slot/tray this card is drawn on (never guessed from the card itself —
-// a card has no unit of its own) so the tooltip says "offensive snaps" on an OFF card and "defensive
-// snaps" on a DEF one. `opts.gamesPlayed`, when the caller happens to have it, lets the tooltip explain a
-// short trio; every caller that reaches this through an `opts` bag with no header on it (renderColumn/
-// compactRow, fed by team.js/matchup.js/zoom.js's side view) simply never sets it, and the sentence is
-// skipped rather than guessed at — only zoom.js's group view (renderGroupStack, which builds its own opts
-// straight from the TeamView it already has in scope) can supply it today.
-// 🔵 review follow-up (2026-09-15, D91 item 2): a caller with no unit at all — the player panel is the one
-// today (public/js/panel.js, D91 follow-up 1): it has the resolved card but nothing tells it which side of
-// the ball the card is on — used to fall back to the WORD "offensive", which is a guess this file has no
-// basis for and is wrong exactly half the time. An unknown unit now prints no side word at all ("81% of
-// snaps"), same as every other genuinely-unknown fact on this card already renders as nothing rather than
-// an invented default.
+// `opts.unit` is read off the column/slot/tray this card is drawn on (never guessed from the card itself)
+// so the tooltip says "offensive snaps" on an OFF card, "defensive snaps" on a DEF one, and no side word
+// at all when the caller has no unit to give (e.g. panel.js) — never an invented default. `opts.gamesPlayed`,
+// when the caller has it, notes that a short trio is short because of games missed.
 function snapHistoryTitle(history, unit, gamesPlayed) {
   const word = UNIT_SNAP_WORD[unit] || "";
   const lines = history.map((h) => `Wk ${esc(h.week)} vs ${esc(h.opponent)}: ${esc(h.pct)}% of ${word ? word + " " : ""}snaps`);
@@ -127,16 +113,10 @@ export function snapHistoryHtml(p, opts = {}) {
   return `<span class="snaps" title="${snapHistoryTitle(history, opts.unit, opts.gamesPlayed)}">${nums}</span>`;
 }
 
-// 🎨 Polish (2026-09-11, round 2): "also OLB" was wide enough to shove the whole name out of a 40px
-// depth row (item 2 — the chip has no shrink limit, so it always rendered at full width while the name
-// beside it, the one column Adam actually reads, got squeezed to nothing). Dropping the "also " prefix
-// keeps the same information (still a distinct chip, title text unchanged) in roughly half the width.
-// 🎨 Polish (2026-09-12, round 3, item 1): a co-starter's alsoListedAt can point at the OTHER slot of the
-// same shared band (e.g. PHI's Greenard, paired at EDGE with Hunt, also carries an alsoListedAt entry
-// that resolves back to "EDGE" — the very column this card is already rendered under). That rendered as
-// a ghost chip repeating the card's own column label right next to it, pure noise. `ownLabel` (the
-// card's own slot.label, passed in by renderColumn below) lets this skip any resolved label that matches
-// it — a genuinely different column (e.g. "SLOT WR") still shows normally.
+// No "also " prefix, so the chip fits inside a 40px depth row without shoving the name out (title text
+// still spells it out). `ownLabel` (the card's own slot.label, passed in by renderColumn below) skips any
+// resolved label that matches it, so a co-starter's alsoListedAt pointing back at its own shared column
+// doesn't render a ghost chip repeating the column's own label; a genuinely different column still shows.
 function alsoListedChips(card, slotLookup, ownLabel) {
   const ids = card.alsoListedAt || [];
   if (!ids.length) return "";
@@ -177,11 +157,9 @@ function bannerHtml(p) {
   return "";
 }
 
-// ESPN-disagrees ring (integration task 3, 2026-09-11): only shows when ESPN's own placement for this
-// player actually differs from the club chart's — either a different band entirely, or a different rank
-// within the position. Agreement (e.g. Lane Johnson, ESPN "rt #1", club RT tier 1) must show no ring;
-// before this, the ring fired for every player who merely HAD an espnSlot value (nearly everyone in the
-// real compiled data), which made it noise instead of a signal.
+// ESPN-disagrees ring: only shows when ESPN's own placement for this player actually differs from the
+// club chart's — either a different band entirely, or a different rank within the position. Agreement
+// must show no ring.
 const ESPN_POS_BAND = {
   lt: "OL", rt: "OL", lg: "OL", rg: "OL", c: "OL",
   wr: "WR", te: "TE", qb: "QB", rb: "BACKFIELD", fb: "BACKFIELD",
@@ -252,14 +230,9 @@ const SIGNAL_TITLE = {
   NEW_ARRIVAL: "New arrival on this roster",
   LOW_SNAPS: "Low recent snap share",
 };
-// 🎨 Polish (2026-09-12, round 3, item 1): this used to sit INSIDE .card-name, right after the player's
-// name text — on a long name that already ellipsizes at the card's fixed width (e.g. "Jonathan
-// Greenar…"), the glyph itself got swallowed by the ellipsis while still costing the name that same
-// width, so a wider name truncated a character or two earlier than it needed to for a star nobody could
-// even see (HOU's "Braden Smith ★" was the other half of this — the glyph rendered but crowded right up
-// against the truncation point). Rendered as its own sibling in a fixed top-left corner instead (same
-// corner slot zoom.js's group view already uses for the identical signals, via its own .zoom-signals) —
-// it never competes with the name for width and stays visible regardless of name length.
+// Rendered as its own sibling in a fixed top-left corner (same corner zoom.js's group view uses via its
+// own .zoom-signals), not inside .card-name, so the glyph never competes with the name for width and
+// stays visible regardless of name length.
 function signalGlyphs(p) {
   const sig = Array.isArray(p.signals) ? p.signals : [];
   if (!sig.length) return "";
@@ -274,9 +247,8 @@ function signalGlyphs(p) {
 // view, which is where D15's "88 OVR, #4 RB" line is actually read.
 function overviewOvr(rating, cls) {
   const v = rating?.current;
-  // 👁 QA: an unrated player (HOU's fill-in Jake Hummel has no EA entry) used to leave a hole where every
-  // other row has a number, which reads as a rendering fault rather than as "no rating exists". A muted
-  // "NR" keeps the column a solid ranked list; the same treatment is used in every other view.
+  // An unrated player has no Madden entry; show a muted "NR" rather than a hole, so the column still reads
+  // as a solid ranked list. The same treatment is used in every other view.
   if (v == null) return `<span class="prow-ovr ${cls} prow-ovr-none" title="Not rated — no Madden entry for this player">NR</span>`;
   return `<span class="prow-ovr ${cls}">${esc(v)}</span>`;
 }
@@ -308,15 +280,11 @@ function overviewClasses(p, base) {
   return cls.join(" ");
 }
 
-// 👁 QA (2026-09-15): row one of a column is whichever man the club's own tier order (D90) puts first —
-// that is not always the actual starter. D89's 100-snap floor can leave a thin-sample BACKUP standing
-// alone in his club column (CAR's Jimmy Horn Jr., 75 slot snaps, under the floor that would have moved
-// him into WR · Slot with his column's real starter), and the team overview used to give whoever sat on
-// line one the bold/photo/pill starter treatment regardless of his actual role — dressing a BACKUP as the
-// opening-day starter the legend promises. This gates that treatment on the man himself: a real STARTER, a
-// STARTER_OUT (still the starter, just hurt — D44's banner still belongs to him), an ACTIVE fill-in, or
-// either half of a co-starter pair reads as the starter; a plain BACKUP who merely has nobody ranked above
-// him reads in the same weight the rows below line one already use.
+// Row one of a column is whichever man the club's own tier order (D90) puts first — that is not always
+// the actual starter, so line-one bold/photo/pill treatment is gated on the man's actual role: a real
+// STARTER, a STARTER_OUT (still the starter, just hurt — D44's banner still belongs to him), an ACTIVE
+// fill-in, or either half of a co-starter pair reads as the starter; a plain BACKUP who merely has nobody
+// ranked above him reads in the same weight the rows below line one use.
 function isLineOneStarter(p) {
   return p.role === "STARTER" || p.role === "STARTER_OUT" || p.role === "ACTIVE" || p.coStarter === true;
 }
@@ -333,7 +301,7 @@ function overviewLineOne(p, teamAbbr, opts = {}) {
   const disagrees = espnDisagrees(p, opts.band, opts.scheme, opts.labelSource);
   const espnRing = disagrees ? " espn-flag" : "";
   // No role tag here: on the overview the bold top row IS the starter, and an out or filling-in player
-  // says so on his own banner. (It used to be rendered and then hidden in CSS — blue review.)
+  // says so on his own banner.
   const badges = [
     isFullyOut(p) ? "" : statusBadge(p.status),
     psBadge(p),
@@ -341,27 +309,21 @@ function overviewLineOne(p, teamAbbr, opts = {}) {
     weekOneChip(p.weekOneNote),
     alsoListedChips(p, opts.slotLookup, opts.ownLabel),
   ].join("");
-  // 👁 QA: the banner is INSIDE this anchor and inset from its edges (.prow-one .card-banner in
-  // styles.css), and a bannered row takes the banner's own colour on its border, so "OUT · back ~Sep 19"
-  // unmistakably belongs to the man underneath it. Before, a full-bleed strip sat in the gap between two
-  // rows and read as a divider between them (PHI's EDGE co-starter pair).
+  // The banner sits INSIDE this anchor, inset from its edges (.prow-one .card-banner in styles.css), and
+  // a bannered row takes the banner's own colour on its border, so it unmistakably belongs to the man
+  // underneath it rather than reading as a divider between two rows.
   const head = style.headshot ? `<span class="prow-head">${headshotHtml(p, style.headshot)}</span>` : "";
   // `column-no-starter` (see isLineOneStarter above) keeps the exact same box — same tag, same classes
   // otherwise, same inline min-height straight off field.js's lineOneHeight — so the column's height and
   // everything stacked under it (the pass-catcher cluster included) sits exactly where the layout engine
   // already reserved it; only styles.css's bold/photo-pill treatment is switched off for this row.
   const starterCls = isLineOneStarter(p) ? "" : " column-no-starter";
-  // Fix (👁 finding, 2026-09-15): on the side pages' headshot row the D91 snap trio used to sit inline
-  // after the rating pill, on the same line as the name — at that row's wider font sizes the trio ate
-  // into the name's width and pushed every longer name into a browser ellipsis ("C. Ok…", D91 hardening
-  // didn't touch this, it's a layout-only regression). `.prow-info` wraps everything but the headshot,
-  // and `.prow-main` wraps everything but the trio: on every OTHER row family (the whole-team overview
-  // with no headshot) both wrappers stay `display:contents` in CSS, so they add nothing to the box tree
-  // and the row renders byte-for-byte as it did before this change. Only styles.css's
-  // `.prow-one:has(.prow-head)` rule turns `.prow-info` into a two-line stack — trio under the pill —
-  // so the name gets back the same full row width it had before the trio existed. cards.js has to be the
-  // one to add these wrapper spans: CSS alone cannot single out "every flex item except the first" (the
-  // headshot) into its own stacking column without one.
+  // `.prow-info` wraps everything but the headshot; `.prow-main` wraps everything but the D91 snap trio.
+  // Both stay `display:contents` in CSS for every row family without a headshot, so this changes nothing
+  // there. Only `.prow-one:has(.prow-head)` (styles.css) turns `.prow-info` into a two-line stack — trio
+  // under the pill — so a long name on a headshot row keeps its full row width instead of eating into the
+  // trio's space. CSS alone can't single out "every flex item but the first" without these wrapper spans,
+  // so cards.js has to add them.
   return `<a class="${overviewClasses(p, "prow prow-one")}${starterCls}${espnRing}" href="#/team/${esc(teamAbbr)}/player/${encodeURIComponent(p.playerKey)}" data-player-key="${esc(p.playerKey)}" title="${overviewTitle(p, disagrees)}" style="min-height:${lineOneHeight(p, style)}px">
     ${bannerHtml(p)}
     <span class="prow-line">
@@ -452,18 +414,16 @@ export function compactRow(p, teamAbbr, opts = {}) {
   </a>`;
 }
 
-// Shared "slot body" renderer (final 👁 pass, item 5, 2026-09-12): every view that shows a stack of
-// players under one slot label — this file's own renderColumn below (whole-team field), zoom.js's side
-// view, and matchup.js — must render a co-starter pair or a STARTER_OUT+ACTIVE fill-in as two full-size
-// "big" cards (D44: the two ratings sit directly one above/beside the other), and everything else as one
-// big starter card plus a compactRow (40px) for every player behind him — never another stacked full
-// card, so a deep column stays a scannable ranked list instead of ballooning the page height (the whole
-// point of item 5: side/matchup views were running 2,600-3,000px tall because their backups were full
-// cards, not rows). `renderBig(player, teamAbbr, opts)` is the caller's own big-card renderer (this
-// zoom.js's fullCard, matchup.js's matchupCard — each a different size/shape. (The whole-team field no
-// longer comes through here at all: ruling E gave it its own text-row renderer, overviewLineOne above.)
-// `opts.pairOpts` (optional) lets a caller size a co-starter pair differently from a lone starter;
-// every other caller can omit it and both cases share the same opts.
+// Shared "slot body" renderer: every view that shows a stack of players under one slot label — this
+// file's own renderColumn below (whole-team field), zoom.js's side view, and matchup.js — renders a
+// co-starter pair or a STARTER_OUT+ACTIVE fill-in as two full-size "big" cards (D44: the two ratings sit
+// directly one above/beside the other), and everything else as one big starter card plus a compactRow
+// (40px) for every player behind him — never another stacked full card, so a deep column stays a
+// scannable ranked list instead of ballooning the page height. `renderBig(player, teamAbbr, opts)` is the
+// caller's own big-card renderer (zoom.js's fullCard, matchup.js's matchupCard — each a different
+// size/shape). The whole-team field no longer comes through here: ruling E gave it its own text-row
+// renderer, overviewLineOne above. `opts.pairOpts` (optional) lets a caller size a co-starter pair
+// differently from a lone starter; every other caller can omit it and both cases share the same opts.
 export function renderSlotBody(players, teamAbbr, renderBig, opts = {}) {
   const hasCoPair = players.length >= 2 && players[0].coStarter && players[1].coStarter;
   const hasOutFillIn = !hasCoPair && players.length >= 2 && isFullyOut(players[0]) && players[1].role === "ACTIVE";
@@ -512,18 +472,17 @@ export function wireDepthToggles(root) {
   });
 }
 
-// 👁 QA C5: a compact row's name is clipped with an ellipsis when it will not fit, which cuts people
-// mid-word ("Emmanuel McNeil-Warr…"). Where the full name overflows its column, swap in the same
-// "F. Surname" form the badge-crowded rows already use — a real abbreviation rather than a truncation.
-// Measured rather than guessed from a character count, because the column width now varies with the
-// spread factor field.js chose for that particular team and window. Called after mount and again once
-// the webfonts have settled, since the metrics that decide this change when the real font arrives.
-// D73 follow-up: measured with a Range, not with scrollWidth. scrollWidth is an INTEGER, so a name needing
-// 100.4px inside a 100px box reported 100 > 100 — false — and the abbreviation never fired even though the
-// browser was already drawing an ellipsis ("Cooper DeJe…", "DeVonta Smi…"). A Range over the text reports
-// the true sub-pixel width and is not clipped by the overflow, and comparing it against the element's own
-// rect keeps both numbers in the same coordinate space (the field is inside a CSS transform, which scales
-// rects but not scrollWidth). The scrollWidth test stays as the fallback wherever Range is unavailable.
+// A compact row's name overflowing its column swaps to the same "F. Surname" form the badge-crowded rows
+// use — a real abbreviation rather than a mid-word ellipsis truncation. Measured rather than guessed from
+// a character count, because the column width varies with the spread factor field.js chose for that team
+// and window. Called after mount and again once webfonts settle, since the metrics change when the real
+// font arrives.
+// D73: measured with a Range, not scrollWidth. scrollWidth is an INTEGER, so a name needing e.g. 100.4px
+// in a 100px box reports 100 > 100 — false — and the abbreviation never fires even though the browser is
+// already drawing an ellipsis. A Range over the text reports the true sub-pixel width, and comparing it
+// against the element's own rect keeps both numbers in the same coordinate space (the field sits inside a
+// CSS transform, which scales rects but not scrollWidth). scrollWidth stays as the fallback where Range is
+// unavailable.
 function textOverflows(el) {
   const avail = el.getBoundingClientRect().width;
   if (typeof document.createRange !== "function" || !avail) return el.scrollWidth > el.clientWidth + 1;
@@ -558,8 +517,7 @@ function heatTitle(injury) {
 }
 
 // Ruling E caps a column at MAX_DEPTH_ROWS slim rows and collapses the rest behind "+N more". D61 appends the
-// reserve second-stringer as the LAST row of his slot, which made him the very first row that tail swallowed -
-// the man the ruling exists to show was the one man hidden (review finding 2). An out row now outranks a
+// reserve second-stringer as the LAST row of his slot, so an out row now outranks a
 // healthy backup for the visible places: the same NUMBER of rows is drawn, so the column height the layout
 // engine reserved is untouched; the DEEPEST healthy rows collapse instead, and whatever survives keeps the
 // chart's own order. "+N more" still leads to the group view, where every row is shown in full.
@@ -608,10 +566,10 @@ export function renderColumn(col, teamAbbr, opts = {}) {
   const heatCls = slot.injury?.level && HEAT_CLASS[slot.injury.level] ? ` ${HEAT_CLASS[slot.injury.level]}` : "";
   const heatTitleText = heatCls ? heatTitle(slot.injury) : "";
   const labelHref = `#/team/${esc(teamAbbr)}/group/${esc((slot.band || "").toLowerCase())}`;
-  // col.slotReason (D64): why THIS receiver is the one standing in the slot. On the Slot column it is the D86/D89
-  // sentence naming the men at 40 percent or more of their own snaps inside (D118; D117 dropped the snap floor); on a club column it is
-  // columnRankReason's sentence, ESPN's rank of the column plus what the club printed (D92/D93). It leads the
-  // tooltip because it is the thing a reader actually questions.
+  // col.slotReason (D64): why THIS receiver is the one standing in the slot. On the Slot column it is the
+  // D86 sentence naming the men at 40 percent or more of their own snaps inside (D118, was 50); on a club
+  // column it is columnRankReason's sentence, ESPN's rank of the column plus what the club printed (D92/D93).
+  // It leads the tooltip because it is the thing a reader actually questions.
   const labelTitle = esc([col.slotReason || "", slot.labelSource ? `source: ${slot.labelSource}` : "", heatTitleText].filter(Boolean).join(" · "));
   // D83: `col.derived` marks a column the LAYOUT built rather than one the club charted (the WR · Slot
   // column). Two men in it may happen to be co-starters of the club columns they came from, but they are
@@ -708,8 +666,7 @@ export function renderTray(tray, teamAbbr) {
   // is obvious, but a band with nothing charted has no row of its own any more (field.js collapses it),
   // and its tray is re-homed onto a neighbouring row — at which point the name is the only thing saying
   // these are, say, the edge rushers rather than more defensive linemen.
-  // D70: the NAME, not the internal code — this printed "NOT ON CHART · NB" directly under a pill reading
-  // "CB · Nickel", which is the same position called two different things a centimetre apart.
+  // D70: the NAME, not the internal code, so the tray label stays consistent with the column pill above it.
   const label = tray.band ? `not on chart · ${esc(bandDisplay(tray.band))}` : "not on chart";
   // data-unit so a click on one of these chips can be attributed to the right TEAM: the matchup view
   // draws two teams on one field, and a tray is not inside a `.column`, so it is the only thing that can

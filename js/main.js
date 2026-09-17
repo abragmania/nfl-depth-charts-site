@@ -5,8 +5,8 @@ import { renderZoomSide, renderZoomGroup } from "./zoom.js";
 import { renderMatchup } from "./matchup.js";
 import { openPanel } from "./panel.js";
 import { esc } from "./cards.js";
-import { disposeCurrentView } from "./viewfit.js"; // an error message can carry anything; it must never reach innerHTML raw
-import "./refresh.js"; // side effect only: defines window.NFLRefresh (integration task 2, 2026-09-11)
+import { disposeCurrentView } from "./viewfit.js";
+import "./refresh.js"; // side effect only: defines window.NFLRefresh
 
 const root = document.getElementById("app");
 const search = document.getElementById("search");
@@ -15,23 +15,23 @@ const asof = document.getElementById("asof");
 // landing grid has no such constraint and reads better with room around it, so it keeps the old padding
 // through one marker class (styles.css's `main.page-landing`) that every route clears on entry and only
 // the landing route puts back.
-// 🔵 delta review finding 1: ONE teardown point for the whole app. Every route change disposes the
-// outgoing view's observers, timers and listeners before the incoming one renders - without it, a view
-// that had been navigated away from kept a ResizeObserver on <main>, and when it fired it re-measured
-// its own detached field, decided the layout was wrong and wrote itself over whatever page was on screen.
-// `keepView` is the one exception: the player sub-route opens a panel on the page that is ALREADY
+// ONE teardown point for the whole app: every route change disposes the outgoing view's observers, timers
+// and listeners before the incoming one renders — without it, a view navigated away from could keep a
+// ResizeObserver on <main> that re-measures its own detached field and overwrites whatever page is on
+// screen. `keepView` is the one exception: the player sub-route opens a panel on the page that is ALREADY
 // rendered without re-rendering it (openPlayerPanel below), so tearing that page down would leave the
 // field it is opening the panel on with nothing left to re-fit it.
 const guard = (fn, { keepView = false } = {}) => (p) => {
   root.classList.remove("page-landing");
   if (!keepView) disposeCurrentView();
+  // e.message can carry anything (a network error string, etc.); esc() it before it reaches innerHTML.
   return fn(p).catch((e) => { root.innerHTML = `<div class="notfound">Something broke: ${esc(e.message)}</div>`; });
 };
 
 // Finds a player card anywhere in an already-loaded TeamView — the depth-chart columns, or the
 // "not on chart" trays — by playerKey. Used so a #/team/X/player/Y navigation can open the panel
 // without re-rendering whatever view (this build's full field, or zoom.js's side/group views) is
-// currently showing (integration task 1, 2026-09-11).
+// currently showing.
 function findCard(view, playerKey) {
   for (const unit of ["OFF", "DEF"]) {
     for (const slot of view.units?.[unit] || []) {
@@ -55,8 +55,8 @@ function findCard(view, playerKey) {
 // stays a defense page (route unchanged: #/team/X/player/Y) with the field re-fitting beside the panel,
 // the same as the whole-team page already did before D72 put the side pages on the same field engine.
 // If nothing matches yet (a direct link, a team switch, or a "group"/matchup page that has no aside at
-// all — 🔵 review finding 5), this falls back to rendering the full team field (the one view this file
-// owns outright) so there's always an aside to open the panel on.
+// all), this falls back to rendering the full team field (the one view this file owns outright) so
+// there's always an aside to open the panel on.
 const KEEPABLE_PANEL_PAGES = new Set(["team", "off", "def"]);
 async function openPlayerPanel(abbr, playerKey) {
   const A = String(abbr || "").toUpperCase();
@@ -82,8 +82,8 @@ router.on("/matchup/:a/:b", guard(({ a, b }) => renderMatchup(root, search, a, b
 router.start(() => { root.innerHTML = `<div class="notfound">Page not found. <a class="back" href="#/">Back to all teams</a></div>`; });
 window.NFLRefresh?.autoRefreshIfStale(); // D53: refresh on open if data is older than 6h (public/js/refresh.js)
 
-// League-wide "data as of" in the app bar, independent of whichever team page is open (integration
-// task 2). Runs once at startup and again whenever a refresh cycle finishes anywhere in the app.
+// League-wide "data as of" in the app bar, independent of whichever team page is open. Runs once at
+// startup and again whenever a refresh cycle finishes anywhere in the app.
 if (window.NFLRefresh?.renderStatus && asof) {
   window.NFLRefresh.renderStatus(asof);
   window.addEventListener("nfl:data-refreshed", () => window.NFLRefresh.renderStatus(asof));

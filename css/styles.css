@@ -927,23 +927,11 @@ a.back { color:var(--muted); }
   .matchup-opp-picker label, .matchup-opp-picker select, .matchup-opp-note { font-size:10px; }
 }
 
-/* D113 follow-up (👁 QA, 2026-09-16): the half banners now live OUTSIDE the scaled `.field-scale` canvas,
-   as two fixed-height strips wrapping `.field-outer` inside a new `.matchup-field-wrap` (matchup.js's
-   renderMatchup/halfBannerHtml). Inside the canvas the banner used to be sized in design pixels that
-   viewfit.js's fit-to-window transform then shrank along with everything else — at a typical 1700x900
-   scale (~0.65-0.7) a 26-design-px band rendered barely taller than its own text. A real DOM strip outside
-   the transform is always exactly 32 real pixels no matter the scale. Because it is a real sibling in flow
-   rather than an absolutely-positioned canvas layer, viewfit's own measurement of `.field-outer`'s
-   bounding rect already accounts for the top strip's height with no extra plumbing; the bottom strip's
-   32px sits comfortably inside the 40px (`backRow ?? 26` + `BOTTOM_RESERVE` 14) viewfit already reserves
-   below the canvas by default, so neither 1700x900 nor 2000x980 need a scrollbar. A solid primary fill end
-   to end (not a gradient) fixes the black-on-black dead zone a primary-to-secondary gradient produced on a
-   club whose secondary is itself near-black (Jacksonville); the secondary now shows as a 4px inset stripe
-   along the strip's OUTER edge (the top strip's top edge, the bottom strip's bottom edge) instead, so
-   every club still carries two-colour identity without ever blending to near-invisible ink. Ink colour
-   keeps the same light/dark threshold the header panels use (isLightWash). Moving the banner off the
-   canvas also restores the "SECONDARY" level label the old in-canvas banner covered — nothing on the
-   canvas draws in this space any more. */
+/* D113: the matchup half banners are real 32px strips OUTSIDE the scaled `.field-scale` canvas (matchup.js
+   halfBannerHtml), so they stay 32 real pixels at any fit scale. The top strip is measured with `.field-outer`;
+   the bottom strip is NOT covered by viewfit's default reserve — matchup.js passes its height as `reserveBelow`
+   (matchupReserveBelow), and dropping that makes the page oscillate. Solid primary fill, with the club's
+   secondary as a 4px stripe on the strip's outer edge, so a near-black secondary never blends into the field. */
 .matchup-field-wrap { display:flex; flex-direction:column; flex:1 1 auto; min-width:0; border-radius:10px;
   overflow:hidden; border:1px solid #22282f; }
 .matchup-field-wrap .field-outer { border-radius:0; border:none; }
