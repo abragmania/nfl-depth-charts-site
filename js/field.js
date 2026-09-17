@@ -824,12 +824,26 @@ function placeLineColumns(slots, lm) {
   const xs = new Array(slots.length);
   const ends = [], interior = [];
   slots.forEach((s, i) => (isEndLabel(s) ? ends : interior).push(i));
+  // D127 follow-up: a line charting THREE or more ends (Kansas City: DE, DT, DT, DE, DE) has no label-led
+  // shape to fill, so the whole row draws in the club's chart order, one pitch apart, centred on the centre.
+  if (ends.length >= 3) return slots.map((_, i) => lm.C + (i - (slots.length - 1) / 2) * lm.pitch);
+  // D132 (Adam): ends go on the ends, tackles in the middle. A three-man line with ONE end (Arizona, New
+  // Orleans) used to stand him on the centre between the tackles. He takes the tackle spot on the side the
+  // club printed him (right only when printed last); a lone nose, else the first interior man, takes the centre.
+  if (slots.length === 3 && ends.length === 1) {
+    const e = ends[0];
+    const noses = interior.filter((i) => String(slots[i]?.label || "").toUpperCase() === "NT");
+    const mid = noses.length === 1 ? noses[0] : interior[0];
+    const far = interior.find((i) => i !== mid);
+    const left = e !== 2;
+    xs[e] = left ? lm.LT : lm.RT; xs[mid] = lm.C; xs[far] = left ? lm.RT : lm.LT;
+    return xs;
+  }
   interior.forEach((idx, k) => (xs[idx] = lm.C + (k - (interior.length - 1) / 2) * lm.pitch));
   const innerL = interior.length ? Math.min(...interior.map((idx) => xs[idx])) : lm.C;
   const innerR = interior.length ? Math.max(...interior.map((idx) => xs[idx])) : lm.C;
   // D127: an end keeps his tackle's landmark unless the interior cluster has grown out to within MIN_PITCH
-  // of it, in which case he steps OUT (away from the centre) by exactly the shortfall. A rare third end,
-  // whom placeOuterInner lands on the centre itself, has no side to step to and is left to enforceNoOverlap.
+  // of it, in which case he steps OUT (away from the centre) by exactly the shortfall.
   const endXs = placeOuterInner(ends.length, lm.LT, lm.RT, lm.LG, lm.RG);
   ends.forEach((idx, k) => {
     const x = endXs[k];
