@@ -204,11 +204,11 @@ export const BOTH_SIDES_HEIGHT = MARGIN_TOP + BOTH_SIDES_HALF + 2 * LOS_HALF_GAP
 const SIDE_INSET = 30;
 
 // D69: three offensive rows, nearest-the-LOS first. Reordering these entries reorders the whole offensive
-// half — levels, stripes, labels and gaps all fall out of it. PASS CATCHERS (WR+TE) sits above LINE (OL
-// alone) as a deliberate visual choice, not real formation depth, with its own stripe and label.
+// half — levels, stripes, labels and gaps all fall out of it. D130 (Adam, every page): the LINE sits on the
+// line of scrimmage, facing the defensive line; PASS CATCHERS (WR+TE) sit behind it, then the BACKFIELD.
 const OFF_ROW_GROUPS = [
-  { key: "PASS_CATCHERS", bands: ["WR", "TE"] }, // outside WR, slot WR, TE(s), outside WR
   { key: "LINE", bands: ["OL"] },                // LT LG C RG RT
+  { key: "PASS_CATCHERS", bands: ["WR", "TE"] }, // outside WR, slot WR, TE(s), outside WR
   { key: "BACKFIELD", bands: ["QB", "BACKFIELD"] }, // QB centred on the centre, RB/FB flanking him
 ];
 const OFF_ROW_LEVEL = { PASS_CATCHERS: "PASS_CATCHERS", LINE: "LINE", BACKFIELD: "BACKFIELD" };
