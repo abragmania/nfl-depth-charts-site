@@ -96,7 +96,9 @@ export const MAX_DEPTH_ROWS = 3; // ruling E: at most three depth rows, the thir
 // rating pill or snap trio, so it is reserved (and drawn — styles.css's `.prow-more.depth-more`) shorter
 // than a player row; every unit it costs is a unit off the constant canvas every club is scaled to (D107).
 export const REDUCED_DEPTH_ROWS = 1;
-const DEPTH_CHIP_H = 14;
+// 👁 V4: the chip was drawn smaller than the floor it serves (7.8 CSS px at 1536x864). styles.css prints it
+// at 12.5px so it lands at ~9px at the floor, which needs a 15-unit line rather than 14 (border box).
+const DEPTH_CHIP_H = 15;
 // D72: the single-unit (offense/defense) pages draw half as many rows, so the fit engine scales them to
 // roughly 1.3-1.8x — room for a small headshot on line one, the SAME row renderer widened by an option
 // (cards.js's overviewLineOne), never a second card type. HEADSHOT_PAD is the air above/below it, so the
@@ -115,6 +117,14 @@ export const SIDE_CARD_W = 210;
 // which is where the visible separation between rows actually comes from.
 const BAND_GAP = 5; // vertical gap between adjacent rows inside one level
 const LEVEL_GAP_EXTRA = 10; // on top of BAND_GAP, only between two rows in DIFFERENT levels
+// 👁 V5 (D134's reduced state only): the reduced rows are 9 units shorter than the full-depth ones, so the
+// full-depth gaps left ~150 units of empty turf per half and a maximised 1080p laptop scrolled ~100px. These
+// tighter gaps shorten the constant canvas AND every club's own natural span, so one FEWER club outgrows the
+// constant than before. The full-depth layout reads BAND_GAP/LEVEL_GAP_EXTRA and does not move by a pixel.
+const REDUCED_BAND_GAP = 2;
+const REDUCED_LEVEL_GAP_EXTRA = 4;
+const bandGapOf = (style = {}) => (style.depthChip ? REDUCED_BAND_GAP : BAND_GAP);
+const levelGapOf = (style = {}) => (style.depthChip ? REDUCED_LEVEL_GAP_EXTRA : LEVEL_GAP_EXTRA);
 // D111: with the secondary on one row, the TOP defensive row carries the two corners, whose cards sit
 // right where the canvas used to leave empty turf for the "SECONDARY" level label and the "DEFENSE"
 // caption. EDGE_CHROME opens a strip above the first row (and, since the LOS sits on the canvas
@@ -218,8 +228,8 @@ const DEF_LEVEL_BOUNDARIES = DEF_ROW_ORDER.reduce(
 // always was; with no style it is the full-depth number every club renders on today (467 / 1014).
 export function bothSidesHalf(style = {}) {
   return DEF_ROW_ORDER.length * defRowFullH(style)
-    + (DEF_ROW_ORDER.length - 1) * BAND_GAP
-    + DEF_LEVEL_BOUNDARIES * LEVEL_GAP_EXTRA
+    + (DEF_ROW_ORDER.length - 1) * bandGapOf(style)
+    + DEF_LEVEL_BOUNDARIES * levelGapOf(style)
     + (SECONDARY_ONE_ROW ? SECONDARY_CORNER_DROP : 0);
 }
 export function bothSidesHeight(style = {}) {
@@ -1127,11 +1137,15 @@ export function computeLayout(teamView, opts = {}) {
   // BAND_GAP + LEVEL_GAP_EXTRA at a level boundary (Adam: "generous vertical separation" between levels),
   // plus a uniform `extraGap` spent as air between every pair of rows. Returns the y just past the last
   // row's bottom (or `top` unchanged for an empty list, so an empty side never pushes anything).
+  // 👁 V5: the gap pair is the one this style draws at — tighter in D134's reduced state, untouched anywhere
+  // else — so a row's minimum pitch and the constant half above are always derived from the same numbers.
+  const bandGap = bandGapOf(style);
+  const levelGap = levelGapOf(style);
   const placeSpan = (rows, top, extraGap) => {
     let y = top;
     let prevLevel = null;
     for (const row of rows) {
-      if (prevLevel !== null) y += BAND_GAP + extraGap + (row.level !== prevLevel ? LEVEL_GAP_EXTRA : 0);
+      if (prevLevel !== null) y += bandGap + extraGap + (row.level !== prevLevel ? levelGap : 0);
       placeRow(row, y);
       y = row.bottom;
       prevLevel = row.level;
@@ -1145,7 +1159,7 @@ export function computeLayout(teamView, opts = {}) {
     let h = 0;
     let prevLevel = null;
     for (const row of rows) {
-      if (prevLevel !== null) h += BAND_GAP + (row.level !== prevLevel ? LEVEL_GAP_EXTRA : 0);
+      if (prevLevel !== null) h += bandGap + (row.level !== prevLevel ? levelGap : 0);
       h += row.height;
       prevLevel = row.level;
     }
@@ -1426,5 +1440,5 @@ export function renderFieldSvg(layoutHeight, losY, layoutWidth = LAYOUT_WIDTH, c
 // Exported so tests read these numbers from here instead of hardcoding literals that go stale silently the
 // moment a ruling moves a constant — a test states the RELATIONSHIP (a corner is CB_PITCH_FROM_CENTER pitches
 // off the centre; two cards never come closer than MIN_CARD_GAP) rather than a specific number.
-export const geometry = { CARD_W, CARD_H1, ROW_H, SIDE_ROW_H, CARD_GAP, SIDE_CARD_GAP, BANNER_H, OUT_RAIL_H, LABEL_RESERVE, MAX_DEPTH_ROWS, REDUCED_DEPTH_ROWS, DEPTH_CHIP_H, HEADSHOT_SIZE, BAND_GAP, LEVEL_GAP_EXTRA, LOS_HALF_GAP, MARGIN_TOP, MARGIN_BOTTOM, SIDE_INSET, DEF_ROW_FULL_H, DEF_ROW_COUNT: DEF_ROW_ORDER.length, DEF_LEVEL_BOUNDARIES, BOTH_SIDES_HALF, BOTH_SIDES_HEIGHT, MIN_PITCH, MIN_CARD_GAP, EDGE_PITCH_OUT, ILB_PITCH_FROM_CENTER, PASS_CATCHER_PITCH, SECONDARY_CORNER_DROP,
+export const geometry = { CARD_W, CARD_H1, ROW_H, SIDE_ROW_H, CARD_GAP, SIDE_CARD_GAP, BANNER_H, OUT_RAIL_H, LABEL_RESERVE, MAX_DEPTH_ROWS, REDUCED_DEPTH_ROWS, DEPTH_CHIP_H, HEADSHOT_SIZE, BAND_GAP, LEVEL_GAP_EXTRA, REDUCED_BAND_GAP, REDUCED_LEVEL_GAP_EXTRA, LOS_HALF_GAP, MARGIN_TOP, MARGIN_BOTTOM, SIDE_INSET, DEF_ROW_FULL_H, DEF_ROW_COUNT: DEF_ROW_ORDER.length, DEF_LEVEL_BOUNDARIES, BOTH_SIDES_HALF, BOTH_SIDES_HEIGHT, MIN_PITCH, MIN_CARD_GAP, EDGE_PITCH_OUT, ILB_PITCH_FROM_CENTER, PASS_CATCHER_PITCH, SECONDARY_CORNER_DROP,
   S_PITCH_FROM_CENTER, NB_PITCH_FROM_CENTER, CB_PITCH_FROM_CENTER };

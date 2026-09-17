@@ -154,8 +154,11 @@ const unitChipHtml = (unit) => `<span class="matchup-unit-chip">${esc(unit)}</sp
 
 // The compact state itself: one class on the page root drives the banners, the key and the header's own
 // tighter type, so switching states re-renders nothing and the field underneath cannot shake (D114).
+// 👁 A8: the key collapses to the same one-word chip the team page uses instead of disappearing — a page
+// showing two clubs' cards must still say what a red band or a hatch means.
 function setMatchupCompact(root, on) {
   root.querySelector(".matchup")?.classList.toggle("is-compact", on);
+  root.querySelector(".legend-matchup")?.classList.toggle("legend-collapsed", on);
 }
 
 // D113 (Adam, 2026-09-16): the centre block used to print its own "A offense vs B defense" line here — the
@@ -381,7 +384,8 @@ function mountMatchupField(root, viewA, viewB, teamA, teamB) {
       setDepth: (on) => { depthOpts = on ? REDUCED_DEPTH_OPTS : null; },
     },
     onDraw: (el) => { fitNames(el); wireDepthToggles(el); wireMatchupClicks(el, teamA, teamB); },
-    onScale: (el) => fitNames(el),
+    onText: (el) => fitNames(el), // 🔵 A9: on the font swap only, never on every resize frame
+
   });
 }
 

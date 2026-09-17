@@ -165,9 +165,15 @@ const ESPN_POS_BAND = {
   wr: "WR", te: "TE", qb: "QB", rb: "BACKFIELD", fb: "BACKFIELD",
   lde: "DL", rde: "DL",
   dt: "DL", nt: "DL", ldt: "DL", rdt: "DL",
-  wlb: "LB", slb: "LB", mlb: "LB", lilb: "LB", rilb: "LB",
+  mlb: "LB", lilb: "LB", rilb: "LB",
   lcb: "CB", rcb: "CB", nb: "NB", fs: "S", ss: "S",
 };
+// D137 (2026-09-17): the WEAK-SIDE and STRONG-SIDE codes are scheme-dependent exactly as lolb/rolb are — in
+// a 3-4 the man ESPN files at wlb/slb is an outside linebacker, i.e. an edge rusher, and only in a 4-3 is he
+// an off-ball backer. Reading them as LB in every scheme rang a false dashed ring on every 3-4 outside
+// linebacker in the league (Pittsburgh's T.J. Watt, Arizona's Zaven Collins). mlb/lilb/rilb are off-ball in
+// both schemes and stay in the table above.
+const SCHEME_OLB_CODES = new Set(["lolb", "rolb", "wlb", "slb"]);
 function mapEspnSlotToBand(espnSlot, scheme) {
   const key = String(espnSlot || "").toLowerCase();
   // D18: a 3-4's outside linebackers are edge rushers; the same code in a non-3-4 context is an off-ball
@@ -175,7 +181,7 @@ function mapEspnSlotToBand(espnSlot, scheme) {
   // moved lde/rde to DL above: while they still mapped to EDGE this function reported a disagreement for
   // EVERY 4-3 defensive end, painting the whole line with the dashed "ESPN lists him elsewhere" ring and a
   // tooltip that was simply untrue.)
-  if (key === "lolb" || key === "rolb") return scheme === "3-4" ? "EDGE" : "LB";
+  if (SCHEME_OLB_CODES.has(key)) return scheme === "3-4" ? "EDGE" : "LB";
   return ESPN_POS_BAND[key] || null;
 }
 
@@ -189,9 +195,14 @@ const FRONT_BANDS = new Set(["DL", "EDGE"]);
 // "roster-body" reads the man standing there, "starter-of-record" the man who owns the spot), there is nothing
 // for ESPN's label to disagree WITH - the band is already an answer to the same question, reached from better
 // evidence. Only the rank comparison survives.
-const BODY_DERIVED = new Set(["roster-body", "starter-of-record"]);
+// D137 review item B2: D136's "off-ball" columns (Baltimore's, the Giants' and Seattle's WLB) are the same
+// kind of answer — the app read the club's own snap evidence and put a row labelled WLB/SLB on the LINEBACKERS
+// row deliberately, so ESPN's band for that man cannot disagree with anything. Only the rank comparison survives.
+const BODY_DERIVED = new Set(["roster-body", "starter-of-record", "off-ball"]);
 
-function espnDisagrees(p, slotBand, scheme, labelSource) {
+// Exported for the tests (D137): the dashed ring is a claim about a real player's real placement, so the
+// rule that decides it is asserted directly rather than only through a rendered page.
+export function espnDisagrees(p, slotBand, scheme, labelSource) {
   if (!p.espnSlot) return false;
   // A tier of 0 is not a rank: it is the sentinel starters.js stamps on a man it INSERTED onto line one from
   // the roster because today's chart does not list him at all (D61), and a null tier is the same for a reserve
@@ -331,7 +342,7 @@ function overviewLineOne(p, teamAbbr, opts = {}) {
       <span class="prow-info">
         <span class="prow-main">
           <span class="prow-num">${esc(p.number ?? "—")}</span>
-          <span class="prow-name" data-short="${esc(shortName(p))}">${esc(p.name)}</span>
+          <span class="prow-name" data-full="${esc(p.name)}" data-short="${esc(shortName(p))}">${esc(p.name)}</span>
           ${signalGlyphs(p)}
           <span class="prow-badges">${badges}</span>
           ${overviewOvr(p.rating, ratingTier(p.rating))}
@@ -358,14 +369,16 @@ function overviewDepth(p, teamAbbr, opts = {}) {
     weekOneChip(p.weekOneNote),
     alsoListedChips(p, opts.slotLookup, opts.ownLabel),
   ].join("");
-  const name = badges.trim() ? shortName(p) : p.name;
+  // 👁 V2 (D135): the row is drawn with the man's FULL name whether or not he wears a badge, and fitOneName
+  // decides. Shortening here first made the abbreviation the "full" text fitNames recorded, so a badge row
+  // read "A. Sam" with 130px of spare room and D135 could never see it.
   const rail = opts.outRail ? bannerHtml(p) : "";
   const railCls = opts.outRail ? " prow-outrail" : "";
   return `<a class="${overviewClasses(p, "prow")}${railCls}" href="#/team/${esc(teamAbbr)}/player/${encodeURIComponent(p.playerKey)}" data-player-key="${esc(p.playerKey)}" title="${overviewTitle(p, false)}">
     ${rail}
     <span class="prow-line">
       <span class="prow-num">${esc(p.number ?? "—")}</span>
-      <span class="prow-name" data-short="${esc(shortName(p))}">${esc(name)}</span>
+      <span class="prow-name" data-full="${esc(p.name)}" data-short="${esc(shortName(p))}">${esc(p.name)}</span>
       <span class="prow-badges">${badges}</span>
       ${overviewOvr(p.rating, ratingTier(p.rating))}
       ${snapHistoryHtml(p, opts)}
@@ -402,7 +415,8 @@ export function compactRow(p, teamAbbr, opts = {}) {
     weekOneChip(p.weekOneNote),
     alsoListedChips(p, opts.slotLookup, opts.ownLabel),
   ].join("");
-  const displayName = badgesHtml.trim() ? shortName(p) : p.name;
+  // 👁 V2 (D135), same rule as overviewDepth above: the full name is drawn and fitOneName decides, so a
+  // badge never costs a name that had room. fitNames fits `.row-name[data-short]` as well as `.prow-name`.
   // 👁 QA: "NR" rather than a dash for a player with no Madden entry — the same word every other view
   // uses, so a reader never has to work out whether a rating is missing or merely not rendered.
   const ovr = p.rating?.current ?? "NR";
@@ -414,7 +428,7 @@ export function compactRow(p, teamAbbr, opts = {}) {
   const outCls = isFullyOut(p) ? " row-out" : "";
   return `<a class="row ${ratingTier(p.rating)}${outCls} ${p.shaded ? "row-shaded" : ""}" href="#/team/${esc(teamAbbr)}/player/${encodeURIComponent(p.playerKey)}" data-player-key="${esc(p.playerKey)}" title="${title}">
     <span class="row-number">#${p.number ?? "—"}</span>
-    <span class="row-name">${esc(displayName)}</span>
+    <span class="row-name" data-full="${esc(p.name)}" data-short="${esc(shortName(p))}">${esc(p.name)}</span>
     ${badgesHtml}
     <span class="row-ovr${p.rating?.current == null ? " row-ovr-none" : ""}">${esc(ovr)}</span>
     ${snapHistoryHtml(p, opts)}
@@ -476,6 +490,9 @@ export function wireDepthToggles(root) {
     const open = extra.classList.toggle("is-open");
     btn.setAttribute("aria-expanded", String(open));
     btn.textContent = open ? "show less" : `+${extra.childElementCount} more`;
+    // 🔵 A9: a row inside a CLOSED `.depth-extra` measures 0 wide, so it was never fitted and opened showing
+    // an abbreviation (or an ellipsis) whatever room it had. Fit it now that it has a real box.
+    if (open) fitNames(extra);
   });
 }
 
@@ -512,8 +529,10 @@ const ROW_GIVE_UPS = [".sig-LOW_SNAPS", ".signal-glyph", ".chip-ghost", ".chip-w
 // and a row whose name already fits is never touched — so a page with no cut names renders exactly as it
 // did before this ruling.
 function fitOneName(row, el) {
-  el.textContent = el.dataset.full;
-  row.classList.remove("prow-tight");
+  // 🔵 A9: a row already in its default state is left alone — no text or class write at all — so a page with
+  // no cut names costs one measurement per row and wakes nothing that observes the field.
+  if (el.textContent !== el.dataset.full) el.textContent = el.dataset.full;
+  if (row.classList.contains("prow-tight")) row.classList.remove("prow-tight");
   for (const n of row.querySelectorAll(".prow-given-up")) n.classList.remove("prow-given-up");
   if (!textOverflows(el)) return;
   row.classList.add("prow-tight");
@@ -537,10 +556,12 @@ function fitOneName(row, el) {
   if (el.dataset.short && el.dataset.short !== el.dataset.full) el.textContent = el.dataset.short;
 }
 
+// 👁 V2: `.row-name` (the 40px compactRow the side, group and matchup card views draw) is fitted by the same
+// pass — it draws the full name now too, so without this a badge row would simply ellipsise.
 export function fitNames(root) {
-  for (const el of root.querySelectorAll(".prow-name[data-short]")) {
+  for (const el of root.querySelectorAll(".prow-name[data-short], .row-name[data-short]")) {
     el.dataset.full = el.dataset.full ?? el.textContent;
-    const row = el.closest(".prow");
+    const row = el.closest(".prow, .row");
     if (row) fitOneName(row, el);
   }
 }
@@ -669,9 +690,15 @@ export function renderColumn(col, teamAbbr, opts = {}) {
     // (the rail rides behind the cap, the fill-in and co-starters are line-one rows, D104/D56).
     const cap = style.maxDepthRows ?? 1;
     const ordinary = depth.filter((p) => !railed.has(p));
-    shownRest = ordinary.slice(0, cap);
+    // 🔵 A7: the one visible backup is the first man who can actually PLAY this week, not merely the first
+    // man listed — an OUT/INACTIVE/SUSP row there answered "who is behind him" with a man who is not.
+    // Order is otherwise untouched, so the hidden men stay behind the chip in the chart's printed order,
+    // and the COUNT is unchanged (field.js's depthPlan reserves the same box either way).
+    const lead = ordinary.findIndex((p) => !isFullyOut(p));
+    const ranked = lead > 0 ? [ordinary[lead], ...ordinary.filter((_, i) => i !== lead)] : ordinary;
+    shownRest = ranked.slice(0, cap);
     shownOut = outRows;
-    const hidden = ordinary.slice(cap);
+    const hidden = ranked.slice(cap);
     tail = hidden.length ? depthMoreChip(hidden.map(depthRow).join(""), hidden.length) : "";
   } else {
     const visible = visibleDepthRows(players, style.maxDepthRows);

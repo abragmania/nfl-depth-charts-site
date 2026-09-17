@@ -52,6 +52,9 @@ export function headerHtml(team, view, fromFixture = false, teams, withLegend = 
   const oppTeam = opp ? teams.find((t) => t.abbr === opp.abbr) : null;
   const schemeText = view.scheme ? esc(view.schemeLabel || view.scheme) : "Scheme unknown";
   const stale = ageHours(view.dataAsOf) > STALE_HOURS;
+  // 👁 V3: the compact header hides the "as of" chip to stay on one line at 1280, so the timestamp it
+  // carries has to be somewhere that is always on the page — the Refresh button's own tooltip.
+  const asOfFull = view.dataAsOf ? esc(new Date(view.dataAsOf).toLocaleString()) : dash;
 
   const oppHtml = opp
     ? `<span class="opp">${opp.home ? "vs" : "@"} ${oppTeam ? `<img class="opp-logo" src="${esc(oppTeam.logo)}" alt="${esc(opp.abbr)}">` : ""}${esc(opp.abbr)} · ${fmtKickoff(opp.kickoff)}</span>`
@@ -83,8 +86,8 @@ export function headerHtml(team, view, fromFixture = false, teams, withLegend = 
     ${withLegend && SECONDARY_ONE_ROW ? legendHtml("legend-banner") : ""}
     <div class="teamhead-controls">
       <div class="chip-row">${chips.join("")}</div>
-      <button type="button" class="refresh-btn">Refresh now</button>
-      <span class="asof-chip ${stale ? "amber" : ""}" title="Data as of ${view.dataAsOf ? esc(new Date(view.dataAsOf).toLocaleString()) : dash}">as of ${view.dataAsOf ? esc(fmtAsOf(view.dataAsOf)) : dash}</span>
+      <button type="button" class="refresh-btn" title="Refresh now · data as of ${asOfFull}">Refresh now</button>
+      <span class="asof-chip ${stale ? "amber" : ""}" title="Data as of ${asOfFull}">as of ${view.dataAsOf ? esc(fmtAsOf(view.dataAsOf)) : dash}</span>
     </div>
   </div>`;
 }
@@ -203,10 +206,10 @@ export function mountTeamField(root, view, team, teamAbbr, layoutOpts = {}, casc
       setCompact: cascadeOpts.setCompact || null,
     },
     onDraw: (el) => { wireFieldClicks(el, teamAbbr); wireDepthToggles(el); fitNames(el); },
-    // A name that fits at one scale can stop fitting at another (a webfont swap, a window resize, the
-    // panel opening), so the abbreviate-don't-truncate pass runs on every scale change, not only when the
-    // markup is rebuilt.
-    onScale: (el) => fitNames(el),
+    // 🔵 A9: the names are fitted when the markup is drawn, and again once the real font has landed — the
+    // one event that changes the answer. A scale change cannot: the whole field is one CSS transform, so
+    // the name and the box it has to fit in scale together.
+    onText: (el) => fitNames(el),
   });
 }
 

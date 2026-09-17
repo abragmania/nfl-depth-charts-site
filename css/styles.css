@@ -130,7 +130,17 @@ main.page-landing { padding:10px 20px 12px; }
 .teamhead img { width:38px; height:38px; object-fit:contain; flex:none; }
 /* D134 step 1 on the whole-team page: with the key folded into its chip the banner is back to the height
    of its own crest, and the padding tightens a shade. Everything the header says stays on it. */
-.teamhead-compact { padding:3px 14px; }
+/* 👁 V3: at 1280 (and at 1366 with a long club name) the status chip, Refresh and "as of" dropped to a
+   second row even in the compact state — the field started at y=185 instead of 146, which is 39px, exactly
+   what this step exists to reclaim. The compact header therefore never wraps: it gives ground instead. The
+   "as of" chip goes (its timestamp is on the Refresh button's tooltip, team.js's headerHtml), the meta line
+   stays on one row, and the club name truncates last. No overflow:hidden anywhere — the collapsed key's
+   popover is an absolutely-positioned child of this box and would be clipped by it. */
+.teamhead-compact { padding:3px 14px; flex-wrap:nowrap; }
+.teamhead-compact .teamhead-main { flex:0 1 auto; min-width:0; flex-wrap:nowrap; }
+.teamhead-compact h1 { min-width:0; overflow:hidden; text-overflow:ellipsis; }
+.teamhead-compact .meta { flex-wrap:nowrap; min-width:0; }
+.teamhead-compact .asof-chip { display:none; }
 .teamhead h1 { margin:0; font-size:19px; white-space:nowrap; }
 .teamhead-main { min-width:0; display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
 .teamhead .meta { display:flex; gap:14px; align-items:center; color:rgba(255,255,255,.88); font-size:12.5px; flex-wrap:wrap; }
@@ -643,9 +653,15 @@ a.back { color:var(--muted); }
    depthMoreChip, wired by wireDepthToggles) rather than ruling E's link to the group page. It carries one
    short word — no jersey number, rating pill or snap trio — so field.js reserves DEPTH_CHIP_H (14) for it
    instead of a full row, and this pins the drawn chip to exactly that height so the two agree. */
-.column .prow-more.depth-more { min-height:14px; height:14px; padding:0 6px; font-size:10.5px; line-height:1;
+/* 👁 V4: it was drawn SMALLER than the floor it serves (7.8px at 1536x864, 7.2 at 1280, muted grey italic)
+   — and it is the only sign on the page that men are hidden. At 12.5px it lands at ~9px at the floor, the
+   same readability bar D134 sets for a backup name, and it reads in the page's own ink rather than a mutter.
+   The 15px line box is 12.5px of type plus the 1px borders, which is field.js's DEPTH_CHIP_H. */
+.column .prow-more.depth-more { min-height:15px; height:15px; padding:0 6px; font-size:12.5px; line-height:1;
+  font-style:normal; font-weight:700; color:#dbe3ec; border-color:#5b6672; background:rgba(255,255,255,.05);
   border-radius:var(--r-row); align-self:auto; }
-.column .prow-more.depth-more[aria-expanded="true"] { border-style:solid; color:#c3cad2; }
+.column .prow-more.depth-more:hover { color:#fff; border-color:#8c99a6; }
+.column .prow-more.depth-more[aria-expanded="true"] { border-style:solid; color:#fff; }
 .prow-signals { flex:none; display:inline-flex; gap:1px; align-items:center; }
 /* The compact rows put a real badge in a 15px-tall line, so the shared .badge sizing is scaled down here
    (and only here — zoom.js/matchup.js badges keep their normal size). */
@@ -982,7 +998,12 @@ a.back { color:var(--muted); }
 .matchup-team-light .matchup-unit-chip { background:rgba(255,255,255,.4); border-color:rgba(0,0,0,.22); }
 .matchup.is-compact .matchup-unit-chip { display:inline-block; }
 .matchup.is-compact .matchup-half-banner { display:none; }
-.matchup.is-compact .legend-matchup { display:none; }
+/* 👁 A8: the compact matchup used to drop the key outright, so the one page that draws two clubs' cards at
+   once explained none of them. It now collapses to the same "Legend" chip the team page uses (matchup.js's
+   setMatchupCompact adds `legend-collapsed`), which shows the whole key on hover or keyboard focus. The
+   popover hangs below the centre block, so it is centred there rather than right-aligned. */
+.matchup.is-compact .legend-matchup.legend-collapsed { max-width:none; }
+.matchup.is-compact .legend-matchup.legend-collapsed .legend-items { right:auto; left:50%; transform:translateX(-50%); }
 .matchup.is-compact .matchup-head { padding:5px 12px; gap:12px; }
 .matchup.is-compact .matchup-team { padding:4px 10px; gap:10px; }
 .matchup.is-compact .matchup-logo { width:34px; height:34px; padding:3px; }
