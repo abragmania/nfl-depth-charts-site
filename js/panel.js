@@ -123,8 +123,8 @@ function bioRowHtml(card) {
   const draft = draftLine(b.draft) || dash;
   // No "Drafted " prefix: it cost 8 of this narrow grid cell's characters for no real information (the
   // whole row is obviously bio data), and dropping it is what lets "2020 · R2 #53" fit.
-  // D115 (Adam, 2026-09-16): a seventh cell, spanning the grid's full width as its own row, for the games/
-  // starts chip below (gamesChipData/patchGamesChip). The draft cell above already reads "—" for the many
+  // D115 (Adam, 2026-09-16): a seventh cell, spanning the grid's full width as its own row, for the games
+  // chip below (gamesChipData/patchGamesChip). The draft cell above already reads "—" for the many
   // undrafted men on file, which looked like a free slot, but that dash is a real answer ("undrafted") for
   // a drafted player it instead shows his round/pick — overwriting it would destroy that data, so this adds
   // a cell rather than repurposing one. History hasn't resolved yet when this first renders (see openPanel),
@@ -353,35 +353,33 @@ function fillDraftRound(asideEl, apiDraft) {
   if (el) el.textContent = draftLine(apiDraft);
 }
 
-// --- D115: game-experience chip -----------------------------------------------------------------------
+// --- D115/D147: game-experience chip ------------------------------------------------------------------
 // Pure summarizer over the /api/history/{abbr}/{playerKey} `seasons` rows (server/history/index.js's
-// buildHistory: nine completed seasons plus D87's current-season row, each already carrying `games` and
-// `starts`, null when unknown). Exported for tests/panel.test.mjs, which has no DOM to drive the real fetch
-// through. A row with both fields null (no data on file for that year, e.g. before he entered the league)
-// is skipped entirely — it contributes to neither the totals nor the "on file" season span. Games sums
-// over every row that has a games number; starts only ever appears in the chip text when at least one row
-// actually carries a starts number (`anyStarts`) — otherwise the honest answer is "we don't know starts",
-// not "0 starts".
+// buildHistory: nine completed seasons plus D87's current-season row, each carrying a `games` number, null
+// when that year has no data on file). Exported for tests/panel.test.mjs, which has no DOM to drive the real
+// fetch through.
+// D147 (Adam, 2026-09-17; amends D115): "I don't really care about starts just show me game experience." The
+// chip is games and nothing else. The API rows still carry a per-season `starts` figure for any other reader;
+// this summarizer no longer looks at it, so a season whose starts are unknown - which is every season since
+// nflverse switched to the daily depth-chart format in 2025 - no longer changes what the chip says.
+// A row with no games number is skipped entirely: it contributes to neither the total nor the season span
+// printed in the tooltip.
 export function gamesChipData(seasons) {
   const rows = Array.isArray(seasons) ? seasons : [];
-  // D115 (Adam): starts only when KNOWN for every counted season - a season with games but no starts figure
-  // (nflverse leaves GS blank for some linemen) would make the total a floor, and "0 starts" would then be
-  // a claim the data does not support. One unknown season drops the starts half entirely.
-  let games = 0, starts = 0, anyStarts = false, startsUnknown = false, minSeason = null, maxSeason = null;
+  let games = 0, minSeason = null, maxSeason = null;
   for (const r of rows) {
-    if (!r || (r.games == null && r.starts == null)) continue;
-    if (r.games != null) games += Number(r.games) || 0;
-    if (r.starts != null) { anyStarts = true; starts += Number(r.starts) || 0; }
-    else if (r.games != null && Number(r.games) > 0) startsUnknown = true;
+    if (!r || r.games == null) continue;
+    games += Number(r.games) || 0;
     const s = Number(r.season);
     if (Number.isFinite(s)) {
       minSeason = minSeason == null ? s : Math.min(minSeason, s);
       maxSeason = maxSeason == null ? s : Math.max(maxSeason, s);
     }
   }
-  const text = anyStarts && !startsUnknown ? `${games} games · ${starts} starts` : `${games} games`;
   const span = minSeason == null ? "" : minSeason === maxSeason ? `, ${minSeason}` : `, ${minSeason}–${maxSeason}`;
-  return { text, title: `Regular-season games on file${span}` };
+  // "1 game", not "1 games": with this season now counted, every rookie in the league reads exactly 1 after
+  // week one - which is the very man (a Jets edge rusher after week 1) this chip was reported broken for.
+  return { text: `${games} game${games === 1 ? "" : "s"}`, title: `Regular-season games on file${span}` };
 }
 
 // history.js owns the /api/history fetch for the position/season table it renders into `[data-history]`,
@@ -467,7 +465,7 @@ export function openPanel(asideEl, card, teamView, teamMeta) {
   asideEl.innerHTML = panelShellHtml(card, teamView?.season, teamMeta, teamView);
   { const h = asideEl.querySelector("[data-history]"); if (h) renderHistory(h, card, teamMeta, { abbr: teamView?.abbr ?? teamMeta?.abbr }); }
 
-  // D115: independent of the ESPN-bio fetch below (gated on card.espnId) — games/starts come from
+  // D115: independent of the ESPN-bio fetch below (gated on card.espnId) — the games count comes from
   // gsis/pfr/name matching against nflverse history, not from ESPN, so this runs even for the small number
   // of players with no ESPN id on file.
   fetchGamesSeasons(card, abbr)

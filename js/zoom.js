@@ -18,7 +18,7 @@
 // card-banner, banner-out, banner-active, badge*, rating-pill, column-shaded, tray-label/tray-chip)
 // rather than inventing parallel styles.
 import { getTeams, getTeam, invalidateTeam } from "./api.js";
-import { esc, BAND_DISPLAY, headshotHtml, wireDepthToggles, isFullyOut, isScratch, psBadge, snapHistoryHtml, withClubRole } from "./cards.js";
+import { esc, BAND_DISPLAY, headshotHtml, wireDepthToggles, isFullyOut, isScratch, psBadge, snapHistoryHtml, withClubRole, NO_SNAP_ROW_TITLE } from "./cards.js";
 import { headerHtml, mountTeamField, teamBodyHtml } from "./team.js";
 import { SIDE_CARD_W, SIDE_MAX_DEPTH_ROWS, regroupSlotReceivers, columnRankReason } from "./field.js";
 import { fitToViewport, disposeCurrentView, SIDE_MIN_READABLE_SCALE } from "./viewfit.js";
@@ -181,7 +181,8 @@ function stackHeatTitle(slot) {
 function signalMarkers(p) {
   const sigs = Array.isArray(p.signals) ? p.signals : [];
   const html = sigs.map((s) => {
-    const meta = SIGNAL_META[s];
+    // D148: a man the source has no row for is not "low" - same distinction cards.js draws from lowSnapsReason.
+    const meta = s === "LOW_SNAPS" && p?.lowSnapsReason === "NO_ROW" ? { ...SIGNAL_META[s], glyph: "no data", title: NO_SNAP_ROW_TITLE } : SIGNAL_META[s];
     return meta ? `<span class="sig ${meta.cls}" title="${esc(meta.title)}">${esc(meta.glyph)}</span>` : "";
   }).join("");
   return html ? `<span class="zoom-signals">${html}</span>` : "";

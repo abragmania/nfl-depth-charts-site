@@ -533,7 +533,9 @@ a.back { color:var(--muted); }
 /* D102: "the tiny grey jersey number read as an afterthought." Same size and colour token as before (this
    column can't grow without costing the name width, D73), but a touch of weight gives it the look of a
    deliberately-set number rather than filler text. */
-.prow-num { flex:none; color:#9aa4b0; font-weight:600; font-variant-numeric:tabular-nums; font-size:9.5px; min-width:15px; text-align:right; }
+/* Adam (2026-09-17): a # before every jersey number on the main display. min-width grew from 15 to 21 so a
+   two-digit number keeps its column alignment with the # in front. */
+.prow-num { flex:none; color:#9aa4b0; font-weight:600; font-variant-numeric:tabular-nums; font-size:9.5px; min-width:21px; text-align:right; }
 /* D73 (Adam, 2026-09-15): "player ratings should appear next to their names, not all the way on the right
    of the cell." The name used to be the row's one growing element (flex:1 1 auto), which pushed the
    badges and the rating pill hard against the right edge and left a long empty gutter between a short
@@ -720,7 +722,7 @@ a.back { color:var(--muted); }
 .column-compact .prow-one { min-height:23px; }
 .column-compact .column-stack { gap:1px; }
 .column-compact .prow-line { line-height:1.2; }
-.column-compact .prow-num { font-size:11px; min-width:17px; }
+.column-compact .prow-num { font-size:11px; min-width:24px; }
 .column-compact .prow-name { font-size:12.5px; }
 .column-compact .prow-badges { max-width:60px; }
 .column-compact .prow-ovr { font-size:11.5px; min-width:22px; }

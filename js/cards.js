@@ -282,13 +282,23 @@ const SIGNAL_TITLE = {
   NEW_ARRIVAL: "New arrival on this roster",
   LOW_SNAPS: "Low recent snap share",
 };
+// Adam, 2026-09-17 (Philadelphia's Riq Woolen, who played every defensive snap of week 1 and wore this glyph):
+// the part-time marker covers two different facts, and the tooltip must say which one it is. A measured share
+// under the threshold is "low recent snap share"; the other case is the snap-count source having no row for him
+// at all while it has rows for his team-mates, which says nothing about how much he played. server/compile/
+// heat.js decides which and writes it on the card as lowSnapsReason ("LOW_SHARE" / "NO_ROW"); the signal itself
+// stays LOW_SNAPS so the glyph, the CSS and D135's give-up order are unchanged.
+// Exported because the zoomed group view (public/js/zoom.js) draws the same marker and must say the same thing:
+// two copies of one sentence is how the two views come to word the same fact differently.
+export const NO_SNAP_ROW_TITLE = "No snap count on file for him (the source has no row)";
+const signalTitle = (s, p) => (s === "LOW_SNAPS" && p?.lowSnapsReason === "NO_ROW" ? NO_SNAP_ROW_TITLE : SIGNAL_TITLE[s] || s);
 // Rendered as its own sibling in a fixed top-left corner (same corner zoom.js's group view uses via its
 // own .zoom-signals), not inside .card-name, so the glyph never competes with the name for width and
 // stays visible regardless of name length.
 function signalGlyphs(p) {
   const sig = Array.isArray(p.signals) ? p.signals : [];
   if (!sig.length) return "";
-  return `<span class="prow-signals">${sig.map((s) => `<span class="signal-glyph sig-${esc(s)}" title="${esc(SIGNAL_TITLE[s] || s)}">${SIGNAL_GLYPH[s] || "•"}</span>`).join("")}</span>`;
+  return `<span class="prow-signals">${sig.map((s) => `<span class="signal-glyph sig-${esc(s)}" title="${esc(signalTitle(s, p))}">${SIGNAL_GLYPH[s] || "•"}</span>`).join("")}</span>`;
 }
 
 // ---- ruling E: the whole-team overview's text rows ------------------------------------------------
@@ -390,7 +400,7 @@ function overviewLineOne(p, teamAbbr, opts = {}) {
       ${head}
       <span class="prow-info">
         <span class="prow-main">
-          <span class="prow-num">${esc(p.number ?? "—")}</span>
+          <span class="prow-num">#${esc(p.number ?? "—")}</span>
           <span class="prow-name" data-full="${esc(p.name)}" data-short="${esc(shortName(p))}">${esc(p.name)}</span>
           ${signalGlyphs(p)}
           <span class="prow-badges">${badges}</span>
@@ -426,7 +436,7 @@ function overviewDepth(p, teamAbbr, opts = {}) {
   return `<a class="${overviewClasses(p, "prow")}${railCls}" href="#/team/${esc(teamAbbr)}/player/${encodeURIComponent(p.playerKey)}" data-player-key="${esc(p.playerKey)}" title="${overviewTitle(p, false)}">
     ${rail}
     <span class="prow-line">
-      <span class="prow-num">${esc(p.number ?? "—")}</span>
+      <span class="prow-num">#${esc(p.number ?? "—")}</span>
       <span class="prow-name" data-full="${esc(p.name)}" data-short="${esc(shortName(p))}">${esc(p.name)}</span>
       <span class="prow-badges">${badges}</span>
       ${overviewOvr(p.rating, ratingTier(p.rating))}
