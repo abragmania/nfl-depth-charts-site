@@ -38,7 +38,7 @@ function slotLookupFor(viewA, viewB) {
 function facingView(viewA, viewB) {
   return {
     scheme: viewB.scheme,
-    // 🔵 A0-2: the defending club's ESPN-vs-club scheme disagreement travels with its front, or this page
+    // D137: the defending club's ESPN-vs-club scheme disagreement travels with its front, or this page
     // would read ESPN's linebacker codes in the wrong formation (cards.js's espnSchemeOf).
     schemeOverride: viewB.schemeOverride ?? null,
     units: { OFF: viewA.units?.OFF || [], DEF: viewB.units?.DEF || [] },
@@ -159,7 +159,7 @@ const unitChipHtml = (unit) => `<span class="matchup-unit-chip">${esc(unit)}</sp
 
 // The compact state itself: one class on the page root drives the banners, the key and the header's own
 // tighter type, so switching states re-renders nothing and the field underneath cannot shake (D114).
-// 👁 A8: the key collapses to the same one-word chip the team page uses instead of disappearing — a page
+// The key collapses to the same one-word chip the team page uses instead of disappearing — a page
 // showing two clubs' cards must still say what a red band or a hatch means.
 function setMatchupCompact(root, on) {
   root.querySelector(".matchup")?.classList.toggle("is-compact", on);
@@ -279,7 +279,7 @@ function wireByePicker(root, A) {
 
 export async function renderMatchup(root, search, aAbbr, bAbbr) {
   search.hidden = true;
-  disposeCurrentView(); // the outgoing view's observers must not outlive its DOM (🔵 review 1)
+  disposeCurrentView(); // the outgoing view's observers must not outlive its DOM
   const A = (aAbbr || "").toUpperCase();
   const { teams } = await getTeams();
   const teamA = teams.find((t) => t.abbr === A);
@@ -392,7 +392,7 @@ function mountMatchupField(root, viewA, viewB, teamA, teamB) {
       setDepth: (on) => { depthOpts = on ? REDUCED_DEPTH_OPTS : null; },
     },
     onDraw: (el) => { fitNames(el); wireDepthToggles(el); wireMatchupClicks(el, teamA, teamB); },
-    onText: (el) => fitNames(el), // 🔵 A9: on the font swap only, never on every resize frame
+    onText: (el) => fitNames(el), // on the font swap only, never on every resize frame
 
   });
 }

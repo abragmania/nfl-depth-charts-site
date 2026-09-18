@@ -314,7 +314,7 @@ function errorHtml(team, e) {
 function unitView(view, unit) {
   return {
     scheme: view.scheme,
-    // 🔵 A0-2: and the club's ESPN-vs-club scheme disagreement, which decides what ESPN's own position
+    // D137: and the club's ESPN-vs-club scheme disagreement, which decides what ESPN's own position
     // codes mean wherever this page's cards are judged against them (cards.js's espnSchemeOf).
     schemeOverride: view.schemeOverride ?? null,
     units: { [unit]: view.units?.[unit] || [] },

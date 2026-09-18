@@ -46,7 +46,7 @@ function sectionsHtml(layout, unit, teamAbbr, opts) {
   }).join("");
 }
 
-// D68/👁: the "not on chart" trays are one collapsed disclosure at the foot of the unit rather than a strip
+// D68: the "not on chart" trays are one collapsed disclosure at the foot of the unit rather than a strip
 // under each band — on a phone they are the least important thing on the page, but they must still be
 // reachable. The strips themselves are cards.js's renderTray, unchanged.
 function trayHtml(layout, unit, teamAbbr) {
@@ -60,7 +60,7 @@ function trayHtml(layout, unit, teamAbbr) {
 }
 
 // The options renderColumn is handed on this page: exactly the Team page's own (D70's coloured pills,
-// D91's snap tooltips, 🔵 A0-2's ESPN formation for the placement verdict), plus D138(4)'s photo rule.
+// D91's snap tooltips, D137's ESPN formation for the placement verdict), plus D138(4)'s photo rule.
 // Exported so a test can render a column through renderColumn with the SAME options the list uses and
 // compare the two strings — which is what proves this file defines no card markup of its own.
 export function columnOpts(view) {

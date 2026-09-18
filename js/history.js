@@ -3,8 +3,8 @@
 // container = the panel's <div data-history>; card = the compiled player object; teamsMeta = the /api/teams
 // envelope (or its teams array) for logos. `abbr` is the team on screen (falls back to the #/team/{abbr} route).
 // Talks to GET /api/history/{abbr}/{playerKey} through api.js's getHistory() helper, so the published static
-// copy (D67) reads the pre-rendered file instead. Styles are injected
-// once from here (styles.css is owned by another step) under the .hist- prefix so the lead can lift them later.
+// copy (D67) reads the pre-rendered file instead. This block's own styles live in this file, injected once
+// under the .hist- prefix; styles.css carries none of them.
 import { getHistory, getTeams } from "./api.js";
 
 const CSS = `

@@ -125,30 +125,28 @@ main.page-landing { padding:10px 20px 12px; }
    spend on a 96px crest and a stacked control column came straight out of the field's height budget.
    Nothing was dropped, only re-flowed; the chips wrap to a second line only when there genuinely are
    chips (a heat summary, an ESPN-fallback warning), which is the rare case. */
-/* D107 (👁 Visual QA, 2026-09-17): THIS HEADER IS ONE LINE HIGH ON EVERY CLUB'S PAGE, ALWAYS. It used to
-   wrap, and an unfolded header that wraps is as tall as the club's own details make it — Houston's ran to
-   three lines (87px), New England's to two (69px), Buffalo's to one (48px) — which put the field's top at
-   four different heights and drew the 32 clubs at seven different sizes on a 1536x864 laptop. The nowrap and
-   give-ground rules below used to belong to `.teamhead-compact` alone; they are the plain state now, so the
-   header is one crest-high line whatever the club is called and however long its next fixture reads. What is
-   left of the compact state is the fold itself (the key becomes its chip, viewfit.js's HEADER_FOLD_WIDTH
-   decides when from the WINDOW) and 2px less padding. */
+/* D107/D146 (1): THIS HEADER IS ONE LINE HIGH ON EVERY CLUB'S PAGE, ALWAYS. A header that wraps is as tall
+   as the club's own details make it (one, two or three lines depending on the club), which puts the field's
+   top at a different height per club and draws the 32 clubs at different sizes. The nowrap and give-ground
+   rules below are therefore the PLAIN state, not `.teamhead-compact`'s: the header is one crest-high line
+   whatever the club is called and however long its next fixture reads. All the compact state adds is the
+   fold itself (the key becomes its chip, viewfit.js's HEADER_FOLD_WIDTH decides from the WINDOW) and 2px
+   less padding. */
 .teamhead { display:flex; align-items:center; gap:14px; padding:5px 14px; border-radius:10px; color:#fff; flex-wrap:nowrap;
   background:linear-gradient(110deg, var(--team-primary) 0 60%, var(--team-secondary) 160%); }
 .teamhead img { width:38px; height:38px; object-fit:contain; flex:none; }
 /* D134 step 1 on the whole-team page: with the key folded into its chip the banner is back to the height
    of its own crest, and the padding tightens a shade. Everything the header says stays on it. */
-/* 👁 V3: at 1280 (and at 1366 with a long club name) the status chip, Refresh and "as of" dropped to a
-   second row even in the compact state — the field started at y=185 instead of 146, which is 39px, exactly
-   what this step exists to reclaim. The compact header therefore never wraps: it gives ground instead. The
+/* The compact header never wraps: it gives ground instead. Letting the status chip, Refresh and "as of"
+   drop to a second row costs about 39px of field top, which is exactly what this step exists to reclaim. The
    "as of" chip goes (its timestamp is on the Refresh button's tooltip, team.js's headerHtml), the meta line
    stays on one row, and the club name truncates last. No overflow:hidden anywhere — the collapsed key's
    popover is an absolutely-positioned child of this box and would be clipped by it. */
 .teamhead-compact { padding:3px 14px; }
 .teamhead-compact .asof-chip { display:none; }
 .teamhead h1 { margin:0; font-size:19px; white-space:nowrap; min-width:0; overflow:hidden; text-overflow:ellipsis; }
-/* 🔵 review of D146: the details line may not wrap (D107), so it must be able to cut off instead — with no
-   overflow rule it painted straight over the Legend chip and Refresh on a 1000-1200 px window. The popover
+/* The details line may not wrap (D107), so it must be able to cut off instead — with no overflow rule it
+   paints straight over the Legend chip and Refresh on a 1000-1200 px window. The popover
    caveat above is about .teamhead itself; these two boxes hold no popover. */
 .teamhead-main { flex:0 1 auto; min-width:0; display:flex; align-items:center; gap:14px; flex-wrap:nowrap; overflow:hidden; }
 .teamhead .meta { display:flex; gap:14px; align-items:center; color:rgba(255,255,255,.88); font-size:12.5px; flex-wrap:nowrap; min-width:0; overflow:hidden; text-overflow:ellipsis; }
@@ -198,7 +196,7 @@ a.back { color:var(--muted); }
    darker than current." That direction — two corner glows of the club's primary/secondary plus a diagonal
    base wash — is what Adam then called "still ugly" on the Vikings: two saturated glows (purple top-left,
    gold bottom-right) read as a muddy diagonal smear once both a busy crest and a full column of cards sat
-   on top of it. 🎨 Polish (2026-09-16) replaced it with TWO selectable directions, switched by
+   on top of it. It was replaced with TWO selectable directions, switched by
    [data-field-variant] on .field-outer (set from field.js's single FIELD_VARIANT constant so team.js,
    matchup.js and zoom.js — which reuses team.js's own renderer — all agree without three separate flags):
      A — "neutral field, colour at the edges": a near-neutral charcoal centre (so cards, pills and the
@@ -217,8 +215,8 @@ a.back { color:var(--muted); }
 .field-scale { position:relative; --field-dk1:#090b0f; --field-dk2:#06080b; }
 
 /* ---- Variant A (live): neutral charcoal centre, primary colour only at the outer edges ----
-   🎨 Polish (2026-09-16): Adam couldn't tell A and B apart in the D99 rework mockups — both landed at the
-   same mean luminance (24-30) and read as the same dark field at a glance. Pushed apart from B: the edge
+   A and B were indistinguishable in the D99 rework mockups — both landed at the same mean luminance
+   (24-30) and read as the same dark field at a glance. Pushed apart from B: the edge
    mix nearly doubled (26% -> 48%) and the ellipse widened/its fade pushed further in (62% -> 84% of a wider
    38% -> 40% box) so the club colour is unmistakably purple/gold/etc. within a second and now visibly
    reaches roughly a third of the way toward the centre before fading, while the centre band stays neutral
@@ -315,7 +313,7 @@ a.back { color:var(--muted); }
     radial-gradient(circle, rgba(255,255,255,.22) 0%, rgba(255,255,255,.1) 55%, rgba(255,255,255,0) 80%),
     var(--wm-url, none);
   opacity:.22; }
-/* 🎨 Polish, variant A: a neutral field reads as calmer when the crest is a little quieter too — 60% of
+/* Variant A: a neutral field reads as calmer when the crest is a little quieter too — 60% of
    D95/D98's original .22, so it stays a watermark rather than another loud shape competing with the cards. */
 [data-field-variant="A"] .field-watermark::before { opacity:.132; }
 
@@ -384,10 +382,9 @@ a.back { color:var(--muted); }
    first cut of this rule. A small flex-basis makes the hypothetical size 200px, which always fits, and the
    flex-grow then hands the block whatever room is actually left between the club's details and its
    controls (602px at 1700x900) for it to wrap inside.
-   D107 (👁, 2026-09-17) settles what happens when the room runs out, which the paragraph above used to
-   answer with "the banner grows": IT NO LONGER GROWS. A banner that grows is a header that grows, and a
-   header whose height depends on how long this club's name and next fixture are drew the 32 clubs at seven
-   different sizes on a laptop. The key sits on ONE line here (flex-wrap:nowrap) and the whole key folds into
+   D107 settles what happens when the room runs out: THE BANNER NEVER GROWS. A banner that grows is a header
+   that grows, and a header whose height depends on this club's own name and next fixture draws the 32 clubs
+   at different sizes. The key sits on ONE line here (flex-wrap:nowrap) and the whole key folds into
    its "Legend" chip below viewfit.js's HEADER_FOLD_WIDTH — a decision about the window, so it is the same
    decision on all 32 pages. The overflow guard is a backstop for a club whose details grow past that width
    before anyone re-measures it: the club's own block shrinks about three times faster than this one (its
@@ -398,11 +395,10 @@ a.back { color:var(--muted); }
   flex-wrap:nowrap; overflow:hidden;
   gap:3px 9px; font-size:9.5px; line-height:1.15; color:rgba(255,255,255,.88);
   background:rgba(0,0,0,.26); border-radius:8px; padding:3px 9px; }
-/* 👁 Visual QA of D146, and the rule that makes the "one line" above actually true. `flex-wrap:nowrap` stops
-   the ITEMS moving to a second flex line; it does nothing about an item wrapping its own TEXT, and an item
-   two lines tall is a banner two lines tall. Between about 1800 and 2200px most clubs' keys were printing on
-   two lines and Houston's on three, which grew Houston's header to 48.8px against everyone else's 48 — the
-   exact club-dependent header height D107 exists to forbid. viewfit.js's HEADER_FOLD_WIDTH now folds the key
+/* THE RULE THAT MAKES THE "ONE LINE" ABOVE ACTUALLY TRUE (D146 (1)). `flex-wrap:nowrap` stops the ITEMS
+   moving to a second flex line; it does nothing about an item wrapping its own TEXT, and an item two lines
+   tall is a banner two lines tall — the exact club-dependent header height D107 forbids, and how an earlier
+   HEADER_FOLD_WIDTH went stale unnoticed. viewfit.js's HEADER_FOLD_WIDTH now folds the key
    before the room runs out, so this never fires in normal use; it is the backstop for a club whose details
    grow past that width before anyone re-measures, and it fails by clipping the TAIL of the key (hence `safe
    flex-end`, which drops the unsafe alignment's habit of pushing the overflow off the LEFT edge, where it
@@ -547,7 +543,7 @@ a.back { color:var(--muted); }
 .prow-badges { flex:none; display:inline-flex; gap:2px; align-items:center; max-width:52px; overflow:hidden; }
 .prow-ovr { flex:none; font-size:10px; font-weight:800; font-variant-numeric:tabular-nums; min-width:19px; text-align:center;
   border-radius:var(--r-chip); padding:0 3px; background:rgba(255,255,255,.07); color:#c3cad2; }
-/* 👁 QA: "NR" for a player with no Madden entry — quiet, but never an empty slot where every other row
+/* "NR" for a player with no Madden entry — quiet, but never an empty slot where every other row
    in the column has a number. Same wording and weight as the card views' own NR pill. */
 .prow-ovr-none { color:var(--muted); font-weight:700; font-size:8.5px; letter-spacing:.02em; }
 /* D91 (Adam, 2026-09-15): the man's last-three-games snap-share trio ("81 · 64 · 70"), a span.snaps sitting
@@ -679,12 +675,12 @@ a.back { color:var(--muted); }
 .prow-more:hover { color:#c3cad2; border-color:#6b7885; }
 /* D134: the reduced state's own tail is a BUTTON that expands this column in place (cards.js's
    depthMoreChip, wired by wireDepthToggles) rather than ruling E's link to the group page. It carries one
-   short word — no jersey number, rating pill or snap trio — so field.js reserves DEPTH_CHIP_H (14) for it
-   instead of a full row, and this pins the drawn chip to exactly that height so the two agree. */
-/* 👁 V4: it was drawn SMALLER than the floor it serves (7.8px at 1536x864, 7.2 at 1280, muted grey italic)
-   — and it is the only sign on the page that men are hidden. At 12.5px it lands at ~9px at the floor, the
-   same readability bar D134 sets for a backup name, and it reads in the page's own ink rather than a mutter.
-   The 15px line box is 12.5px of type plus the 1px borders, which is field.js's DEPTH_CHIP_H. */
+   short word — no jersey number, rating pill or snap trio — so field.js reserves DEPTH_CHIP_H for it
+   instead of a full row, and this pins the drawn chip to exactly that height so the two agree.
+   It is the only sign on the page that men are hidden, so it must never be drawn smaller than the floor it
+   serves: at 12.5px it lands at ~9px at the D134 floor, the same readability bar a backup name gets, and it
+   reads in the page's own ink rather than as a mutter. The 15px line box is 12.5px of type plus the 1px
+   borders, which is exactly field.js's DEPTH_CHIP_H. */
 .column .prow-more.depth-more { min-height:15px; height:15px; padding:0 6px; font-size:12.5px; line-height:1;
   font-style:normal; font-weight:700; color:#dbe3ec; border-color:#5b6672; background:rgba(255,255,255,.05);
   border-radius:var(--r-row); align-self:auto; }
@@ -769,16 +765,15 @@ a.back { color:var(--muted); }
    badge and the snap trio are untouched at every step (the give-up list lives in cards.js). */
 .prow-tight .prow-line { gap:2px; }
 .prow-one.prow-tight .prow-main { gap:2px; }
-/* 👁 Visual QA (2026-09-17): the jersey number is right-aligned, so dropping its gutter left the digits
-   butting straight against the name ("90Tyrion Ingram-Dawkins", "22Jacory Croskey-Merritt"). The margin
+/* D146 (3): the jersey number is right-aligned, so dropping its gutter leaves the digits butting straight
+   against the name ("90Tyrion Ingram-Dawkins", "22Jacory Croskey-Merritt"). The margin
    puts a floor of 4 units — the row's own 2px gap plus this — between the number and the name, so however
    squeezed a row is, the two never read as one word. It costs the name 2 units and is worth it. */
 .prow-tight .prow-num { min-width:0; margin-right:2px; }
 .prow-one.prow-tight .prow-head { margin-right:0; }
-/* 👁 Visual QA of D146: the 4-unit floor above has to be paid for by the row, not by the name. Arizona's
-   Dadrion Taylor-Demerson needed 141.6 units with the panel open at 2560x1300 and, once the floor took its
-   two, had 139.8 — so a name that had printed in full since D135 started printing as "D. Taylor-Demerson",
-   with nothing else on that row left to give up. This is the last rung before the name is cut (cards.js's
+/* D146 (3): the 4-unit floor above has to be paid for by the ROW, not by the name — without this rung a
+   long name that had printed in full since D135 loses two units to the floor and starts abbreviating, with
+   nothing else on the row left to give up. This is the last rung before the name is cut (cards.js's
    nameLadder): the row's own side padding drops from 4 units to 2, which hands the name back 4. It is only
    ever reached by a row that would otherwise lose its name, and the floor between the number and the name is
    untouched by it. */
@@ -791,7 +786,7 @@ a.back { color:var(--muted); }
 /* Card surface. Height is set inline per card (field.js's geometry — normal or +banner) so CSS never
    fights the layout engine's own math; box-shadow/background below are the D43 rating-tier surface,
    layered UNDER two fixed elements — the badge cluster and the OUT/ACTIVE banner — so neither is ever
-   dimmed, tinted or hidden by the tier treatment or the STARTER_OUT greyscale (👁 review, D43, D44). */
+   dimmed, tinted or hidden by the tier treatment or the STARTER_OUT greyscale (D43, D44). */
 /* overflow:visible, not hidden, with cards.js/zoom.js setting `min-height` rather than a fixed `height` —
    the card can never be shorter than its layout box but is free to grow the few px real content needs
    (the rating pill on a banner card, say) instead of clipping it. `.card-banner` gets its own top corner
@@ -826,7 +821,7 @@ a.back { color:var(--muted); }
 .card:has(.card-banner) .card-body { margin-top:20px; }
 
 /* STARTER_OUT dims only the body (photo/name/label/pill) — never .card-badges or .card-banner, which
-   must stay fully legible on top of the tier surface (👁 review, D44). */
+   must stay fully legible on top of the tier surface (D44). */
 .card-body { display:flex; flex-direction:column; align-items:center; gap:2px; width:100%; }
 .card.card-out .card-body { opacity:.55; filter:grayscale(.55); }
 
@@ -912,7 +907,7 @@ a.back { color:var(--muted); }
 .row-number { color:#9aa4b0; font-weight:600; font-variant-numeric:tabular-nums; flex:none; }
 .row-name { flex:1 1 auto; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .row-ovr { flex:none; font-size:10px; font-weight:700; color:#c3cad2; background:rgba(255,255,255,.06); border-radius:var(--r-chip); padding:1px 6px; margin-left:auto; }
-/* 👁 QA: an unrated player reads "NR", muted — never a blank or a bare dash. */
+/* An unrated player reads "NR", muted — never a blank or a bare dash. */
 .row-ovr-none { color:var(--muted); font-size:8.5px; letter-spacing:.03em; }
 /* D91: same jersey-number-weight trio as .prow's own .snaps above, sized for this row's own (bigger)
    jersey number — compactRow prints it as the row's very last child, after .row-ovr. */
@@ -1037,8 +1032,8 @@ a.back { color:var(--muted); }
 .matchup-team-light .matchup-unit-chip { background:rgba(255,255,255,.4); border-color:rgba(0,0,0,.22); }
 .matchup.is-compact .matchup-unit-chip { display:inline-block; }
 .matchup.is-compact .matchup-half-banner { display:none; }
-/* 👁 A8: the compact matchup used to drop the key outright, so the one page that draws two clubs' cards at
-   once explained none of them. It now collapses to the same "Legend" chip the team page uses (matchup.js's
+/* The compact matchup must not drop the key outright, or the one page that draws two clubs' cards at once
+   explains none of them. It collapses to the same "Legend" chip the team page uses (matchup.js's
    setMatchupCompact adds `legend-collapsed`), which shows the whole key on hover or keyboard focus. The
    popover hangs below the centre block, so it is centred there rather than right-aligned. */
 .matchup.is-compact .legend-matchup.legend-collapsed { max-width:none; }

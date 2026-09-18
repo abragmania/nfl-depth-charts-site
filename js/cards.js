@@ -70,12 +70,10 @@ function initials(p) {
   return (a + b).toUpperCase();
 }
 
-// D138 (Adam, 2026-09-17): "no photos on phone; only for players rated 90 or above." `opts.minRating` is
-// that floor — a man under it (or with no Madden rating at all) gets NO photo and NO initials disc, so the
-// width goes to his name instead. Absent, which is every other caller, means "always draw one", so the option
-// itself changes nothing for any of them. It is no longer true that the markup they get is byte for byte what
-// it was when D138 landed: a desktop img tag has since grown `width`, `height` and `decoding="async"` (see the
-// note on the return line below). This option did not add them and does not touch them.
+// D138 (Adam): "no photos on phone; only for players rated 90 or above." `opts.minRating` is that floor — a
+// man under it (or with no Madden rating at all) gets NO photo and NO initials disc, so the width goes to his
+// name instead. Absent, which is every other caller, means "always draw one", so the option itself changes
+// nothing for any of them.
 export const PHONE_HEADSHOT_MIN_RATING = 90;
 export function headshotHtml(p, size, opts = {}) {
   if (opts.minRating != null && !(p.rating?.current >= opts.minRating)) return "";
@@ -212,12 +210,12 @@ const FRONT_BANDS = new Set(["DL", "EDGE"]);
 // "roster-body" reads the man standing there, "starter-of-record" the man who owns the spot), there is nothing
 // for ESPN's label to disagree WITH - the band is already an answer to the same question, reached from better
 // evidence. Only the rank comparison survives.
-// D137 review item B2: D136's "off-ball" columns (Baltimore's, the Giants' and Seattle's WLB) are the same
-// kind of answer — the app read the club's own snap evidence and put a row labelled WLB/SLB on the LINEBACKERS
-// row deliberately, so ESPN's band for that man cannot disagree with anything. Only the rank comparison survives.
+// D136's "off-ball" columns (Baltimore's, the Giants' and Seattle's WLB) are the same kind of answer — the app
+// read the club's own snap evidence and put a row labelled WLB/SLB on the LINEBACKERS row deliberately, so
+// ESPN's band for that man cannot disagree with anything. Only the rank comparison survives.
 const BODY_DERIVED = new Set(["roster-body", "starter-of-record", "off-ball"]);
 
-// 🔵 A0-2: ESPN's position codes belong to ESPN's OWN formation, not the club's. D133 lets a club chart that
+// ESPN's position codes belong to ESPN's OWN formation, not the club's. D133 lets a club chart that
 // plainly prints its front overrule ESPN's unit name (Arizona reads 3-4 while ESPN files it "Base 4-3 D"), and
 // the compiled view records both in `schemeOverride` — so the code map below must be read in ESPN's scheme or
 // every wlb/slb in such a club is mapped to the wrong band. Falls back to the club's scheme when they agree.
@@ -240,7 +238,7 @@ export function espnPlacement(p, slotBand, scheme, labelSource, espnScheme = sch
 
 // Exported for the tests (D137): the verdict is a claim about a real player's real placement, so the
 // rule that decides it is asserted directly rather than only through a rendered page.
-// 🔵 A0-2: `espnScheme` is the formation ESPN itself files this club under (espnSchemeOf above); it decides
+// `espnScheme` is the formation ESPN itself files this club under (espnSchemeOf above); it decides
 // what ESPN's own codes MEAN. It defaults to the club's scheme, which is the right answer whenever the two
 // agree — 31 of 32 clubs today — so a caller that has only one scheme to give is unchanged.
 export function espnDisagrees(p, slotBand, scheme, labelSource, espnScheme = scheme) {
@@ -282,14 +280,13 @@ const SIGNAL_TITLE = {
   NEW_ARRIVAL: "New arrival on this roster",
   LOW_SNAPS: "Low recent snap share",
 };
-// Adam, 2026-09-17 (Philadelphia's Riq Woolen, who played every defensive snap of week 1 and wore this glyph):
-// the part-time marker covers two different facts, and the tooltip must say which one it is. A measured share
+// D148 (3): the part-time marker covers two different facts and the tooltip must say WHICH. A measured share
 // under the threshold is "low recent snap share"; the other case is the snap-count source having no row for him
-// at all while it has rows for his team-mates, which says nothing about how much he played. server/compile/
-// heat.js decides which and writes it on the card as lowSnapsReason ("LOW_SHARE" / "NO_ROW"); the signal itself
-// stays LOW_SNAPS so the glyph, the CSS and D135's give-up order are unchanged.
-// Exported because the zoomed group view (public/js/zoom.js) draws the same marker and must say the same thing:
-// two copies of one sentence is how the two views come to word the same fact differently.
+// at all while it has rows for his team-mates, which says nothing about how much he played (Riq Woolen wore the
+// glyph after playing every defensive snap of week 1). server/compile/heat.js decides which and writes it on
+// the card as lowSnapsReason ("LOW_SHARE" / "NO_ROW"); the signal stays LOW_SNAPS so the glyph, the CSS and
+// D135's give-up order are unchanged. Exported because the group view (public/js/zoom.js) draws the same
+// marker and must say the same thing — two copies of one sentence is how two views come to word it differently.
 export const NO_SNAP_ROW_TITLE = "No snap count on file for him (the source has no row)";
 const signalTitle = (s, p) => (s === "LOW_SNAPS" && p?.lowSnapsReason === "NO_ROW" ? NO_SNAP_ROW_TITLE : SIGNAL_TITLE[s] || s);
 // Rendered as its own sibling in a fixed top-left corner (same corner zoom.js's group view uses via its
@@ -431,9 +428,9 @@ function overviewDepth(p, teamAbbr, opts = {}) {
     weekOneChip(p.weekOneNote),
     alsoListedChips(p, opts.slotLookup, opts.ownLabel),
   ].join("");
-  // 👁 V2 (D135): the row is drawn with the man's FULL name whether or not he wears a badge, and fitOneName
-  // decides. Shortening here first made the abbreviation the "full" text fitNames recorded, so a badge row
-  // read "A. Sam" with 130px of spare room and D135 could never see it.
+  // D135: the row is drawn with the man's FULL name whether or not he wears a badge, and fitOneName decides.
+  // Shortening here first makes the abbreviation the "full" text fitNames records, so a badge row reads
+  // "A. Sam" with 130px of spare room and D135 can never see it.
   const rail = opts.outRail ? bannerHtml(p) : "";
   const railCls = opts.outRail ? " prow-outrail" : "";
   return `<a class="${overviewClasses(p, "prow")}${railCls}" href="#/team/${esc(teamAbbr)}/player/${encodeURIComponent(p.playerKey)}" data-player-key="${esc(p.playerKey)}" title="${overviewTitle(p, false)}">
@@ -477,10 +474,10 @@ export function compactRow(p, teamAbbr, opts = {}) {
     weekOneChip(p.weekOneNote),
     alsoListedChips(p, opts.slotLookup, opts.ownLabel),
   ].join("");
-  // 👁 V2 (D135), same rule as overviewDepth above: the full name is drawn and fitOneName decides, so a
-  // badge never costs a name that had room. fitNames fits `.row-name[data-short]` as well as `.prow-name`.
-  // 👁 QA: "NR" rather than a dash for a player with no Madden entry — the same word every other view
-  // uses, so a reader never has to work out whether a rating is missing or merely not rendered.
+  // D135, same rule as overviewDepth above: the full name is drawn and fitOneName decides, so a badge never
+  // costs a name that had room. fitNames fits `.row-name[data-short]` as well as `.prow-name`.
+  // "NR" rather than a dash for a player with no Madden entry — the same word every other view uses, so a
+  // reader never has to work out whether a rating is missing or merely not rendered.
   const ovr = p.rating?.current ?? "NR";
   // D61 (Adam, 2026-09-15): a depth row for a man who will not play — the second-stringer on IR/PUP/NFI/
   // suspension that D61 puts at the bottom of his slot, and any other out backup — greys out the same way
@@ -552,8 +549,8 @@ export function wireDepthToggles(root) {
     const open = extra.classList.toggle("is-open");
     btn.setAttribute("aria-expanded", String(open));
     btn.textContent = open ? "show less" : `+${extra.childElementCount} more`;
-    // 🔵 A9: a row inside a CLOSED `.depth-extra` measures 0 wide, so it was never fitted and opened showing
-    // an abbreviation (or an ellipsis) whatever room it had. Fit it now that it has a real box.
+    // A row inside a CLOSED `.depth-extra` measures 0 wide, so it is never fitted and would open showing an
+    // abbreviation (or an ellipsis) whatever room it had. Fit it now that it has a real box.
     if (open) fitNames(extra);
   });
 }
@@ -591,8 +588,8 @@ export const ROW_SPACING = ["normal", "tight", "tighter"];
 
 // D135's ladder, as a list of states rather than as control flow: what a row is allowed to spend, in order,
 // before its name is cut, and what it may spend after. Pure and exported so the ORDER is pinned by a test
-// instead of only by reading the DOM code below — the order is the whole ruling, and D146 shipped with it
-// looking right and behaving wrong.
+// instead of only by reading the DOM code below — the order IS the ruling, and it can look right in the code
+// while behaving wrong.
 //
 // THE ORDER IS: the full name at normal spacing; the full name tightened; the full name after giving up each
 // kind of quiet extra in turn; the full name at the tightest spacing there is — and only when all of that has
@@ -611,7 +608,7 @@ export function nameLadder({ giveUps = ROW_GIVE_UPS, hasShort = false } = {}) {
 
 // Walks that ladder against one live row, stopping at the first rung whose name fits. A row whose name
 // already fits is left in the state it is already in — no class write at all — so a page with no cut names
-// costs one measurement per row and wakes nothing that observes the field (🔵 A9).
+// costs one measurement per row and wakes nothing that observes the field.
 function fitOneName(row, el) {
   // An emptied wrapper still costs the row a flex gap, so it goes with the last thing inside it.
   const dropEmptyWrappers = () => {
@@ -658,8 +655,8 @@ function fitOneName(row, el) {
   }
 }
 
-// 👁 V2: `.row-name` (the 40px compactRow the side, group and matchup card views draw) is fitted by the same
-// pass — it draws the full name now too, so without this a badge row would simply ellipsise.
+// `.row-name` (the 40px compactRow the side, group and matchup card views draw) is fitted by the same pass —
+// it draws the full name too, so without this a badge row would simply ellipsise.
 export function fitNames(root) {
   for (const el of root.querySelectorAll(".prow-name[data-short], .row-name[data-short]")) {
     el.dataset.full = el.dataset.full ?? el.textContent;
@@ -759,9 +756,9 @@ export function renderColumn(col, teamAbbr, opts = {}) {
   // used to carry alone.
   const label = `<a class="column-label${heatCls}" data-band="${esc(slot.band || "")}" href="${labelHref}" title="${labelTitle}">${esc(labelText)}</a>`;
 
-  // ownLabel (🎨 Polish, round 3, item 1): the raw slot label (never the "· co-starters" suffixed
-  // labelText above) — it's compared against slotLookup's own return value in alsoListedChips, which
-  // resolves OTHER slots' plain labels the same way, so the two must use the identical un-suffixed form.
+  // ownLabel: the raw slot label (never the "· co-starters" suffixed labelText above) — it is compared
+  // against slotLookup's own return value in alsoListedChips, which resolves OTHER slots' plain labels the
+  // same way, so the two must use the identical un-suffixed form.
   // D72: the drawing options travel with the column the layout engine produced (field.js's layoutStyle),
   // so the markup below can no more disagree about the headshot or the depth cap than it already could
   // about the row count — both come from the same object the reserved box was measured with.
@@ -794,8 +791,8 @@ export function renderColumn(col, teamAbbr, opts = {}) {
     // (the rail rides behind the cap, the fill-in and co-starters are line-one rows, D104/D56).
     const cap = style.maxDepthRows ?? 1;
     const ordinary = depth.filter((p) => !railed.has(p));
-    // 🔵 A7: the one visible backup is the first man who can actually PLAY this week, not merely the first
-    // man listed — an OUT/INACTIVE/SUSP row there answered "who is behind him" with a man who is not.
+    // The one visible backup is the first man who can actually PLAY this week, not merely the first man
+    // listed — an OUT/INACTIVE/SUSP row there answers "who is behind him" with a man who is not.
     // Order is otherwise untouched, so the hidden men stay behind the chip in the chart's printed order,
     // and the COUNT is unchanged (field.js's depthPlan reserves the same box either way).
     const lead = ordinary.findIndex((p) => !isFullyOut(p));
@@ -845,7 +842,7 @@ export function renderColumn(col, teamAbbr, opts = {}) {
 // Renders the small strip of players carried on the roster but absent from the chart (unlisted role),
 // positioned against that specific band's own columns (left edge aligned to the band's first column,
 // width spanning to its last) rather than the whole row, with the row's own tray gap keeping it clear
-// of the deepest depth row above/below it (👁 review, 2026-09-11).
+// of the deepest depth row above/below it.
 export function renderTray(tray, teamAbbr) {
   // D91: a tray chip carries no rating pill for the trio to sit "beside", so it sits beside the name
   // instead — tray.unit (renderColumn's own colOpts.unit source: field.js stamps both from the same
@@ -853,23 +850,23 @@ export function renderTray(tray, teamAbbr) {
   const chips = (entries) => (entries ?? []).map((p) => `<a class="tray-chip" href="#/team/${esc(teamAbbr)}/player/${encodeURIComponent(p.playerKey)}" data-player-key="${esc(p.playerKey)}" title="Carried on the roster but not on the club depth chart">
       #${esc(p.number ?? "—")} ${esc(p.name)}${(psBadge(p, false) ? " " + psBadge(p, false) : "")}${snapHistoryHtml(p, { unit: tray.unit })}
     </a>`).join("");
-  // 👁 QA: the tray carries its band's name. It normally hangs under that band's own columns so the name
-  // is obvious, but a band with nothing charted has no row of its own any more (field.js collapses it),
-  // and its tray is re-homed onto a neighbouring row — at which point the name is the only thing saying
-  // these are, say, the edge rushers rather than more defensive linemen.
+  // The tray carries its band's name. It normally hangs under that band's own columns so the name is
+  // obvious, but a band with nothing charted has no row of its own (field.js collapses it) and its tray is
+  // re-homed onto a neighbouring row — at which point the name is the only thing saying these are, say, the
+  // edge rushers rather than more defensive linemen.
   // D70: the NAME, not the internal code, so the tray label stays consistent with the column pill above it.
   //
-  // 🔵 on d5ea26c: one of D111/D141's merged rows can be the home of two bands' spare men at once (New Orleans
-  // charts a spare corner and a spare safety under its one SECONDARY row). field.js hands those over as ONE
-  // strip carrying a `groups` list rather than two strips stacked under the row, so each band prints its own
-  // small label inside the strip, in front of its own men: "not on chart · CB  #29 …  · Safety  #40 …". A strip
+  // D144: one of D111/D141's merged rows can be the home of two bands' spare men at once (New Orleans charts
+  // a spare corner and a spare safety under its one SECONDARY row). field.js hands those over as ONE strip
+  // carrying a `groups` list rather than two strips stacked under the row, so each band prints its own small
+  // label inside the strip, in front of its own men: "not on chart · CB  #29 …  · Safety  #40 …". A strip
   // serving one band has no `groups` and renders exactly as it always did.
   const body = tray.groups?.length
     ? tray.groups.map((g, i) => `<span class="tray-label">${i ? "· " : "not on chart · "}${esc(bandDisplay(g.band))}</span>${chips(g.entries)}`).join("")
     : `<span class="tray-label">${tray.band ? `not on chart · ${esc(bandDisplay(tray.band))}` : "not on chart"}</span>${chips(tray.entries)}`;
   // data-unit so a click on one of these chips can be attributed to the right TEAM: the matchup view
   // draws two teams on one field, and a tray is not inside a `.column`, so it is the only thing that can
-  // say which half of the ball it belongs to (🔵 review finding 4).
+  // say which half of the ball it belongs to.
   return `<div class="tray${tray.homed ? " tray-homed" : ""}" data-unit="${esc(tray.unit || "")}" style="left:${tray.left}px;width:${tray.right - tray.left}px;top:${tray.top}px;height:${tray.bottom - tray.top}px">
     ${body}
   </div>`;

@@ -53,7 +53,7 @@ export function headerHtml(team, view, fromFixture = false, teams, withLegend = 
   const oppTeam = opp ? teams.find((t) => t.abbr === opp.abbr) : null;
   const schemeText = view.scheme ? esc(view.schemeLabel || view.scheme) : "Scheme unknown";
   const stale = ageHours(view.dataAsOf) > STALE_HOURS;
-  // 👁 V3: the compact header hides the "as of" chip to stay on one line at 1280, so the timestamp it
+  // The compact header hides the "as of" chip to stay on one line, so the timestamp it
   // carries has to be somewhere that is always on the page — the Refresh button's own tooltip.
   const asOfFull = view.dataAsOf ? esc(new Date(view.dataAsOf).toLocaleString()) : dash;
 
@@ -140,7 +140,7 @@ function fieldHtml(view, team, layoutOpts = {}) {
   const teamAbbr = team.abbr;
   const layout = computeLayout(view, layoutOpts);
   const slotLookup = slotLookupFor(view);
-  // 🔵 A0-2: `scheme` places the front (the club's own), `espnScheme` reads ESPN's codes (ESPN's own).
+  // D137: `scheme` places the front (the club's own), `espnScheme` reads ESPN's codes (ESPN's own).
   const opts = { slotLookup, scheme: view.scheme, espnScheme: espnSchemeOf(view) };
   const columnsHtml = layout.columns.map((c) => renderColumn(c, teamAbbr, opts)).join("");
   const traysHtml = layout.trays.map((t) => renderTray(t, teamAbbr)).join("");
@@ -225,7 +225,7 @@ export function mountTeamField(root, view, team, teamAbbr, layoutOpts = {}, casc
       setList: cascadeOpts.setList || null, // D138: a window that has become a phone window re-renders the page
     },
     onDraw: (el) => { wireFieldClicks(el, teamAbbr); wireDepthToggles(el); fitNames(el); },
-    // 🔵 A9: the names are fitted when the markup is drawn, and again once the real font has landed — the
+    // The names are fitted when the markup is drawn, and again once the real font has landed — the
     // one event that changes the answer. A scale change cannot: the whole field is one CSS transform, so
     // the name and the box it has to fit in scale together.
     onText: (el) => fitNames(el),
@@ -358,12 +358,12 @@ export async function renderTeam(root, search, abbr, playerKey) {
   // D134: the whole-team page offers all three steps — fold the legend into its chip, then one backup per
   // column behind a "+N more" chip, then the readable floor with the page scrolling. D138 adds a fourth
   // answer above all of them: a window narrow enough for the list re-renders this page as the list.
-  // 👁 (2026-09-17): `fillHeight` — with the player panel open the field is WIDTH-bound and the height fit
+  // D146 (4): `fillHeight` — with the player panel open the field is WIDTH-bound and the height fit
   // goes unused, so the rows spread into it instead of leaving a bare strip under the field (field.js's
   // bothSides branch). It is inert whenever the height binds, which is every window with the panel shut.
   mountTeamField(root, view, team, A, { fillHeight: true }, {
     depth: true,
-    // D107 (👁, 2026-09-17): below this width the key folds into its chip for every one of the 32 clubs,
+    // D107: below this width the key folds into its chip for every one of the 32 clubs,
     // whether or not this club's own header would have wrapped, so the field starts at the same y and draws
     // at the same scale on every club's page.
     foldWidth: HEADER_FOLD_WIDTH,

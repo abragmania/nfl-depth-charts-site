@@ -138,10 +138,9 @@ function bioRowHtml(card) {
   </div>`;
 }
 
-// PFF-inspired (Adam, 2026-09-11): "snap-share as a thin bar when snap data exists" — guarded on
-// card.snapShare being a real number: the compiled schema already carries this field (nflverse snap
-// counts, per PROJECT.md) but every live team file has it as `null` today (not populated by the compile
-// step yet), so this renders nothing until that lands — never a fake/zero bar.
+// "Snap-share as a thin bar when snap data exists" (Adam) — the compile fills card.snapShare from nflverse's
+// snap counts (server/compile/chart.js's snapShares), and it stays null for a man the file has no rows for.
+// Guarded on it being a real number, so such a man gets nothing at all rather than a fake zero bar.
 export function snapShareHtml(card) {
   const v = card.snapShare;
   if (v == null || !Number.isFinite(Number(v))) return "";
@@ -161,8 +160,8 @@ export function snapShareHtml(card) {
 // necessary to see on the main page." The dashed ring is gone from the cards; the fact is this one muted
 // line, in words. Exported so the wording is tested directly — this project has no DOM in its test runner.
 //
-// The verdict itself is cards.js's espnPlacement, the same rule the rings used (and with it 🔵 A0-2's fix:
-// ESPN's codes are read in ESPN's OWN formation, which is not always the club's). The column this man is
+// The verdict itself is cards.js's espnPlacement, the same rule the rings used — including D137's amendment
+// that ESPN's codes are read in ESPN's OWN formation, which is not always the club's. The column this man is
 // standing in is found in the compiled TeamView, so the sentence can name what the club charts him as.
 const ORDINALS = ["", "first", "second", "third", "fourth", "fifth"];
 const ordinal = (n) => (n % 100 >= 11 && n % 100 <= 13 ? `${n}th` : `${n}${["th", "st", "nd", "rd"][n % 10] ?? "th"}`);
@@ -228,7 +227,7 @@ function stripOrdinal(s) { return String(s || "").replace(/\d+$/, ""); }
 
 // Position family is chosen from, in order: the card's Madden position (most canonical, independent of
 // scheme/display quirks), then `position`, then `displayLabel` (spec's own fallback order). Known gap:
-// a plain "OLB" is ambiguous between a 3-4 edge rusher (D14, wants the DL_EDGE line) and a true 4-3
+// a plain "OLB" is ambiguous between a 3-4 edge rusher (D54/D66, wants the DL_EDGE line) and a true 4-3
 // off-ball backer, and neither `position` nor `displayLabel` carries scheme context here — this defaults
 // ambiguous OLBs to the LB family (tkl/sacks/INT/PD), which still surfaces sack production, just not
 // TFL/QB hits (ESPN doesn't expose those at all regardless, see STAT_FAMILIES above).
@@ -397,8 +396,8 @@ export function gamesChipData(seasons) {
     }
   }
   const span = minSeason == null ? "" : minSeason === maxSeason ? `, ${minSeason}` : `, ${minSeason}–${maxSeason}`;
-  // "1 game", not "1 games": with this season now counted, every rookie in the league reads exactly 1 after
-  // week one - which is the very man (a Jets edge rusher after week 1) this chip was reported broken for.
+  // "1 game", not "1 games": with this season counted (D147), every rookie in the league reads exactly 1
+  // after week one, which is the case this chip was reported broken for.
   return { text: `${games} game${games === 1 ? "" : "s"}`, title: `Regular-season games on file${span}` };
 }
 

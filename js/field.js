@@ -1,11 +1,11 @@
 // Depth-aware field layout engine. Pure geometry — no DOM here except the small SVG markup builder
 // at the bottom. Everything is computed in "layout units" on a fixed-width (LAYOUT_WIDTH) canvas;
-// team.js scales the whole result to the wrapper with a single CSS transform (👁 requirement C: scale
-// as one unit).
+// team.js scales the whole result to the wrapper with a single CSS transform, so the field always
+// scales as one unit.
 //
 // A slot can carry any number of players (D23 — no fixed roster cap), so row/column heights are a
 // function of the deepest column in each band rather than a fixed y per band, and columns are spread
-// across a band's x-range rather than pinned to literal pixel anchors (review requirement B).
+// across a band's x-range rather than pinned to literal pixel anchors.
 //
 // RULING E — the whole-team page is a COMPACT OVERVIEW built to fit a 1700x900 viewport with no
 // scrolling: no headshots, each column is a label pill + a bold starter row + up to MAX_DEPTH_ROWS
@@ -19,12 +19,12 @@
 // RULING B — every column, offense and defense, reads top-down: label, starter, backups beneath, tray
 // at the row's bottom edge.
 //
-// Current offensive row order top-down from the LOS (D69, superseding ruling D's original three-row
-// shape and D63's on-the-line receiver comb): PASS CATCHERS (WR+TE — D71's evenly-pitched cluster
-// centred on the field's centre line, not field-accurate x's), LINE (OL alone: LT LG C RG RT),
-// BACKFIELD (QB centred, RB/FB flanking). Because the receivers are a centred cluster rather than real
-// alignments, the secondary is pitched off the tackles/centre instead of mirroring them
-// (mirrorLandmarks) — a defensive row's shape no longer changes with how many receivers a club charts.
+// Offensive row order top-down from the LOS is OFF_ROW_GROUPS below and nothing else. D130: the LINE
+// (OL alone: LT LG C RG RT) sits on the line of scrimmage facing the defensive line, then PASS CATCHERS
+// (WR+TE — D71's evenly-pitched cluster centred on the field's centre line, not field-accurate x's),
+// then BACKFIELD (QB centred, RB/FB flanking). Because the receivers are a centred cluster rather than
+// real alignments, the secondary is pitched off the tackles/centre instead of mirroring them
+// (mirrorLandmarks) — a defensive row's shape does not change with how many receivers a club charts.
 //
 // D72 — the OFFENSE and DEFENSE pages are this same engine drawing ONE unit (zoom.js hands
 // computeLayout a TeamView carrying only that unit). Driven entirely by `opts`: no line of scrimmage
@@ -32,12 +32,9 @@
 // actually on it, and rows draw at a bigger `style` (a small headshot on line one, one extra depth row).
 
 // D110 — LAYOUT_WIDTH cannot narrow further to grow the cards: the fit engine's `spread` (viewfit.js)
-// is capped at MAX_SPREAD = 1.8, and real screens already measure ~1.70-1.77, so a narrower canvas
-// would just hit the cap and stop reaching the sidelines instead of growing anything (verified: at the
-// ruling's own proposed 1475 the cap binds on every screen, leaving dead turf down the sides). The
-// ruling's actual lever is a card's share of the canvas, CARD_W / LAYOUT_WIDTH: this file carries
-// 216/1800 (~0.120), the same proportions the ruling asked for, on a canvas the fit engine can still
-// spread onto. Vertical sizing (D109's 1106) is untouched.
+// is capped at MAX_SPREAD = 1.8 and real screens measure ~1.70-1.77, so a narrower canvas would only hit
+// the cap and stop reaching the sidelines instead of growing anything. The ruling's lever is a card's
+// share of the canvas, CARD_W / LAYOUT_WIDTH = 216/1800 (~0.120). Vertical sizing is untouched.
 const REFERENCE_WIDTH = 1600; // the OFF_BANDS anchors below were tuned against this width
 export const LAYOUT_WIDTH = 1800;
 const SCALE = LAYOUT_WIDTH / REFERENCE_WIDTH;
@@ -62,7 +59,7 @@ export const SECONDARY_ONE_ROW = true;
 // EDGE rushers on a single row (backers on the row's top line, edge columns a FRONT_LB_LIFT step below, so
 // the two groups still read apart), which drops the defence another row and shortens the canvas with it.
 // `false` restores the two rows and their column spots everywhere. It does NOT put the corner drop back:
-// SECONDARY_CORNER_DROP stays at D141's full card, so the undo state is 24 units taller than the pre-D141
+// secondaryCornerDrop() stays at D141's full card, so the undo state is 24 units taller than the pre-D141
 // canvas. Horizontal placement is untouched but for the one shape the ruling names: a club charting a LONE
 // edge column takes the left edge spot on the shared row.
 export const FRONT_ONE_ROW = true;
@@ -116,8 +113,8 @@ export const MAX_DEPTH_ROWS = 3; // ruling E: at most three depth rows, the thir
 // rating pill or snap trio, so it is reserved (and drawn — styles.css's `.prow-more.depth-more`) shorter
 // than a player row; every unit it costs is a unit off the constant canvas every club is scaled to (D107).
 export const REDUCED_DEPTH_ROWS = 1;
-// 👁 V4: the chip was drawn smaller than the floor it serves (7.8 CSS px at 1536x864). styles.css prints it
-// at 12.5px so it lands at ~9px at the floor, which needs a 15-unit line rather than 14 (border box).
+// The chip has to stay readable at the D134 scale floor it serves: styles.css prints it at 12.5px, which
+// lands at ~9px there and needs a 15-unit line rather than 14 (border box).
 const DEPTH_CHIP_H = 15;
 // D72: the single-unit (offense/defense) pages draw half as many rows, so the fit engine scales them to
 // roughly 1.3-1.8x — room for a small headshot on line one, the SAME row renderer widened by an option
@@ -137,10 +134,9 @@ export const SIDE_CARD_W = 210;
 // which is where the visible separation between rows actually comes from.
 const BAND_GAP = 5; // vertical gap between adjacent rows inside one level
 const LEVEL_GAP_EXTRA = 10; // on top of BAND_GAP, only between two rows in DIFFERENT levels
-// 👁 V5 (D134's reduced state only): the reduced rows are 9 units shorter than the full-depth ones, so the
-// full-depth gaps left ~150 units of empty turf per half and a maximised 1080p laptop scrolled ~100px. These
-// tighter gaps shorten the constant canvas AND every club's own natural span, so one FEWER club outgrows the
-// constant than before. The full-depth layout reads BAND_GAP/LEVEL_GAP_EXTRA and does not move by a pixel.
+// D134's reduced state only: its rows are 9 units shorter than the full-depth ones, so the full-depth gaps
+// left ~150 units of empty turf per half. These tighter gaps shorten the constant canvas AND every club's
+// own natural span. The full-depth layout reads BAND_GAP/LEVEL_GAP_EXTRA and does not move by a pixel.
 const REDUCED_BAND_GAP = 2;
 const REDUCED_LEVEL_GAP_EXTRA = 4;
 const bandGapOf = (style = {}) => (style.depthChip ? REDUCED_BAND_GAP : BAND_GAP);
@@ -212,27 +208,23 @@ const DEF_LEVEL_LABEL = { LINE: "LINE", EDGE: "EDGE", LB: "LINEBACKERS", FRONT: 
 
 // THE STAGGER INSIDE A MERGED ROW. Both merged rows share one top line and start SOME of their bands' columns
 // a step below it, so two groups read as two groups without costing a row:
-//   SECONDARY  the corners and the nickel step below the safeties. D121 opened 22 units, D125 raised it to 34,
-//              and D141 raises it to a full card — LABEL_RESERVE + a line-one row, plus air — so the corner's
-//              own label pill sits BELOW the bottom of the safety's line-one card rather than beside it.
+//   SECONDARY  the corners and the nickel step below the safeties — 22 units (D121), then 34 (D125), then
+//              D141's full card (LABEL_RESERVE + a line-one row, plus air), so the corner's own label pill
+//              sits BELOW the bottom of the safety's line-one card rather than beside it.
 //   FRONT      the edge rushers step below the off-ball linebackers (D141), which is what makes the backers
 //              read as the higher, further-from-the-line group they are.
 // A two-row model has neither: its corners and its edge rushers have rows of their own.
 //
-// THE CORNER STEP IS THE PAGE'S OWN CARD, NOT ONE NUMBER FOR ALL PAGES (👁 Visual QA, 2026-09-17). It shipped
-// as a flat 46 — LABEL_RESERVE 17 + CARD_H1 23 + 6 of air — which is a full card on the team and matchup
-// pages and 5 units SHORT of one on the Offense/Defense pages, where line one carries a headshot and is 34
-// units tall instead of 23. On every club's Defense page the corner's pill therefore started about 7px above
-// the bottom of the safety's card: the step Adam asked for, drawn too small. D141 applies to every page that
-// draws a defence, so the step is now derived from the style the page is drawing at:
-//   team / matchup   17 + 23 + 6 air        = 46  (D141's own number, unchanged)
-//   offense/defense  17 + 34 + 13           = 64
-// The side pages spend a BANNER_H (13) on the last term where the team page spends 6 units of air, which is
-// what puts the pill under a safety whose card wears a D44 banner too — Pittsburgh's FILLING IN safety, the
-// one club where the flat 46 was 25px short rather than 7. They can afford it: those pages leave about 245px
-// of turf idle under the corners and are width-bound, so nothing shrinks to pay for it. The team and matchup
-// canvas is height-bound and every unit there is a tax on the size of every card, so it keeps the plain card
-// Adam approved and a bannered safety still reaches a few units past the corner's pill, exactly as it does today.
+// D146 (2): THE CORNER STEP IS THE PAGE'S OWN CARD, NOT ONE NUMBER FOR ALL PAGES. A line-one row is 23 units
+// on the team and matchup pages and 34 on the Offense/Defense pages, where it carries a headshot, so one flat
+// number leaves the corner's pill beside the safety's card on one family or the other. It is derived from the
+// style the page is drawing at:
+//   team / matchup   LABEL_RESERVE + 23 + 6 air      = 46  (D141's own number, unchanged)
+//   offense/defense  LABEL_RESERVE + 34 + BANNER_H   = 64
+// The side pages spend a banner's worth on the last term where the team page spends 6 units of air, so the
+// pill also clears a safety whose card wears a D44 banner; they are width-bound with idle turf under the
+// corners and can pay for it. The team/matchup canvas is height-bound, where every unit is a tax on the size
+// of every card, so it keeps the plain card.
 const SECONDARY_CORNER_AIR = 6;
 export function secondaryCornerDrop(style = {}) {
   return LABEL_RESERVE + lineOneBase(style) + (style.headshot ? BANNER_H : SECONDARY_CORNER_AIR);
@@ -259,35 +251,25 @@ function frontRowLabel(cols) {
   return parts.join(" · ") || DEF_LEVEL_LABEL.FRONT;
 }
 
-// D107 — ONE FIELD SCALE FOR EVERY CLUB, on the team and matchup pages alike. A both-sides canvas used to
-// be exactly as tall as the club's own chart needed, and because the fit engine scales the canvas to the
-// window, a club with a shorter chart (e.g. a defense with no EDGE row) came out MAGNIFIED relative to
-// one with a taller chart — Jacksonville's cards were visibly bigger than Las Vegas's for no reason a
-// reader could see.
-//
-// So the both-sides canvas is a CONSTANT, computed from the row constants alone and never from a club's
-// own rows. BOTH_SIDES_HALF is the tallest defence this engine can draw at its natural pitch: every row
-// of DEF_ROW_ORDER, each as tall as a FULL column (label pill + one bold row + MAX_DEPTH_ROWS slim rows —
-// DEF_ROW_FULL_H; a "+N more" tail costs nothing extra since it REPLACES the last slim row instead of
-// adding one), spaced at BAND_GAP between rows in one level and + LEVEL_GAP_EXTRA at a level boundary.
-// D96 gives the offence a half of the same height, LOS on the canvas midpoint. A club shorter than the
-// constant (every real club today) spreads its rows across the half with placeSpan's extra gap.
+// D107 — ONE FIELD SCALE FOR EVERY CLUB, on the team and matchup pages alike. The both-sides canvas is a
+// CONSTANT computed from the row constants alone and never from a club's own rows: when it was the club's
+// own height, the fit engine MAGNIFIED a club with a shorter chart (a defence with no EDGE row) against one
+// with a taller chart. BOTH_SIDES_HALF is the tallest defence this engine can draw at its natural pitch:
+// every row of DEF_ROW_ORDER, each as tall as a FULL column (label pill + one bold row + MAX_DEPTH_ROWS slim
+// rows — DEF_ROW_FULL_H; a "+N more" tail costs nothing extra since it REPLACES the last slim row instead of
+// adding one), spaced at BAND_GAP inside a level and + LEVEL_GAP_EXTRA at a level boundary. A club shorter
+// than the constant spreads its rows across its share with placeSpan's extra gap.
 //
 // Two things can still push a single row past DEF_ROW_FULL_H — the OUT rail D104 stacks on a demoted
 // starter's row, and a "not on chart" tray — so a side can need more than half the canvas. D152: it then
 // takes that room from the OTHER half's spare and the line of scrimmage moves to where the two meet; the
 // canvas itself only grows when the two sides TOGETHER outgrow it, and then by that shortfall alone.
-// D134: the same sum for whatever depth cap the page is drawing at — the reduced state's chip is an extra
-// short line, so a full column there is the label, the line-one row, one backup and the chip. The default
-// argument reproduces today's number exactly, so nothing about the full-depth canvas moves.
 //
-// The reduced state also reserves D44's BANNER on that line-one row, which the full-depth constant leaves
-// to slack. Measured across the league (2026-09-17): at the bare cap 10 of 32 clubs drew a taller canvas
-// than the constant, because an out starter's banner costs more than the cap saves; reserving it brings 29
-// of 32 onto one canvas, which is the same standing an ordinary club has today (New Orleans already draws
-// taller than the full-depth constant). A column carrying D104's rail as well is still taller than any
-// constant that would be worth having — 121 units against this 87 — so those clubs grow their own canvas
-// exactly the way a too-tall club always has.
+// D134: the same sum for whatever depth cap the page is drawing at — the reduced state's chip is an extra
+// short line, so a full column there is the label, the line-one row, one backup and the chip, and that state
+// also reserves D44's BANNER on the line-one row (without it an out starter's banner costs more than the
+// reduced cap saves, and the reduced canvas buys nothing). The default argument reproduces the full-depth
+// number exactly, so nothing about today's canvas moves.
 function defRowFullH(style = {}) {
   const cap = style.maxDepthRows ?? MAX_DEPTH_ROWS;
   const rowH = style.rowH ?? ROW_H;
@@ -403,7 +385,7 @@ function spanPoints(xMin, xMax, n) {
 // centerX (MLB over the centre; a real 4-3 has exactly this: WLB, MLB, SLB) — an EVEN count has no
 // natural "one middle" slot, so it just spreads evenly across the flank range instead (2 ILB at the
 // two guards). Building the two halves independently guarantees the inserted centerX is never
-// duplicated by a flank point that already landed exactly on the midpoint (👁 review, 2026-09-11).
+// duplicated by a flank point that already landed exactly on the midpoint.
 function placeFlankedCenter(count, flankMin, flankMax, centerX) {
   if (count <= 0) return [];
   if (count % 2 === 0) return spanPoints(flankMin, flankMax, count);
@@ -479,7 +461,7 @@ export function lineOneHeight(p, style = {}) {
 // particular player is in hand, and the two must never disagree about what a line-one row measures.
 function lineOneBase(style = {}) {
   // Number(): a caller handing raw opts (`headshot: true`) instead of a layoutStyle would otherwise get a quiet
-  // wrong number (true + 6) rather than the photo height (🔵 review of D146).
+  // wrong number (true + 6) rather than the photo height.
   const hs = Number(style.headshot) || 0;
   return hs ? Math.max(CARD_H1, hs + HEADSHOT_PAD) : CARD_H1;
 }
@@ -553,9 +535,9 @@ export function shownOutRows(players, style = {}) {
   return depthPlan(players, style).rails;
 }
 
-// A slot's real rendered content height: the column's own label pill (which lives inside this box —
-// 🎨 Polish round 3 item 3: leaving it out made the deepest column in a row overflow the shared bottom
-// edge), plus each bold line-one row, plus the visible slim rows.
+// A slot's real rendered content height: the column's own label pill (which lives INSIDE this box, or the
+// deepest column in a row overflows the row's shared bottom edge), plus each bold line-one row, plus the
+// visible slim rows.
 function slotContentHeight(slot, style) {
   const players = slot.players;
   if (!players.length) return CARD_H1 + LABEL_RESERVE;
@@ -712,7 +694,7 @@ function lastName(name) {
 // Returns { slot, kept, reason }: `slot` is the synthetic column's slot object, `kept` the cloned club
 // slots with their slot men removed (an emptied one is dropped outright, so its column disappears from
 // the row), and `reason` the tooltip sentence naming every man in the column and the rate he plays inside
-// at. Exported for the tests — nothing else calls it.
+// at. Called by layoutPassCatchers below AND by zoom.js's group page, so the two draw one regrouping.
 export function regroupSlotReceivers(wrSlots) {
   // Pass one: every charted receiver PlayerProfiler has measured, deduped by card/playerKey (first listing
   // wins — a chart that lists one man in two receiver columns; dedupSlots already resolves that on the
@@ -831,7 +813,7 @@ export function regroupSlotReceivers(wrSlots) {
 // "espn"`, and have no real club position to quote (printedOrdinal would otherwise fall back to
 // `slot.ordinal`, which is just ESPN's own column count dressed up as something the club printed). Such a
 // column drops the "the club prints it" clause and says only what's true: ESPN listed it at this number.
-// Exported for the tests — nothing else calls it.
+// Called by layoutPassCatchers below AND by zoom.js's group page, so both print the same sentence.
 const ORDINAL_SUFFIX = (n) => (n % 100 >= 11 && n % 100 <= 13 ? "th" : ["th", "st", "nd", "rd"][n % 10] ?? "th");
 function printedOrdinal(slot) {
   const m = /(\d+)\s*$/.exec(String(slot?.clubLabel ?? ""));
@@ -909,10 +891,9 @@ function layoutBackfieldRow(offSlots, lm, style) {
   const cols = [];
   const qbXs = spanPoints(lm.C, lm.C, qb.length);
   qb.forEach((slot, i) => cols.push(col(slot, qbXs[i], "QB")));
-  // 👁 QA round 3 item 4: the backs used to step out from the centre by a fixed MIN_PITCH, which on the
-  // SIDE view (where the whole row is scaled up to fill a 1700px window) opened a ~600px hole between
-  // the quarterback and a lone running back. They are spread across the same tackle-to-tackle span the
-  // rest of the offence uses, skipping the centre so the quarterback keeps it to himself.
+  // The backs spread across the same tackle-to-tackle span the rest of the offence uses, skipping the
+  // centre so the quarterback keeps it to himself. Stepping them out from the centre by a fixed MIN_PITCH
+  // instead opened a ~600px hole beside a lone running back once the side view scaled the row up.
   const half = Math.ceil(backs.length / 2);
   const left = spanPoints(lm.LT, lm.LG, half).slice(0, half);
   const right = spanPoints(lm.RG, lm.RT, backs.length - half);
@@ -979,8 +960,8 @@ function placeLineColumns(slots, lm) {
     if (slots.length === 3) return [lm.LT, lm.C, lm.RT];
     return slots.map((_, i) => lm.C + (i - (slots.length - 1) / 2) * lm.pitch);
   }
-  // 🔵 on e2a0c34: a two-column line of TWO ENDS is two ends, so it takes the two tackle spots — D132's rule
-  // does not stop applying because the line is short. Any OTHER two-column line sits in the gaps either side
+  // A two-column line of TWO ENDS is two ends, so it takes the two tackle spots — D132's rule does not stop
+  // applying because the line is short. Any OTHER two-column line sits in the gaps either side
   // of the centre in printed order (Atlanta charts NT, DE: D132 keeps Atlanta exactly as the club prints it).
   if (slots.length === 2) return ends.length === 2 ? [lm.LT, lm.RT] : [lm.C - 0.5 * lm.pitch, lm.C + 0.5 * lm.pitch];
   // D132 (Adam): ends go on the ends, tackles in the middle. A three-man line with ONE end (Arizona, New
@@ -1001,8 +982,8 @@ function placeLineColumns(slots, lm) {
   // D127: an end keeps his tackle's landmark unless the interior cluster has grown out to within MIN_PITCH
   // of it, in which case he steps OUT (away from the centre) by exactly the shortfall.
   // D132: a LONE end in a wider line takes the tackle on the side the club printed him, never the centre.
-  // 🔵 on e2a0c34: "a wider line" means more than one column — a chart with a single DE row and nothing else
-  // has no side to be on, so he sits on the centre where the only man on the line belongs.
+  // "A wider line" means more than one column: a chart with a single DE row and nothing else has no side to
+  // be on, so he sits on the centre where the only man on the line belongs.
   const endXs = ends.length === 1 && slots.length > 1
     ? [ends[0] >= slots.length / 2 ? lm.RT : lm.LT]
     : placeOuterInner(ends.length, lm.LT, lm.RT, lm.LG, lm.RG);
@@ -1108,11 +1089,10 @@ function enforceNoOverlap(cols) {
 // D111/D141: confirms a club's OWN columns can be drawn on one merged row before committing to it — stricter
 // than "do the cards overlap", since enforceNoOverlap would happily shove a crowded row apart by re-pitching
 // a column off its landmark or pushing a card off the sideline. A club that fails this falls back to the two
-// rows it had before, on that row alone, instead of silently drawing a wrong one.
-// Measured against the league as compiled today: the widest secondary anybody charts is 2 corners + 1 nickel
-// + 2 safeties, which nothing reaches (it exists for a chart that adds a third corner or a fourth safety);
-// on the front, 30 of 32 clubs fit, and Pittsburgh — three edge columns, the middle one on the centre between
-// its two inside backers — is the one club that does not.
+// rows it had before, on that row alone, instead of silently drawing a wrong one. No club's secondary fails
+// it today — the widest anybody charts is 2 corners, a nickel and 2 safeties, and the check exists for a
+// chart that adds a third corner or a fourth safety. On the front only Pittsburgh fails, with three edge
+// columns and the middle one on the centre between its two inside backers.
 function colsFitOneRow(cols) {
   if (cols.length < 2) return true;
   const sorted = cols.slice().sort((a, b) => a.x - b.x);
@@ -1127,7 +1107,7 @@ function colsFitOneRow(cols) {
 
 // Players carried on the roster but absent from the chart (role UNLISTED), grouped per real band —
 // never merged across the bands sharing a row, so a tray can be aligned to that specific band's own
-// columns rather than spanning the whole row (👁 review, 2026-09-11).
+// columns rather than spanning the whole row.
 function unlistedByBand(unlisted, unit) {
   const byBand = unlisted?.[unit] || {};
   return Object.entries(byBand).filter(([, list]) => Array.isArray(list) && list.length);
@@ -1142,10 +1122,10 @@ function unlistedByBand(unlisted, unit) {
 // there is and still measures under this at the level type's own size, so the gutter did not have to grow.
 const LABEL_CLEAR_X = 190;
 // Enough to clear the column pill below it AND leave visible air: the gap above any row is at least
-// BAND_GAP, and at a level boundary BAND_GAP + LEVEL_GAP_EXTRA, so a 22-unit lift always lands the label
-// inside empty turf rather than tight against the pill (👁 self-check: at 15 the level caption and
-// the "WR1" pill under it read as one two-line block). computeLayout clamps the lift on the offensive
-// side so it can never cross back over the line of scrimmage.
+// BAND_GAP, and at a level boundary BAND_GAP + LEVEL_GAP_EXTRA, so the lift lands the label inside empty
+// turf rather than tight against the pill (at 15 the level caption and the "WR1" pill under it read as one
+// two-line block). computeLayout clamps the lift on the offensive side so it can never cross back over the
+// line of scrimmage.
 const LABEL_LIFT = 27;
 
 // D138 (the phone list): this engine's own rows, merged into LEVELS and in reading order — offence LINE,
@@ -1220,9 +1200,8 @@ export function computeLayout(teamView, opts = {}) {
   // re-pitched or hanging off the sideline (colsFitOneRow). The two questions are asked separately, so a club
   // that fails one keeps the merged row it does fit. A fallback adds a row to that club's defence; if that
   // outgrew BOTH_SIDES_HALF, D152 would give it the offence's spare room (and only a club whose two halves
-  // TOGETHER did not fit would grow its own canvas) rather than draw its rows through each other.
-  // No club fails the secondary check today; Pittsburgh alone fails the front one, and its two
-  // front rows still fit inside BOTH_SIDES_HALF (about 20 units to spare), so it draws at everyone's size.
+  // TOGETHER did not fit would grow its own canvas) rather than draw its rows through each other. Pittsburgh,
+  // the one club that falls back, still fits inside BOTH_SIDES_HALF and draws at everyone's size.
   const secOneRow = SECONDARY_ONE_ROW
     && colsFitOneRow(defColsFor(DEF_ROWS_ONE_SEC_ONE_FRONT.bands.SECONDARY));
   if (SECONDARY_ONE_ROW && !secOneRow) console.warn("[field] this chart's secondary is too wide for one row; falling back to the two-row secondary (D111)");
@@ -1262,8 +1241,8 @@ export function computeLayout(teamView, opts = {}) {
   // BAND_GAP + LEVEL_GAP_EXTRA at a level boundary (Adam: "generous vertical separation" between levels),
   // plus a uniform `extraGap` spent as air between every pair of rows. Returns the y just past the last
   // row's bottom (or `top` unchanged for an empty list, so an empty side never pushes anything).
-  // 👁 V5: the gap pair is the one this style draws at — tighter in D134's reduced state, untouched anywhere
-  // else — so a row's minimum pitch and the constant half above are always derived from the same numbers.
+  // The gap pair is the one this style draws at — tighter in D134's reduced state, untouched anywhere else —
+  // so a row's minimum pitch and the constant half above are always derived from the same numbers.
   const bandGap = bandGapOf(style);
   const levelGap = levelGapOf(style);
   const placeSpan = (rows, top, extraGap) => {
@@ -1293,13 +1272,12 @@ export function computeLayout(teamView, opts = {}) {
 
   let losY, layoutHeight, halves = null;
   if (bothSides) {
-    // D96: the two halves get equal height, LOS at the midpoint, each half's rows spread evenly across it
-    // (a side with one row just sits at its natural height). D107 changes WHERE that half height comes
-    // from: it used to be the taller side's own natural height, so a shorter chart (e.g. a four-row
-    // defence) came out MAGNIFIED by the fit engine. The canvas is now the CONSTANT BOTH_SIDES_HEIGHT, so
-    // every club draws on an identical canvas and scale. D152 changes how that one canvas is DIVIDED: the
-    // halves are equal only while both sides fit in half of it, and a side that needs more takes the other
-    // side's spare instead of making the whole canvas taller (see the room arithmetic below).
+    // D107: the canvas is the CONSTANT BOTH_SIDES_HEIGHT, so every club draws on an identical canvas and
+    // scale — it used to be the taller side's own natural height, and a shorter chart (a four-row defence)
+    // came out MAGNIFIED by the fit engine. D152 decides how that one canvas is DIVIDED, and D96's equal
+    // halves with the line on the midpoint hold only while both sides fit in half of it: a side that needs
+    // more takes the other side's spare rather than making the whole canvas taller (the room arithmetic
+    // below). Each half's rows spread evenly across its share; a side with one row sits at its natural height.
     const defMin = naturalSpanHeight(defRowsTopDown);
     const offMin = naturalSpanHeight(offRowsTopDown);
     // D140 (small screens only): `opts.ownHeight` drops the constant and gives the canvas THIS club's own
@@ -1307,20 +1285,18 @@ export function computeLayout(teamView, opts = {}) {
     // scale stays pinned to the floor (viewfit.js's SCROLL_STATE_OWN_HEIGHT). D152: the own height is now
     // defMin + offMin — each side exactly its own rows — rather than twice the taller side, so the page ends
     // where the chart ends on a club with one tall half too, and the line sits where the two meet.
-    // 👁 Visual QA (2026-09-17): SPEND SPARE HEIGHT WHEN THE WIDTH IS WHAT BINDS. With the player panel open
-    // the box is 440px narrower, so the canvas is scaled to fit the WIDTH and the height fit goes unused —
-    // the field ended about 127px above the bottom of Adam's window with a bare strip of turf under it. The
-    // single-unit pages have spent that height on air between their rows since D72 (`opts.minHeight`, the
-    // `else` branch below); this is the same lever on the two-sided canvas, and the only one that fits D107:
-    // BOTH halves grow by the same amount, so the fill alone never moves the line of scrimmage and
-    // every club still draws at one size (the number depends on the window, never on the club). It can only
-    // ever GROW the canvas past the constant, so a height-bound page — every page with no panel open, Adam's
-    // 2560 monitor included — asks for a minHeight under the constant and nothing here moves.
-    // The ceiling is the single-unit page's own MAX_EXTRA_GAP per gap, and a side with one row (nothing to
-    // spread) sets it to that side's natural height, which is to say: no growth at all.
+    // D146 (4): SPEND SPARE HEIGHT WHEN THE WIDTH IS WHAT BINDS. With the player panel open the box is
+    // narrower, so the canvas is scaled to fit the WIDTH, the height fit goes unused and a bare strip of turf
+    // is left under the field. `opts.minHeight` spends it on air between the rows — the same lever the
+    // single-unit pages have used since D72 (the `else` branch below), and the only one that fits D107,
+    // because BOTH halves grow by the same amount: the fill alone never moves the line of scrimmage and every
+    // club still draws at one size (the number depends on the window, never on the club). It can only ever
+    // GROW the canvas past the constant, so a height-bound page asks for a minHeight under the constant and
+    // nothing here moves. The ceiling is the single-unit page's own MAX_EXTRA_GAP per gap, and a side with one
+    // row (nothing to spread) sets it to that side's natural height, which is to say: no growth at all.
     const spreadRoom = (rows, natural) => (rows.length > 1 ? natural + (rows.length - 1) * MAX_EXTRA_GAP : natural);
     // Never in D140's own-height state: filling would grow a short chart back toward the constant and put the
-    // empty field back under it (🔵 review of D146).
+    // empty field back under it.
     const fillHalf = !opts.ownHeight && opts.minHeight > 0
       ? Math.min((opts.minHeight - MARGIN_TOP - MARGIN_BOTTOM - 2 * LOS_HALF_GAP) / 2,
         spreadRoom(defRowsTopDown, defMin), spreadRoom(offRowsTopDown, offMin))
@@ -1462,7 +1438,7 @@ function placeRow(row, top) {
 // Decides which row each band's "not on chart" tray hangs under, and grows that row to make room. A tray
 // normally sits under its own band's row; when that band has no columns (so its row was dropped) it is
 // re-homed onto the last populated row of the same unit — the LINE row for a collapsed EDGE band — and
-// renders with its band name so those players are still attributed correctly (👁 QA, ATL).
+// renders with its band name so those players are still attributed correctly (Atlanta is the real case).
 const TRAY_STACK_GAP = 4;
 function planTrays(rows, unlisted) {
   for (const unit of ["DEF", "OFF"]) {
@@ -1484,24 +1460,21 @@ function planTrays(rows, unlisted) {
   }
 }
 
-// ONE TRAY STRIP PER ROW (🔵 on d5ea26c). D111/D141 merged two and three bands onto one row, and a row used to
-// stack one TRAY_H strip per BAND that had unlisted men under it: New Orleans charts a spare corner AND a spare
-// safety, so its one SECONDARY row grew two strips (22 + 4 + 22) where a two-row secondary had grown one under
-// each row. That is height nobody reads as height — the same men, on two lines — and because the reserve every
-// club is measured against (defRowFullH) deliberately knows nothing about trays, it pushed New Orleans's own
-// half past the D107 constant and made the whole club draw about 6.6 percent smaller than the other 31.
-//
-// So a row's trays are DRAWN as one strip spanning that row's columns, with each band's own name printed inside
-// it in front of its own men ("not on chart · CB  #29 …  · Safety  #40 …", cards.js's renderTray). A row with one
-// band's tray is untouched and renders byte for byte as it always did.
+// D144 — ONE TRAY STRIP PER ROW. A row's trays are DRAWN as one strip spanning that row's columns, with each
+// band's own name printed inside it in front of its own men ("not on chart · CB  #29 …  · Safety  #40 …",
+// cards.js's renderTray). A row with one band's tray is untouched and renders exactly as it always did.
+// Why: D111/D141 merged two and three bands onto one row, and stacking one TRAY_H strip per band put the same
+// men on two lines for height nobody reads as height. Because the reserve every club is measured against
+// (defRowFullH) deliberately knows nothing about trays, that pushed New Orleans past the D107 constant and
+// made the whole club draw smaller than the other 31.
 //
 // The escape hatch is width: the strip is one line (styles.css pins `flex-wrap:nowrap`), so a combined strip
 // whose own estimated text is wider than the canvas would have names clipped off its right-hand end. Such a row
-// keeps today's stacked strips, which cost height but lose nothing.
+// keeps the stacked strips, which cost height but lose nothing.
 //
 // `homed` — styles.css's stronger dashed outline for "these men have no row of their own" — is true of the
 // combined strip only when it is true of EVERY band on it, so a strip that is partly a visitor is not labelled
-// as wholly one. No club mixes the two in one row today (New Orleans's corner and safety are both homed).
+// as wholly one.
 function combineRowTrays(row) {
   if (row.trays.length < 2) return;
   const first = row.trays[0];
@@ -1630,7 +1603,7 @@ export function renderLevelLabels(levels, layoutWidth = LAYOUT_WIDTH) {
   return levels.map((lv, i) => {
     const h = lv.bottom - lv.top;
     // Alternating by the level's OWN index rather than by position in this array, so that two entries
-    // belonging to one level always share a tint and read as one band of turf (blue review).
+    // belonging to one level always share a tint and read as one band of turf.
     const alpha = (lv.stripeIndex ?? i) % 2 === 0 ? 6 : 11;
     // A level entry MAY carry its own left/right instead of spanning the full canvas width, and its own
     // labelTop when the generic top+4 would land on a column's label pill.
@@ -1667,8 +1640,8 @@ export function renderFieldSvg(layoutHeight, losY, layoutWidth = LAYOUT_WIDTH, c
     </svg>`;
   }
   const los = `<line x1="20" y1="${losY}" x2="${w - 20}" y2="${losY}" stroke="#ffdd00" stroke-width="3"/>`;
-  // 👁 review: a single centred caption sat directly over the NT/DT column and was hidden behind it. Two
-  // shorter captions flanking the ends of the line never overlap any column.
+  // Two shorter captions flanking the ends of the line, because a single centred one sat directly over the
+  // NT/DT column and was hidden behind it.
   const losLabelLeft = `<text x="30" y="${losY - 5}" fill="#ffdd00" font-size="11" font-weight="700" text-anchor="start" letter-spacing="1.2">LINE OF SCRIMMAGE</text>`;
   const losLabelRight = `<text x="${w - 30}" y="${losY - 5}" fill="#ffdd00" font-size="11" font-weight="700" text-anchor="end" letter-spacing="1.2">LINE OF SCRIMMAGE</text>`;
   return `<svg viewBox="0 0 ${w} ${layoutHeight}" width="${w}" height="${layoutHeight}" xmlns="http://www.w3.org/2000/svg" style="position:absolute;top:0;left:0;pointer-events:none;">
@@ -1681,7 +1654,7 @@ export function renderFieldSvg(layoutHeight, losY, layoutWidth = LAYOUT_WIDTH, c
 // off the centre; two cards never come closer than MIN_CARD_GAP) rather than a specific number.
 export const geometry = { CARD_W, CARD_H1, ROW_H, SIDE_ROW_H, CARD_GAP, SIDE_CARD_GAP, BANNER_H, OUT_RAIL_H, LABEL_RESERVE, MAX_DEPTH_ROWS, REDUCED_DEPTH_ROWS, DEPTH_CHIP_H, HEADSHOT_SIZE, BAND_GAP, LEVEL_GAP_EXTRA, REDUCED_BAND_GAP, REDUCED_LEVEL_GAP_EXTRA, LOS_HALF_GAP, MARGIN_TOP, MARGIN_BOTTOM, SIDE_INSET, DEF_ROW_FULL_H, DEF_ROW_COUNT: DEF_ROW_ORDER.length, DEF_LEVEL_BOUNDARIES, BOTH_SIDES_HALF, BOTH_SIDES_HEIGHT, MIN_PITCH, MIN_CARD_GAP, EDGE_PITCH_OUT, ILB_PITCH_FROM_CENTER, PASS_CATCHER_PITCH, SECONDARY_CORNER_DROP, SECONDARY_CORNER_AIR, secondaryCornerDrop, FRONT_LB_LIFT,
   S_PITCH_FROM_CENTER, NB_PITCH_FROM_CENTER, CB_PITCH_FROM_CENTER,
-  // 👁 (2026-09-17): SECONDARY_CORNER_DROP is the TEAM/MATCHUP number (46). A test or a caller asking about
-  // an Offense/Defense page has to ask secondaryCornerDrop(style) instead — the step is a line-one card on
-  // the page it is drawn on, and a line-one card there carries a headshot.
+  // TRAP: SECONDARY_CORNER_DROP is the TEAM/MATCHUP number (46) only. A test or a caller asking about an
+  // Offense/Defense page has to ask secondaryCornerDrop(style) instead — the step is a line-one card on the
+  // page it is drawn on, and a line-one card there carries a headshot (D146 (2)).
   lineOneBase };
