@@ -147,8 +147,12 @@ main.page-landing { padding:10px 20px 12px; }
 .teamhead-compact { padding:3px 14px; }
 .teamhead-compact .asof-chip { display:none; }
 .teamhead h1 { margin:0; font-size:19px; white-space:nowrap; min-width:0; overflow:hidden; text-overflow:ellipsis; }
-.teamhead-main { flex:0 1 auto; min-width:0; display:flex; align-items:center; gap:14px; flex-wrap:nowrap; }
-.teamhead .meta { display:flex; gap:14px; align-items:center; color:rgba(255,255,255,.88); font-size:12.5px; flex-wrap:nowrap; min-width:0; }
+/* 🔵 review of D146: the details line may not wrap (D107), so it must be able to cut off instead — with no
+   overflow rule it painted straight over the Legend chip and Refresh on a 1000-1200 px window. The popover
+   caveat above is about .teamhead itself; these two boxes hold no popover. */
+.teamhead-main { flex:0 1 auto; min-width:0; display:flex; align-items:center; gap:14px; flex-wrap:nowrap; overflow:hidden; }
+.teamhead .meta { display:flex; gap:14px; align-items:center; color:rgba(255,255,255,.88); font-size:12.5px; flex-wrap:nowrap; min-width:0; overflow:hidden; text-overflow:ellipsis; }
+.teamhead .meta > * { white-space:nowrap; flex:none; }
 .opp { display:inline-flex; align-items:center; gap:5px; }
 .opp-logo { width:17px !important; height:17px !important; }
 /* Ruling E: these must stay on the header's single line. min-width:0 plus the ellipsis on .chip below

@@ -533,7 +533,9 @@ export function mountScaledField({ root, probe, build, onDraw, onText, panel = n
   // the ResizeObserver that watches the header from being woken by a no-op class toggle.
   let chromeCompact = null;
   function syncChrome() {
-    const want = step !== "none" || headerFoldsAt(window.innerWidth, foldWidth);
+    // clientWidth, not innerWidth: the header is laid out in the width CSS has, which is 17 px less than the
+    // window whenever a scrollbar is up (🔵 review of D146; the same trap the cascade notes for itself below).
+    const want = step !== "none" || headerFoldsAt(document.documentElement.clientWidth, foldWidth);
     if (want === chromeCompact) return;
     chromeCompact = want;
     cascade?.setCompact?.(want);

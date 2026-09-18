@@ -466,7 +466,10 @@ export function lineOneHeight(p, style = {}) {
 // because the corner step (secondaryCornerDrop, above) has to reserve a line-one card on a page where no
 // particular player is in hand, and the two must never disagree about what a line-one row measures.
 function lineOneBase(style = {}) {
-  return style.headshot ? Math.max(CARD_H1, style.headshot + HEADSHOT_PAD) : CARD_H1;
+  // Number(): a caller handing raw opts (`headshot: true`) instead of a layoutStyle would otherwise get a quiet
+  // wrong number (true + 6) rather than the photo height (🔵 review of D146).
+  const hs = Number(style.headshot) || 0;
+  return hs ? Math.max(CARD_H1, hs + HEADSHOT_PAD) : CARD_H1;
 }
 
 // D104: how many of the players standing at the TOP of a slot are fully-out starters with somebody active
@@ -1300,7 +1303,9 @@ export function computeLayout(teamView, opts = {}) {
     // The ceiling is the single-unit page's own MAX_EXTRA_GAP per gap, and a side with one row (nothing to
     // spread) sets it to that side's natural height, which is to say: no growth at all.
     const spreadRoom = (rows, natural) => (rows.length > 1 ? natural + (rows.length - 1) * MAX_EXTRA_GAP : natural);
-    const fillHalf = opts.minHeight > 0
+    // Never in D140's own-height state: filling would grow a short chart back toward the constant and put the
+    // empty field back under it (🔵 review of D146).
+    const fillHalf = !opts.ownHeight && opts.minHeight > 0
       ? Math.min((opts.minHeight - MARGIN_TOP - MARGIN_BOTTOM - 2 * LOS_HALF_GAP) / 2,
         spreadRoom(defRowsTopDown, defMin), spreadRoom(offRowsTopDown, offMin))
       : 0;
