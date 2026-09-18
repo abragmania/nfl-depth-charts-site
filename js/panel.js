@@ -92,6 +92,7 @@ function gradeBoxHtml(rating, season, card) {
     <div class="panel-grade-num">${esc(rating.current)}</div>
     <div class="panel-grade-rank">${rank}</div>
     ${delta}
+    ${snaps ? `<div class="panel-grade-snaps-label" title="Share of his unit's snaps, most recent game first">snap %</div>` : ""}
     ${snaps}
   </div>`;
 }
