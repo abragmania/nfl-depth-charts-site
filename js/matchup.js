@@ -11,7 +11,7 @@
 import { getTeams, getTeam } from "./api.js";
 import { esc, renderColumn, renderTray, fitNames, wireDepthToggles, espnSchemeOf } from "./cards.js";
 import { computeLayout, renderFieldSvg, renderLevelLabels, FIELD_VARIANT, SECONDARY_ONE_ROW } from "./field.js";
-import { mountScaledField, disposeCurrentView, MIN_READABLE_SCALE, MATCHUP_FOLD_WIDTH } from "./viewfit.js";
+import { mountScaledField, disposeCurrentView, MIN_READABLE_SCALE } from "./viewfit.js";
 import { navStripHtml, wireNav } from "./nav.js";
 import { isLightWash } from "./landing.js";
 // D111: one legend, drawn on both pages (see matchupLegendHtml). D134: one reduced-depth option object too.
@@ -52,7 +52,7 @@ function heatSummaryHtml(view) {
   const text = typeof summary === "string" ? summary
     : Array.isArray(summary) ? summary.map((x) => (typeof x === "string" ? x : x?.text)).filter(Boolean).join(" \u00b7 ")
     : "";
-  return text ? `<div class="matchup-team-heat">${esc(text)}</div>` : "";
+  return text ? `<div class="matchup-team-heat" title="${esc(text)}">${esc(text)}</div>` : "";
 }
 
 // Same URL rule team.js's fieldHtml uses for its single watermark (D95/D98 part 1): prefer the dark
@@ -149,22 +149,28 @@ function logoPlate(team, extraClass) {
 // The markup is team.js's own legendHtml, imported rather than copied: the two pages draw the same cards, so
 // a reworded key must reword on both at once or the copies drift the way four of them once did over
 // OUT_STATUS_CODES.
-const matchupLegendHtml = () => (SECONDARY_ONE_ROW ? legendHtml("legend-matchup") : "");
+const matchupLegendHtml = () => (SECONDARY_ONE_ROW ? legendHtml("legend-matchup legend-collapsed") : "");
 
-// D134 step 1 on this page: on a window too short to draw the field readably the two 32px half banners fold
-// away, and the one thing they alone were saying — which club is on offense and which on defense (D113) —
-// becomes a small chip beside that club's own name in the header, which is always rendered and only shown
-// in the compact state (styles.css's `.matchup.is-compact`). So the fact never disappears, it just moves.
+// D113/D134: which club is on offense and which on defense is a chip beside that club's own name. It used
+// to be the compact state's stand-in for the two 32px half banners; since D155 the header is compact at
+// every size, so the chip is simply always on (styles.css's `.matchup.is-compact`).
 const unitChipHtml = (unit) => `<span class="matchup-unit-chip">${esc(unit)}</span>`;
 
-// The compact state itself: one class on the page root drives the banners, the key and the header's own
-// tighter type, so switching states re-renders nothing and the field underneath cannot shake (D114).
-// The key collapses to the same one-word chip the team page uses instead of disappearing — a page
-// showing two clubs' cards must still say what a red band or a hatch means.
-function setMatchupCompact(root, on) {
-  root.querySelector(".matchup")?.classList.toggle("is-compact", on);
-  root.querySelector(".legend-matchup")?.classList.toggle("legend-collapsed", on);
-}
+// D155 (Adam, 2026-09-18, "yes"): THERE IS ONLY ONE MATCHUP HEADER NOW. `is-compact` is written into the
+// page's own markup (see renderMatchup) instead of being toggled by the fit engine, and the key is rendered
+// already collapsed behind its "Legend" chip, exactly as a laptop always saw it.
+//
+// WHY: the header used to have two heights, 112px unfolded and 57px folded, and which one you got depended
+// on the window. Whichever way that was decided it produced the same absurdity — a TALLER window drawing a
+// SMALLER field, because the extra height bought a taller header and then some. D146's window-width rule
+// (MATCHUP_FOLD_WIDTH, now gone) moved the boundary rather than removing it: 1700x850 drew at 0.7918 folded
+// and 1700x900 at 0.7106 unfolded. One header, one height, no boundary to cross, and every pair of clubs the
+// same size at a given window — which is what D107 asks for and what two rulings failed to deliver here.
+// The injury sentence is not lost with the unfolded header: it moves into the empty club colour beside the
+// name and record, on one line (styles.css), with the whole of it in the element's `title`.
+//
+// There is therefore NO setCompact hook on this page's cascade, which also means `steps.header` is false in
+// mountScaledField and D134's step (1) is never offered here at all — it had nothing left to buy.
 
 // D113 (Adam, 2026-09-16): the centre block used to print its own "A offense vs B defense" line here — the
 // exact small grey text that read as "Denver's positions rewritten" rather than "Jacksonville's defence".
@@ -335,7 +341,7 @@ export async function renderMatchup(root, search, aAbbr, bAbbr) {
   // halfWatermarkHtml/facingView use). `.matchup-field-wrap` (styles.css) gives the three a single rounded,
   // bordered frame so the banners read as caps on the same card the field sits in.
   root.innerHTML = `
-    <div class="matchup">
+    <div class="matchup is-compact">
       ${navStripHtml({ teams, abbr: A, page: "matchup", opponentAbbr: B, primary: teamA.colourPrimary, secondary: teamA.colourSecondary })}
       ${headerHtml(teamA, teamB, viewA, viewB, teams)}
       <div class="team-body">
@@ -388,12 +394,9 @@ function mountMatchupField(root, viewA, viewB, teamA, teamB) {
       floor: MIN_READABLE_SCALE,
       reduced: computeLayout(view, REDUCED_DEPTH_OPTS),
       own, // D140
-      setCompact: (on) => setMatchupCompact(root, on),
-      // D146 (1) on this page: below this width EVERY pair folds its header, whatever the window's height
-      // and whatever these two clubs' details happen to be. Without it the fold was bought by the cascade
-      // out of a SHORT window, so a taller window kept the 87px-taller header and drew a smaller field than
-      // a shorter one did — see MATCHUP_FOLD_WIDTH for the measurement and the numbers.
-      foldWidth: MATCHUP_FOLD_WIDTH,
+      // D155: no setCompact and no foldWidth. The header is already compact in the markup, so there is
+      // nothing for the cascade to fold — which makes `steps.header` false and drops D134's step (1) from
+      // this page's cascade entirely. It goes straight from "none" to the depth step and then the floor.
       setDepth: (on) => { depthOpts = on ? REDUCED_DEPTH_OPTS : null; },
     },
     onDraw: (el) => { fitNames(el); wireDepthToggles(el); wireMatchupClicks(el, teamA, teamB); },

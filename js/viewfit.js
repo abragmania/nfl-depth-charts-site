@@ -186,39 +186,19 @@ export const FIT_STEP_MARGIN = 1.02;
 // desktop widths.
 export const HEADER_FOLD_WIDTH = 2240;
 
-// ---- D146 (1) ON THE MATCHUP PAGE ---------------------------------------------------------------
-//
-// The same rule, for the same reason, on the page that had the most to lose from not having it. The Team
-// page's folded and unfolded headers are within 4px of each other; the MATCHUP page's differ by 87. Unfolded
-// it carries two 60px club crests and each club's injury sentence; folded (D139, Adam approved) it carries a
-// 34px crest and no sentence at all. So a matchup window that was a pixel too TALL to need the cascade's
-// height-bought fold drew its field 87px shorter than the same window a pixel shorter did: 1536x900 drew at
-// 0.7106 with 8.88px backup names while 1536x864 — a SHORTER window — drew 0.8082. A taller window drawing
-// smaller is precisely the flaw D146 removed from the Team page, and it is removed here the same way: the
-// fold is a question about the WINDOW's width and nothing else, so below this width every pair is folded
-// whatever its height, and the cascade's "header" step then has nothing left to buy (it re-folds an
-// already-folded header, measures a gain of 0, and is dropped by STEP_GAIN — exactly as on the Team page).
-//
-// WHAT THE NUMBER IS: the narrowest window at which the WORST pair's unfolded header still sits at its
-// designed 112px — one flex line, and no club's injury sentence wrapped onto a second. Measured on the live
-// page over all 32 clubs (2026-09-18), each club drawn against a short-sentence opponent so the answer is
-// that club's own: Green Bay 1567 (the longest sentence in the league — both units injured, both with a
-// critical and a star man), Detroit 1471, then Dallas 1353, Philadelphia and Washington 1350, Houston and
-// San Francisco 1349, down to the Chargers at 1265. tests/viewfit.test.mjs pins the table.
-//
-// WHY THE HEADROOM IS BIGGER THAN D107's: the two club blocks SPLIT the width left over by the centre
-// block, so one pixel of extra sentence costs two pixels of window. ~90px above Green Bay is about eight
-// more characters in that sentence, which is a week's worth of injury news, not a season's.
-export const MATCHUP_FOLD_WIDTH = 1660;
-// AND IT IS BELT AND BRACES HERE TOO (styles.css): the injury sentence is `white-space:nowrap` with an
-// ellipsis and the compact header is `flex-wrap:nowrap`, so a pair whose details outgrow this constant
-// clips the tail of a sentence rather than growing the header and moving the field.
+// D155 (Adam, 2026-09-18) — THE MATCHUP PAGE HAS NO FOLD WIDTH, because it has only ONE header.
+// It briefly had its own constant here (MATCHUP_FOLD_WIDTH, 1660, measured over all 32 clubs the way the
+// number above was). That removed the flaw below the boundary and left it above: at 1700 wide the page drew
+// 0.7918 at a height of 850 and 0.7106 at 900 — still a taller window drawing smaller, because crossing the
+// boundary swapped a 57px header for a 112px one. Adam's answer was to delete the boundary rather than move
+// it: matchup.js writes `is-compact` into its own markup and passes neither setCompact nor foldWidth, so
+// that page's header is one height at every window and D134's step (1) is not offered on it at all. The
+// injury sentence the unfolded header carried now sits on one line inside the club block (styles.css).
 
 // A window parked on the boundary must not flip the key open and shut. The band is one-sided and sits ABOVE
 // the width, so the guarantee ("unfolded means it fits") is untouched: a folded header waits for 2264 before
-// it opens, an open one folds the moment it drops under 2240 (1684 and 1660 on the matchup page — the band
-// is the same 24px on both, being a property of the scrollbar and of a drag rather than of the page).
-// It is wider than a classic scrollbar (17px) on
+// it opens, an open one folds the moment it drops under 2240. (The Team page is the only page with a fold
+// width at all since D155, so this band applies to it alone.) It is wider than a classic scrollbar (17px) on
 // purpose — folding the key can change the page's height, and a height change that raises or drops a
 // scrollbar moves `documentElement.clientWidth` by exactly that much, which is a feedback loop, not a drag.
 export const HEADER_FOLD_HYSTERESIS = 24;
