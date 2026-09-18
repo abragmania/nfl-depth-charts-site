@@ -172,20 +172,40 @@ export const FIT_STEP_MARGIN = 1.02;
 //
 // THE RULE: whether the chrome folds is a question about the WINDOW and nothing else. Below this width every
 // club folds its key into the "Legend" chip, above it no club does — never "fold when THIS club's own header
-// would wrap", which is precisely what made the answer club-dependent. The number is the widest window at
-// which the worst club's unfolded header still needs a second line, measured on the live page over all 32
-// clubs (2026-09-17: Houston 1800, then Washington 1700, New England / Philadelphia / Green Bay 1660, down
-// to Miami / the Giants / Chicago at 1420). It is a ceiling, so a club whose details grow by a few pixels
-// between now and next week still folds at the same place as every other club.
+// would wrap", which is precisely what made the answer club-dependent.
 //
-// AND IT IS BELT AND BRACES, not the only guard: styles.css gives `.teamhead` itself `flex-wrap:nowrap`
-// (the rules the compact state used to own), so an UNFOLDED header is one crest-high line for every club at
-// every width — a club whose details outgrow this constant ellipsises its own name rather than growing the
-// header and moving the field. D107 therefore holds even if this number goes stale.
-export const HEADER_FOLD_WIDTH = 1800;
-export function headerFoldsAt(width, foldWidth = HEADER_FOLD_WIDTH) {
-  return foldWidth > 0 && width < foldWidth;
+// WHAT THE NUMBER IS, and what it is NOT (👁 Visual QA of D146; the 1800 it replaces was measuring the wrong
+// thing). `.legend-banner` is a nowrap flex row, so its ITEMS never move to a second flex line — but nothing
+// stopped each item wrapping its own TEXT inside itself, and an item two lines tall makes the banner two
+// lines tall. Between about 1800 and 2200 px most clubs' keys were therefore printing on two lines and
+// Houston's on three, which is ragged on the commonest desktop width (1920) and, at three lines, finally tall
+// enough to outgrow the 38px crest and push Houston's header to 48.8px against everyone else's 48 — the D107
+// leak 👁 caught (field top 151 not 150, scale 0.9518 not 0.9529 at 1920x1080). 1800 was the width at which
+// Houston stopped needing a THIRD line, i.e. the width at which its header height stopped being wrong; it was
+// never the width at which the key fits on ONE line.
+//
+// So this is now the real thing: the narrowest window at which the WORST club's key is handed its full
+// one-line width. Measured on the live page over all 32 clubs with tools/qa/legendfit.mjs (2026-09-17). The
+// key's own one-line width is 818.4px and identical on every club — the same markup — so what varies is only
+// how much room the club's details and controls leave it: Houston 2197, Washington 2094, New England 2056,
+// down to Chicago at 1798. The constant clears Houston with ~40px of headroom, so a club whose next fixture
+// grows by a few characters between now and next week still folds at the same place as every other club.
+export const HEADER_FOLD_WIDTH = 2240;
+// A window parked on the boundary must not flip the key open and shut. The band is one-sided and sits ABOVE
+// the width, so the guarantee ("unfolded means it fits") is untouched: a folded header waits for 2264 before
+// it opens, an open one folds the moment it drops under 2240. It is wider than a classic scrollbar (17px) on
+// purpose — folding the key can change the page's height, and a height change that raises or drops a
+// scrollbar moves `documentElement.clientWidth` by exactly that much, which is a feedback loop, not a drag.
+export const HEADER_FOLD_HYSTERESIS = 24;
+export function headerFoldsAt(width, foldWidth = HEADER_FOLD_WIDTH, folded = false) {
+  return foldWidth > 0 && width < foldWidth + (folded ? HEADER_FOLD_HYSTERESIS : 0);
 }
+// AND IT IS BELT AND BRACES, not the only guard: styles.css gives `.teamhead` `flex-wrap:nowrap` and now
+// gives the key's own items `white-space:nowrap` too, so a club whose details outgrow this constant clips the
+// tail of its key (`justify-content: safe flex-end`) or ellipsises its own name rather than growing the
+// header and moving the field. That second rule is new: without it the "one line" above was true of the
+// banner's flex line and false of the banner, which is how a stale constant went unnoticed for a whole
+// ruling. D107 now holds even if this number goes stale.
 
 // D138: about 1320 — the widest window that still cannot draw the field readably when held upright.
 export const LIST_PORTRAIT_WIDTH = Math.round(LAYOUT_WIDTH * MIN_READABLE_SCALE) + 24;
@@ -532,10 +552,15 @@ export function mountScaledField({ root, probe, build, onDraw, onText, panel = n
   // crosses the width. The last-applied value is remembered so a repeated call writes nothing, which keeps
   // the ResizeObserver that watches the header from being woken by a no-op class toggle.
   let chromeCompact = null;
+  // The WIDTH half of that answer, kept on its own so HEADER_FOLD_HYSTERESIS has a state to stick to. It must
+  // not be read off `chromeCompact`: that is also true whenever the cascade has taken a step, and a step
+  // released on a wide window would then hold the key folded for another 24px for no reason.
+  let widthFolded = false;
   function syncChrome() {
     // clientWidth, not innerWidth: the header is laid out in the width CSS has, which is 17 px less than the
     // window whenever a scrollbar is up (🔵 review of D146; the same trap the cascade notes for itself below).
-    const want = step !== "none" || headerFoldsAt(document.documentElement.clientWidth, foldWidth);
+    widthFolded = headerFoldsAt(document.documentElement.clientWidth, foldWidth, widthFolded);
+    const want = step !== "none" || widthFolded;
     if (want === chromeCompact) return;
     chromeCompact = want;
     cascade?.setCompact?.(want);

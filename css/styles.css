@@ -361,9 +361,11 @@ a.back { color:var(--muted); }
    two headers are shaped differently:
 
    `.legend-banner` (team page) sits in .teamhead's own flex row, between the club's details and its
-   controls. The banner's height is set by its 38px crest, and at the sizes this ruling is about the key
-   wraps to two lines well inside that, so the banner does not grow (48px before and after, measured at
-   1700x900 and 2000x980). Its items are packed to the right-hand end of the block (justify-content) and
+   controls. The header's height is set by its 38px crest, so the banner has to stay inside that. D111 read
+   that as "two lines still fit inside the crest, so the banner does not grow" — which was true of two lines
+   and false of three (Houston's, at 1920), and is no longer how the banner behaves at all: since D107 it
+   never wraps and is never allowed to reach the room where it would want to, because the whole key folds
+   into its chip first. Its items are packed to the right-hand end of the block (justify-content) and
    printed on a dark plate, because .teamhead is a club-colour gradient — the base .legend's muted grey is
    unreadable on a mid-tone wash, and a plate reads on every club without dulling the wash itself, which
    D48 wants bright.
@@ -392,9 +394,21 @@ a.back { color:var(--muted); }
    flex basis is its ~600px of content against this block's 200px), so the club NAME ellipsises long before
    an item of the key is clipped. `.legend-collapsed` sets overflow back to visible, which it must: the
    folded key's popover is an absolutely-positioned child of this box. */
-.legend-banner { margin:0; flex:1 1 200px; min-width:0; justify-content:flex-end; flex-wrap:nowrap; overflow:hidden;
+.legend-banner { margin:0; flex:1 1 200px; min-width:0; justify-content:flex-end; justify-content:safe flex-end;
+  flex-wrap:nowrap; overflow:hidden;
   gap:3px 9px; font-size:9.5px; line-height:1.15; color:rgba(255,255,255,.88);
   background:rgba(0,0,0,.26); border-radius:8px; padding:3px 9px; }
+/* 👁 Visual QA of D146, and the rule that makes the "one line" above actually true. `flex-wrap:nowrap` stops
+   the ITEMS moving to a second flex line; it does nothing about an item wrapping its own TEXT, and an item
+   two lines tall is a banner two lines tall. Between about 1800 and 2200px most clubs' keys were printing on
+   two lines and Houston's on three, which grew Houston's header to 48.8px against everyone else's 48 — the
+   exact club-dependent header height D107 exists to forbid. viewfit.js's HEADER_FOLD_WIDTH now folds the key
+   before the room runs out, so this never fires in normal use; it is the backstop for a club whose details
+   grow past that width before anyone re-measures, and it fails by clipping the TAIL of the key (hence `safe
+   flex-end`, which drops the unsafe alignment's habit of pushing the overflow off the LEFT edge, where it
+   would eat the key's first item) instead of by moving the field. The popover keeps wrapping between items,
+   which is what `flex-wrap:wrap` on `.legend-collapsed .legend-items` is for. */
+.legend-banner .legend-items > span { white-space:nowrap; }
 .legend-banner b { color:#fff; }
 .legend-banner .sw { width:8px; height:8px; border-radius:2px; margin-right:3px; }
 .legend-banner .tier-strip { height:8px; width:44px; margin-right:3px; }
@@ -759,6 +773,14 @@ a.back { color:var(--muted); }
    squeezed a row is, the two never read as one word. It costs the name 2 units and is worth it. */
 .prow-tight .prow-num { min-width:0; margin-right:2px; }
 .prow-one.prow-tight .prow-head { margin-right:0; }
+/* 👁 Visual QA of D146: the 4-unit floor above has to be paid for by the row, not by the name. Arizona's
+   Dadrion Taylor-Demerson needed 141.6 units with the panel open at 2560x1300 and, once the floor took its
+   two, had 139.8 — so a name that had printed in full since D135 started printing as "D. Taylor-Demerson",
+   with nothing else on that row left to give up. This is the last rung before the name is cut (cards.js's
+   nameLadder): the row's own side padding drops from 4 units to 2, which hands the name back 4. It is only
+   ever reached by a row that would otherwise lose its name, and the floor between the number and the name is
+   untouched by it. */
+.prow-tighter .prow-line { padding:0 2px; }
 /* An extra the row has handed over to its own name. `display:none` rather than a width tweak: it has to
    stop costing its flex gap as well as its own width, and it must come back the moment the row is
    re-measured at a size where it fits (fitNames clears these on every pass). */

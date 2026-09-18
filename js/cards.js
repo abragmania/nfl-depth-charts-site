@@ -569,22 +569,37 @@ function textOverflows(el) {
 // then the purely descriptive chips. The rating pill, the status badges (Q/D/OUT/IR/PUP/SUSP/INACTIVE), the
 // PS badge and the D91 snap trio are NOT on this list: each is a fact about whether and how much the man
 // plays, which is what the row is for.
-const ROW_GIVE_UPS = [".sig-LOW_SNAPS", ".signal-glyph", ".chip-ghost", ".chip-wk1", ".badge-slot"];
+export const ROW_GIVE_UPS = [".sig-LOW_SNAPS", ".signal-glyph", ".chip-ghost", ".chip-wk1", ".badge-slot"];
 
-// D135: a name is never cut while its row still has room. The row first pulls the photo, number and name
-// tight (`prow-tight` drops the jersey number's reserved gutter and the wide gaps around it — worth ~25px
-// on a side-page row), then gives up ROW_GIVE_UPS one kind at a time, and only then falls back to
-// "F. Surname" and, last of all, to the browser's ellipsis. Every step is re-measured rather than guessed,
-// and a row whose name already fits is never touched — so a page with no cut names renders exactly as it
-// did before this ruling.
+// The three spacing states a row can be in, cheapest first. "normal" is the row as drawn; "tight"
+// (`prow-tight`) drops the jersey number's reserved gutter and the wide gaps around it; "tighter"
+// (`prow-tighter`) also takes the row's own 4-unit side padding down to 2.
+export const ROW_SPACING = ["normal", "tight", "tighter"];
+
+// D135's ladder, as a list of states rather than as control flow: what a row is allowed to spend, in order,
+// before its name is cut, and what it may spend after. Pure and exported so the ORDER is pinned by a test
+// instead of only by reading the DOM code below — the order is the whole ruling, and D146 shipped with it
+// looking right and behaving wrong.
+//
+// THE ORDER IS: the full name at normal spacing; the full name tightened; the full name after giving up each
+// kind of quiet extra in turn; the full name at the tightest spacing there is — and only when all of that has
+// failed, the short "F. Surname" form, which then starts again from the top (D146 (3): a shortened name gets
+// its gutter and its part-time marker back, so it is never printed in a squeezed row with 30-65px of the row
+// still idle). Spacing is spent before the name, and every rung is re-measured rather than guessed.
+export function nameLadder({ giveUps = ROW_GIVE_UPS, hasShort = false } = {}) {
+  const rungs = [];
+  for (const name of hasShort ? ["full", "short"] : ["full"]) {
+    rungs.push({ name, spacing: "normal", gave: 0 });
+    for (let gave = 0; gave <= giveUps.length; gave++) rungs.push({ name, spacing: "tight", gave });
+    rungs.push({ name, spacing: "tighter", gave: giveUps.length });
+  }
+  return rungs;
+}
+
+// Walks that ladder against one live row, stopping at the first rung whose name fits. A row whose name
+// already fits is left in the state it is already in — no class write at all — so a page with no cut names
+// costs one measurement per row and wakes nothing that observes the field (🔵 A9).
 function fitOneName(row, el) {
-  // Puts the row back to its untouched state: full spacing, every extra shown. 🔵 A9: guarded, so a row
-  // already in that state is left alone — no class write at all — and a page with no cut names costs one
-  // measurement per row and wakes nothing that observes the field.
-  const loosen = () => {
-    if (row.classList.contains("prow-tight")) row.classList.remove("prow-tight");
-    for (const n of row.querySelectorAll(".prow-given-up")) n.classList.remove("prow-given-up");
-  };
   // An emptied wrapper still costs the row a flex gap, so it goes with the last thing inside it.
   const dropEmptyWrappers = () => {
     for (const w of row.querySelectorAll(".prow-signals, .prow-badges")) {
@@ -592,40 +607,41 @@ function fitOneName(row, el) {
       w.classList.toggle("prow-given-up", !live);
     }
   };
-  // D135's ladder for whatever name is in the row RIGHT NOW: pull the photo, number and name tight, then
-  // give up the quiet extras one kind at a time, re-measuring at every step. Returns true as soon as the
-  // name fits, so the row keeps everything it has not had to hand over.
-  const squeeze = () => {
-    if (!textOverflows(el)) return true;
-    row.classList.add("prow-tight");
-    if (!textOverflows(el)) return true;
-    for (const sel of ROW_GIVE_UPS) {
-      let gave = false;
-      for (const n of row.querySelectorAll(sel)) {
-        if (!n.classList.contains("prow-given-up")) { n.classList.add("prow-given-up"); gave = true; }
-      }
-      if (!gave) continue;
-      dropEmptyWrappers();
-      if (!textOverflows(el)) return true;
+  // Every element the row is allowed to hand over, found once. THE LIST OVERLAPS ON PURPOSE — the part-time
+  // marker is `class="signal-glyph sig-LOW_SNAPS"`, so it is matched by the first selector and again by the
+  // second — which is why a rung is applied as a SET rather than selector by selector: toggling each selector
+  // in turn would have the second rung hand the part-time marker straight back to the row.
+  const candidates = [...new Set(ROW_GIVE_UPS.flatMap((sel) => [...row.querySelectorAll(sel)]))];
+  // Puts the row into exactly the state one rung describes, and answers whether anything actually moved. A
+  // rung that changes nothing cannot change the answer either, so the caller skips re-measuring it — which
+  // is what keeps the common case (a row with no extras to give up, so most of the middle rungs are no-ops)
+  // to the same handful of measurements it always took.
+  const applyRung = ({ name, spacing, gave }) => {
+    let moved = false;
+    const text = name === "short" ? el.dataset.short : el.dataset.full;
+    if (el.textContent !== text) { el.textContent = text; moved = true; }
+    for (const [cls, on] of [["prow-tight", spacing !== "normal"], ["prow-tighter", spacing === "tighter"]]) {
+      if (row.classList.contains(cls) !== on) { row.classList.toggle(cls, on); moved = true; }
     }
-    return !textOverflows(el);
+    const handed = new Set();
+    for (let i = 0; i < gave; i++) for (const n of row.querySelectorAll(ROW_GIVE_UPS[i])) handed.add(n);
+    for (const n of candidates) {
+      const on = handed.has(n);
+      if (n.classList.contains("prow-given-up") !== on) { n.classList.toggle("prow-given-up", on); moved = true; }
+    }
+    if (moved) dropEmptyWrappers();
+    return moved;
   };
 
-  if (el.textContent !== el.dataset.full) el.textContent = el.dataset.full;
-  loosen();
-  if (squeeze()) return;
-  // D135: the name itself is the LAST thing to give, and only now. 👁 Visual QA (2026-09-17): the row used to
-  // keep every concession it had made on the way down once the short form went in, so "J. Schmitz Jr." was
-  // printed in a squeezed row with the jersey number against the name and 30 to 65px of the row still idle
-  // on the right ("61J. Schmitz Jr.", "0D. Overshown"). A short name is a DIFFERENT question, so the ladder
-  // is asked again from the top: a row that fits "J. Schmitz Jr." at full spacing gets its gutter and its
-  // part-time marker back, and a row that still does not fit gives the same things up again in the same
-  // order. D135 is untouched by this — a name is still never cut while its row has room, because the short
-  // form is still only reached after every concession has failed on the full one.
-  if (el.dataset.short && el.dataset.short !== el.dataset.full) {
-    el.textContent = el.dataset.short;
-    loosen();
-    squeeze();
+  const hasShort = !!(el.dataset.short && el.dataset.short !== el.dataset.full);
+  let measured = false;
+  for (const rung of nameLadder({ hasShort })) {
+    const moved = applyRung(rung);
+    // The first rung is always measured (it is the question "does this row need anything at all?"); after
+    // that only a rung that actually moved something is worth a measurement.
+    if (!moved && measured) continue;
+    measured = true;
+    if (!textOverflows(el)) return;
   }
 }
 
