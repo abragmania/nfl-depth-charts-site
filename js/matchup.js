@@ -11,7 +11,7 @@
 import { getTeams, getTeam } from "./api.js";
 import { esc, renderColumn, renderTray, fitNames, wireDepthToggles, espnSchemeOf } from "./cards.js";
 import { computeLayout, renderFieldSvg, renderLevelLabels, FIELD_VARIANT, SECONDARY_ONE_ROW } from "./field.js";
-import { mountScaledField, disposeCurrentView, MIN_READABLE_SCALE } from "./viewfit.js";
+import { mountScaledField, disposeCurrentView, MIN_READABLE_SCALE, MATCHUP_FOLD_WIDTH } from "./viewfit.js";
 import { navStripHtml, wireNav } from "./nav.js";
 import { isLightWash } from "./landing.js";
 // D111: one legend, drawn on both pages (see matchupLegendHtml). D134: one reduced-depth option object too.
@@ -352,8 +352,8 @@ export async function renderMatchup(root, search, aAbbr, bAbbr) {
 }
 
 // D114 (Adam, 2026-09-16): "on the matchup screen it's permanently shaking uncontrollably." viewfit.js's
-// height budget only ever reserved space for a `.back-row` UNDER the field; it had never heard of the D113
-// bottom half-banner, which lives INSIDE `.matchup-field-wrap` below `.field-outer` (see renderMatchup's
+// height budget knew only about the field's own top edge and a fixed bottom margin; it had never heard of the
+// D113 bottom half-banner, which lives INSIDE `.matchup-field-wrap` below `.field-outer` (see renderMatchup's
 // markup). Missing that, the wrap rendered taller than the window on every load, which raised a vertical
 // scrollbar, narrowed `main`, triggered a refit at the narrower width that shrank the field enough to lose
 // the scrollbar, widened `main` back, and refit grew the field right back into overflow - forever. This
@@ -389,6 +389,11 @@ function mountMatchupField(root, viewA, viewB, teamA, teamB) {
       reduced: computeLayout(view, REDUCED_DEPTH_OPTS),
       own, // D140
       setCompact: (on) => setMatchupCompact(root, on),
+      // D146 (1) on this page: below this width EVERY pair folds its header, whatever the window's height
+      // and whatever these two clubs' details happen to be. Without it the fold was bought by the cascade
+      // out of a SHORT window, so a taller window kept the 87px-taller header and drew a smaller field than
+      // a shorter one did — see MATCHUP_FOLD_WIDTH for the measurement and the numbers.
+      foldWidth: MATCHUP_FOLD_WIDTH,
       setDepth: (on) => { depthOpts = on ? REDUCED_DEPTH_OPTS : null; },
     },
     onDraw: (el) => { fitNames(el); wireDepthToggles(el); wireMatchupClicks(el, teamA, teamB); },

@@ -63,8 +63,8 @@ const RESIZE_DEBOUNCE = 180;
 
 // Why the settle is a TIMER and not an observer.
 //
-// The available height is `window - fieldTop - backRow`, so it changes whenever anything ABOVE the field
-// changes height. On a cold load that happens twice: the header's controls wrap to a second line and the
+// The available height is `window - fieldTop - the bottom margin`, so it changes whenever anything ABOVE the
+// field changes height. On a cold load that happens twice: the header's controls wrap to a second line and the
 // legend wraps to three or four, both in the fallback font, and both collapse when the real font lands.
 // A ResizeObserver on those elements is the obvious fix and it does not work: RO callbacks are driven by
 // the frame loop, which a background or hidden tab throttles to a standstill - as does a headless
@@ -118,8 +118,13 @@ export function capToWidthFit(widthFit, heightFit) {
 
 // The height-budget arithmetic, pulled out as its own pure function so it can be unit tested directly
 // (D114 — the matchup page could otherwise shake uncontrollably). The plain budget is
-// `innerHeight - fieldTop - (backRow + BOTTOM_RESERVE)`, which only ever knows about a `.back-row` UNDER
-// the field. matchup.js's D113 bottom half-banner is a real sibling INSIDE `.field-outer`'s own wrapper
+// `innerHeight - fieldTop - BOTTOM_RESERVE` and nothing else. It USED to open with a third term, an
+// allowance for a `.back-row` link under the field: 26px, or 8px once a cascade step was in force. D59
+// replaced every one of those links with the nav strip ABOVE the page, so the lookup that fed it matched
+// nothing and the fallback was taken on every Team and Matchup page there is — every club drawn 26px
+// shorter than the window allowed, for an element that had not existed for fifty rulings. Removing it is
+// what makes the field fill the window; BOTTOM_RESERVE alone is the breathing room under it.
+// matchup.js's D113 bottom half-banner is a real sibling INSIDE `.field-outer`'s own wrapper
 // (`.matchup-field-wrap`) that this budget never heard of, so the wrap rendered ~33px taller than the
 // window on every load: a vertical scrollbar appeared, `main` narrowed, the ResizeObserver refit at the
 // narrower width, which (being the same height budget) also shrank the field - narrow enough that the
@@ -130,9 +135,9 @@ export function capToWidthFit(widthFit, heightFit) {
 // future CSS change to the banner is picked up automatically instead of silently drifting out of date
 // again. It is 0 for the team and side pages, which have no such wrapper, so a zero reserveBelow also
 // skips SAFETY_MARGIN (see its own comment) and their numbers are exactly what they were before D114.
-export function heightBudget(innerHeight, fieldTop, backRowHeight, reserveBelow = 0) {
+export function heightBudget(innerHeight, fieldTop, reserveBelow = 0) {
   const extra = reserveBelow > 0 ? reserveBelow + SAFETY_MARGIN : 0;
-  return Math.max(innerHeight - fieldTop - (backRowHeight + BOTTOM_RESERVE + extra), 240);
+  return Math.max(innerHeight - fieldTop - (BOTTOM_RESERVE + extra), 240);
 }
 
 // ---- D134: the too-short-window cascade --------------------------------------------------------
@@ -153,8 +158,9 @@ export const FIT_HYSTERESIS = 1.05;
 // the hysteresis on purpose: the band absorbs a pixel, never a real shortfall, so a window genuinely under the
 // floor still takes its step (tests/viewfit.test.mjs pins both sides — 1 percent under stays at "none", 4
 // percent under steps). NOTE, because D134's own text still cites it: the 1536x864 laptop no longer needs a
-// step. Since D141 shortened the canvas it draws its team page at 0.7976, clear of the floor, and takes NO
-// cascade step — its key is folded by the width rule below (D107), which is not a step and buys it nothing.
+// step. Since D141 shortened the canvas — and since the phantom back-row reserve came out of heightBudget —
+// it draws its team page at 0.8282, clear of the floor, and takes NO cascade step; its key is folded by the
+// width rule below (D107), which is not a step and buys it nothing.
 export const FIT_STEP_MARGIN = 1.02;
 
 // ---- D107: ONE HEADER HEIGHT FOR EVERY CLUB AT A GIVEN WINDOW WIDTH ----------------------------
@@ -179,9 +185,40 @@ export const FIT_STEP_MARGIN = 1.02;
 // of the banner is how an earlier constant went stale and left most clubs' keys on two lines at ordinary
 // desktop widths.
 export const HEADER_FOLD_WIDTH = 2240;
+
+// ---- D146 (1) ON THE MATCHUP PAGE ---------------------------------------------------------------
+//
+// The same rule, for the same reason, on the page that had the most to lose from not having it. The Team
+// page's folded and unfolded headers are within 4px of each other; the MATCHUP page's differ by 87. Unfolded
+// it carries two 60px club crests and each club's injury sentence; folded (D139, Adam approved) it carries a
+// 34px crest and no sentence at all. So a matchup window that was a pixel too TALL to need the cascade's
+// height-bought fold drew its field 87px shorter than the same window a pixel shorter did: 1536x900 drew at
+// 0.7106 with 8.88px backup names while 1536x864 — a SHORTER window — drew 0.8082. A taller window drawing
+// smaller is precisely the flaw D146 removed from the Team page, and it is removed here the same way: the
+// fold is a question about the WINDOW's width and nothing else, so below this width every pair is folded
+// whatever its height, and the cascade's "header" step then has nothing left to buy (it re-folds an
+// already-folded header, measures a gain of 0, and is dropped by STEP_GAIN — exactly as on the Team page).
+//
+// WHAT THE NUMBER IS: the narrowest window at which the WORST pair's unfolded header still sits at its
+// designed 112px — one flex line, and no club's injury sentence wrapped onto a second. Measured on the live
+// page over all 32 clubs (2026-09-18), each club drawn against a short-sentence opponent so the answer is
+// that club's own: Green Bay 1567 (the longest sentence in the league — both units injured, both with a
+// critical and a star man), Detroit 1471, then Dallas 1353, Philadelphia and Washington 1350, Houston and
+// San Francisco 1349, down to the Chargers at 1265. tests/viewfit.test.mjs pins the table.
+//
+// WHY THE HEADROOM IS BIGGER THAN D107's: the two club blocks SPLIT the width left over by the centre
+// block, so one pixel of extra sentence costs two pixels of window. ~90px above Green Bay is about eight
+// more characters in that sentence, which is a week's worth of injury news, not a season's.
+export const MATCHUP_FOLD_WIDTH = 1660;
+// AND IT IS BELT AND BRACES HERE TOO (styles.css): the injury sentence is `white-space:nowrap` with an
+// ellipsis and the compact header is `flex-wrap:nowrap`, so a pair whose details outgrow this constant
+// clips the tail of a sentence rather than growing the header and moving the field.
+
 // A window parked on the boundary must not flip the key open and shut. The band is one-sided and sits ABOVE
 // the width, so the guarantee ("unfolded means it fits") is untouched: a folded header waits for 2264 before
-// it opens, an open one folds the moment it drops under 2240. It is wider than a classic scrollbar (17px) on
+// it opens, an open one folds the moment it drops under 2240 (1684 and 1660 on the matchup page — the band
+// is the same 24px on both, being a property of the scrollbar and of a drag rather than of the page).
+// It is wider than a classic scrollbar (17px) on
 // purpose — folding the key can change the page's height, and a height change that raises or drops a
 // scrollbar moves `documentElement.clientWidth` by exactly that much, which is a feedback loop, not a drag.
 export const HEADER_FOLD_HYSTERESIS = 24;
@@ -335,11 +372,6 @@ export function stepOutcome({ was, step, wasScrolling, scrolls, depthBefore, dep
   return { changed: redraw || step !== was || scrolls !== wasScrolling, redraw };
 }
 
-// How much room a field actually has, measured rather than guessed, so a wrapped header or a second chip
-// line is accounted for automatically instead of silently pushing the field off the bottom.
-// D134: the `?? 26` is an allowance for a "back to team" link under the field that D59 removed from every
-// page, so on a window too short to draw the field readably the compact step stops reserving 26px for an
-// element that is not there. A full-size window keeps the allowance, and therefore its exact scale.
 // The field's top, measured in LAYOUT space rather than from a rect. Two things make a rect wrong
 // here: `getBoundingClientRect` includes transforms, and `.field-outer`'s own entrance animation starts at
 // scale(.97) (the Offense/Defense pages get the same from `.zoom-page`'s), which is worth about 1.5 percent
@@ -352,7 +384,13 @@ function layoutTop(el) {
   return y;
 }
 
-function availableBox(el, main, panel, backRow, reserveBelow, compact = false) {
+// How much room a field actually has, measured rather than guessed, so a wrapped header or a second chip
+// line is accounted for automatically instead of silently pushing the field off the bottom: the window,
+// minus where the field starts, minus BOTTOM_RESERVE, minus whatever the page itself says trails the field
+// inside its own wrapper (matchup.js's bottom banner). Nothing is held back for a `.back-row` — no view has
+// drawn one since D59, and the allowance that pretended otherwise cost every club 26px of field (see
+// heightBudget's own comment).
+function availableBox(el, main, panel, reserveBelow) {
   const cs = getComputedStyle(main);
   const width = Math.max(main.clientWidth - parseFloat(cs.paddingLeft || 0) - parseFloat(cs.paddingRight || 0)
     - (panel && !panel.hidden ? panel.offsetWidth + 12 : 0), 320);
@@ -360,8 +398,7 @@ function availableBox(el, main, panel, backRow, reserveBelow, compact = false) {
   // ...all but a few pixels of it: apply() rounds the scaled canvas UP to the next pixel, and a budget spent
   // to the last one turns that rounding into a scrollbar, which narrows the page and starts the feedback
   // loop D114 exists to prevent (SAFETY_MARGIN's own reason, a size larger).
-  const backRowH = backRow?.offsetHeight ?? (compact ? 8 : 26);
-  const height = heightBudget(window.innerHeight, layoutTop(el), backRowH, extra);
+  const height = heightBudget(window.innerHeight, layoutTop(el), extra);
   return { width, height };
 }
 
@@ -434,7 +471,6 @@ export function mountScaledField({ root, probe, build, onDraw, onText, panel = n
   const mountPoint = root.querySelector(".field-outer");
   if (!mountPoint) return () => {};
   const main = mountPoint.closest("main") ?? document.body;
-  const backRow = root.querySelector(".back-row");
 
   let dead = false;
   let el = null;
@@ -471,7 +507,7 @@ export function mountScaledField({ root, probe, build, onDraw, onText, panel = n
   // element in the document, so it returns instead of rewriting whatever view is on screen now.
   const alive = () => !dead && el !== null && document.contains(el);
 
-  const boxOf = (node) => availableBox(node, main, panel, backRow, reserveBelow, step !== "none");
+  const boxOf = (node) => availableBox(node, main, panel, reserveBelow);
   // D134: the reduced state draws a different canvas, so the spread arithmetic has to measure against the
   // canvas actually being drawn rather than the full-depth probe it started from.
   // D140: and in the scrolling state that canvas may be the club's own-height pair instead of the constant.
@@ -844,19 +880,17 @@ export function fitToViewport(root, { fill = false, maxGrow = MAX_FILL_GROW } = 
   const outer = root.querySelector(".fit-outer");
   const inner = outer?.querySelector(".fit-inner");
   if (!outer || !inner) return () => {};
-  const backRow = root.querySelector(".back-row");
   inner.style.transformOrigin = "top left";
   let dead = false;
 
   const alive = () => !dead && document.contains(inner);
-  // No `?? 26` fallback here: that used to be an allowance for a "back to team" link under the field, but
-  // D59 replaced every one of those with the nav strip ABOVE the page, so no view renders a .back-row any
-  // more. A view that does render one is still measured; nothing else is held back for it.
-  // FLOW_BOTTOM_RESERVE replaces it with an honest margin: now that the fit actually consumes the height
-  // it is given, whatever is left over is the visible gap under the last card, and a card pressed against
-  // the window edge reads as cut off even when it is not.
+  // FLOW_BOTTOM_RESERVE is the whole of the allowance, and an honest one: now that the fit actually consumes
+  // the height it is given, whatever is left over is the visible gap under the last card, and a card pressed
+  // against the window edge reads as cut off even when it is not. (This used to look for a `.back-row` under
+  // the field as well. Nothing has rendered one since D59, so it only ever added 0 here — but the same dead
+  // lookup in the canvas fitter above was costing every club 26px, so both are gone.)
   const availableHeight = () => Math.max(window.innerHeight - outer.getBoundingClientRect().top
-    - ((backRow?.offsetHeight ?? 0) + FLOW_BOTTOM_RESERVE), 200);
+    - FLOW_BOTTOM_RESERVE, 200);
 
   // The write below is unconditional — no cache-and-skip-if-unmoved shortcut. BOTH apply functions below
   // CLEAR the transform and the outer height before they measure (that is how they get an unscaled natural

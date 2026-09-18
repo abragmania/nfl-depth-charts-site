@@ -176,7 +176,6 @@ main.page-landing { padding:10px 20px 12px; }
 .placeholder { margin-top:26px; padding:40px; border:1px dashed #2a323b; border-radius:12px; color:var(--muted); text-align:center; }
 .notfound { padding:60px; text-align:center; color:var(--muted); }
 a.back { color:var(--muted); }
-.back-row { margin-top:4px; font-size:12px; }
 
 /* ---- field-style depth chart (build step 4) ---- */
 .team-body { display:flex; gap:12px; margin-top:8px; align-items:flex-start; }
@@ -1038,12 +1037,17 @@ a.back { color:var(--muted); }
    popover hangs below the centre block, so it is centred there rather than right-aligned. */
 .matchup.is-compact .legend-matchup.legend-collapsed { max-width:none; }
 .matchup.is-compact .legend-matchup.legend-collapsed .legend-items { right:auto; left:50%; transform:translateX(-50%); }
-.matchup.is-compact .matchup-head { padding:5px 12px; gap:12px; }
-.matchup.is-compact .matchup-team { padding:4px 10px; gap:10px; }
+/* D146 (1), the belt-and-braces half of MATCHUP_FOLD_WIDTH, and the same guarantee `.teamhead` has: the
+   COMPACT header must not grow either. Unguarded it kept `flex-wrap:wrap` and a 320px flex-basis per club,
+   so under about 1210px the centre block dropped to a second line and the header went 57px -> 111px -> 165px
+   (the field's top 160 -> 214 -> 268) — a narrower window drawing a smaller field, which is the same flaw
+   the fold width exists to remove. The blocks now SHRINK instead, down to their ellipsised names. */
+.matchup.is-compact .matchup-head { padding:5px 12px; gap:12px; flex-wrap:nowrap; }
+.matchup.is-compact .matchup-team { padding:4px 10px; gap:10px; flex:1 1 0; min-width:0; }
 .matchup.is-compact .matchup-logo { width:34px; height:34px; padding:3px; }
-.matchup.is-compact .matchup-team-info { display:flex; align-items:baseline; gap:10px; }
+.matchup.is-compact .matchup-team-info { display:flex; align-items:baseline; gap:10px; min-width:0; }
 .matchup.is-compact .matchup-team-b .matchup-team-info { flex-direction:row-reverse; }
-.matchup.is-compact .matchup-team-name { font-size:15px; display:inline-flex; align-items:center; gap:8px; }
+.matchup.is-compact .matchup-team-name { font-size:15px; display:inline-flex; align-items:center; gap:8px; min-width:0; }
 .matchup.is-compact .matchup-team-sub { margin-top:0; }
 /* The injury line is the one thing that goes: it is a sentence, it is the tallest item in the block, and
    the same summary is a chip on each club's own team page. */

@@ -847,9 +847,12 @@ export function renderTray(tray, teamAbbr) {
   // D91: a tray chip carries no rating pill for the trio to sit "beside", so it sits beside the name
   // instead — tray.unit (renderColumn's own colOpts.unit source: field.js stamps both from the same
   // row.unit) is read the same way every other renderer here reads it, never guessed from the entry.
-  const chips = (entries) => (entries ?? []).map((p) => `<a class="tray-chip" href="#/team/${esc(teamAbbr)}/player/${encodeURIComponent(p.playerKey)}" data-player-key="${esc(p.playerKey)}" title="Carried on the roster but not on the club depth chart">
-      #${esc(p.number ?? "—")} ${esc(p.name)}${(psBadge(p, false) ? " " + psBadge(p, false) : "")}${snapHistoryHtml(p, { unit: tray.unit })}
-    </a>`).join("");
+  const chips = (entries) => (entries ?? []).map((p) => {
+    const badge = psBadge(p, false);
+    return `<a class="tray-chip" href="#/team/${esc(teamAbbr)}/player/${encodeURIComponent(p.playerKey)}" data-player-key="${esc(p.playerKey)}" title="Carried on the roster but not on the club depth chart">
+      #${esc(p.number ?? "—")} ${esc(p.name)}${badge ? " " + badge : ""}${snapHistoryHtml(p, { unit: tray.unit })}
+    </a>`;
+  }).join("");
   // The tray carries its band's name. It normally hangs under that band's own columns so the name is
   // obvious, but a band with nothing charted has no row of its own (field.js collapses it) and its tray is
   // re-homed onto a neighbouring row — at which point the name is the only thing saying these are, say, the

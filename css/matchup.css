@@ -31,8 +31,14 @@
   color:#14181d; text-shadow:0 1px 2px rgba(255,255,255,.45); }
 /* The heat-summary line only renders for whichever team actually has an injury signal (view.heat.summary).
    min-height reserves its space on every team block, present or not, so a summary on only one side never
-   throws the two teams' text blocks (and therefore their logos) off a shared vertical centre. */
+   throws the two teams' text blocks (and therefore their logos) off a shared vertical centre.
+   D146 (1), belt and braces for MATCHUP_FOLD_WIDTH: this sentence is the one thing in the unfolded header
+   that can grow it, and a taller header moves the field's top and the height-bound scale with it. nowrap
+   plus an ellipsis means a club whose injury news outgrows the fold width loses the tail of its sentence
+   instead — the same trade `.teamhead h1` makes for a long club name, and the reason the rule holds even
+   if the constant goes stale. */
 .matchup-team-heat { font-size:11.5px; color:rgba(255,255,255,.95); margin-top:3px; font-style:italic; min-height:14px;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
   text-shadow:0 1px 3px rgba(0,0,0,.6); }
 
 .matchup-vs { display:flex; flex-direction:column; align-items:center; gap:6px; flex:0 0 auto; padding:0 8px; color:var(--ink); }

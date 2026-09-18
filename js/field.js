@@ -229,7 +229,11 @@ const SECONDARY_CORNER_AIR = 6;
 export function secondaryCornerDrop(style = {}) {
   return LABEL_RESERVE + lineOneBase(style) + (style.headshot ? BANNER_H : SECONDARY_CORNER_AIR);
 }
-const SECONDARY_CORNER_DROP = secondaryCornerDrop();
+// There is deliberately NO bare `SECONDARY_CORNER_DROP` constant. It used to exist, holding the team/matchup
+// number (46), and it survived D146 (2) as an export — which invites back the exact mistake D146 fixed: a
+// caller or a test asking "how far below the safeties do the corners start?" and getting the Team page's
+// answer on an Offense/Defense page, where a line-one card carries a headshot and the step is 64. The only
+// way to ask is secondaryCornerDrop(style), with the style of the page actually being drawn.
 const FRONT_LB_LIFT = 18;
 // `drop` is a FUNCTION of the style now, not a number, so every reader (the reserved row height, the
 // constant canvas, the placement pass) asks the same question about the page actually being drawn.
@@ -1428,8 +1432,8 @@ function placeRow(row, top) {
     // Every column starts on the row's shared top line (so a row reads as one row) but is sized to its OWN
     // content height, never stretched to the row's — otherwise a column shorter than its neighbours draws
     // an empty framed rectangle, with the part-time hatch and injury-heat glow, over turf with nothing in it.
-    // D121: a corner/nickel column in the one-row secondary starts SECONDARY_CORNER_DROP below that shared
-    // top line — the only thing on the field that does not start on its row's top line by choice.
+    // D121: a corner/nickel column in the one-row secondary starts secondaryCornerDrop(style) below that
+    // shared top line — the only thing on the field that does not start on its row's top line by choice.
     c.top = row.contentTop + (c.stacked ? c.yOffset ?? 0 : 0) + (c.drop ?? 0);
     c.unit = row.unit;
   }
@@ -1652,9 +1656,9 @@ export function renderFieldSvg(layoutHeight, losY, layoutWidth = LAYOUT_WIDTH, c
 // Exported so tests read these numbers from here instead of hardcoding literals that go stale silently the
 // moment a ruling moves a constant — a test states the RELATIONSHIP (a corner is CB_PITCH_FROM_CENTER pitches
 // off the centre; two cards never come closer than MIN_CARD_GAP) rather than a specific number.
-export const geometry = { CARD_W, CARD_H1, ROW_H, SIDE_ROW_H, CARD_GAP, SIDE_CARD_GAP, BANNER_H, OUT_RAIL_H, LABEL_RESERVE, MAX_DEPTH_ROWS, REDUCED_DEPTH_ROWS, DEPTH_CHIP_H, HEADSHOT_SIZE, BAND_GAP, LEVEL_GAP_EXTRA, REDUCED_BAND_GAP, REDUCED_LEVEL_GAP_EXTRA, LOS_HALF_GAP, MARGIN_TOP, MARGIN_BOTTOM, SIDE_INSET, DEF_ROW_FULL_H, DEF_ROW_COUNT: DEF_ROW_ORDER.length, DEF_LEVEL_BOUNDARIES, BOTH_SIDES_HALF, BOTH_SIDES_HEIGHT, MIN_PITCH, MIN_CARD_GAP, EDGE_PITCH_OUT, ILB_PITCH_FROM_CENTER, PASS_CATCHER_PITCH, SECONDARY_CORNER_DROP, SECONDARY_CORNER_AIR, secondaryCornerDrop, FRONT_LB_LIFT,
+export const geometry = { CARD_W, CARD_H1, ROW_H, SIDE_ROW_H, CARD_GAP, SIDE_CARD_GAP, BANNER_H, OUT_RAIL_H, LABEL_RESERVE, MAX_DEPTH_ROWS, REDUCED_DEPTH_ROWS, DEPTH_CHIP_H, HEADSHOT_SIZE, BAND_GAP, LEVEL_GAP_EXTRA, REDUCED_BAND_GAP, REDUCED_LEVEL_GAP_EXTRA, LOS_HALF_GAP, MARGIN_TOP, MARGIN_BOTTOM, SIDE_INSET, DEF_ROW_FULL_H, DEF_ROW_COUNT: DEF_ROW_ORDER.length, DEF_LEVEL_BOUNDARIES, BOTH_SIDES_HALF, BOTH_SIDES_HEIGHT, MIN_PITCH, MIN_CARD_GAP, EDGE_PITCH_OUT, ILB_PITCH_FROM_CENTER, PASS_CATCHER_PITCH, SECONDARY_CORNER_AIR, secondaryCornerDrop, FRONT_LB_LIFT,
   S_PITCH_FROM_CENTER, NB_PITCH_FROM_CENTER, CB_PITCH_FROM_CENTER,
-  // TRAP: SECONDARY_CORNER_DROP is the TEAM/MATCHUP number (46) only. A test or a caller asking about an
-  // Offense/Defense page has to ask secondaryCornerDrop(style) instead — the step is a line-one card on the
-  // page it is drawn on, and a line-one card there carries a headshot (D146 (2)).
+  // The corner step is published as the FUNCTION alone, never as a number: it is 46 on the Team and Matchup
+  // pages and 64 on the Offense/Defense pages, where a line-one card carries a headshot (D146 (2)). Ask
+  // secondaryCornerDrop(layoutStyle(opts)) with the options of the page being drawn.
   lineOneBase };
