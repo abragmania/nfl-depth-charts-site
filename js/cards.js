@@ -317,7 +317,7 @@ function overviewOvr(rating, cls) {
 
 // The tooltip carries everything the shrunken row cannot: the full name, the Madden line with its
 // positional rank, the injury prose and return date, and the Week-1/ESPN-disagrees notes.
-function overviewTitle(p, disagrees) {
+export function overviewTitle(p, disagrees) {
   const bits = [p.name];
   if (p.rating?.current != null) {
     bits.push(p.rating.posRank && p.rating.posCount ? `${p.rating.current} OVR · #${p.rating.posRank} ${p.rating.maddenPos || ""}`.trim() : `${p.rating.current} OVR`);
@@ -328,7 +328,10 @@ function overviewTitle(p, disagrees) {
   if (p.status?.shortComment) bits.push(p.status.shortComment);
   if (p.status?.returnDate) bits.push(`Return: ${p.status.returnDate}`);
   if (p.weekOneNote) bits.push(p.weekOneNote);
-  if (p.snapShare != null) bits.push(`${Math.round(p.snapShare * 100)}% of snaps`);
+  // D150: the card's share is pooled from the snap counts wherever the file establishes his club's own totals
+  // for those games, and the average of the source's per-game percentages where it does not. The weaker figure
+  // says so wherever it shows; the pooled one needs no footnote.
+  if (p.snapShare != null) bits.push(`${Math.round(p.snapShare * 100)}% of snaps${p.snapShareMethod === "source-mean" ? " (average of the source's per-game percentages)" : ""}`);
   if (disagrees) bits.push(`ESPN lists him at ${p.espnSlot}${p.espnRank ? ` #${p.espnRank}` : ""}`);
   return esc(bits.join(" · "));
 }

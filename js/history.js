@@ -16,7 +16,8 @@ const CSS = `
 .hist-table { width:100%; border-collapse:collapse; font-variant-numeric:tabular-nums; }
 .hist-table th { text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted,#8a94a0); font-weight:600; padding:4px 6px; border-bottom:1px solid #2a323b; }
 .hist-table td { padding:4px 6px; border-bottom:1px solid #1e242b; white-space:nowrap; vertical-align:middle; }
-.hist-table td.hist-stats { white-space:normal; color:#c6ccd3; font-size:12px; }
+/* D151: the old STATS column is now SNAP % — one number per season, in the table's own tabular figures. */
+.hist-table td.hist-snap { color:#c6ccd3; font-weight:600; }
 .hist-table tr.empty td { color:#4d5761; }
 .hist-table tr.hist-collapsed td { text-align:center; font-style:italic; padding:8px 6px; }
 .hist-team { display:inline-flex; align-items:center; gap:4px; }
@@ -63,7 +64,6 @@ const CSS = `
 
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const dash = "—";
-const n = (v) => (v == null || Number.isNaN(v) ? dash : String(v));
 
 function ensureStyle() {
   if (document.getElementById("hist-style")) return;
@@ -90,21 +90,24 @@ function abbrFromRoute() {
   return m ? m[1].toUpperCase() : "";
 }
 
-// D30 stat line per family, from the server's normalised stats object.
-export function statText(fam, s, row) {
-  if (!s) return fam === "OL" || fam === "FB" ? `${n(row?.games)} G · ${n(row?.starts)} GS · ${n(row?.snaps)} snaps` : dash;
-  switch (fam) {
-    case "QB": return `${n(s.comp)}/${n(s.att)}, ${n(s.yds)} yds, ${n(s.td)} TD, ${n(s.int)} INT, ${s.rating == null ? dash : s.rating.toFixed(1)} rtg`;
-    case "RB": return `${n(s.att)} att, ${n(s.yds)} yds (${s.avg == null ? dash : s.avg.toFixed(1)}), ${n(s.td)} TD · ${n(s.rec)} rec, ${n(s.recYds)} yds`;
-    case "WR": case "TE": return `${n(s.tgt)} tgt, ${n(s.rec)} rec, ${n(s.yds)} yds, ${n(s.td)} TD`;
-    case "OL": return `${n(s.games)} G · ${n(s.starts)} GS · ${n(s.snaps)} snaps`;
-    case "FB": return `${n(s.games)} G · ${n(s.starts)} GS · ${n(s.snaps)} snaps${s.rec ? ` · ${n(s.rec)} rec, ${n(s.recYds)} yds` : ""}${s.att ? ` · ${n(s.att)} att, ${n(s.yds)} yds` : ""}`;
-    case "DL": return `${n(s.tkl)} tkl, ${n(s.sacks)} sacks, ${n(s.tfl)} TFL, ${n(s.qbHits)} QB hits`;
-    case "LB": return `${n(s.tkl)} tkl, ${n(s.sacks)} sacks, ${n(s.int)} INT, ${n(s.pd)} PD`;
-    case "DB": return `${n(s.tkl)} tkl, ${n(s.int)} INT, ${n(s.pd)} PD, ${n(s.ff)} FF`;
-    case "ST": return `${n(s.games)} G`;
-    default: return dash;
-  }
+// D151 (Adam, 2026-09-18): the table's last column is the man's share of his unit's snaps that season, not a
+// stat line - "since we have stats at the far right of the chart and below, let's replace the stats column of
+// that chart with snap % and then we can see the guy's snap % going back each season". The stat lines stay in
+// the NFL SEASON STATS table underneath, which is untouched.
+// The share itself is the server's (server/history/index.js seasonSnapShare): pooled out of his snaps and his
+// team's snaps wherever the counts allow it, and the mean of the source's own per-game percentages where they
+// do not. The title says which, because that distinction is Adam's own rule (D150).
+// "source" is the one-game case: D150's last sentence says a single game's percentage is always the source's
+// own figure, never one this app recomputes.
+export const SNAP_METHOD_TITLE = {
+  pooled: "pooled from snap counts",
+  "source-mean": "average of the source's per-game percentages",
+  source: "the source's own figure for the one game he played",
+};
+export function snapPctCell(r) {
+  if (r?.snapPct == null) return `<td class="hist-snap">${dash}</td>`;
+  const title = SNAP_METHOD_TITLE[r.snapPctMethod] ?? "";
+  return `<td class="hist-snap"${title ? ` title="${esc(title)}"` : ""}>${esc(r.snapPct)}%</td>`;
 }
 
 // Same thresholds as cards.js/zoom.js/matchup.js/panel.js's own ratingTier() (each file keeps its own
@@ -172,7 +175,7 @@ function rowHtml(r, teams) {
     : `${ovrNum}${tag}`;
   const empty = !r.team && r.ovr == null && r.ovrCurrent == null && !r.positionOfRecord;
   const pos = r.positionOfRecord ? `<span class="hist-pos ${r.positionChanged ? "changed" : ""}" title="position of record: ${esc(r.positionSource || "")}">${esc(r.positionOfRecord)}</span>` : dash;
-  return `<tr class="${empty ? "empty" : ""}"><td>${r.season}</td><td>${teamHtml}</td><td>${pos}</td><td>${ovr}</td><td class="hist-stats">${empty ? dash : esc(statText(r.statFamily, r.stats, r))}</td></tr>`;
+  return `<tr class="${empty ? "empty" : ""}"><td>${r.season}</td><td>${teamHtml}</td><td>${pos}</td><td>${ovr}</td>${empty ? `<td class="hist-snap">${dash}</td>` : snapPctCell(r)}</tr>`;
 }
 
 export function historyHtml(data, teamsMeta) {
@@ -196,7 +199,7 @@ export function historyHtml(data, teamsMeta) {
     <div class="hist-posline ${data.positionChanged ? "changed" : ""}"><span class="hist-k">Position</span><span class="hist-v">${esc(data.positionLine || dash)}</span></div>
     ${stripHtml(rows)}
     <table class="hist-table">
-      <thead><tr><th>Season</th><th>Team</th><th>Pos</th><th>OVR</th><th>Stats</th></tr></thead>
+      <thead><tr><th>Season</th><th>Team</th><th>Pos</th><th>OVR</th><th>Snap %</th></tr></thead>
       <tbody>${bodyRows}</tbody>
     </table>
     ${notes.length ? `<div class="hist-note">${notes.map(esc).join(" · ")}</div>` : ""}

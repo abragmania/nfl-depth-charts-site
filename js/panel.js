@@ -142,12 +142,16 @@ function bioRowHtml(card) {
 // card.snapShare being a real number: the compiled schema already carries this field (nflverse snap
 // counts, per PROJECT.md) but every live team file has it as `null` today (not populated by the compile
 // step yet), so this renders nothing until that lands — never a fake/zero bar.
-function snapShareHtml(card) {
+export function snapShareHtml(card) {
   const v = card.snapShare;
   if (v == null || !Number.isFinite(Number(v))) return "";
   const pct = Math.max(0, Math.min(100, Math.round(Number(v) <= 1 ? Number(v) * 100 : Number(v))));
+  // D150: a share this app pooled out of the snap counts stands on its own; one it could only average out of
+  // the source's per-game percentages says so, here and in the card's tooltip (public/js/cards.js), because
+  // which of the two a number is is Adam's own rule.
+  const label = card.snapShareMethod === "source-mean" ? "Snap share (average of the source's per-game percentages)" : "Snap share";
   return `<div class="panel-snaps">
-    <span class="panel-snaps-label">Snap share</span>
+    <span class="panel-snaps-label">${esc(label)}</span>
     <span class="panel-snaps-bar"><span class="panel-snaps-fill" style="width:${pct}%"></span></span>
     <span class="panel-snaps-pct">${pct}%</span>
   </div>`;
@@ -245,19 +249,34 @@ function statValue(season, cat, name) {
   return season.stats?.[cat]?.[name]?.value ?? null;
 }
 
-function seasonsTableHtml(family, seasons, collegeFallback) {
+// Adam, 2026-09-18 (with D151): games is a column of its own, right after TEAM, for every stat family - "so a
+// season where he played 2 games at 90 percent of snaps reads as the anomaly it is". The figure is OURS, the
+// same one the experience chip sums and the snap share is measured over (D115/D147: games he took an offensive
+// or defensive snap in, from the history rows), never ESPN's own gamesPlayed, so the chip, the SNAP % column in
+// the table above and this column can never disagree. A season the history rows say nothing about shows a dash
+// rather than borrowing ESPN's count, and college seasons have no G column at all - our figure is NFL only.
+export const gamesBySeason = (seasons) => {
+  const m = new Map();
+  for (const r of seasons ?? []) { const s = Number(r?.season); if (Number.isFinite(s) && r?.games != null) m.set(s, r.games); }
+  return m;
+};
+
+export function seasonsTableHtml(family, seasons, collegeFallback, games = null) {
   const rows = (seasons || []).slice(0, 10); // D33: ten seasons max
   if (!rows.length) return `<div class="panel-stats-empty">No ${collegeFallback ? "college" : "NFL"} season stats on file.</div>`;
   const cols = STAT_FAMILIES[family] || [];
+  const showG = !collegeFallback;
+  const gHead = showG ? `<th>G</th>` : "";
+  const gCell = (s) => (showG ? `<td>${esc(games?.get(Number(s.season)) ?? dash)}</td>` : "");
   if (!cols.length) {
-    const body = rows.map((s) => `<tr><td>${esc(s.season)}</td><td>${esc(s.teamAbbr || dash)}</td><td>${esc(s.games ?? dash)}</td></tr>`).join("");
-    return `<table class="panel-stats-table"><thead><tr><th>Season</th><th>Team</th><th>GP</th></tr></thead><tbody>${body}</tbody></table>
+    const body = rows.map((s) => `<tr><td>${esc(s.season)}</td><td>${esc(s.teamAbbr || dash)}</td>${showG ? gCell(s) : `<td>${esc(s.games ?? dash)}</td>`}</tr>`).join("");
+    return `<table class="panel-stats-table"><thead><tr><th>Season</th><th>Team</th>${showG ? gHead : `<th>GP</th>`}</tr></thead><tbody>${body}</tbody></table>
       <div class="panel-stats-note">ESPN's per-player stats feed does not report starts or snap counts for this position.</div>`;
   }
-  const head = `<th>Season</th><th>Team</th>${cols.map(([h]) => `<th>${esc(h)}</th>`).join("")}`;
+  const head = `<th>Season</th><th>Team</th>${gHead}${cols.map(([h]) => `<th>${esc(h)}</th>`).join("")}`;
   const body = rows.map((s) => {
     const cells = cols.map(([, cat, name]) => `<td>${esc(statValue(s, cat, name) ?? dash)}</td>`).join("");
-    return `<tr><td>${esc(s.season)}</td><td>${esc(s.teamAbbr || dash)}</td>${cells}</tr>`;
+    return `<tr><td>${esc(s.season)}</td><td>${esc(s.teamAbbr || dash)}</td>${gCell(s)}${cells}</tr>`;
   }).join("");
   const note = cols.some(([, cat]) => cat === "__missing")
     ? `<div class="panel-stats-note">ESPN's per-player stats feed does not report tackles-for-loss or QB hits.</div>` : "";
@@ -412,7 +431,9 @@ function patchGamesChip(asideEl, data) {
   el.title = data.title;
 }
 
-function renderStats(asideEl, data, family) {
+// `histSeasons` is the /api/history rows the games chip already fetched (see openPanel): the G column's
+// figures. The two fetches land in either order, so whichever arrives second re-renders the table.
+export function renderStats(asideEl, data, family, histSeasons = null) {
   const box = asideEl.querySelector("[data-stats]");
   if (!box) return; // the aside moved on to a different player/team while this fetch was in flight
   const useCollege = (!data.seasons || data.seasons.length === 0) && Array.isArray(data.collegeSeasons) && data.collegeSeasons.length > 0;
@@ -420,7 +441,7 @@ function renderStats(asideEl, data, family) {
   const staleNote = data.stale
     ? `<div class="panel-stats-note">Showing cached data from ${esc(new Date(data.fetchedAt).toLocaleString())} — live refresh failed.</div>` : "";
   const heading = `<div class="panel-stats-heading">${useCollege ? "College" : "NFL"} season stats</div>`;
-  box.innerHTML = staleNote + heading + seasonsTableHtml(family, seasons, useCollege);
+  box.innerHTML = staleNote + heading + seasonsTableHtml(family, seasons, useCollege, gamesBySeason(histSeasons));
 }
 
 // --- public API ------------------------------------------------------------------------------------------
@@ -469,17 +490,29 @@ export function openPanel(asideEl, card, teamView, teamMeta) {
   // D115: independent of the ESPN-bio fetch below (gated on card.espnId) — the games count comes from
   // gsis/pfr/name matching against nflverse history, not from ESPN, so this runs even for the small number
   // of players with no ESPN id on file.
+  // The two fetches below feed each other: the history rows are the G column of the ESPN stats table (Adam,
+  // 2026-09-18), and they land in either order. Each stores what it got and re-renders the table if the other
+  // is already in. Both are cleared first, so a panel opened on a second player never shows the first one's.
+  const family = statFamily(card);
+  asideEl._histSeasons = null;
+  asideEl._espnStats = null;
+
   fetchGamesSeasons(card, abbr)
-    .then((seasons) => { if (asideEl._panelGen === myGen) patchGamesChip(asideEl, gamesChipData(seasons)); })
+    .then((seasons) => {
+      if (asideEl._panelGen !== myGen) return;
+      patchGamesChip(asideEl, gamesChipData(seasons));
+      asideEl._histSeasons = seasons;
+      if (asideEl._espnStats) renderStats(asideEl, asideEl._espnStats, family, seasons);
+    })
     .catch(() => {}); // leave the dash placeholder; a real failure already surfaces via the history block above
 
   if (!card.espnId) return; // finding 1: no ESPN id on file -> card-only panel, no fetch, no error state
 
-  const family = statFamily(card);
   fetchPlayer(card.espnId)
     .then((data) => {
       if (asideEl._panelGen !== myGen) return; // superseded by a later openPanel() call
-      renderStats(asideEl, data, family);
+      asideEl._espnStats = data;
+      renderStats(asideEl, data, family, asideEl._histSeasons);
       fillDraftRound(asideEl, data.bio?.draft);
     })
     .catch((err) => {

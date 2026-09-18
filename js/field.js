@@ -67,6 +67,17 @@ export const SECONDARY_ONE_ROW = true;
 // edge column takes the left edge spot on the shared row.
 export const FRONT_ONE_ROW = true;
 
+// D152 — THE SWITCH THE FLOATING-LINE RULING SITS BEHIND. `true`: the two halves SHARE the one constant
+// canvas instead of each being given exactly half of it. Each side asks for what its own rows need; the
+// line of scrimmage sits where the two meet, so a half that needs more than its share (an out starter adds
+// an OUT rail and a FILLING IN banner to his column, D104/D44) borrows the other half's spare room and the
+// club still draws at the league's size. Both sides keep the midpoint whenever both fit in half, which is
+// most of the league, so their layouts are exactly what they were. The canvas only grows past the constant
+// when BOTH halves TOGETHER do not fit, and then by the shortfall alone rather than by twice the larger
+// overflow. `false` restores D96/D107's equal halves exactly: one `half` for both sides, the line on the
+// canvas midpoint, and the canvas twice the taller side. Nothing else in this file or any other reads it.
+export const LOS_FLOATS = true;
+
 // ---- compact overview geometry (ruling E) -------------------------------------------------------
 // A column is a stack of text rows, not photo cards, so its width is set by how much room a real name
 // plus a rating pill needs, not by a headshot diameter. WIDTH is free: LAYOUT_WIDTH is fixed and the fit
@@ -136,9 +147,10 @@ const bandGapOf = (style = {}) => (style.depthChip ? REDUCED_BAND_GAP : BAND_GAP
 const levelGapOf = (style = {}) => (style.depthChip ? REDUCED_LEVEL_GAP_EXTRA : LEVEL_GAP_EXTRA);
 // D111: with the secondary on one row, the TOP defensive row carries the two corners, whose cards sit
 // right where the canvas used to leave empty turf for the "SECONDARY" level label and the "DEFENSE"
-// caption. EDGE_CHROME opens a strip above the first row (and, since the LOS sits on the canvas
-// midpoint, an equal strip below the last offensive row for "OFFENSE") tall enough for the lifted level
-// label plus its height. Zero when the switch is off, since the two-row secondary never needed it.
+// caption. EDGE_CHROME opens a strip above the first row, and an equal one below the last offensive row
+// for "OFFENSE", tall enough for the lifted level label plus its height. Both are canvas margins, so they
+// are unaffected by where the line of scrimmage lands (D152). Zero when the switch is off, since the
+// two-row secondary never needed it.
 const EDGE_CHROME = SECONDARY_ONE_ROW ? 22 : 0;
 const MARGIN_TOP = 8 + EDGE_CHROME;
 const MARGIN_BOTTOM = 8 + EDGE_CHROME;
@@ -262,9 +274,9 @@ function frontRowLabel(cols) {
 // constant (every real club today) spreads its rows across the half with placeSpan's extra gap.
 //
 // Two things can still push a single row past DEF_ROW_FULL_H — the OUT rail D104 stacks on a demoted
-// starter's row, and a "not on chart" tray — so the half is actually max(BOTH_SIDES_HALF, this club's own
-// natural halves): no club reaches the constant today, and one that did would grow its own canvas rather
-// than draw its rows through each other.
+// starter's row, and a "not on chart" tray — so a side can need more than half the canvas. D152: it then
+// takes that room from the OTHER half's spare and the line of scrimmage moves to where the two meet; the
+// canvas itself only grows when the two sides TOGETHER outgrow it, and then by that shortfall alone.
 // D134: the same sum for whatever depth cap the page is drawing at — the reduced state's chip is an extra
 // short line, so a full column there is the label, the line-one row, one backup and the chip. The default
 // argument reproduces today's number exactly, so nothing about the full-depth canvas moves.
@@ -1207,8 +1219,9 @@ export function computeLayout(teamView, opts = {}) {
   // D111/D141: each merged row is used unless THIS club's own columns cannot be drawn on it without being
   // re-pitched or hanging off the sideline (colsFitOneRow). The two questions are asked separately, so a club
   // that fails one keeps the merged row it does fit. A fallback adds a row to that club's defence; if that
-  // ever outgrew BOTH_SIDES_HALF, D107's `half` floor would grow ITS canvas rather than draw its rows through
-  // each other. No club fails the secondary check today; Pittsburgh alone fails the front one, and its two
+  // outgrew BOTH_SIDES_HALF, D152 would give it the offence's spare room (and only a club whose two halves
+  // TOGETHER did not fit would grow its own canvas) rather than draw its rows through each other.
+  // No club fails the secondary check today; Pittsburgh alone fails the front one, and its two
   // front rows still fit inside BOTH_SIDES_HALF (about 20 units to spare), so it draws at everyone's size.
   const secOneRow = SECONDARY_ONE_ROW
     && colsFitOneRow(defColsFor(DEF_ROWS_ONE_SEC_ONE_FRONT.bands.SECONDARY));
@@ -1278,25 +1291,28 @@ export function computeLayout(teamView, opts = {}) {
     return h;
   };
 
-  let losY, layoutHeight;
+  let losY, layoutHeight, halves = null;
   if (bothSides) {
-    // D96: the two halves get EQUAL height, LOS at the midpoint, each half's rows spread evenly across it
+    // D96: the two halves get equal height, LOS at the midpoint, each half's rows spread evenly across it
     // (a side with one row just sits at its natural height). D107 changes WHERE that half height comes
     // from: it used to be the taller side's own natural height, so a shorter chart (e.g. a four-row
-    // defence) came out MAGNIFIED by the fit engine. The half is now the CONSTANT BOTH_SIDES_HALF, so every
-    // club draws on an identical canvas and scale — natural heights are only a floor (BOTH_SIDES_HALF
-    // above): a club taller than the constant grows its own canvas instead of compressing its rows.
+    // defence) came out MAGNIFIED by the fit engine. The canvas is now the CONSTANT BOTH_SIDES_HEIGHT, so
+    // every club draws on an identical canvas and scale. D152 changes how that one canvas is DIVIDED: the
+    // halves are equal only while both sides fit in half of it, and a side that needs more takes the other
+    // side's spare instead of making the whole canvas taller (see the room arithmetic below).
     const defMin = naturalSpanHeight(defRowsTopDown);
     const offMin = naturalSpanHeight(offRowsTopDown);
     // D140 (small screens only): `opts.ownHeight` drops the constant and gives the canvas THIS club's own
-    // natural half, so D134's scrolling page ends where the club's chart ends instead of at empty field. The
-    // halves stay equal (D96) and the scale stays pinned to the floor (viewfit.js's SCROLL_STATE_OWN_HEIGHT).
+    // natural rows, so D134's scrolling page ends where the club's chart ends instead of at empty field. The
+    // scale stays pinned to the floor (viewfit.js's SCROLL_STATE_OWN_HEIGHT). D152: the own height is now
+    // defMin + offMin — each side exactly its own rows — rather than twice the taller side, so the page ends
+    // where the chart ends on a club with one tall half too, and the line sits where the two meet.
     // 👁 Visual QA (2026-09-17): SPEND SPARE HEIGHT WHEN THE WIDTH IS WHAT BINDS. With the player panel open
     // the box is 440px narrower, so the canvas is scaled to fit the WIDTH and the height fit goes unused —
     // the field ended about 127px above the bottom of Adam's window with a bare strip of turf under it. The
     // single-unit pages have spent that height on air between their rows since D72 (`opts.minHeight`, the
-    // `else` branch below); this is the same lever on the two-sided canvas, and the only one that fits D96 and
-    // D107: BOTH halves grow by the same amount, so the line of scrimmage stays on the canvas midpoint and
+    // `else` branch below); this is the same lever on the two-sided canvas, and the only one that fits D107:
+    // BOTH halves grow by the same amount, so the fill alone never moves the line of scrimmage and
     // every club still draws at one size (the number depends on the window, never on the club). It can only
     // ever GROW the canvas past the constant, so a height-bound page — every page with no panel open, Adam's
     // 2560 monitor included — asks for a minHeight under the constant and nothing here moves.
@@ -1309,16 +1325,45 @@ export function computeLayout(teamView, opts = {}) {
       ? Math.min((opts.minHeight - MARGIN_TOP - MARGIN_BOTTOM - 2 * LOS_HALF_GAP) / 2,
         spreadRoom(defRowsTopDown, defMin), spreadRoom(offRowsTopDown, offMin))
       : 0;
-    const half = Math.max(opts.ownHeight ? 0 : bothSidesHalf(style), defMin, offMin, fillHalf);
-    const spreadGap = (rows, natural) => (rows.length > 1 && half > natural) ? (half - natural) / (rows.length - 1) : 0;
-    placeSpan(defRowsTopDown, MARGIN_TOP, spreadGap(defRowsTopDown, defMin));
-    // D107: the half boundaries are the constant's, not the rows' — a defence with fewer rows than the
-    // half can hold (a 4-3 with no EDGE row) leaves its spare height as air at the bottom of its own half
-    // instead of dragging the line of scrimmage up, so the LOS stays on the canvas midpoint for every club.
-    losY = MARGIN_TOP + half + LOS_HALF_GAP;
+    // D152: THE TWO HALVES SHARE ONE CANVAS. `room` is all the height there is for rows — the constant's two
+    // halves, or the two sides' own needs when even that is not enough — and the line of scrimmage is then
+    // placed where the two sides MEET rather than on the canvas midpoint:
+    //   * both sides fit in half the room -> each gets exactly half, so the line is the midpoint and the
+    //     layout is byte-identical to the equal-halves one (every club on the constant today);
+    //   * one side needs more -> it takes its own minimum and the other keeps the rest, which is still at
+    //     least that side's own minimum, and spreads its rows into it exactly as it always did;
+    //   * both together need more than the constant -> the canvas grows by THAT shortfall (defMin + offMin),
+    //     not by twice the larger side's overflow, which is what drew Atlanta 9.8 percent smaller.
+    // The fill (D146 (4)) is untouched: it is still a per-half ceiling capped by what each side can actually
+    // absorb, so it grows the room by the same amount on both sides and cannot move the line on a club whose
+    // halves both fit — the no-feedback property D114 depends on (it can only ever ask for a TALLER canvas,
+    // and a height-bound page asks for none at all).
+    const constantHalf = opts.ownHeight ? 0 : bothSidesHalf(style);
+    let defHalf, offHalf;
+    if (LOS_FLOATS) {
+      const room = Math.max(2 * constantHalf, defMin + offMin, 2 * fillHalf);
+      // Half the room, unless one side's own rows need more than that — and never more than what leaves the
+      // other side its own minimum. `room` is at least defMin + offMin, so that window is never empty.
+      defHalf = Math.min(Math.max(room / 2, defMin), room - offMin);
+      offHalf = room - defHalf;
+    } else {
+      // D96/D107 as they stood before D152: one half height for both sides, the line on the midpoint, and a
+      // side that outgrows it drags the WHOLE canvas up by twice its overflow.
+      defHalf = offHalf = Math.max(constantHalf, defMin, offMin, fillHalf);
+    }
+    const spreadGap = (rows, natural, sideHalf) => (rows.length > 1 && sideHalf > natural) ? (sideHalf - natural) / (rows.length - 1) : 0;
+    placeSpan(defRowsTopDown, MARGIN_TOP, spreadGap(defRowsTopDown, defMin, defHalf));
+    // D107/D152: a side's boundary is its SHARE of the shared room, not its own rows' height — a defence with
+    // fewer rows than its share can hold (a 4-3 with no EDGE row) leaves the spare as air at the bottom of its
+    // own half instead of dragging the line up, so two clubs with the same needs put the line in the same place.
+    losY = MARGIN_TOP + defHalf + LOS_HALF_GAP;
     const offStart = losY + LOS_HALF_GAP; // the same gutter both ways
-    placeSpan(offRowsTopDown, offStart, spreadGap(offRowsTopDown, offMin));
-    layoutHeight = offStart + half + MARGIN_BOTTOM;
+    placeSpan(offRowsTopDown, offStart, spreadGap(offRowsTopDown, offMin, offHalf));
+    layoutHeight = offStart + offHalf + MARGIN_BOTTOM;
+    // D152: what the shared room was spent on, for the canvas watch in server/compile/coverage.js — which
+    // side asked for more than its share, how far the line sits from the midpoint, and whether the club is
+    // still on the constant. Read by nothing that draws, so it cannot change a layout.
+    halves = { defMin, offMin, defHalf, offHalf, constantHalf, losShift: defHalf - (defHalf + offHalf) / 2 };
   } else {
     // D72/D75: a single-unit page has no LOS and no second side, so both lists start at the same top and
     // only one is ever populated. Spare height (`extraGap`) is shared out as air between the rows rather
@@ -1359,7 +1404,7 @@ export function computeLayout(teamView, opts = {}) {
 
   // D72: the caption the field SVG prints when there is no line of scrimmage to divide two halves.
   const caption = bothSides ? null : offRowsTopDown.length ? "OFFENSE" : defRowsTopDown.length ? "DEFENSE" : null;
-  const layout = { layoutWidth: LAYOUT_WIDTH, layoutHeight, losY, caption, columns, trays, levels, cardWidth: style.cardWidth, fieldMarginX: FIELD_MARGIN_X };
+  const layout = { layoutWidth: LAYOUT_WIDTH, layoutHeight, losY, caption, columns, trays, levels, halves, cardWidth: style.cardWidth, fieldMarginX: FIELD_MARGIN_X };
   if (opts.crop) cropLayout(layout);
   return opts.spread && opts.spread !== 1 ? spreadLayout(layout, opts.spread) : layout;
 }
