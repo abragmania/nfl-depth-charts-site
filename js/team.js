@@ -1,6 +1,6 @@
 import { getTeams, getTeam, invalidateTeam } from "./api.js";
 import { computeLayout, renderFieldSvg, renderLevelLabels, FIELD_VARIANT, SECONDARY_ONE_ROW, REDUCED_DEPTH_ROWS } from "./field.js";
-import { renderColumn, renderTray, esc, fitNames, wireDepthToggles, espnSchemeOf } from "./cards.js";
+import { renderColumn, renderTray, esc, fitNames, wireDepthToggles, espnSchemeOf, unitTagsHtml } from "./cards.js";
 import { mountScaledField, disposeCurrentView, MIN_READABLE_SCALE, decideViewMode, HEADER_FOLD_WIDTH } from "./viewfit.js";
 import { navStripHtml, wireNav } from "./nav.js";
 import { renderPhoneList } from "./phonelist.js";
@@ -166,7 +166,7 @@ function fieldHtml(view, team, layoutOpts = {}) {
     html: `
     <div class="field-outer" data-field-variant="${FIELD_VARIANT}" style="--team-primary:${team.colourPrimary};--team-secondary:${team.colourSecondary};--los-pct:${losPct}">
       <div class="field-scale" style="width:${layout.layoutWidth}px;height:${layout.layoutHeight}px">
-        ${watermarkUrl ? `<div class="field-watermark" style="--wm-url:url('${esc(watermarkUrl)}')"></div>` : ""}
+        <div class="field-watermark"${watermarkUrl ? ` style="--wm-url:url('${esc(watermarkUrl)}')"` : ` data-no-crest="1"`}>${unitTagsHtml(layout, team, team)}</div>
         ${svg}
         <div class="field-layer">${columnsHtml}${traysHtml}</div>
         <div class="level-layer">${levelsHtml}</div>

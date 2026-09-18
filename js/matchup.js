@@ -9,7 +9,7 @@
 // Route #/matchup/:a/:b renders A-offense-over-B-defense; #/matchup/:a alone resolves B from A's
 // header.nextOpponent (this week's schedule) and redirects, or shows a picker on a bye week.
 import { getTeams, getTeam } from "./api.js";
-import { esc, renderColumn, renderTray, fitNames, wireDepthToggles, espnSchemeOf } from "./cards.js";
+import { esc, renderColumn, renderTray, fitNames, wireDepthToggles, espnSchemeOf, unitTagsHtml } from "./cards.js";
 import { computeLayout, renderFieldSvg, renderLevelLabels, FIELD_VARIANT, SECONDARY_ONE_ROW } from "./field.js";
 import { mountScaledField, disposeCurrentView, MIN_READABLE_SCALE } from "./viewfit.js";
 import { navStripHtml, wireNav } from "./nav.js";
@@ -78,83 +78,6 @@ function halfWatermarkHtml(layout, team, half) {
   return `<div class="matchup-watermark-crest" style="--wm-url:url('${esc(url)}');top:${topPct}%;height:${heightPct}%"></div>`;
 }
 
-// Adam (2026-09-18): each half says OFFENSE / DEFENSE as a SMALL broadcast tag — wide-tracked caps at
-// about a starter's text size over a club-tinted hairline rule — parked in turf that is genuinely empty:
-// OFFENSE beside the quarterback, DEFENSE under the right-hand edge rusher. The two need not mirror each
-// other ("just use the space we have"); each is placed from the layout this field already computed, so it
-// follows any club's chart and any floating line of scrimmage (D152), and it is tested against every
-// column and tray on the canvas before it is placed, so it never lands on a card, an OUT rail or a tray.
-// It draws in the watermark layer (z-index 0, absolutely positioned): no layout box, no reflow.
-const TAG_SIZE = 21;   // canvas px: small — about a starter's name and a half — but the faint etched ink needs the size to read
-const TAG_PAD = 14;    // clear turf demanded left and right of the word
-const TAG_PAD_Y = 8;   // and above/below it: small, so DEFENSE tucks UNDER its column rather than floating in the row beneath
-
-function tagBox(word, cx, cy) {
-  // Width/height of the drawn word in canvas units (7 caps at TAG_SIZE with .3em tracking).
-  const w = word.length * TAG_SIZE * 1.02;
-  const h = TAG_SIZE * 1.25;
-  return { left: cx - w / 2 - TAG_PAD, right: cx + w / 2 + TAG_PAD, top: cy - h / 2 - TAG_PAD_Y, bottom: cy + h / 2 + TAG_PAD_Y, cx, cy, w, h };
-}
-
-// Every drawn thing on the canvas, as rectangles: a column carries its own OUT rails and depth cards
-// inside its height, and a tray already states its own box, so these two lists are the whole field.
-function obstacleRects(layout) {
-  const cols = layout.columns.map((c) => ({ left: c.x - c.width / 2, right: c.x + c.width / 2, top: c.top, bottom: c.top + c.height }));
-  const trays = (layout.trays || []).map((t) => ({ left: t.left, right: t.right, top: t.top, bottom: t.bottom }));
-  return cols.concat(trays);
-}
-
-function tagFits(box, rects, layout, bounds) {
-  if (box.left < Math.max(8, bounds.minX || 0) || box.right > layout.layoutWidth - 8) return false;
-  if (box.top < bounds.top || box.bottom > bounds.bottom) return false;
-  return !rects.some((r) => box.left < r.right && box.right > r.left && box.top < r.bottom && box.bottom > r.top);
-}
-
-// Adam's placement ruling (2026-09-18, judged from the Jets/Titans render): the two words are a PAIR.
-// They share one horizontal centre out in the right-hand turf — past the last front column, short of the
-// sideline — and they MIRROR about the line of scrimmage: DEFENSE the same distance above the yellow line
-// as OFFENSE is below it. The distance is measured from the line itself, which floats per club (D152), so
-// the pair travels with it. The position is searched jointly: every candidate (x, distance) is tested for
-// BOTH words at once against every card, OUT rail and tray, and the first pair that is clear wins, so a
-// club whose chart fills the preferred spot slides the WHOLE pair rather than breaking the symmetry.
-const PAIR_X_FRACTION = 0.89;  // share of the canvas width: where the approved render put the word
-const PAIR_GAP = 87;           // canvas px from the line of scrimmage to the word's centre, same render
-const PAIR_GAP_MIN = 62;       // never closer: the line's own "LINE OF SCRIMMAGE" caption lives in there
-function unitTagsHtml(layout, teamA, teamB) {
-  const rects = obstacleRects(layout);
-  const W = layout.layoutWidth;
-  const bounds = { top: 6, bottom: layout.layoutHeight - 6, minX: W * 0.5 };
-  // Candidates ordered by how far they stray from the approved spot: x slides inboard and outboard in
-  // 10px steps, the distance from the line grows in 6px steps, and the cheapest combination wins.
-  const tries = [];
-  for (let xi = 0; xi <= 24; xi++) {
-    for (let gi = 0; gi <= 40; gi++) {
-      const x = W * PAIR_X_FRACTION + (xi % 2 ? 1 : -1) * Math.ceil(xi / 2) * 10;
-      // Adam's fallback for a crowded chart: step the pair OUTWARD first — DEFENSE further up the field,
-      // OFFENSE the same distance further down, past the faint band lines — and only slide the shared x
-      // once no distance at this x works for both words.
-      tries.push({ x, gap: PAIR_GAP + gi * 6, cost: xi * 100 + gi });
-    }
-  }
-  tries.sort((a, b) => a.cost - b.cost);
-  for (const t of tries) {
-    if (t.gap < PAIR_GAP_MIN) continue;
-    const def = tagBox("DEFENSE", t.x, layout.losY - t.gap);
-    const off = tagBox("OFFENSE", t.x, layout.losY + t.gap);
-    if (!tagFits(def, rects, layout, bounds) || !tagFits(off, rects, layout, bounds)) continue;
-    return tagHtml("DEFENSE", teamB, def.cx, def.cy) + tagHtml("OFFENSE", teamA, off.cx, off.cy);
-  }
-  return "";
-}
-
-function tagHtml(word, team, cx, cy) {
-  const tint = team?.colourPrimary || "#ffffff";
-  // One ink for every club: the wash inside a half runs from the club's colour at the line of scrimmage to
-  // near-black at the sideline, so a "light club" rule (dark ink for New Orleans' gold) vanished wherever
-  // the word actually lands. White paint at watermark strength reads on both ends of every club's wash.
-  return `<div class="matchup-unit-tag" style="left:${Math.round(cx)}px;top:${Math.round(cy)}px;font-size:${TAG_SIZE}px;--tag-tint:${esc(tint)}">${word}</div>`;
-}
-
 // D113: each half carries its own ownership banner (top edge = the defending club, bottom edge = the
 // offensive club — the same split halfWatermarkHtml above draws crests for), in that club's own colours,
 // so a single shared field with two teams on it doesn't read as one team's positions rewritten over the
@@ -188,7 +111,7 @@ function fieldHtml(viewA, viewB, teamA, teamB, spread, depthOpts = null, ownHeig
   }).join("");
   const traysHtml = layout.trays.map((t) => renderTray(t, (t.unit === "OFF" ? teamA : teamB).abbr)).join("");
   // D98 part 2: B defends (top half), A is on offense (bottom half) — see facingView above.
-  const watermarkHtml = `<div class="field-watermark">${halfWatermarkHtml(layout, teamB, "def")}${halfWatermarkHtml(layout, teamA, "off")}${unitTagsHtml(layout, teamA, teamB)}</div>`;
+  const watermarkHtml = `<div class="field-watermark">${halfWatermarkHtml(layout, teamB, "def")}${halfWatermarkHtml(layout, teamA, "off")}${unitTagsHtml(layout, teamB, teamA)}</div>`;
   // D99: the field surface tints each half with its own club. --team-primary/--team-secondary (from
   // colour(teamB)) already carry the defending club for the header pill and column tints (D98 part 2);
   // --team-a-primary/--team-a-secondary add the offensive club's colours for styles.css's

@@ -874,3 +874,78 @@ export function renderTray(tray, teamAbbr) {
     ${body}
   </div>`;
 }
+
+/* D156 (Adam, 2026-09-18): a two-sided field says which half is which with a pair of words etched into the
+   turf — wide-tracked caps in stroke-only white with a faint wash of the club's own colour, at about a
+   starter's type size, painted BEHIND the cards like the crest watermark rather than typeset on top of
+   them. It lives here, with the other shared render helpers, because the whole-team field (team.js) and
+   the matchup field (matchup.js) draw the identical mark from the identical rule; neither owns it.
+   Everything below is drawing, never layout: the words go in the watermark layer, absolutely positioned,
+   so no box moves and no fit scale changes. */
+const TAG_SIZE = 21;   // canvas px: small — about a starter's name and a half — but faint ink needs the size to read
+const TAG_PAD = 14;    // clear turf demanded left and right of the word
+const TAG_PAD_Y = 8;   // and above and below it
+
+function tagBox(word, cx, cy) {
+  // The drawn word's box in canvas units (caps at TAG_SIZE with .3em tracking), plus the clear turf around it.
+  const w = word.length * TAG_SIZE * 1.02;
+  const h = TAG_SIZE * 1.25;
+  return { left: cx - w / 2 - TAG_PAD, right: cx + w / 2 + TAG_PAD, top: cy - h / 2 - TAG_PAD_Y, bottom: cy + h / 2 + TAG_PAD_Y, cx, cy, w, h };
+}
+
+// Every drawn thing on the canvas, as rectangles: a column carries its own OUT rails and depth cards
+// inside its height, and a tray already states its own box, so these two lists are the whole field.
+function obstacleRects(layout) {
+  const cols = layout.columns.map((c) => ({ left: c.x - c.width / 2, right: c.x + c.width / 2, top: c.top, bottom: c.top + c.height }));
+  const trays = (layout.trays || []).map((t) => ({ left: t.left, right: t.right, top: t.top, bottom: t.bottom }));
+  return cols.concat(trays);
+}
+
+function tagFits(box, rects, layout, bounds) {
+  if (box.left < Math.max(8, bounds.minX || 0) || box.right > layout.layoutWidth - 8) return false;
+  if (box.top < bounds.top || box.bottom > bounds.bottom) return false;
+  return !rects.some((r) => box.left < r.right && box.right > r.left && box.top < r.bottom && box.bottom > r.top);
+}
+
+function tagHtml(word, team, cx, cy) {
+  // One ink for every club: the wash inside a half runs from the club's colour at the line of scrimmage to
+  // near-black at the sideline, so a "light club" rule (dark ink for New Orleans' gold) vanished wherever
+  // the word actually lands. White paint at watermark strength reads on both ends of every club's wash.
+  const tint = team?.colourPrimary || "#ffffff";
+  return `<div class="matchup-unit-tag" style="left:${Math.round(cx)}px;top:${Math.round(cy)}px;font-size:${TAG_SIZE}px;--tag-tint:${esc(tint)}">${word}</div>`;
+}
+
+// Adam's placement ruling (2026-09-18): the two words are a PAIR. They share one horizontal centre out in
+// the right-hand turf — past the last front column, short of the sideline — and they MIRROR about the line
+// of scrimmage: DEFENSE the same distance above the yellow line as OFFENSE is below it. The distance is
+// measured from the line itself, which floats per club (D152), so the pair travels with it. The position is
+// searched jointly: every candidate (x, distance) is tested for BOTH words at once against every card, OUT
+// rail and tray, and the first clear pair wins — a club whose chart fills the preferred spot steps the pair
+// outward together (DEFENSE further up the field, OFFENSE the same distance further down, past the next
+// faint band line) and only slides the shared x when no distance at that x works, so the symmetry holds.
+// `defTeam` / `offTeam` are the same club on the whole-team page and the two opponents on the matchup page.
+const PAIR_X_FRACTION = 0.89;  // share of the canvas width: where the approved render put the words
+const PAIR_GAP = 87;           // canvas px from the line of scrimmage to a word's centre, same render
+const PAIR_GAP_MIN = 62;       // never closer: the line's own "LINE OF SCRIMMAGE" caption lives in there
+export function unitTagsHtml(layout, defTeam, offTeam) {
+  if (layout?.losY == null) return ""; // a single-unit side page keeps its own one-word caption instead
+  const rects = obstacleRects(layout);
+  const W = layout.layoutWidth;
+  const bounds = { top: 6, bottom: layout.layoutHeight - 6, minX: W * 0.5 };
+  const tries = [];
+  for (let xi = 0; xi <= 24; xi++) {
+    for (let gi = 0; gi <= 40; gi++) {
+      const x = W * PAIR_X_FRACTION + (xi % 2 ? 1 : -1) * Math.ceil(xi / 2) * 10;
+      tries.push({ x, gap: PAIR_GAP + gi * 6, cost: xi * 100 + gi });
+    }
+  }
+  tries.sort((a, b) => a.cost - b.cost);
+  for (const t of tries) {
+    if (t.gap < PAIR_GAP_MIN) continue;
+    const def = tagBox("DEFENSE", t.x, layout.losY - t.gap);
+    const off = tagBox("OFFENSE", t.x, layout.losY + t.gap);
+    if (!tagFits(def, rects, layout, bounds) || !tagFits(off, rects, layout, bounds)) continue;
+    return tagHtml("DEFENSE", defTeam, def.cx, def.cy) + tagHtml("OFFENSE", offTeam, off.cx, off.cy);
+  }
+  return "";
+}

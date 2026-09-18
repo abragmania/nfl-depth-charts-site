@@ -1622,9 +1622,12 @@ export function renderLevelLabels(levels, layoutWidth = LAYOUT_WIDTH) {
 // Builds the field's vector dressing (yard lines, hashes, highlighted line of scrimmage). Turf itself is
 // a CSS repeating-gradient on the wrapper; this SVG only draws the thin vector marks on top of it, sized
 // to exactly match the layout canvas so it scales together with the cards under the one shared transform.
-// D72: `losY` is null on a single-unit canvas — no yellow line, no LINE OF SCRIMMAGE captions and no
-// DEFENSE-above/OFFENSE-below pair; `caption` ("OFFENSE" / "DEFENSE", which computeLayout supplies) prints
-// once at the top right instead, in exactly the type the whole-team field labels its halves with.
+// D72: `losY` is null on a single-unit canvas — no yellow line and no LINE OF SCRIMMAGE captions;
+// `caption` ("OFFENSE" / "DEFENSE", which computeLayout supplies) prints once at the top right instead.
+// D156: a TWO-sided canvas no longer prints the tiny corner pair here at all. Both pages that draw one
+// (the whole-team field and the matchup field) now name their halves with the etched turf wordmarks in
+// cards.js's unitTagsHtml, and the corner captions said the same thing a second time — the matchup page
+// had already been hiding them in CSS since D113. The single-unit branch above is untouched.
 export function renderFieldSvg(layoutHeight, losY, layoutWidth = LAYOUT_WIDTH, caption = null) {
   const w = layoutWidth;
   const lines = [];
@@ -1649,7 +1652,7 @@ export function renderFieldSvg(layoutHeight, losY, layoutWidth = LAYOUT_WIDTH, c
   const losLabelLeft = `<text x="30" y="${losY - 5}" fill="#ffdd00" font-size="11" font-weight="700" text-anchor="start" letter-spacing="1.2">LINE OF SCRIMMAGE</text>`;
   const losLabelRight = `<text x="${w - 30}" y="${losY - 5}" fill="#ffdd00" font-size="11" font-weight="700" text-anchor="end" letter-spacing="1.2">LINE OF SCRIMMAGE</text>`;
   return `<svg viewBox="0 0 ${w} ${layoutHeight}" width="${w}" height="${layoutHeight}" xmlns="http://www.w3.org/2000/svg" style="position:absolute;top:0;left:0;pointer-events:none;">
-    ${sidelineTop}${sidelineBottom}${lines.join("")}${los}${losLabelLeft}${losLabelRight}${unitLabel("DEFENSE", 20)}${unitLabel("OFFENSE", layoutHeight - 8)}
+    ${sidelineTop}${sidelineBottom}${lines.join("")}${los}${losLabelLeft}${losLabelRight}
   </svg>`;
 }
 

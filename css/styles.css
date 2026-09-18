@@ -320,6 +320,10 @@ a.back { color:var(--muted); }
 /* Variant A: a neutral field reads as calmer when the crest is a little quieter too — 60% of
    D95/D98's original .22, so it stays a watermark rather than another loud shape competing with the cards. */
 [data-field-variant="A"] .field-watermark::before { opacity:.132; }
+/* D156: the watermark layer is drawn on the whole-team field even when the club has no crest URL (it
+   carries the etched OFFENSE / DEFENSE wordmarks too). Without a crest there must be no light plate
+   either, or an empty white disc would float on the turf. */
+.field-watermark[data-no-crest]::before { content:none; }
 
 /* D98 part 2: the matchup field carries TWO crests (defending club's in the defensive/top half, the
    club on offense's in the offensive/bottom half) instead of team.js's single centred one, so its
@@ -1078,9 +1082,7 @@ a.back { color:var(--muted); }
 .matchup.is-compact .matchup-team-heat { flex:1 1 auto; min-width:0; margin-top:0;
   white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 
-/* D113: the field engine's own tiny "DEFENSE"/"OFFENSE" corner caption (field.js's renderFieldSvg) is
-   redundant with the full-width banner above and repeats it in the same corner — hidden on the matchup
-   page only; the team page's single-caption use of the same SVG text is unchanged. The two captions this
-   view draws are told apart by their own font-size attribute: the unit caption is 14, the "LINE OF
-   SCRIMMAGE" labels either side of the yellow line are 11, so only the former is targeted. */
-.matchup-field svg text[font-size="14"] { display:none; }
+/* D113's rule hiding the field engine's tiny "DEFENSE"/"OFFENSE" corner captions on the matchup page is
+   gone with D156: renderFieldSvg no longer draws that pair on a two-sided canvas at all, on either page,
+   because the etched turf wordmarks now name the halves. A single-unit side page still prints its own
+   one-word caption, and nothing here hides it. */
