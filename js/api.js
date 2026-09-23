@@ -24,6 +24,7 @@ export function staticPathFor(url) {
   if (parts.length === 2 && parts[1] === "teams") return "api/teams.json";
   if (parts.length === 3 && parts[1] === "team") return `api/team/${staticFileKey(seg(2)).toUpperCase()}.json`;
   if (parts.length === 4 && parts[1] === "history") return `api/history/${staticFileKey(seg(2)).toUpperCase()}/${staticFileKey(seg(3))}.json`;
+  if (parts.length === 3 && parts[1] === "gamelog") return `api/gamelog/${staticFileKey(seg(2)).toUpperCase()}.json`;
   if (parts.length === 3 && parts[1] === "player") return `api/player/${staticFileKey(seg(2))}.json`;
   if (parts.length === 3 && parts[1] === "refresh" && parts[2] === "status") return "api/refresh/status.json";
   return null;
@@ -89,6 +90,15 @@ export async function getPlayer(espnId) {
     throw new Error(body?.error?.message || `${r.status} ${url}`);
   }
   return body;
+}
+
+// GET /api/gamelog/{abbr} (D165) for public/js/panel.js's "Game log" tab: one file per club, cached per page
+// load like the team response (a failed fetch is dropped so the next panel open retries). Throws on failure.
+const gameLogCache = new Map();
+export function getGameLog(abbr) {
+  const A = String(abbr || "").toUpperCase();
+  if (!gameLogCache.has(A)) gameLogCache.set(A, getJson(`/api/gamelog/${encodeURIComponent(A)}`).catch((e) => { gameLogCache.delete(A); throw e; }));
+  return gameLogCache.get(A);
 }
 
 // Per-team response cache, keyed by abbr (holds the in-flight/settled Promise, so two callers racing

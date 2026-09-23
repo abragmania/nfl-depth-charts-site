@@ -20,7 +20,7 @@
 // GET /api/player/{espnId} (server/api/player.js).
 import { esc, snapHistoryHtml, espnPlacement, espnSchemeOf } from "./cards.js";
 import { renderHistory } from "./history.js";
-import { getPlayer, getHistory } from "./api.js";
+import { getPlayer, getHistory, getGameLog } from "./api.js";
 
 const dash = "—";
 const STATUS_CLASS = {
@@ -282,6 +282,83 @@ export function seasonsTableHtml(family, seasons, collegeFallback, games = null)
   return `<table class="panel-stats-table"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>${note}`;
 }
 
+// --- D165: the season's game log --------------------------------------------------------------------------
+// The second tab of the stats box: one row per club game this season, newest first (the order the card's own
+// snap figures read in), from GET /api/gamelog/{abbr} (server/compile/gamelog.js). The headings are the SAME
+// ones STAT_FAMILIES prints, each mapped to the nflverse column it reads; a family column nflverse has no
+// equivalent for is left out rather than invented (the QB's RTG - nflverse publishes no passer rating). The
+// compile stores only non-zero values, so a column missing from a present stats line is a 0. TKL is all three of
+// nflverse's tackle counts (solo, with an assist, assists); AVG is the game's rushing yards over its carries.
+const col = (c) => (s) => s[c] ?? 0;
+const TKL = ["TKL", (s) => (s.def_tackles_solo ?? 0) + (s.def_tackles_with_assist ?? 0) + (s.def_tackle_assists ?? 0)];
+export const GAMELOG_FAMILIES = {
+  QB: [["CMP", col("completions")], ["ATT", col("attempts")], ["YDS", col("passing_yards")], ["TD", col("passing_tds")], ["INT", col("passing_interceptions")]],
+  RB: [["ATT", col("carries")], ["YDS", col("rushing_yards")],
+       ["AVG", (s) => (s.carries ? (Math.round(((s.rushing_yards ?? 0) / s.carries) * 10) / 10).toFixed(1) : dash)],
+       ["TD", col("rushing_tds")], ["REC", col("receptions")], ["REC YDS", col("receiving_yards")]],
+  WR_TE: [["TGT", col("targets")], ["REC", col("receptions")], ["YDS", col("receiving_yards")], ["TD", col("receiving_tds")]],
+  DL_EDGE: [TKL, ["SACK", col("def_sacks")], ["TFL", col("def_tackles_for_loss")], ["QB HITS", col("def_qb_hits")]],
+  LB: [TKL, ["SACK", col("def_sacks")], ["INT", col("def_interceptions")], ["PD", col("def_pass_defended")]],
+  DB: [TKL, ["INT", col("def_interceptions")], ["PD", col("def_pass_defended")], ["FF", col("def_fumbles_forced")]],
+  OL: [],
+};
+
+// Pure (tests/panel.test.mjs): `entries` is this man's array from the game-log file, or null when the file
+// has none for him. Wk / Opp / Snap % always; the family's stat columns after them. A game he did not play
+// reads "did not play" across the snap and stat cells (the card prints that game as a 0 with the same words
+// in its tooltip, D162). A game he played with no box-score line at all (a lineman, or a man who recorded
+// nothing) shows 0s once the stats file has reached that week and dashes before; a snap share nobody stated (a
+// blank cell, a man the snap file dropped, a game with another club) is a dash. An away game reads "@LA".
+// `club` is the file's own club (nflverse abbreviation, the game-log file's `team`): a game whose entry carries
+// `withTeam` was played for another club, and wherever the club changes between two consecutive games a
+// full-width "Traded from X to Y" row sits between them (Adam, 2026-09-23: the opponents stay real, the move is
+// the signal).
+export function gameLogTableHtml(family, entries, season = null, club = null) {
+  const rows = Array.isArray(entries) ? entries : [];
+  if (!rows.length) return `<div class="panel-stats-empty">No ${season != null ? `${esc(season)} ` : ""}regular-season games on file yet.</div>`;
+  const cols = GAMELOG_FAMILIES[family] || [];
+  const head = `<th>Wk</th><th>Opp</th><th>Snap %</th>${cols.map(([h]) => `<th>${esc(h)}</th>`).join("")}`;
+  const clubOf = (g) => g.withTeam ?? club;
+  const body = rows.map((g, i) => {
+    const newer = i > 0 ? clubOf(rows[i - 1]) : null;
+    const move = newer && clubOf(g) && newer !== clubOf(g)
+      ? `<tr class="panel-gamelog-trade"><td colspan="${3 + cols.length}">Traded from ${esc(clubOf(g))} to ${esc(newer)}</td></tr>` : "";
+    const opp = g.opponent ? `${g.away ? "@" : ""}${g.opponent}` : dash;
+    const lead = `<td>${esc(g.week)}</td><td>${esc(opp)}</td>`;
+    if (g.played === false) return `${move}<tr class="panel-gamelog-dnp">${lead}<td colspan="${1 + cols.length}">did not play</td></tr>`;
+    const snap = `<td>${g.snapPct == null ? dash : esc(g.snapPct)}</td>`;
+    const cells = cols.map(([, get]) => `<td>${g.stats ? esc(get(g.stats)) : dash}</td>`).join("");
+    return `${move}<tr>${lead}${snap}${cells}</tr>`;
+  }).join("");
+  return `<table class="panel-stats-table panel-gamelog-table"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
+}
+
+// The tab switch. Season stats is the default and is what the box has always shown; the game log is fetched
+// the first time its tab is opened for this panel (one file per club, cached by api.js), and a response that
+// lands after the panel has moved on to another player is dropped (the same generation counter openPanel uses).
+function showStatsTab(asideEl, tab) {
+  for (const b of asideEl.querySelectorAll("[data-stats-tab]")) b.setAttribute("aria-selected", String(b.dataset.statsTab === tab));
+  const stats = asideEl.querySelector("[data-stats]");
+  const log = asideEl.querySelector("[data-gamelog]");
+  if (!stats || !log) return;
+  stats.hidden = tab !== "season";
+  log.hidden = tab !== "log";
+  const g = asideEl._gameLogReq;
+  if (tab !== "log" || !g || g.started) return;
+  g.started = true;
+  log.innerHTML = `<div class="panel-loading">Loading game log…</div>`;
+  getGameLog(g.abbr)
+    .then((file) => {
+      if (asideEl._panelGen !== g.gen) return;
+      log.innerHTML = gameLogTableHtml(g.family, file?.players?.[g.playerKey] ?? null, file?.season ?? g.season, file?.team ?? null);
+    })
+    .catch((err) => {
+      if (asideEl._panelGen !== g.gen) return;
+      g.started = false;   // a later click retries
+      log.innerHTML = `<div class="panel-error">${esc(`Couldn't load the game log${err?.message ? `: ${String(err.message).replace(/https?:\/\/\S+/g, "").trim()}` : ""}`)}</div>`;
+    });
+}
+
 // --- network -------------------------------------------------------------------------------------------
 // api.js owns the URL, the error contract and (D67) the live-vs-published rewrite; this is just the name
 // the rest of this file already calls.
@@ -360,6 +437,8 @@ function wireCloseHandlersOnce(asideEl) {
   asideEl.dataset.panelWired = "true";
   asideEl.addEventListener("click", (e) => {
     if (e.target.closest(".panel-close")) navigateAwayFromPlayer(asideEl);
+    const tab = e.target.closest("[data-stats-tab]");
+    if (tab) showStatsTab(asideEl, tab.dataset.statsTab);
   });
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape" && !asideEl.hidden) navigateAwayFromPlayer(asideEl);
@@ -439,7 +518,8 @@ export function renderStats(asideEl, data, family, histSeasons = null) {
   const seasons = useCollege ? data.collegeSeasons : data.seasons || [];
   const staleNote = data.stale
     ? `<div class="panel-stats-note">Showing cached data from ${esc(new Date(data.fetchedAt).toLocaleString())} — live refresh failed.</div>` : "";
-  const heading = `<div class="panel-stats-heading">${useCollege ? "College" : "NFL"} season stats</div>`;
+  // D165: the "Season stats" tab above the box names it now; only the college fallback still needs saying.
+  const heading = useCollege ? `<div class="panel-stats-heading">College season stats</div>` : "";
   box.innerHTML = staleNote + heading + seasonsTableHtml(family, seasons, useCollege, gamesBySeason(histSeasons));
 }
 
@@ -462,8 +542,22 @@ function panelShellHtml(card, season, teamMeta, teamView = null) {
     ${statusBlockHtml(card)}
     ${espnPlacementHtml(card, teamView)}
     <div class="panel-position-line" data-history>history loading…</div>
-    <div class="panel-stats" data-stats>${card.espnId ? `<div class="panel-loading">Loading season stats…</div>` : ""}</div>
+    ${statsBoxHtml(card)}
   </div>`;
+}
+
+// D165: the stats box is two tabs, "Season stats" (the ESPN table, the default) and "Game log". Exported for
+// tests/panel.test.mjs. A man with no ESPN id has no season table to load (finding 1), so that tab says so.
+export function statsBoxHtml(card) {
+  const season = card?.espnId ? `<div class="panel-loading">Loading season stats…</div>` : `<div class="panel-stats-empty">No ESPN season stats for this player.</div>`;
+  return `<div class="panel-stats-box">
+      <div class="panel-tabs" role="tablist">
+        <button type="button" class="panel-tab" role="tab" aria-selected="true" data-stats-tab="season">Season stats</button>
+        <button type="button" class="panel-tab" role="tab" aria-selected="false" data-stats-tab="log">Game log</button>
+      </div>
+      <div class="panel-stats" data-stats>${season}</div>
+      <div class="panel-gamelog" data-gamelog hidden></div>
+    </div>`;
 }
 
 // openPanel(asideEl, card, teamView, teamMeta): fills and shows the aside for one player. `card` is the
@@ -495,6 +589,8 @@ export function openPanel(asideEl, card, teamView, teamMeta) {
   const family = statFamily(card);
   asideEl._histSeasons = null;
   asideEl._espnStats = null;
+  // D165: what the Game log tab fetches when it is first opened (showStatsTab); gen ties it to this opening.
+  asideEl._gameLogReq = { gen: myGen, abbr, playerKey: String(card.playerKey ?? ""), family, season: teamView?.season ?? null, started: false };
 
   fetchGamesSeasons(card, abbr)
     .then((seasons) => {
