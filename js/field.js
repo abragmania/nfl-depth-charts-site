@@ -332,7 +332,7 @@ const MAX_EXTRA_GAP = 220; // D75: a three-row offense page spreads its rows to 
 // cluster (five places, e.g. Cleveland's WR·Slot/WR1/WR2/WR3/TE) still spreads across the turf rather
 // than huddling on the centre, and a hypothetical sixth place still fits inside the canvas.
 const PASS_CATCHER_PITCH = 1.2;
-const SLOT_COLUMN_MIN_RATE = 40; // D86: share of his OWN snaps a receiver must take inside to stand in the WR · Slot column; bar lowered from 50 to 40 by D118
+const SLOT_COLUMN_MIN_RATE = 35; // D86: share of his OWN snaps a receiver must take inside to stand in the WR · Slot column; bar was 50 by D86, lowered to 40 by D118, lowered again to 35 by D163
 
 function offBandRange(band) {
   const cfg = OFF_BANDS[band] || { x: [REFERENCE_WIDTH / 2, REFERENCE_WIDTH / 2], n: 1 };
@@ -580,7 +580,7 @@ function stackColumns(cols) {
 // nobody over the bar is left behind, nobody is drawn twice. A team with nobody over the bar has no Slot
 // column at all and keeps WR1/WR2/WR3 exactly as the club prints them.
 //
-// Membership (D86, lowered 50 -> 40 by D118): a receiver qualifies once at least SLOT_COLUMN_MIN_RATE
+// Membership (50 by D86, 40 by D118, 35 by D163): a receiver qualifies once at least SLOT_COLUMN_MIN_RATE
 // percent of his OWN snaps are taken inside — not his share of the team's inside snaps, and not gated by
 // any minimum sample size (D117 retired D89's 100-snap floor: a thin sample is still evidence of where he
 // lines up).
@@ -599,9 +599,9 @@ function stackColumns(cols) {
 // Within the merged group, D90's tier rule still governs: qualifying starters from other columns join
 // directly under the source column's line-one block, ahead of its own carried backups.
 //
-// Every man is judged on the same rate window: the pooled 2025+2026 rate when a card carries one, else
-// the headline rate (D77 can switch a man to his current season alone mid-year, so team-mates can carry
-// different windows). This is a DISPLAY regrouping only — the compiled TeamView is untouched; every slot
+// Every man is judged on the same rate window: the current-season rate (D164 retired the 2025+2026 pool —
+// a man with no current-season data carries a null rate and stays in his club column). This is a DISPLAY
+// regrouping only — the compiled TeamView is untouched; every slot
 // is shallow-cloned and player cards are carried by reference, so a man's role/banner/badges/heat in the
 // Slot column are the same object the club column held.
 // slotSnapsPooled is the count every man is ordered on (D90) and shown in the tooltip's bracket; the
@@ -609,9 +609,9 @@ function stackColumns(cols) {
 // membership (D117), so a null count is admitted on the rate alone and simply sorts last.
 const snapCount = (v) => (typeof v === "number" && Number.isFinite(v) && v >= 0 ? v : null);
 const slotSnapsOf = (p) => snapCount(p?.slotSnapsPooled) ?? snapCount(p?.slotSnaps);
-// D86: the one rate window every man is judged on — the pooled 2025+2026 rate when the card carries one,
-// else the headline rate D77 published for whichever season it picked. null means PlayerProfiler never
-// measured him, and an unmeasured man is not evidence of anything: he stays in his club column.
+// D86: the one rate window every man is judged on — the current-season rate (D164), carried in the same
+// *Pooled fields for downstream readers. null means PlayerProfiler never measured him this season, and an
+// unmeasured man is not evidence of anything: he stays in his club column.
 const rateOf = (p) => {
   const pooled = p?.slotRatePooled;
   if (typeof pooled === "number" && Number.isFinite(pooled)) return pooled;
@@ -780,7 +780,7 @@ export function regroupSlotReceivers(wrSlots) {
   const carriedClause = carriedOver.length && decider
     ? `; listed behind ${lastName(decider.name)} by the club: ${carriedOver.map((p) => lastName(p.name)).join(", ")}`
     : "";
-  const reason = `Slot receivers (40 percent or more of their snaps inside): ${men.filter(isQualified).map(entryOf).join(", ")}${carriedClause}`;
+  const reason = `Slot receivers (35 percent or more of their snaps inside): ${men.filter(isQualified).map(entryOf).join(", ")}${carriedClause}`;
   return { slot, kept, reason };
 }
 
