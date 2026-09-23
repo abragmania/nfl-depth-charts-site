@@ -99,6 +99,9 @@
 
 .panel-stats-table { width: 100%; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; }
 .panel-stats-table th, .panel-stats-table td { padding: 5px 6px; text-align: right; border-bottom: 1px solid #22282f; white-space: nowrap; }
+/* D169: a quarterback's twelve-column row (passing then rushing) stays on one line: tighter cells, smaller type. */
+.panel-stats-table.panel-stats-wide { font-size: 11px; }
+.panel-stats-table.panel-stats-wide th, .panel-stats-table.panel-stats-wide td { padding: 5px 3px; }
 .panel-stats-table th:first-child, .panel-stats-table td:first-child,
 .panel-stats-table th:nth-child(2), .panel-stats-table td:nth-child(2) { text-align: left; }
 .panel-stats-table thead th { color: var(--muted); font-weight: 700; text-transform: uppercase; font-size: 10.5px; }

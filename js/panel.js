@@ -210,8 +210,10 @@ function statusBlockHtml(card) {
 // the "defensive" category, and no starts/snap-count category for offensive linemen) — shown as "—" with
 // an explanatory note rather than silently substituting a different, mislabeled stat.
 const STAT_FAMILIES = {
+  // D169 (Adam, 2026-09-23): a quarterback's rushing sits on the same line after his passing (CAR = carries).
   QB: [["CMP", "passing", "completions"], ["ATT", "passing", "passingAttempts"], ["YDS", "passing", "passingYards"],
-       ["TD", "passing", "passingTouchdowns"], ["INT", "passing", "interceptions"], ["RTG", "passing", "QBRating"]],
+       ["TD", "passing", "passingTouchdowns"], ["INT", "passing", "interceptions"], ["RTG", "passing", "QBRating"],
+       ["CAR", "rushing", "rushingAttempts"], ["R YDS", "rushing", "rushingYards"], ["R TD", "rushing", "rushingTouchdowns"]],
   RB: [["ATT", "rushing", "rushingAttempts"], ["YDS", "rushing", "rushingYards"], ["AVG", "rushing", "yardsPerRushAttempt"],
        ["TD", "rushing", "rushingTouchdowns"], ["REC", "receiving", "receptions"], ["REC YDS", "receiving", "receivingYards"]],
   WR_TE: [["TGT", "receiving", "receivingTargets"], ["REC", "receiving", "receptions"], ["YDS", "receiving", "receivingYards"],
@@ -294,7 +296,10 @@ export function seasonsTableHtml(family, seasons, collegeFallback, games = null)
   }).join("");
   const note = cols.some(([, cat]) => cat === "__missing")
     ? `<div class="panel-stats-note">ESPN's per-player stats feed does not report tackles-for-loss or QB hits.</div>` : "";
-  return `<table class="panel-stats-table"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>${note}`;
+  // D169: a quarterback's row carries passing and rushing on one line (12 columns); the wide class tightens
+  // the cells so it still fits the panel instead of running off its right edge.
+  const wide = cols.length >= 8 ? " panel-stats-wide" : "";
+  return `<table class="panel-stats-table${wide}"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>${note}`;
 }
 
 // --- D165: the season's game log --------------------------------------------------------------------------
@@ -307,7 +312,8 @@ export function seasonsTableHtml(family, seasons, collegeFallback, games = null)
 const col = (c) => (s) => s[c] ?? 0;
 const TKL = ["TKL", (s) => (s.def_tackles_solo ?? 0) + (s.def_tackles_with_assist ?? 0) + (s.def_tackle_assists ?? 0)];
 export const GAMELOG_FAMILIES = {
-  QB: [["CMP", col("completions")], ["ATT", col("attempts")], ["YDS", col("passing_yards")], ["TD", col("passing_tds")], ["INT", col("passing_interceptions")]],
+  QB: [["CMP", col("completions")], ["ATT", col("attempts")], ["YDS", col("passing_yards")], ["TD", col("passing_tds")], ["INT", col("passing_interceptions")],
+       ["CAR", col("carries")], ["R YDS", col("rushing_yards")], ["R TD", col("rushing_tds")]], // D169: rushing after passing
   RB: [["ATT", col("carries")], ["YDS", col("rushing_yards")],
        ["AVG", (s) => (s.carries ? (Math.round(((s.rushing_yards ?? 0) / s.carries) * 10) / 10).toFixed(1) : dash)],
        ["TD", col("rushing_tds")], ["REC", col("receptions")], ["REC YDS", col("receiving_yards")]],
@@ -345,7 +351,8 @@ export function gameLogTableHtml(family, entries, season = null, club = null) {
     const cells = cols.map(([, get]) => `<td>${g.stats ? esc(get(g.stats)) : dash}</td>`).join("");
     return `${move}<tr>${lead}${snap}${cells}</tr>`;
   }).join("");
-  return `<table class="panel-stats-table panel-gamelog-table"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
+  const wide = cols.length >= 8 ? " panel-stats-wide" : ""; // D169: the QB log has eleven columns
+  return `<table class="panel-stats-table panel-gamelog-table${wide}"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
 }
 
 // The tab switch. Season stats is the default and is what the box has always shown; the game log is fetched
