@@ -52,7 +52,8 @@ function heatSummaryHtml(view) {
   const text = typeof summary === "string" ? summary
     : Array.isArray(summary) ? summary.map((x) => (typeof x === "string" ? x : x?.text)).filter(Boolean).join(" \u00b7 ")
     : "";
-  return text ? `<div class="matchup-team-heat" title="${esc(text)}">${esc(text)}</div>` : "";
+  const title = view?.heat?.summaryDetail || text;
+  return text ? `<div class="matchup-team-heat" title="${esc(title)}">${esc(text)}</div>` : "";
 }
 
 // Same URL rule team.js's fieldHtml uses for its single watermark (D95/D98 part 1): prefer the dark

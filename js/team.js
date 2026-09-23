@@ -36,7 +36,8 @@ function ageHours(iso) {
 // a team compiled before that field existed): "Defense: 4 out, 1 critical · Offense: 1 out".
 function heatSummaryChip(view) {
   if (!view.heat?.summary) return "";
-  return `<span class="chip chip-heat" title="Injury impact vs. each slot's opening starter">${esc(view.heat.summary)}</span>`;
+  const title = view.heat.summaryDetail || "Injury impact vs. each slot's opening starter";
+  return `<span class="chip chip-heat" title="${esc(title)}">${esc(view.heat.summary)}</span>`;
 }
 
 // Exported so the zoom/matchup views can reuse the exact same header instead of re-deriving their own
