@@ -9,7 +9,7 @@
 // rating-tier surface colours all survive the shrink. The SIDE, GROUP and MATCHUP views keep their big
 // headshot cards and their own renderers (zoom.js's fullCard, matchup.js's matchupCard) — they come
 // through renderSlotBody below, which is deliberately untouched by this ruling.
-import { lineOneCount, lineOneHeight, visibleDepthRows, displayOrder, outFillInDemotion, OUT_STATUS_CODES, isFullyOut, isScratch } from "./field.js";
+import { lineOneCount, lineOneHeight, visibleDepthRows, displayOrder, outFillInDemotion, OUT_STATUS_CODES, isFullyOut, isScratch, fillingIn } from "./field.js";
 // Re-exported so zoom.js and matchup.js share this single definition rather than keeping their own
 // copies. D60's isScratch rides the same route.
 export { OUT_STATUS_CODES, isFullyOut, isScratch };
@@ -168,7 +168,7 @@ const SCRATCH_BANNER = "INACTIVE · coach's decision";
 function bannerHtml(p) {
   if (isScratch(p)) return `<div class="card-banner banner-inactive">${esc(SCRATCH_BANNER)}</div>`;
   if (isFullyOut(p)) return `<div class="card-banner banner-out">${esc(outBannerText(p.status))}</div>`;
-  if (p.role === "ACTIVE") return `<div class="card-banner banner-active">ACTIVE · FILLING IN</div>`;
+  if (fillingIn(p)) return `<div class="card-banner banner-active">ACTIVE · FILLING IN</div>`; // D166: not for an opening starter who moved up
   return "";
 }
 
@@ -319,7 +319,7 @@ export function overviewTitle(p, disagrees) {
   if (p.rating?.current != null) {
     bits.push(p.rating.posRank && p.rating.posCount ? `${p.rating.current} OVR · #${p.rating.posRank} ${p.rating.maddenPos || ""}`.trim() : `${p.rating.current} OVR`);
   }
-  if (p.role === "STARTER_OUT" || p.role === "ACTIVE") bits.push(p.role === "ACTIVE" ? "Filling in" : "Opening starter, out");
+  if (p.role === "STARTER_OUT" || fillingIn(p)) bits.push(p.role === "ACTIVE" ? "Filling in" : "Opening starter, out");
   if (p.status?.label) bits.push(p.status.label);
   if (p.status?.detail) bits.push(p.status.detail);
   if (p.status?.shortComment) bits.push(p.status.shortComment);
@@ -337,7 +337,7 @@ function overviewClasses(p, base) {
   const cls = [base, ratingTier(p.rating)];
   if (isFullyOut(p)) cls.push("prow-out");
   if (p.shaded) cls.push("prow-shaded");
-  if (p.role === "ACTIVE") cls.push("prow-active");
+  if (fillingIn(p)) cls.push("prow-active");
   if (p.coStarter) cls.push("prow-costarter");
   return cls.join(" ");
 }
@@ -424,7 +424,7 @@ function overviewDepth(p, teamAbbr, opts = {}) {
     psBadge(p),
     slotBadge(p, opts),
     statusBadge(p.status),
-    p.role === "ACTIVE" ? `<span class="badge badge-active">FILLING IN</span>` : "",
+    fillingIn(p) ? `<span class="badge badge-active">FILLING IN</span>` : "",
     weekOneChip(p.weekOneNote),
     alsoListedChips(p, opts.slotLookup, opts.ownLabel),
   ].join("");
@@ -470,7 +470,7 @@ export function compactRow(p, teamAbbr, opts = {}) {
     psBadge(p),
     slotBadge(p, opts),
     statusBadge(p.status),
-    p.role === "ACTIVE" ? `<span class="badge badge-active">ACTIVE</span>` : "",
+    fillingIn(p) ? `<span class="badge badge-active">ACTIVE</span>` : "",
     weekOneChip(p.weekOneNote),
     alsoListedChips(p, opts.slotLookup, opts.ownLabel),
   ].join("");

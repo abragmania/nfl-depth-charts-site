@@ -439,8 +439,13 @@ export function layoutStyle(opts = {}) {
 // the headshot plus its air. cards.js imports this function (rather than keeping its own copy of the sum,
 // which is how the two used to drift) so the rendered row is never taller than the box reserved for it.
 export function lineOneHeight(p, style = {}) {
-  return lineOneBase(style) + (isFullyOut(p) || p.role === "ACTIVE" ? BANNER_H : 0);
+  return lineOneBase(style) + (isFullyOut(p) || fillingIn(p) ? BANNER_H : 0);
 }
+// D166 (Adam, 2026-09-23): the green FILLING IN banner belongs to a man who was NOT an opening starter and is
+// now playing for one who is out. A man who opened as a starter himself and now holds an out man's label
+// (D161: Doubs under WR1 for Brown) moved up a rank; he reads as a plain starter and his row reserves no
+// banner. The role stays ACTIVE so the out man's rail still draws under the column.
+export const fillingIn = (p) => p?.role === "ACTIVE" && !p?.openingStarter;
 // The same row WITHOUT its player: how tall a line-one row is on this page before any banner. Pulled out
 // because the corner step (secondaryCornerDrop, above) has to reserve a line-one card on a page where no
 // particular player is in hand, and the two must never disagree about what a line-one row measures.
