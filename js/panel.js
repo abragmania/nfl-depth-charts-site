@@ -260,6 +260,21 @@ export const gamesBySeason = (seasons) => {
   return m;
 };
 
+// Adam, 2026-09-23 (Andrew Thomas: "didn't play football in '23, '24 or '25???"): ESPN's per-player stats feed
+// lists only the seasons a man has a stat line in, so a lineman's table skipped whole seasons he started. The
+// table's rows are therefore the UNION of ESPN's seasons and our own history rows (every season he took a snap
+// in): a season ESPN has nothing for still gets its row, with the team and the G column from our rows and
+// dashes for the stats. Newest first, ESPN's row wins when both exist. Pure (tests/panel.test.mjs).
+export function mergeSeasons(espnSeasons, histSeasons) {
+  const rows = new Map();
+  for (const r of histSeasons ?? []) {
+    const s = Number(r?.season);
+    if (Number.isFinite(s) && (r?.games ?? 0) > 0) rows.set(s, { season: s, teamAbbr: r.team ?? null, stats: {}, fromHistory: true });
+  }
+  for (const r of espnSeasons ?? []) { const s = Number(r?.season); if (Number.isFinite(s)) rows.set(s, r); }
+  return [...rows.values()].sort((a, b) => Number(b.season) - Number(a.season));
+}
+
 export function seasonsTableHtml(family, seasons, collegeFallback, games = null) {
   const rows = (seasons || []).slice(0, 10); // D33: ten seasons max
   if (!rows.length) return `<div class="panel-stats-empty">No ${collegeFallback ? "college" : "NFL"} season stats on file.</div>`;
@@ -520,7 +535,8 @@ export function renderStats(asideEl, data, family, histSeasons = null) {
     ? `<div class="panel-stats-note">Showing cached data from ${esc(new Date(data.fetchedAt).toLocaleString())} — live refresh failed.</div>` : "";
   // D165: the "Season stats" tab above the box names it now; only the college fallback still needs saying.
   const heading = useCollege ? `<div class="panel-stats-heading">College season stats</div>` : "";
-  box.innerHTML = staleNote + heading + seasonsTableHtml(family, seasons, useCollege, gamesBySeason(histSeasons));
+  const rows = useCollege ? seasons : mergeSeasons(seasons, histSeasons);
+  box.innerHTML = staleNote + heading + seasonsTableHtml(family, rows, useCollege, gamesBySeason(histSeasons));
 }
 
 // --- public API ------------------------------------------------------------------------------------------
