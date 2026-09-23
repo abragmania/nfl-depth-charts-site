@@ -10,7 +10,7 @@
 // header.nextOpponent (this week's schedule) and redirects, or shows a picker on a bye week.
 import { getTeams, getTeam } from "./api.js";
 import { esc, renderColumn, renderTray, fitNames, wireDepthToggles, espnSchemeOf, unitTagsHtml } from "./cards.js";
-import { computeLayout, renderFieldSvg, renderLevelLabels, FIELD_VARIANT, SECONDARY_ONE_ROW } from "./field.js";
+import { computeLayout, renderFieldSvg, renderLevelLabels, FIELD_VARIANT } from "./field.js";
 import { mountScaledField, disposeCurrentView, MIN_READABLE_SCALE } from "./viewfit.js";
 import { navStripHtml, wireNav } from "./nav.js";
 import { isLightWash } from "./landing.js";
@@ -144,12 +144,11 @@ function logoPlate(team, extraClass) {
 // the centre block. That block is the SHORT one: the header's height is set by the two club panels, whose
 // 60px crest and three text lines run ~30 units taller than the title plus its controls, so the legend goes
 // into slack that already existed and .matchup-head does not grow (styles.css's `.matchup-vs.has-legend`,
-// which also tightens the block's own gap to pay for the extra line). With SECONDARY_ONE_ROW false the
-// centre block is exactly what it was before the ruling and no legend is printed here at all.
+// which also tightens the block's own gap to pay for the extra line).
 // The markup is team.js's own legendHtml, imported rather than copied: the two pages draw the same cards, so
 // a reworded key must reword on both at once or the copies drift the way four of them once did over
 // OUT_STATUS_CODES.
-const matchupLegendHtml = () => (SECONDARY_ONE_ROW ? legendHtml("legend-matchup legend-collapsed") : "");
+const matchupLegendHtml = () => legendHtml("legend-matchup legend-collapsed");
 
 // D113/D134: which club is on offense and which on defense is a chip beside that club's own name. It used
 // to be the compact state's stand-in for the two 32px half banners; since D155 the header is compact at
@@ -193,7 +192,7 @@ function headerHtml(teamA, teamB, viewA, viewB, teams) {
         ${heatSummaryHtml(viewA)}
       </div>
     </div>
-    <div class="matchup-vs${SECONDARY_ONE_ROW ? " has-legend" : ""}">
+    <div class="matchup-vs has-legend">
       <div class="matchup-vs-controls">
         ${opponentPickerHtml(teams, teamA, teamB)}
         <a class="matchup-swap" href="#/matchup/${esc(teamB.abbr)}/${esc(teamA.abbr)}" title="Swap: ${esc(teamB.abbr)} offense vs ${esc(teamA.abbr)} defense">⇄ Swap sides</a>

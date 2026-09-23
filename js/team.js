@@ -1,5 +1,5 @@
 import { getTeams, getTeam, invalidateTeam } from "./api.js";
-import { computeLayout, renderFieldSvg, renderLevelLabels, FIELD_VARIANT, SECONDARY_ONE_ROW, REDUCED_DEPTH_ROWS } from "./field.js";
+import { computeLayout, renderFieldSvg, renderLevelLabels, FIELD_VARIANT, REDUCED_DEPTH_ROWS } from "./field.js";
 import { renderColumn, renderTray, esc, fitNames, wireDepthToggles, espnSchemeOf, unitTagsHtml } from "./cards.js";
 import { mountScaledField, disposeCurrentView, MIN_READABLE_SCALE, decideViewMode, HEADER_FOLD_WIDTH } from "./viewfit.js";
 import { navStripHtml, wireNav } from "./nav.js";
@@ -84,7 +84,7 @@ export function headerHtml(team, view, fromFixture = false, teams, withLegend = 
         <span>${schemeText}</span>
       </div>
     </div>
-    ${withLegend && SECONDARY_ONE_ROW ? legendHtml("legend-banner") : ""}
+    ${withLegend ? legendHtml("legend-banner") : ""}
     <div class="teamhead-controls">
       <div class="chip-row">${chips.join("")}</div>
       <button type="button" class="refresh-btn" title="Refresh now · data as of ${asOfFull}">Refresh now</button>
@@ -106,9 +106,7 @@ export function headerHtml(team, view, fromFixture = false, teams, withLegend = 
 // it moves by a class: `legend-banner` (styles.css) is the same key re-set smaller, right-aligned and on a
 // dark plate so it reads on any club's colour, sitting in the banner's own row between the club's details
 // and its controls. Because it is now INSIDE .teamhead, whose height is set by the 38px crest, the banner
-// does not grow and the line the legend used to occupy goes to the field. With SECONDARY_ONE_ROW false it is
-// emitted under the banner as its own `.legend` line exactly as before, which is what makes the ruling undo
-// in one edit.
+// does not grow and the line the legend used to occupy goes to the field.
 // D134 (Adam, 2026-09-17): "the legend must never wrap to a second or third line." On a window too short to
 // draw the field readably the key collapses to the one "Legend" chip below, which shows the whole key on
 // hover or tap (styles.css's `.legend-collapsed`). `.legend-items` is `display:contents` until then, so the
@@ -307,8 +305,7 @@ export async function renderTeam(root, search, abbr, playerKey) {
   if (asList) {
     // The nav strip, the club header and the key are this module's markup; the list is handed them as
     // strings so the two files never import each other. The header goes in without its banner legend
-    // (phonelist puts the key's own chip in the phone header instead, so the page is identical whichever
-    // way D111's SECONDARY_ONE_ROW switch is set).
+    // (phonelist puts the key's own chip in the phone header instead).
     renderPhoneList(root, {
       view, team, abbr: A,
       chrome: { nav, header: headerHtml(team, view, fromFixture, teams, false), legend: legendHtml("legend-banner legend-collapsed") },
@@ -321,7 +318,6 @@ export async function renderTeam(root, search, abbr, playerKey) {
     root.innerHTML = `
       ${nav}
       ${headerHtml(team, view, fromFixture, teams, true)}
-      ${SECONDARY_ONE_ROW ? "" : legendHtml()}
       ${teamBodyHtml(team)}
       `;
   }

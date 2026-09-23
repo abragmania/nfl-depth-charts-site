@@ -45,35 +45,17 @@ const SCALE = LAYOUT_WIDTH / REFERENCE_WIDTH;
 // at the top/bottom edges, lighter at the line of scrimmage.
 export const FIELD_VARIANT = "A";
 
-// D111 — THE SWITCH THE ONE-ROW-SECONDARY RULING SITS BEHIND. `true` draws CB/NB/S on a single row
-// (corners at the outer edges, nickel inside the left corner, safeties inside them) instead of two,
-// which drops the defense from five rows to four and shortens BOTH_SIDES_HALF/the canvas with it (D107
-// computes canvas height from the row count alone, so a shorter canvas is a bigger on-screen scale).
-// `false` restores the two-row secondary and taller canvas. team.js and matchup.js import this same
-// constant to decide where the legend line goes (in the banner when true, its own line under the
-// banner when false) — flipping this one word undoes the whole ruling. Horizontal placement is
-// untouched: corners/nickel/safeties keep the x's mirrorLandmarks always gave them.
-export const SECONDARY_ONE_ROW = true;
+// D111: the secondary (CB, NB, S) draws on one row — corners at the outer edges, nickel inside the left
+// corner, safeties inside them — instead of two, which keeps the defense at four rows and the shorter
+// canvas that gives every club (D107). Horizontal placement is untouched: corners/nickel/safeties keep
+// the x's mirrorLandmarks always gave them.
+const SECONDARY_ONE_ROW = true;
 
-// D141 — THE SWITCH THE ONE-ROW-FRONT RULING SITS BEHIND. `true` draws the off-ball LINEBACKERS and the
-// EDGE rushers on a single row (backers on the row's top line, edge columns a FRONT_LB_LIFT step below, so
-// the two groups still read apart), which drops the defence another row and shortens the canvas with it.
-// `false` restores the two rows and their column spots everywhere. It does NOT put the corner drop back:
-// secondaryCornerDrop() stays at D141's full card, so the undo state is 24 units taller than the pre-D141
-// canvas. Horizontal placement is untouched but for the one shape the ruling names: a club charting a LONE
-// edge column takes the left edge spot on the shared row.
-export const FRONT_ONE_ROW = true;
-
-// D152 — THE SWITCH THE FLOATING-LINE RULING SITS BEHIND. `true`: the two halves SHARE the one constant
-// canvas instead of each being given exactly half of it. Each side asks for what its own rows need; the
-// line of scrimmage sits where the two meet, so a half that needs more than its share (an out starter adds
-// an OUT rail and a FILLING IN banner to his column, D104/D44) borrows the other half's spare room and the
-// club still draws at the league's size. Both sides keep the midpoint whenever both fit in half, which is
-// most of the league, so their layouts are exactly what they were. The canvas only grows past the constant
-// when BOTH halves TOGETHER do not fit, and then by the shortfall alone rather than by twice the larger
-// overflow. `false` restores D96/D107's equal halves exactly: one `half` for both sides, the line on the
-// canvas midpoint, and the canvas twice the taller side. Nothing else in this file or any other reads it.
-export const LOS_FLOATS = true;
+// D141: the off-ball LINEBACKERS and the EDGE rushers draw on one row (backers on the row's top line, edge
+// columns a FRONT_LB_LIFT step below, so the two groups still read apart), which drops the defence another
+// row and shortens the canvas with it. Horizontal placement is untouched but for the one shape the ruling
+// names: a club charting a LONE edge column takes the left edge spot on the shared row.
+const FRONT_ONE_ROW = true;
 
 // ---- compact overview geometry (ruling E) -------------------------------------------------------
 // A column is a stack of text rows, not photo cards, so its width is set by how much room a real name
@@ -145,9 +127,8 @@ const levelGapOf = (style = {}) => (style.depthChip ? REDUCED_LEVEL_GAP_EXTRA : 
 // right where the canvas used to leave empty turf for the "SECONDARY" level label and the "DEFENSE"
 // caption. EDGE_CHROME opens a strip above the first row, and an equal one below the last offensive row
 // for "OFFENSE", tall enough for the lifted level label plus its height. Both are canvas margins, so they
-// are unaffected by where the line of scrimmage lands (D152). Zero when the switch is off, since the
-// two-row secondary never needed it.
-const EDGE_CHROME = SECONDARY_ONE_ROW ? 22 : 0;
+// are unaffected by where the line of scrimmage lands (D152).
+const EDGE_CHROME = 22;
 const MARGIN_TOP = 8 + EDGE_CHROME;
 const MARGIN_BOTTOM = 8 + EDGE_CHROME;
 const LOS_HALF_GAP = 10; // half the empty gutter straddling the line of scrimmage, same both sides
@@ -1136,7 +1117,7 @@ const LABEL_LIFT = 27;
 // PASS CATCHERS, BACKFIELD (D130); defence LINE, EDGE, LINEBACKERS, SECONDARY. Derived from the very lists
 // the field is drawn from (OFF_ROW_GROUPS, DEF_ROW_ORDER and their level maps), so a ruling that reorders
 // the field reorders the list with it and the order is never written down a second time. Consecutive rows
-// of one level merge (the two-row secondary behind SECONDARY_ONE_ROW=false is one SECONDARY level here).
+// of one level merge (the one-row secondary is one SECONDARY level here).
 export function levelGroups(unit) {
   const rows = unit === "OFF"
     ? OFF_ROW_GROUPS.map((g) => ({ level: OFF_ROW_LEVEL[g.key], label: OFF_LEVEL_LABEL[OFF_ROW_LEVEL[g.key]], bands: g.bands }))
@@ -1206,12 +1187,10 @@ export function computeLayout(teamView, opts = {}) {
   // outgrew BOTH_SIDES_HALF, D152 would give it the offence's spare room (and only a club whose two halves
   // TOGETHER did not fit would grow its own canvas) rather than draw its rows through each other. Pittsburgh,
   // the one club that falls back, still fits inside BOTH_SIDES_HALF and draws at everyone's size.
-  const secOneRow = SECONDARY_ONE_ROW
-    && colsFitOneRow(defColsFor(DEF_ROWS_ONE_SEC_ONE_FRONT.bands.SECONDARY));
-  if (SECONDARY_ONE_ROW && !secOneRow) console.warn("[field] this chart's secondary is too wide for one row; falling back to the two-row secondary (D111)");
-  const frontOneRow = FRONT_ONE_ROW
-    && colsFitOneRow(defColsFor(DEF_ROWS_ONE_SEC_ONE_FRONT.bands.FRONT, true));
-  if (FRONT_ONE_ROW && !frontOneRow) console.warn("[field] this chart's edge rushers and linebackers are too wide for one row; falling back to two front rows (D141)");
+  const secOneRow = colsFitOneRow(defColsFor(DEF_ROWS_ONE_SEC_ONE_FRONT.bands.SECONDARY));
+  if (!secOneRow) console.warn("[field] this chart's secondary is too wide for one row; falling back to the two-row secondary (D111)");
+  const frontOneRow = colsFitOneRow(defColsFor(DEF_ROWS_ONE_SEC_ONE_FRONT.bands.FRONT, true));
+  if (!frontOneRow) console.warn("[field] this chart's edge rushers and linebackers are too wide for one row; falling back to two front rows (D141)");
   const defRows = defRowModel(secOneRow, frontOneRow);
 
   // D121/D141: the staggered bands of a merged row are stamped with their step before the row is measured, so
@@ -1319,18 +1298,11 @@ export function computeLayout(teamView, opts = {}) {
     // halves both fit — the no-feedback property D114 depends on (it can only ever ask for a TALLER canvas,
     // and a height-bound page asks for none at all).
     const constantHalf = opts.ownHeight ? 0 : bothSidesHalf(style);
-    let defHalf, offHalf;
-    if (LOS_FLOATS) {
-      const room = Math.max(2 * constantHalf, defMin + offMin, 2 * fillHalf);
-      // Half the room, unless one side's own rows need more than that — and never more than what leaves the
-      // other side its own minimum. `room` is at least defMin + offMin, so that window is never empty.
-      defHalf = Math.min(Math.max(room / 2, defMin), room - offMin);
-      offHalf = room - defHalf;
-    } else {
-      // D96/D107 as they stood before D152: one half height for both sides, the line on the midpoint, and a
-      // side that outgrows it drags the WHOLE canvas up by twice its overflow.
-      defHalf = offHalf = Math.max(constantHalf, defMin, offMin, fillHalf);
-    }
+    const room = Math.max(2 * constantHalf, defMin + offMin, 2 * fillHalf);
+    // Half the room, unless one side's own rows need more than that — and never more than what leaves the
+    // other side its own minimum. `room` is at least defMin + offMin, so that window is never empty.
+    const defHalf = Math.min(Math.max(room / 2, defMin), room - offMin);
+    const offHalf = room - defHalf;
     const spreadGap = (rows, natural, sideHalf) => (rows.length > 1 && sideHalf > natural) ? (sideHalf - natural) / (rows.length - 1) : 0;
     placeSpan(defRowsTopDown, MARGIN_TOP, spreadGap(defRowsTopDown, defMin, defHalf));
     // D107/D152: a side's boundary is its SHARE of the shared room, not its own rows' height — a defence with
