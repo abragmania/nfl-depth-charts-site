@@ -15,10 +15,10 @@
 // fullCard renderer below — D49's zoom ladder puts the biggest cards in the app on that page, and it is
 // a grid of ranked cards rather than a field. Visual language is kept identical to the main field by
 // reusing the SAME class names cards.js/styles.css already define (card, tier-elite/strong/avg/weak/flat,
-// card-banner, banner-out, banner-active, badge*, rating-pill, column-shaded, tray-label/tray-chip)
+// card-banner, banner-out, banner-active, badge*, rating-pill, tray-label/tray-chip)
 // rather than inventing parallel styles.
 import { getTeams, getTeam, invalidateTeam } from "./api.js";
-import { esc, BAND_DISPLAY, headshotHtml, wireDepthToggles, isFullyOut, isScratch, psBadge, snapHistoryHtml, withClubRole, NO_SNAP_ROW_TITLE } from "./cards.js";
+import { esc, BAND_DISPLAY, headshotHtml, wireDepthToggles, isFullyOut, isScratch, psBadge, snapHistoryHtml, withClubRole } from "./cards.js";
 import { headerHtml, mountTeamField, teamBodyHtml } from "./team.js";
 import { SIDE_CARD_W, SIDE_MAX_DEPTH_ROWS, regroupSlotReceivers, columnRankReason } from "./field.js";
 import { fitToViewport, disposeCurrentView, SIDE_MIN_READABLE_SCALE } from "./viewfit.js";
@@ -127,7 +127,6 @@ function roleTagHtml(p) {
 function cardClasses(p) {
   const cls = ["card", ratingTier(p.rating)];
   if (isFullyOut(p)) cls.push("card-out");
-  if (p.shaded) cls.push("card-shaded");
   if (p.coStarter) cls.push("card-costarter");
   return cls.join(" ");
 }
@@ -142,19 +141,18 @@ function tooltipFor(p) {
 // ---- D50 injury heat, corrected (Adam, 2026-09-11: "subtle, not loud" — no chips, no banner) ----
 // None of this exists in the compiled data yet, so every function here guards for the field being
 // absent/undefined and renders nothing rather than throwing. Class names (heat-low/high/critical,
-// sig-star/sig-ps/sig-new/sig-lowsnaps) are the step-4 builder's own, defined in styles.css so every
+// sig-star/sig-ps/sig-new) are the step-4 builder's own, defined in styles.css so every
 // view matches — this file only applies them; a fallback look for each is defined in zoom.css scoped to
 // .zoom, so this build still reads correctly even before/without those styles.css rules landing (the
 // same pattern this build already uses for the D43 tier-* classes).
 // Shapes once compiled: slot.injury = {starterOut, outStarter:{name,ovr}, fillIn:{name,ovr}, drop,
 // level:"none"|"low"|"high"|"critical"}; view.heat = {OFF:{band:{thin,cluster,starOutCount}}, DEF:{...}, summary};
-// card.signals = subset of ["STAR_OUT","PROMOTED","NEW_ARRIVAL","LOW_SNAPS"].
+// card.signals = subset of ["STAR_OUT","PROMOTED","NEW_ARRIVAL"] (D167 retired the fourth, LOW_SNAPS).
 const HEAT_LEVEL_CLASS = { low: "heat-low", high: "heat-high", critical: "heat-critical" };
 const SIGNAL_META = {
   STAR_OUT: { cls: "sig-star", glyph: "★", title: "A starter here is out" },
   PROMOTED: { cls: "sig-ps", glyph: "PS", title: "Promoted starter" },
   NEW_ARRIVAL: { cls: "sig-new", glyph: "new", title: "New arrival" },
-  LOW_SNAPS: { cls: "sig-lowsnaps", glyph: "low%", title: "Low snap share" },
 };
 
 function heatDropText(injury) {
@@ -177,12 +175,11 @@ function stackHeatTitle(slot) {
   return ` title="Starter out: ${esc(inj.outStarter.name)} ${esc(String(inj.outStarter.ovr))} → ${esc(inj.fillIn.name)} ${esc(String(inj.fillIn.ovr))}${esc(heatDropText(inj))}"`;
 }
 
-// Tiny quiet per-player markers (star-out glyph, faint "PS"/"new"/"low%") from card.signals.
+// Tiny quiet per-player markers (star-out glyph, faint "PS"/"new") from card.signals.
 function signalMarkers(p) {
   const sigs = Array.isArray(p.signals) ? p.signals : [];
   const html = sigs.map((s) => {
-    // D148: a man the source has no row for is not "low" - same distinction cards.js draws from lowSnapsReason.
-    const meta = s === "LOW_SNAPS" && p?.lowSnapsReason === "NO_ROW" ? { ...SIGNAL_META[s], glyph: "no data", title: NO_SNAP_ROW_TITLE } : SIGNAL_META[s];
+    const meta = SIGNAL_META[s];
     return meta ? `<span class="sig ${meta.cls}" title="${esc(meta.title)}">${esc(meta.glyph)}</span>` : "";
   }).join("");
   return html ? `<span class="zoom-signals">${html}</span>` : "";
@@ -489,7 +486,6 @@ export function renderGroupStack(col, teamAbbr, wide = false, unit, gamesPlayed)
   const posLabel = col.label;
   const lineOne = { ...(wide ? GROUP_LINE_ONE_WIDE : GROUP_LINE_ONE), wide, unit, gamesPlayed, posLabel };
   const rest = { ...(wide ? GROUP_REST_WIDE : GROUP_REST), wide, unit, gamesPlayed, posLabel };
-  const hatched = slot.shadedByDefault ? " column-shaded" : "";
   const players = slot.players;
   // Lead ruling (2026-09-11, item 8): same "one slot, two names" label treatment as the side view, for
   // the same reason — an explicit coStarter pair at tier 1.
@@ -543,7 +539,7 @@ export function renderGroupStack(col, teamAbbr, wide = false, unit, gamesPlayed)
   // labelTitle) — why these men are the ones standing in the slot, or where a renumbered club column's
   // number came from — so a reader who questions a pill gets the same answer on either page.
   const labelTitle = col.reason ? ` title="${esc(col.reason)}"` : "";
-  return `<div class="zoom-stack${hatched}${stackHeatClass(slot)}" data-slot-id="${esc(slot.slotId)}"${stackHeatTitle(slot)}>
+  return `<div class="zoom-stack${stackHeatClass(slot)}" data-slot-id="${esc(slot.slotId)}"${stackHeatTitle(slot)}>
     <div class="zoom-stack-label" data-band="${esc(slot.band || "")}"${labelTitle}>${esc(labelText)}</div>
     <div class="zoom-stack-body">${rowsHtml}</div>
   </div>`;

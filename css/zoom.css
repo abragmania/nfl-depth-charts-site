@@ -51,9 +51,9 @@
    views so it can't touch a card drawn anywhere else. */
 .zoom-group .card:has(.card-banner) .card-badges { top:26px; }
 
-/* Tiny quiet D50 signal markers (star-out / promoted / new / low-snaps) — top-left, opposite the
+/* Tiny quiet D50 signal markers (star-out / promoted / new) — top-left, opposite the
    existing badge cluster (top-right), so the two clusters never collide. Fallback look only: the
-   step-4 builder owns the canonical sig-star/sig-ps/sig-new/sig-lowsnaps rules in styles.css; these
+   step-4 builder owns the canonical sig-star/sig-ps/sig-new rules in styles.css; these
    apply only where those haven't defined a background/color already (this build never overrides them). */
 /* Plain coloured text, no chip/fill — matches cards.js's/matchup.js's own signal glyphs (styles.css's
    .signal-glyph), per D50's own "quiet, not shouted" ruling. */
@@ -62,7 +62,6 @@
 .sig-star { color:#ffd54a; }
 .sig-ps { color:#ffd54a; }
 .sig-new { color:#4fd1c5; }
-.sig-lowsnaps { color:#8a94a0; }
 
 /* The "+N more" depth toggle (cards.js's renderDepth / wireDepthToggles). display:contents on the open
    state so the revealed rows join the stack's own flex column instead of forming a nested box inside it. */
@@ -202,7 +201,7 @@ a.zoom-stack-label:hover { color:#ffd54a; text-decoration:underline; }
 /* ---- D50 injury heat, corrected to "subtle, not loud" (Adam, 2026-09-11) — no chips, no banner. ----
    Guarded on the JS side for absence (slot.injury / view.heat / card.signals may not exist yet); these
    rules only ever fire once zoom.js actually applies one of the classes below. heat-low/high/critical
-   and sig-star/sig-ps/sig-new/sig-lowsnaps are the step-4 builder's canonical names (defined in
+   and sig-star/sig-ps/sig-new are the step-4 builder's canonical names (defined in
    styles.css so every view matches) — this is a fallback look, scoped to .zoom-group so it
    steps out of the way the moment styles.css defines its own (same pattern as the D43 tier-* classes). */
 .zoom-stack.heat-low { box-shadow:0 0 0 1px rgba(242,193,78,.35), 0 0 14px rgba(242,193,78,.25); border-radius:10px; }

@@ -95,15 +95,16 @@ export function headerHtml(team, view, fromFixture = false, teams, withLegend = 
 }
 
 // D44 (Adam, 2026-09-11): a one-line, muted key above the field so a first-time viewer knows what the
-// banners/badges/shading/card surface mean without having to ask, worded in plain English (never internal
+// banners/badges/card surface mean without having to ask, worded in plain English (never internal
 // decision numbers) and tight enough to fit on one line at 1366px.
 // Ruling E replaced the whole-team view's photo cards with text rows, so the first legend entry no longer
 // describes a visible "STARTER" tag — on the overview the STARTER is simply the bold top row of a column.
 // The wording follows the pixels rather than the other way round.
 //
 // D111 (Adam, 2026-09-16) — "the legend line under the team banner moves INTO the banner row". The KEY ITSELF
-// is unchanged: every item (bold starter, OUT, FILLING IN, Q/D, IR PUP NFI SUSP, INACTIVE, part-time and the
-// rating-tint strip) is still here in the same words and the same order. Only where it is printed moves, and
+// is unchanged: every item (bold starter, OUT, FILLING IN, Q/D, IR PUP NFI SUSP, INACTIVE and the
+// rating-tint strip) is still here in the same words and the same order (D167 dropped the part-time entry
+// along with the shading it described). Only where it is printed moves, and
 // it moves by a class: `legend-banner` (styles.css) is the same key re-set smaller, right-aligned and on a
 // dark plate so it reads on any club's colour, sitting in the banner's own row between the club's details
 // and its controls. Because it is now INSIDE .teamhead, whose height is set by the 38px crest, the banner
@@ -120,7 +121,6 @@ export function legendHtml(extraClass = "") {
     <span><span class="sw sw-out"></span><b>OUT</b> starter out</span>
     <span><span class="sw sw-active"></span><b>FILLING IN</b> active replacement</span>
     <span><span class="sw sw-q"></span>Q <span class="sw sw-d"></span>D <span class="sw sw-out"></span>OUT IR PUP NFI SUSP <span class="sw sw-inactive"></span>INACTIVE</span>
-    <span><span class="sw sw-shaded"></span>▨ part-time</span>
     <span><span class="tier-strip"><span style="background:var(--tier-elite)"></span><span style="background:var(--tier-strong)"></span><span style="background:var(--tier-avg)"></span><span style="background:var(--tier-weak)"></span><span style="background:var(--tier-flat)"></span></span>▬ row tint = rating</span>
     </span>
   </div>`;

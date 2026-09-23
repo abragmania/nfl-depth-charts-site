@@ -5,7 +5,7 @@
 // 1700x900 viewport with no scrolling — so its columns are built from text rows, not photo cards:
 // a label pill, the starter as one bold row (number, name, rating pill in its colour tier), then slim
 // one-line rows for the backups, at most three of them with a "+N more" tail that links through to the
-// position-group view. Status badges, the red OUT / green FILLING IN banners, the shading hatch and the
+// position-group view. Status badges, the red OUT / green FILLING IN banners and the
 // rating-tier surface colours all survive the shrink. The SIDE, GROUP and MATCHUP views keep their big
 // headshot cards and their own renderers (zoom.js's fullCard, matchup.js's matchupCard) — they come
 // through renderSlotBody below, which is deliberately untouched by this ruling.
@@ -273,29 +273,20 @@ function tooltipFor(p, disagrees) {
 // D50, corrected (Adam, 2026-09-11): "when I say highlight I just mean the eye gets drawn to it... not
 // HEY WE'RE HIGHLIGHTING THIS" — quiet glyphs, not badges/chips; the real detail lives in the tooltip
 // (and the panel). Guarded: a card with no `signals` array renders nothing extra.
-const SIGNAL_GLYPH = { STAR_OUT: "★", PROMOTED: "▲", NEW_ARRIVAL: "●", LOW_SNAPS: "◐" };
+const SIGNAL_GLYPH = { STAR_OUT: "★", PROMOTED: "▲", NEW_ARRIVAL: "●" };
 const SIGNAL_TITLE = {
   STAR_OUT: "A notably higher-rated player at this spot is out",
   PROMOTED: "Promoted on the depth chart",
   NEW_ARRIVAL: "New arrival on this roster",
-  LOW_SNAPS: "Low recent snap share",
 };
-// D148 (3): the part-time marker covers two different facts and the tooltip must say WHICH. A measured share
-// under the threshold is "low recent snap share"; the other case is the snap-count source having no row for him
-// at all while it has rows for his team-mates, which says nothing about how much he played (Riq Woolen wore the
-// glyph after playing every defensive snap of week 1). server/compile/heat.js decides which and writes it on
-// the card as lowSnapsReason ("LOW_SHARE" / "NO_ROW"); the signal stays LOW_SNAPS so the glyph, the CSS and
-// D135's give-up order are unchanged. Exported because the group view (public/js/zoom.js) draws the same
-// marker and must say the same thing — two copies of one sentence is how two views come to word it differently.
-export const NO_SNAP_ROW_TITLE = "No snap count on file for him (the source has no row)";
-const signalTitle = (s, p) => (s === "LOW_SNAPS" && p?.lowSnapsReason === "NO_ROW" ? NO_SNAP_ROW_TITLE : SIGNAL_TITLE[s] || s);
+const signalTitle = (s) => SIGNAL_TITLE[s] || s;
 // Rendered as its own sibling in a fixed top-left corner (same corner zoom.js's group view uses via its
 // own .zoom-signals), not inside .card-name, so the glyph never competes with the name for width and
 // stays visible regardless of name length.
 function signalGlyphs(p) {
   const sig = Array.isArray(p.signals) ? p.signals : [];
   if (!sig.length) return "";
-  return `<span class="prow-signals">${sig.map((s) => `<span class="signal-glyph sig-${esc(s)}" title="${esc(signalTitle(s, p))}">${SIGNAL_GLYPH[s] || "•"}</span>`).join("")}</span>`;
+  return `<span class="prow-signals">${sig.map((s) => `<span class="signal-glyph sig-${esc(s)}" title="${esc(signalTitle(s))}">${SIGNAL_GLYPH[s] || "•"}</span>`).join("")}</span>`;
 }
 
 // ---- ruling E: the whole-team overview's text rows ------------------------------------------------
@@ -336,7 +327,6 @@ export function overviewTitle(p, disagrees) {
 function overviewClasses(p, base) {
   const cls = [base, ratingTier(p.rating)];
   if (isFullyOut(p)) cls.push("prow-out");
-  if (p.shaded) cls.push("prow-shaded");
   if (fillingIn(p)) cls.push("prow-active");
   if (p.coStarter) cls.push("prow-costarter");
   return cls.join(" ");
@@ -485,7 +475,7 @@ export function compactRow(p, teamAbbr, opts = {}) {
   // the badge. His rating pill keeps its colour: the whole point of showing him is "how good is the man
   // this unit is missing".
   const outCls = isFullyOut(p) ? " row-out" : "";
-  return `<a class="row ${ratingTier(p.rating)}${outCls} ${p.shaded ? "row-shaded" : ""}" href="#/team/${esc(teamAbbr)}/player/${encodeURIComponent(p.playerKey)}" data-player-key="${esc(p.playerKey)}" title="${title}">
+  return `<a class="row ${ratingTier(p.rating)}${outCls}" href="#/team/${esc(teamAbbr)}/player/${encodeURIComponent(p.playerKey)}" data-player-key="${esc(p.playerKey)}" title="${title}">
     <span class="row-number">#${p.number ?? "—"}</span>
     <span class="row-name" data-full="${esc(p.name)}" data-short="${esc(shortName(p))}">${esc(p.name)}</span>
     ${badgesHtml}
@@ -574,12 +564,12 @@ function textOverflows(el) {
   return range.getBoundingClientRect().width > avail + 0.5;
 }
 
-// D135 (Adam, 2026-09-17): what a row gives up, in order, before its name is touched. The part-time marker
-// goes first (the ◐ glyph that says this man plays a low share of the snaps), then the other quiet signals,
-// then the purely descriptive chips. The rating pill, the status badges (Q/D/OUT/IR/PUP/SUSP/INACTIVE), the
-// PS badge and the D91 snap trio are NOT on this list: each is a fact about whether and how much the man
-// plays, which is what the row is for.
-export const ROW_GIVE_UPS = [".sig-LOW_SNAPS", ".signal-glyph", ".chip-ghost", ".chip-wk1", ".badge-slot"];
+// D135 (Adam, 2026-09-17): what a row gives up, in order, before its name is touched. The quiet signal glyphs
+// go first, then the purely descriptive chips. The rating pill, the status badges (Q/D/OUT/IR/PUP/SUSP/
+// INACTIVE), the PS badge and the D91 snap trio are NOT on this list: each is a fact about whether and how much
+// the man plays, which is what the row is for. D167 (2026-09-23) dropped the part-time marker's own entry
+// (".sig-LOW_SNAPS") along with the marker itself; the remaining give-ups keep their order.
+export const ROW_GIVE_UPS = [".signal-glyph", ".chip-ghost", ".chip-wk1", ".badge-slot"];
 
 // The three spacing states a row can be in, cheapest first. "normal" is the row as drawn; "tight"
 // (`prow-tight`) drops the jersey number's reserved gutter and the wide gaps around it; "tighter"
@@ -594,7 +584,7 @@ export const ROW_SPACING = ["normal", "tight", "tighter"];
 // THE ORDER IS: the full name at normal spacing; the full name tightened; the full name after giving up each
 // kind of quiet extra in turn; the full name at the tightest spacing there is — and only when all of that has
 // failed, the short "F. Surname" form, which then starts again from the top (D146 (3): a shortened name gets
-// its gutter and its part-time marker back, so it is never printed in a squeezed row with 30-65px of the row
+// its gutter and its signal glyphs back, so it is never printed in a squeezed row with 30-65px of the row
 // still idle). Spacing is spent before the name, and every rung is re-measured rather than guessed.
 export function nameLadder({ giveUps = ROW_GIVE_UPS, hasShort = false } = {}) {
   const rungs = [];
@@ -617,10 +607,9 @@ function fitOneName(row, el) {
       w.classList.toggle("prow-given-up", !live);
     }
   };
-  // Every element the row is allowed to hand over, found once. THE LIST OVERLAPS ON PURPOSE — the part-time
-  // marker is `class="signal-glyph sig-LOW_SNAPS"`, so it is matched by the first selector and again by the
-  // second — which is why a rung is applied as a SET rather than selector by selector: toggling each selector
-  // in turn would have the second rung hand the part-time marker straight back to the row.
+  // Every element the row is allowed to hand over, found once. A rung is applied as a SET rather than selector
+  // by selector so two ROW_GIVE_UPS selectors that ever matched the same element could never fight over it —
+  // toggling each selector in turn could otherwise have a later rung hand an already-given-up element back.
   const candidates = [...new Set(ROW_GIVE_UPS.flatMap((sel) => [...row.querySelectorAll(sel)]))];
   // Puts the row into exactly the state one rung describes, and answers whether anything actually moved. A
   // rung that changes nothing cannot change the answer either, so the caller skips re-measuring it — which
@@ -727,7 +716,6 @@ export const psBadge = (p, title = true) => {
 export function renderColumn(col, teamAbbr, opts = {}) {
   const { slot, x, top, height } = col;
   const players = slot.players;
-  const hatched = slot.shadedByDefault ? " column-shaded" : "";
   const heatCls = slot.injury?.level && HEAT_CLASS[slot.injury.level] ? ` ${HEAT_CLASS[slot.injury.level]}` : "";
   const heatTitleText = heatCls ? heatTitle(slot.injury) : "";
   const labelHref = `#/team/${esc(teamAbbr)}/group/${esc((slot.band || "").toLowerCase())}`;
@@ -833,7 +821,7 @@ export function renderColumn(col, teamAbbr, opts = {}) {
   // The test is the same `style.headshot` field field.js's layoutStyle keys the slim-row height off, so the
   // markup and the reserved box can never end up in different families.
   const compact = style.headshot ? "" : " column-compact";
-  return `<div class="column${compact}${hatched}${heatCls}" data-slot-id="${esc(slot.slotId)}" style="${colourStyle}left:${x - col.width / 2}px;top:${top}px;width:${col.width}px;height:${height}px">
+  return `<div class="column${compact}${heatCls}" data-slot-id="${esc(slot.slotId)}" style="${colourStyle}left:${x - col.width / 2}px;top:${top}px;width:${col.width}px;height:${height}px">
     ${label}
     <div class="column-stack">${body}</div>
   </div>`;

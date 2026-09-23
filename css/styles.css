@@ -370,7 +370,6 @@ a.back { color:var(--muted); }
 .legend .sw-d { background:#f2924e; }
 .legend .sw-susp { background:#9b5de5; }
 .legend .sw-inactive { background:#8a94a0; }
-.legend .sw-shaded { background:repeating-linear-gradient(45deg, #6b7480 0 3px, #333a42 3px 6px); }
 .legend .tier-strip { display:inline-flex; height:10px; width:56px; border-radius:3px; overflow:hidden; vertical-align:-1px; margin-right:4px; }
 .legend .tier-strip span { flex:1; }
 
@@ -497,7 +496,6 @@ a.back { color:var(--muted); }
    (flex-direction:column-reverse, which used to flip the defensive columns so the starter sat nearest the
    line of scrimmage) is gone, along with field.js's matching bottom-flush defensive row geometry. */
 .column-stack { display:flex; flex-direction:column; gap:2px; flex:1 1 auto; }
-.column-shaded { background:repeating-linear-gradient(45deg, rgba(255,255,255,.05) 0 8px, rgba(255,255,255,0) 8px 16px); border-radius:8px; padding:2px; margin:-2px; }
 
 /* D50, corrected (Adam: quiet — "the eye gets drawn to it", not a loud chip): a warm glow scaled by
    level, on the slot's label and column edge only — columns already carry tiers/hatching, so the tint here
@@ -687,7 +685,6 @@ a.back { color:var(--muted); }
 .prow-out .prow-num, .prow-out .prow-name { opacity:.6; filter:grayscale(.55); }
 .prow-active { border-left-color:#2f9e63 !important; }
 .prow-costarter { border-style:solid; }
-.prow-shaded { background-image:repeating-linear-gradient(45deg, rgba(255,255,255,.06) 0 5px, rgba(255,255,255,0) 5px 10px); }
 /* The "+N more" tail (ruling E's depth cap): deliberately quiet, and it links through to the position
    group view — the screen that does show every player at the position, stacked 1, 2, 3… (D45). */
 .prow-more { display:flex; align-items:center; justify-content:center; min-height:18px; font-size:9.5px; font-style:italic;
@@ -912,7 +909,6 @@ a.back { color:var(--muted); }
    positioned .card-signals-corner slot it used has no card to sit in the corner of any more). */
 .card-signals { display:inline-flex; gap:2px; margin-left:3px; vertical-align:1px; }
 .signal-glyph { font-size:9px; line-height:1; color:#ffd54a; }
-.signal-glyph.sig-LOW_SNAPS { color:#8a94a0; }
 .signal-glyph.sig-NEW_ARRIVAL { color:#4fd1c5; }
 
 /* D102: same subtle vertical gradient + hairline top seam as .prow (styles.css above) so a backup row in
