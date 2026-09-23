@@ -102,22 +102,22 @@ function weekOneChip(note) {
 // D91 (Adam, 2026-09-15) front-end half: beside every name/rating pill, on every view, the man's last
 // three games' share of HIS unit's snaps, newest first, as small muted numbers ("81 · 64 · 70"). The data
 // comes from card.snapHistory = [{week, opponent, pct}] (server/compile/chart.js's makeCard — D91's server
-// half, built alongside this): newest first, at most 3 entries, pct already measured on the card's OWN
-// unit (an offensive card's numbers are always offense_pct, a defensive card's always defense_pct — see
-// that file's own comment beside `card.snapHistory =`), [] or absent when he has no game rows. This file
-// only has to print what is there: nothing at all when the array is empty or missing — no placeholder, no
-// dash — the same "optional fact" treatment weekOneChip/alsoListedChips above already give a maybe-missing
-// field.
+// half, built alongside this): newest first, the CLUB's last 3 games (D162), pct already measured on the
+// card's OWN unit (an offensive card's numbers are always offense_pct, a defensive card's always defense_pct
+// — see that file's own comment beside `card.snapHistory =`), [] or missing when the club has no snap file
+// or no game yet. A club game he has no snap row for arrives as pct 0 with `absent: true`: it prints "0" like
+// any other figure and its tooltip line says "did not play". This file only has to print what is there:
+// nothing at all when the array is empty or missing — no placeholder, no dash — the same "optional fact"
+// treatment weekOneChip/alsoListedChips above already give a maybe-missing field.
 const UNIT_SNAP_WORD = { OFF: "offensive", DEF: "defensive" };
 
 // `opts.unit` is read off the column/slot/tray this card is drawn on (never guessed from the card itself)
 // so the tooltip says "offensive snaps" on an OFF card, "defensive snaps" on a DEF one, and no side word
-// at all when the caller has no unit to give (e.g. panel.js) — never an invented default. `opts.gamesPlayed`,
-// when the caller has it, notes that a short trio is short because of games missed.
-function snapHistoryTitle(history, unit, gamesPlayed) {
+// at all when the caller has no unit to give (e.g. panel.js) — never an invented default. `opts.gamesPlayed`
+// is still passed by zoom.js but no longer read: since D162 a missed game is a 0 in its own place, not a gap.
+function snapHistoryTitle(history, unit) {
   const word = UNIT_SNAP_WORD[unit] || "";
-  const lines = history.map((h) => `Wk ${esc(h.week)} vs ${esc(h.opponent)}: ${esc(h.pct)}% of ${word ? word + " " : ""}snaps`);
-  if (history.length < 3 && typeof gamesPlayed === "number" && gamesPlayed > history.length) lines.push("Games he missed leave a gap");
+  const lines = history.map((h) => `Wk ${esc(h.week)} vs ${esc(h.opponent)}: ${h.absent ? "did not play" : `${esc(h.pct)}% of ${word ? word + " " : ""}snaps`}`);
   return lines.join("\n");
 }
 
@@ -125,7 +125,7 @@ export function snapHistoryHtml(p, opts = {}) {
   const history = Array.isArray(p.snapHistory) ? p.snapHistory : [];
   if (!history.length) return "";
   const nums = history.map((h) => esc(String(h.pct))).join(" · ");
-  return `<span class="snaps" title="${snapHistoryTitle(history, opts.unit, opts.gamesPlayed)}">${nums}</span>`;
+  return `<span class="snaps" title="${snapHistoryTitle(history, opts.unit)}">${nums}</span>`;
 }
 
 // No "also " prefix, so the chip fits inside a 40px depth row without shoving the name out (title text

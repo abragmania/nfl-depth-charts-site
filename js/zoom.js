@@ -600,9 +600,9 @@ export async function renderZoomGroup(root, search, abbr, bandParam) {
     unlistedEntries = unlistedEntries.concat((view.unlisted?.DEF?.NB) || []);
   }
 
-  // D91: the same wins+losses+ties reading server/compile/coverage.js's own playerRecords() uses for
-  // "how many games has this club played" — the one figure the tooltip's "Games he missed leave a gap"
-  // sentence needs and the one place in this file's own call chain that still has view.header on hand.
+  // D91/D162: the same wins+losses+ties reading server/compile/coverage.js's own playerRecords() uses for
+  // "how many games has this club played"; since D162 a missed game prints 0 rather than leaving a gap, so
+  // this figure only sizes the tooltip's window, and this is the one place in the call chain with view.header.
   const rec = view.header?.record;
   const gamesPlayed = rec ? (rec.wins ?? 0) + (rec.losses ?? 0) + (rec.ties ?? 0) : null;
   // D93: the WR band is regrouped exactly as the field regroups it before anything is measured or drawn,
