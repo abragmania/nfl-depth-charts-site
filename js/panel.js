@@ -209,15 +209,22 @@ function statusBlockHtml(card) {
 // does not expose at all (confirmed live 2026-09-11: no tacklesForLoss/quarterbackHits field anywhere in
 // the "defensive" category, and no starts/snap-count category for offensive linemen) — shown as "—" with
 // an explanatory note rather than silently substituting a different, mislabeled stat.
+// D170 (Adam, 2026-09-23: "important stat"): fumbles lost, every kind ESPN keeps. ESPN has no passing fumble field;
+// a quarterback's are filed under rushing, so the rushing + receiving sum is the whole figure for every family.
+// Null (a dash) only when neither category has a figure at all.
+const FL = ["FL", (s) => {
+  const r = s.stats?.rushing?.rushingFumblesLost?.value, c = s.stats?.receiving?.receivingFumblesLost?.value;
+  return r == null && c == null ? null : (Number(r) || 0) + (Number(c) || 0);
+}, "fumblesLost"];
 const STAT_FAMILIES = {
   // D169 (Adam, 2026-09-23): a quarterback's rushing sits on the same line after his passing (CAR = carries).
   QB: [["CMP", "passing", "completions"], ["ATT", "passing", "passingAttempts"], ["YDS", "passing", "passingYards"],
        ["TD", "passing", "passingTouchdowns"], ["INT", "passing", "interceptions"], ["RTG", "passing", "QBRating"],
-       ["CAR", "rushing", "rushingAttempts"], ["R YDS", "rushing", "rushingYards"], ["R TD", "rushing", "rushingTouchdowns"]],
+       ["CAR", "rushing", "rushingAttempts"], ["R YDS", "rushing", "rushingYards"], ["R TD", "rushing", "rushingTouchdowns"], FL],
   RB: [["ATT", "rushing", "rushingAttempts"], ["YDS", "rushing", "rushingYards"], ["AVG", "rushing", "yardsPerRushAttempt"],
-       ["TD", "rushing", "rushingTouchdowns"], ["REC", "receiving", "receptions"], ["REC YDS", "receiving", "receivingYards"]],
+       ["TD", "rushing", "rushingTouchdowns"], ["REC", "receiving", "receptions"], ["REC YDS", "receiving", "receivingYards"], FL],
   WR_TE: [["TGT", "receiving", "receivingTargets"], ["REC", "receiving", "receptions"], ["YDS", "receiving", "receivingYards"],
-          ["TD", "receiving", "receivingTouchdowns"]],
+          ["TD", "receiving", "receivingTouchdowns"], FL],
   DL_EDGE: [["TKL", "defensive", "totalTackles"], ["SACK", "defensive", "sacks"],
             ["TFL", "__missing", "tacklesForLoss"], ["QB HITS", "__missing", "quarterbackHits"]],
   LB: [["TKL", "defensive", "totalTackles"], ["SACK", "defensive", "sacks"], ["INT", "defensive", "interceptions"], ["PD", "defensive", "passesDefended"]],
@@ -247,6 +254,7 @@ function statFamily(card) {
 
 function statValue(season, cat, name) {
   if (cat === "__missing") return null;
+  if (typeof cat === "function") return cat(season); // D170: a summed column (fumbles lost across categories)
   return season.stats?.[cat]?.[name]?.value ?? null;
 }
 
@@ -313,11 +321,11 @@ const col = (c) => (s) => s[c] ?? 0;
 const TKL = ["TKL", (s) => (s.def_tackles_solo ?? 0) + (s.def_tackles_with_assist ?? 0) + (s.def_tackle_assists ?? 0)];
 export const GAMELOG_FAMILIES = {
   QB: [["CMP", col("completions")], ["ATT", col("attempts")], ["YDS", col("passing_yards")], ["TD", col("passing_tds")], ["INT", col("passing_interceptions")],
-       ["CAR", col("carries")], ["R YDS", col("rushing_yards")], ["R TD", col("rushing_tds")]], // D169: rushing after passing
+       ["CAR", col("carries")], ["R YDS", col("rushing_yards")], ["R TD", col("rushing_tds")], ["FL", col("fumbles_lost_total")]], // D169 rushing, D170 FL
   RB: [["ATT", col("carries")], ["YDS", col("rushing_yards")],
        ["AVG", (s) => (s.carries ? (Math.round(((s.rushing_yards ?? 0) / s.carries) * 10) / 10).toFixed(1) : dash)],
-       ["TD", col("rushing_tds")], ["REC", col("receptions")], ["REC YDS", col("receiving_yards")]],
-  WR_TE: [["TGT", col("targets")], ["REC", col("receptions")], ["YDS", col("receiving_yards")], ["TD", col("receiving_tds")]],
+       ["TD", col("rushing_tds")], ["REC", col("receptions")], ["REC YDS", col("receiving_yards")], ["FL", col("fumbles_lost_total")]],
+  WR_TE: [["TGT", col("targets")], ["REC", col("receptions")], ["YDS", col("receiving_yards")], ["TD", col("receiving_tds")], ["FL", col("fumbles_lost_total")]],
   DL_EDGE: [TKL, ["SACK", col("def_sacks")], ["TFL", col("def_tackles_for_loss")], ["QB HITS", col("def_qb_hits")]],
   LB: [TKL, ["SACK", col("def_sacks")], ["INT", col("def_interceptions")], ["PD", col("def_pass_defended")]],
   DB: [TKL, ["INT", col("def_interceptions")], ["PD", col("def_pass_defended")], ["FF", col("def_fumbles_forced")]],
