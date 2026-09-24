@@ -5,7 +5,7 @@
 // the Madden passing attributes sit under Rushing. Every figure comes from agg_qb.js (pure); this file only draws
 // and wires clicks. Interactivity (D177): a weekly column sets the window to that week and back; a zone cell lists
 // the plays behind it; the header links to his depth-chart card (new tab), his team page and back to Quarterbacks.
-import { fromQuery, seasonsOf, weekLabel } from "../filters.js";
+import { fromQuery, seasonsOf, weekLabel, splitKey } from "../filters.js";
 import { loadFor, loadTeams, displayName } from "../data.js";
 import { isStatic } from "../../../js/api.js";
 import { clubGames } from "../agg.js";
@@ -44,6 +44,30 @@ export function maddenQb(madden, gsis, season) {
 
 // The page ignores team, opponent and the position chips (one man; his reference is every QB in the window).
 const pageState = (st) => ({ ...st, team: "", opp: "", ha: "", downs: [], qtrs: [], pos: {} });
+
+// PURE: agg_qb.js's per-week series (no opponent) enriched with his club's opponent that week and whether the
+// week was inside the window. His club for a week comes from players.json teams[week]; a week with no entry
+// there (he had no dropback or carry) falls back to his nearest known week, so a week his club played still
+// resolves its opponent instead of reading "bye". "car" is null only for a week he had no dropback or carry
+// (agg_qb.js's series); a week his club had a game (g) but he did not is a DNP, not a bye.
+export function qbWeeklySeries(rawSeries, meta, games, winKeys) {
+  const weekNum = (key) => { const { season, week } = splitKey(key); return season * 100 + week; };
+  const teamOf = (key) => {
+    if (meta?.teams?.[key]) return meta.teams[key];
+    let best = null, bestDist = Infinity;
+    for (const k of Object.keys(meta?.teams || {})) {
+      const d = Math.abs(weekNum(k) - weekNum(key));
+      if (d < bestDist) { bestDist = d; best = k; }
+    }
+    return best ? meta.teams[best] : null;
+  };
+  return rawSeries.map((s) => {
+    const t = teamOf(s.key);
+    const g = t ? games.get(`${s.key}|${t}`) : null;
+    const played = s.car !== null && s.car !== undefined;
+    return { ...s, opp: g?.opp || null, home: g ? g.home : null, inWin: winKeys.has(s.key), dnp: !!g && !played };
+  });
+}
 export function windowName(st, weeks) {
   if (st.window === "last3") return "Last 3";
   if (st.window === "range" && weeks.length) return weeks.length === 1 ? weekLabel(weeks[0], st.season) : `${weekLabel(weeks[0], st.season)}–${weekLabel(weeks[weeks.length - 1], st.season)}`;
@@ -104,11 +128,7 @@ export async function renderQbPlayer(ctx, params, query) {
   // The whole timeline, the window's weeks bright, with the opponent under each week.
   const games = new Map(clubGames(data.blocks).map((g) => [`${g.key}|${g.team}`, g]));
   const winKeys = new Set(win.weeks);
-  const series = (frow?.series || full.weeks.map((key) => ({ key }))).map((s) => {
-    const t = meta.teams?.[s.key];
-    const g = t ? games.get(`${s.key}|${t}`) : null;
-    return { ...s, opp: g?.opp || null, home: g ? g.home : null, inWin: winKeys.has(s.key) };
-  });
+  const series = qbWeeklySeries(frow?.series || full.weeks.map((key) => ({ key })), meta, games, winKeys);
 
   const tile = (label, val, k, lg, title = "") => {
     const t = k ? qbTier(k, r?.[k], cuts) : "";

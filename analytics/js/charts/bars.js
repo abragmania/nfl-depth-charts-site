@@ -36,6 +36,8 @@ export function weeklyStrips(series, strips, { season, bw = 40, gap = 10, sh = 5
     series.forEach((s, i) => {
       const v = s[sp.k], bx = x(i);
       const dim = s.inWin ? "" : " dim";
+      // His club played that week but he has no rows in it: a muted "DNP" mark, no bar (zero height), never "bye".
+      if (s.dnp) { g += `<text class="an-wb-dnp${dim}" x="${bx + bw / 2}" y="${top + sh - 4}">DNP</text>`; return; }
       if (v === null || v === undefined) { g += `<text class="an-wb-na${dim}" x="${bx + bw / 2}" y="${top + sh - 4}">–</text>`; return; }
       const h = Math.max(1.5, top + sh - y(v));
       g += `<rect class="an-wb-bar${dim}${sp.tier ? " t-" + sp.tier(v) : ""}" x="${bx}" y="${(top + sh - h).toFixed(1)}" width="${bw}" height="${h.toFixed(1)}" rx="3"/>`

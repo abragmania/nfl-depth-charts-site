@@ -62,6 +62,8 @@ export function qbStrips(series, strips, { season, bw = 30, gap = 8, sh = 52, lw
       + `<line class="an-wb-base${sp.signed ? " zero" : ""}" x1="${lw - 5}" x2="${W - rw + 5}" y1="${mid}" y2="${mid}"/>`;
     series.forEach((s, i) => {
       const v = s[sp.k], bx = x(i), dim = s.inWin === false ? " dim" : "";
+      // His club played that week but he has no rows in it (no dropback or carry): a muted "DNP" mark, no bar.
+      if (s.dnp) { g += `<text class="an-wb-dnp${dim}" x="${bx + bw / 2}" y="${mid - 4}">DNP</text>`; return; }
       if (!isNum(v)) { g += `<text class="an-wb-na${dim}" x="${bx + bw / 2}" y="${mid - 4}">–</text>`; return; }
       const yv = y(v), h = Math.max(1.5, Math.abs(mid - yv));
       const cls = sp.signed ? (v >= 0 ? " up" : " down") : " plain";

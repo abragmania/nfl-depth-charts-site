@@ -13,7 +13,7 @@
 // The weekly chart always spans every loaded week (the whole timeline, both seasons when Include 2025 is on) so a
 // one-week window can be seen in context; the window's weeks are flagged `inWin` and drawn bright.
 import { aggregateUsage, clubGames, colIndex, usageReference, inPool, tierCuts, referenceText } from "./agg.js";
-import { gamesInWindow } from "./filters.js";
+import { gamesInWindow, splitKey } from "./filters.js";
 
 const num = (v) => (v === null || v === undefined || v === "" || !Number.isFinite(+v) ? null : +v);
 const truthy = (v) => v === true || v === 1 || v === "1" || v === "true";
@@ -241,14 +241,26 @@ export function playerView(blocks, players, stIn, gsis) {
   }
 
   // Weekly timeline: target share, air-yards share, snap share (from the whole-timeline row) with the opponent.
-  const teamOf = (key) => meta.teams?.[key] || null;
+  // His club for a week comes from players.json teams[week]; a week with no entry there (he had no rows) falls
+  // back to his nearest known week, so a week the club played still resolves its opponent instead of reading "bye".
+  const weekNum = (key) => { const { season, week } = splitKey(key); return season * 100 + week; };
+  const teamOf = (key) => {
+    if (meta.teams?.[key]) return meta.teams[key];
+    let best = null, bestDist = Infinity;
+    for (const k of Object.keys(meta.teams || {})) {
+      const d = Math.abs(weekNum(k) - weekNum(key));
+      if (d < bestDist) { bestDist = d; best = k; }
+    }
+    return best ? meta.teams[best] : null;
+  };
   const series = (frow?.series || full.weeks.map((key) => ({ key, v: null, ay: null, snap: null, tgt: 0 }))).map((s) => {
     const team = teamOf(s.key);
     const g = team ? oppOf.get(`${s.key}|${team}`) : null;
     const w = myWeek.get(s.key);
     const runs = g ? clubRuns.get(`${s.key}|${team}`) || 0 : 0;
     const played = s.v !== null || s.snap !== null || !!w;
-    return { ...s, opp: g?.opp || null, home: g?.home ?? null, inWin: winKeys.has(s.key),
+    // His club had a game that week (g) but he has no rows in it: a DNP, not a bye.
+    return { ...s, opp: g?.opp || null, home: g?.home ?? null, inWin: winKeys.has(s.key), dnp: !!g && !played,
       car: played ? w?.car || 0 : null, rushShare: played ? ratio(w?.car || 0, runs) : null };
   });
 
