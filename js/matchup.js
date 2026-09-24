@@ -14,6 +14,8 @@ import { computeLayout, renderFieldSvg, renderLevelLabels, FIELD_VARIANT } from 
 import { mountScaledField, disposeCurrentView, MIN_READABLE_SCALE } from "./viewfit.js";
 import { navStripHtml, wireNav } from "./nav.js";
 import { isLightWash } from "./landing.js";
+// D173: this week's games strip (shared with the landing page) and the game line for the game being viewed.
+import { gamesBarHtml, gameLineHtml, findGame } from "./gamesbar.js";
 // D111: one legend, drawn on both pages (see matchupLegendHtml). D134: one reduced-depth option object too.
 import { legendHtml, REDUCED_DEPTH_OPTS } from "./team.js";
 
@@ -287,7 +289,7 @@ export async function renderMatchup(root, search, aAbbr, bAbbr) {
   search.hidden = true;
   disposeCurrentView(); // the outgoing view's observers must not outlive its DOM
   const A = (aAbbr || "").toUpperCase();
-  const { teams } = await getTeams();
+  const { teams, games = [] } = await getTeams();
   const teamA = teams.find((t) => t.abbr === A);
   if (!teamA) {
     document.title = "NFL Depth Charts";
@@ -307,6 +309,7 @@ export async function renderMatchup(root, search, aAbbr, bAbbr) {
     // "Back to team" link, so picking a bye-week matchup doesn't strand you any differently than any other
     // route does.
     root.innerHTML = `
+      ${gamesBarHtml(teams, games, null)}
       ${navStripHtml({ teams, abbr: A, page: "matchup", primary: teamA.colourPrimary, secondary: teamA.colourSecondary })}
       ${byePickerHtml(teamA, teams)}`;
     wireByePicker(root, A);
@@ -340,10 +343,16 @@ export async function renderMatchup(root, search, aAbbr, bAbbr) {
   // halfBannerHtml/fieldHtml) — B defends the top half, A is on offense in the bottom half (the same split
   // halfWatermarkHtml/facingView use). `.matchup-field-wrap` (styles.css) gives the three a single rounded,
   // bordered frame so the banners read as caps on the same card the field sits in.
+  // D173: the week's games strip sits above everything, the chip for this game lit when A and B really are
+  // this week's opponents (either order); the game line (kickoff, venue, conditions) sits under the header and
+  // is absent for a hand-picked pairing that is not a real game this week.
+  const game = findGame(games, A, B);
   root.innerHTML = `
     <div class="matchup is-compact">
+      ${gamesBarHtml(teams, games, [A, B])}
       ${navStripHtml({ teams, abbr: A, page: "matchup", opponentAbbr: B, primary: teamA.colourPrimary, secondary: teamA.colourSecondary })}
       ${headerHtml(teamA, teamB, viewA, viewB, teams)}
+      ${gameLineHtml(game)}
       <div class="team-body">
         <div class="matchup-field-wrap">
           ${halfBannerHtml(teamB, "DEFENSE", "top")}
@@ -388,7 +397,7 @@ function mountMatchupField(root, viewA, viewB, teamA, teamB) {
     root,
     probe: computeLayout(view),
     build: (spread, minHeight, ownHeight) => fieldHtml(viewA, viewB, teamA, teamB, spread, depthOpts, ownHeight),
-    observe: [root.querySelector(".nav-strip"), root.querySelector(".matchup-head")],
+    observe: [root.querySelector(".nav-strip"), root.querySelector(".matchup-head"), root.querySelector(".games-bar"), root.querySelector(".game-line")],
     reserveBelow: () => matchupReserveBelow(root), // D114: account for the bottom half-banner strip
     cascade: {
       floor: MIN_READABLE_SCALE,

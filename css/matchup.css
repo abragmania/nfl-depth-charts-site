@@ -93,22 +93,24 @@
 .matchup-bar { display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding:8px 12px; margin-bottom:8px;
   background:var(--panel); border:1px solid #22282f; border-radius:10px; }
 
-/* One row of chips at 1920 and 1536 wide (D172); narrower windows may wrap. */
-.games-row { display:flex; align-items:center; gap:6px; flex:1 1 auto; flex-wrap:wrap; min-width:0; }
-.game-chip { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1px;
-  padding:4px 8px; border-radius:7px; border:1px solid #2a323b; background:#0f1317; color:var(--ink);
-  text-decoration:none; line-height:1.25; flex:1 1 0; min-width:0; }
+/* One row of 16 chips at 1920 wide (D172 as redrawn by Adam, after ESPN's scoreboard strip). A grid of equal
+   cells, each never narrower than its own content: narrower windows wrap to a second row of the same cells
+   (Adam: acceptable at 1536) rather than squeezing or stretching a lone chip across the bar. */
+.games-row { display:grid; grid-template-columns:repeat(auto-fit, minmax(96px, 1fr)); gap:4px; flex:1 1 0; min-width:0; }
+/* A small cell: kickoff across the top, then two rows (away, home) of logo | abbreviation | game data. The grid's
+   three columns are shared by both rows, so the data column lines up and never runs into the names. */
+.game-chip { display:grid; grid-template-columns:14px auto auto; column-gap:4px; row-gap:1px; align-items:center;
+  justify-content:center; padding:3px 3px 4px; border-radius:7px; border:1px solid #2a323b; background:#0f1317;
+  color:var(--ink); text-decoration:none; line-height:1.2; min-width:0; }
 .game-chip:hover { border-color:#ffd54a; background:#181d23; }
-.game-chip-line { font-size:11.5px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; }
-.game-chip-line:last-child { color:var(--muted); font-weight:600; }
-
-/* A full 16-game slate has less room per chip below ~1700px; tighten padding/gap/type rather than let the
-   line/total text ellipsis, which a 1536-wide window (D172's own QA width) otherwise hits. */
-@media (max-width:1700px) {
-  .games-row { gap:3px; }
-  .game-chip { padding:4px 5px; }
-  .game-chip-line { font-size:10.5px; }
-}
+.game-chip-kick { grid-column:1 / -1; font-size:10px; font-weight:600; color:var(--muted); white-space:nowrap; text-align:center; }
+.game-chip-note { margin-left:3px; padding:0 3px; border-radius:3px; background:#1f262e; font-size:8.5px; text-transform:uppercase; letter-spacing:.03em; }
+.game-chip-logo { width:14px; height:14px; object-fit:contain; display:block; }
+.game-chip-abbr { font-size:11.5px; font-weight:800; white-space:nowrap; }
+.game-chip-data { font-size:11px; font-weight:700; white-space:nowrap; text-align:right; padding-left:2px; font-variant-numeric:tabular-nums; }
+.game-chip-data-line { color:#ffd54a; }
+.game-chip-data-total, .game-chip-data-pk { color:var(--ink); font-weight:600; }
+.game-chip-ou { color:var(--muted); font-size:8.5px; font-weight:700; }
 
 .matchup-bar-any { padding:6px 12px; border-radius:6px; border:1px solid #2a323b; background:transparent;
   color:var(--muted); font-size:12px; font-weight:700; cursor:pointer; flex:none; white-space:nowrap; }
@@ -120,3 +122,20 @@
 .matchup-bar-vs { font-size:12px; color:var(--muted); flex:none; }
 .matchup-bar-form button { padding:6px 16px; border-radius:6px; border:1px solid #2a323b; background:var(--ink); color:var(--bg); font-weight:800; font-size:13px; cursor:pointer; flex:none; }
 .matchup-bar-form button:hover { background:#ffd54a; border-color:#ffd54a; }
+
+/* ---- Matchup page: the week's games strip and the game line (public/js/gamesbar.js, D173) ---- */
+
+/* The same chip row as the landing bar, a touch tighter: every pixel here comes out of the field's height. */
+.games-bar { padding:5px 8px; margin-bottom:6px; }
+/* The game being viewed: accent border and a warm wash, so it reads as "you are here" at a glance. */
+.game-chip.is-active { border-color:#ffd54a; background:rgba(255,213,74,.16); box-shadow:inset 0 0 0 1px #ffd54a; }
+.game-chip.is-active .game-chip-kick { color:#ffe9a8; }
+
+.game-line { display:flex; align-items:center; justify-content:center; gap:4px 10px; flex-wrap:wrap; margin-top:6px;
+  padding:4px 12px; font-size:13px; font-weight:600; line-height:1.3; color:var(--ink);
+  background:var(--panel); border:1px solid #22282f; border-radius:8px; }
+.game-line-when { white-space:nowrap; }
+.game-line-sep { color:var(--muted); font-weight:400; }
+.game-wx { display:inline-flex; align-items:center; gap:6px; flex-wrap:wrap; }
+.game-wx .game-line-sep { margin:0 2px; }
+.game-line .ico { width:18px; height:18px; flex:none; color:var(--ink); }

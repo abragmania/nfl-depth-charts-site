@@ -6,40 +6,61 @@ import { icon, weatherIconKey, espnIconKey } from "./icons.js";
 const ESC = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ESC[c]);
 
-const KICKOFF_FMT = new Intl.DateTimeFormat(undefined, { weekday: "short", hour: "numeric", minute: "2-digit" });
+// D172 as redrawn by Adam, 2026-09-24 (after ESPN's scoreboard strip): the spread and total are NOT mixed into
+// the team names. Each chip is a small cell: the kickoff on top (short, Eastern: "Thu 8:15 PM"), then one row
+// per team, away first, each a small logo and the abbreviation, with the game data in its own column to the
+// right - the favorite's row shows its line ("-4.5"), the other row the total ("O/U 42.5"); a pick'em prints
+// "PK" on the home row and the total on the away row; a neutral site adds a small "vs" to the kickoff line (its title says "neutral site").
+const SHORT_ET = new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", weekday: "short", hour: "numeric", minute: "2-digit" });
+export function fmtKickoffShort(iso) {
+  const t = Date.parse(iso ?? "");
+  if (!Number.isFinite(t)) return "";
+  const p = Object.fromEntries(SHORT_ET.formatToParts(new Date(t)).map((x) => [x.type, x.value]));
+  return `${p.weekday} ${p.hour}:${p.minute} ${p.dayPeriod}`;
+}
 
-// Pure: the two display lines for one chip (away line first, home line second - the caller adds the tags
-// and does the escaping). The favorite's line sits by the favorite; the total, in brackets, sits by the
-// other team; a pick'em prints "pk" by the home team and the total by the away team (D172).
-//
-// Team name: the nickname was tried first (D172 draft), but a full 16-game slate at 1920 wide truncates it
-// mid-word once the line/total number is appended, so this reads the abbreviation instead - the same one
-// the division grid above it already uses, and it never truncates at any slate size.
-export function gameChipLines(g, teamsByAbbr) {
-  const away = teamsByAbbr.get(g.away), home = teamsByAbbr.get(g.home);
-  const awayName = away?.abbr || g.away;
-  const homeName = home?.abbr || g.home;
+// Pure: what each chip says. `data` per row is {kind, text}: kind "line" (the favorite's spread), "total"
+// (the over/under, printed with a muted "O/U"), "pk" (pick'em, home row) or null (ESPN lists no odds).
+export function gameChipData(g) {
   const hasOdds = g.favorite != null || g.overUnder != null;
   const isPickEm = hasOdds && g.favorite == null;
-  const awayText = g.favorite === g.away ? `${awayName} -${g.line}`
-    : hasOdds ? `${awayName} (${g.overUnder})` : awayName;
-  const homeText = g.favorite === g.home ? `${homeName} -${g.line}`
-    : isPickEm ? `${homeName} pk`
-    : hasOdds ? `${homeName} (${g.overUnder})` : homeName;
-  return { awayLine: `${awayText} ${g.neutral ? "vs" : "at"}`, homeLine: homeText };
+  const total = g.overUnder != null ? { kind: "total", text: String(g.overUnder) } : null;
+  const rowData = (abbr, isHome) => {
+    if (g.favorite === abbr) return g.line != null ? { kind: "line", text: `-${g.line}` } : null;
+    if (isPickEm && isHome) return { kind: "pk", text: "PK" };
+    return hasOdds ? total : null;
+  };
+  return {
+    kick: fmtKickoffShort(g.kickoff),
+    neutral: !!g.neutral,
+    rows: [{ abbr: g.away, data: rowData(g.away, false) }, { abbr: g.home, data: rowData(g.home, true) }],
+  };
 }
 
 // Is this game the one between these two clubs, in either order? (The Matchup page is A's offense against B's
 // defense, and either club may be the home side.)
 const isPair = (g, a, b) => !!g && ((g.away === a && g.home === b) || (g.away === b && g.home === a));
 
+function logoUrl(t) {
+  let u = t?.logoDark || t?.logo || "";
+  if (u && !/^https?:\/\//.test(u) && !u.startsWith("/")) u = "/" + u;
+  return u;
+}
+
 function gameChipHtml(g, teamsByAbbr, active) {
-  const { awayLine, homeLine } = gameChipLines(g, teamsByAbbr);
-  const title = g.kickoff ? KICKOFF_FMT.format(new Date(g.kickoff)) : "";
+  const d = gameChipData(g);
   const cur = active ? ' aria-current="true"' : "";
+  const title = [fmtKickoffET(g.kickoff), g.venue?.name].filter(Boolean).join(" · ");
+  const rows = d.rows.map(({ abbr, data }) => {
+    const url = logoUrl(teamsByAbbr.get(abbr));
+    const logo = url ? `<img class="game-chip-logo" src="${esc(url)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">` : '<span class="game-chip-logo"></span>';
+    const val = !data ? "" : data.kind === "total"
+      ? `<span class="game-chip-ou">O/U</span> ${esc(data.text)}` : esc(data.text);
+    return `${logo}<span class="game-chip-abbr">${esc(abbr)}</span><span class="game-chip-data game-chip-data-${data?.kind ?? "none"}">${val}</span>`;
+  }).join("");
+  const note = d.neutral ? '<span class="game-chip-note" title="neutral site">vs</span>' : "";
   return `<a class="game-chip${active ? " is-active" : ""}" href="#/matchup/${esc(g.away)}/${esc(g.home)}" title="${esc(title)}"${cur}>
-    <span class="game-chip-line">${esc(awayLine)}</span>
-    <span class="game-chip-line">${esc(homeLine)}</span>
+    <span class="game-chip-kick">${esc(d.kick)}${note}</span>${rows}
   </a>`;
 }
 

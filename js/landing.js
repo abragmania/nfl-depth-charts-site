@@ -1,4 +1,5 @@
 import { getTeams } from "./api.js";
+import { gamesRowHtml } from "./gamesbar.js";
 
 export const DIVISION_ORDER = ["AFC East", "AFC North", "AFC South", "AFC West", "NFC East", "NFC North", "NFC South", "NFC West"];
 const ESC = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
@@ -50,37 +51,7 @@ function tile(t) {
 // D172 (replaces D46's pick-two-teams form as the top bar itself): one chip per this week's game, away at
 // home, kickoff order. The old form still exists for building an arbitrary matchup, but it's tucked behind
 // an "Any matchup..." toggle at the end of the bar so the games are what the bar reads as by default.
-const KICKOFF_FMT = new Intl.DateTimeFormat(undefined, { weekday: "short", hour: "numeric", minute: "2-digit" });
-
-// Pure: the two display lines for one chip (away line first, home line second - the caller adds the tags
-// and does the escaping). The favorite's line sits by the favorite; the total, in brackets, sits by the
-// other team; a pick'em prints "pk" by the home team and the total by the away team (D172).
-//
-// Team name: the nickname was tried first (D172 draft), but a full 16-game slate at 1920 wide truncates it
-// mid-word once the line/total number is appended, so this reads the abbreviation instead - the same one
-// the division grid above it already uses, and it never truncates at any slate size.
-export function gameChipLines(g, teamsByAbbr) {
-  const away = teamsByAbbr.get(g.away), home = teamsByAbbr.get(g.home);
-  const awayName = away?.abbr || g.away;
-  const homeName = home?.abbr || g.home;
-  const hasOdds = g.favorite != null || g.overUnder != null;
-  const isPickEm = hasOdds && g.favorite == null;
-  const awayText = g.favorite === g.away ? `${awayName} -${g.line}`
-    : hasOdds ? `${awayName} (${g.overUnder})` : awayName;
-  const homeText = g.favorite === g.home ? `${homeName} -${g.line}`
-    : isPickEm ? `${homeName} pk`
-    : hasOdds ? `${homeName} (${g.overUnder})` : homeName;
-  return { awayLine: `${awayText} ${g.neutral ? "vs" : "at"}`, homeLine: homeText };
-}
-
-function gameChipHtml(g, teamsByAbbr) {
-  const { awayLine, homeLine } = gameChipLines(g, teamsByAbbr);
-  const title = g.kickoff ? KICKOFF_FMT.format(new Date(g.kickoff)) : "";
-  return `<a class="game-chip" href="#/matchup/${esc(g.away)}/${esc(g.home)}" title="${esc(title)}">
-    <span class="game-chip-line">${esc(awayLine)}</span>
-    <span class="game-chip-line">${esc(homeLine)}</span>
-  </a>`;
-}
+// D173: the chip row itself lives in gamesbar.js, shared with the Matchup page's strip.
 
 // D46's original picker, now hidden behind the "Any matchup..." toggle rather than shown by default.
 // Defaults to the first team alphabetically and, when known, that team's opponent from this week's
@@ -103,10 +74,8 @@ function matchupFormHtml(teams) {
 }
 
 export function matchupBarHtml(teams, games) {
-  const teamsByAbbr = new Map(teams.map((t) => [t.abbr, t]));
-  const chips = games.map((g) => gameChipHtml(g, teamsByAbbr)).join("");
   return `<div class="matchup-bar">
-    <div class="games-row">${chips}</div>
+    ${gamesRowHtml(teams, games)}
     <button type="button" id="matchup-bar-any-toggle" class="matchup-bar-any">Any matchup…</button>
     ${matchupFormHtml(teams)}
   </div>`;
