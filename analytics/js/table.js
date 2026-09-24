@@ -9,7 +9,7 @@
 // 2. TOTALS: anything broken down by week also prints its window total. A share totals by weighting (his
 //    targets / the club attempts over the window), never as a mean of the weekly percentages.
 import { sortRows } from "./agg.js";
-import { weekLabel } from "./filters.js";
+import { weekLabel, POSITIONS } from "./filters.js";
 
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const DASH = `<span class="an-na">–</span>`;
@@ -84,6 +84,13 @@ const GROUPS = [["t", "Opportunity"], ["p", "Production"], ["r", "Routes · heat
 // First column of each group gets a hairline on its left (class gs).
 COLS.forEach((c, i) => { c.gs = i === 0 || COLS[i - 1].grp !== c.grp; });
 const BAND = (pos) => (pos === "RB" || pos === "FB" ? "BACKFIELD" : pos);
+
+// D182 (Adam, 2026-09-24): air yards are not relevant for a running back. When the position chips leave only
+// RB visible, the AY, AY %, WOPR and aDOT columns are dropped from the table entirely; in a mixed view they
+// stay (perspective for the WRs and TEs on the same page), but an RB's own row prints a dash in them rather
+// than a real-but-misleading number. Exported (pure) so tests can check both without a DOM.
+const AY_ONLY_KEYS = new Set(["ay", "ayShare", "wopr", "adot"]);
+export const rbOnlyMode = (pos) => Boolean(pos?.RB === "in" && !POSITIONS.some((p) => p !== "RB" && pos[p] === "in"));
 
 // ---- inline SVG ----------------------------------------------------------------------------------------
 export function sparkline(series, st) {
@@ -176,21 +183,26 @@ function detailHtml(row, st, q, lg, windowName) {
 export const anchor = { id: null, top: null };
 
 // ---- table ---------------------------------------------------------------------------------------------
-// `onState(next)` receives a new filter state (sort, minimum, open row); `query` is the current hash query.
-// `view`: { lg (agg.leagueAverages over the league-wide rows), windowName ("Season", "Last 3", "W1–W2") }.
-export function renderTable(el, allRows, st, query, onState, view = {}) {
+// The table's markup as a pure string (no DOM): everything renderTable needs to know to decide what to show,
+// split out so tests can check column visibility and RB dashing without a document. `view`: { lg
+// (agg.leagueAverages over the league-wide rows), windowName ("Season", "Last 3", "W1–W2") }.
+export function tableHtml(allRows, st, query, view = {}) {
   const rows = sortRows(allRows.filter((r) => r.tgt >= st.minTgt), st.sort, st.dir);
   const q = query || "";
   const teams = view.teams;
+  // D182: RB-only views drop the air-yards columns entirely; a mixed view keeps them.
+  const cols = rbOnlyMode(st.pos) ? COLS.filter((c) => !AY_ONLY_KEYS.has(c.k)) : COLS;
   // Player, team and Pos now share one cell (c-name), so the fixed columns are rank/player/games, not four.
-  const nCols = 3 + COLS.length + 1;
+  const nCols = 3 + cols.length + 1;
   const th = (k, h, t, cls = "") => `<th class="${cls}${st.sort === k ? " sorted " + st.dir : ""}" data-sort="${k}" title="${esc(t)}">${h}</th>`;
-  const groupRow = `<tr class="an-grp"><th colspan="3"></th>${GROUPS.map(([g, l]) => `<th colspan="${COLS.filter((c) => c.grp === g).length}" class="g-${g} gs">${l}</th>`).join("")}<th></th></tr>`;
+  const groupRow = `<tr class="an-grp"><th colspan="3"></th>${GROUPS.map(([g, l]) => `<th colspan="${cols.filter((c) => c.grp === g).length}" class="g-${g} gs">${l}</th>`).join("")}<th></th></tr>`;
   // The Tgt header says whether pass-interference targets are in the count (the "PI targets" switch below).
   const colTitle = (c) => (c.k === "tgt" ? `${c.t} (${st.pi === false ? "excludes" : "includes"} pass-interference targets)` : c.t);
-  const head = `<tr>${th("rank", "#", "Rank", "c-rank")}${th("name", "Player", "Player, team, position", "c-name")}${th("g", "G", "Games in the window")}${COLS.map((c) => th(c.k, c.h, colTitle(c), "g-" + c.grp + (c.gs ? " gs" : ""))).join("")}<th class="c-spark" title="Weekly target share; hover a point for the week">Tgt % by week</th></tr>`;
+  const head = `<tr>${th("rank", "#", "Rank", "c-rank")}${th("name", "Player", "Player, team, position", "c-name")}${th("g", "G", "Games in the window")}${cols.map((c) => th(c.k, c.h, colTitle(c), "g-" + c.grp + (c.gs ? " gs" : ""))).join("")}<th class="c-spark" title="Weekly target share; hover a point for the week">Tgt % by week</th></tr>`;
   const cell = (c, r) => {
-    const v = r[c.k];
+    // D182: a mixed table keeps the air-yards columns for perspective, but an RB's own numbers there are not
+    // meaningful, so his cells show a dash instead of the real (but misleading) figure.
+    const v = AY_ONLY_KEYS.has(c.k) && r.pos === "RB" ? null : r[c.k];
     const tier = tierOf(c.k, v);
     const bar = c.bar && v !== null && v !== undefined ? `<i class="an-bar" style="width:${Math.min(100, (v / c.bar) * 100).toFixed(1)}%"></i>` : "";
     return `<td class="num g-${c.grp}${c.gs ? " gs" : ""}${tier ? " t-" + tier : ""}${bar ? " has-bar" : ""}">${bar}<span>${c.f(v)}</span></td>`;
@@ -202,12 +214,12 @@ export function renderTable(el, allRows, st, query, onState, view = {}) {
       <td class="c-rank">${i + 1}</td>
       <td class="c-name"><a class="an-pname" href="#/player/${encodeURIComponent(r.gsis)}${q ? "?" + q : ""}">${esc(r.name)}</a>${teamPill(r.team, teams, q)}<span class="an-pospill" data-band="${BAND(r.pos)}">${esc(r.pos)}</span><a class="an-dc" href="${depth}" target="_blank" rel="noopener" title="Open his depth-chart card in a new tab" aria-label="Depth chart">↗</a></td>
       <td class="num">${r.g}</td>
-      ${COLS.map((c) => cell(c, r)).join("")}
+      ${cols.map((c) => cell(c, r)).join("")}
       <td class="c-spark">${sparkline(r.series, st)}</td></tr>`
       + (open ? `<tr class="an-detail"><td colspan="${nCols}"><div class="an-detail-wrap">${detailHtml(r, st, q, view.lg, view.windowName || "Window")}</div></td></tr>` : "");
   }).join("");
 
-  el.innerHTML = `<div class="an-tbar">
+  return `<div class="an-tbar">
       <label class="an-min">Min targets <input type="number" min="0" step="1" value="${st.minTgt}" data-min></label>
       <label class="an-switch" title="A defensive pass interference is a no-play in the play-by-play; on, it counts as a target for the receiver (never a pass attempt, catch or yards)"><input type="checkbox" data-pi${st.pi === false ? "" : " checked"}><span>${st.pi === false ? "excl. PI targets" : "PI targets"}</span></label>
       <span class="an-count">${rows.length} player${rows.length === 1 ? "" : "s"}</span>
@@ -216,6 +228,11 @@ export function renderTable(el, allRows, st, query, onState, view = {}) {
       <span class="an-hint">Click a row to open it</span>
     </div>
     <div class="an-tscroll"><table class="an-table"><thead>${groupRow}${head}</thead><tbody>${body || `<tr><td colspan="${nCols}" class="an-empty">No players match these filters.</td></tr>`}</tbody></table></div>`;
+}
+
+// `onState(next)` receives a new filter state (sort, minimum, open row); `query` is the current hash query.
+export function renderTable(el, allRows, st, query, onState, view = {}) {
+  el.innerHTML = tableHtml(allRows, st, query, view);
 
   el.querySelectorAll("th[data-sort]").forEach((h) => h.addEventListener("click", () => {
     const k = h.dataset.sort === "rank" ? "tgt" : h.dataset.sort;

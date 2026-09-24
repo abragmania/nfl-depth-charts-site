@@ -65,6 +65,19 @@ function windowName(st, weeks) {
 // Page-local view state that does not belong in the link: the zone measure and the open zone.
 const ui = { gsis: null, zoneMode: "tgt", zone: null };
 
+// D182 (Adam, 2026-09-24): air yards, aDOT and WOPR are not relevant for a running back; his usage strip leads
+// with involvement instead. WR and TE keep the full order. Exported (pure, no DOM) so tests can check the
+// omission and order directly.
+export const RB_USAGE_ORDER = ["snapPct", "routes", "routePct", "tgt", "tgtShare", "tprr", "yprr", "rz", "ez"];
+export const CATCHER_USAGE_ORDER = ["tgt", "tgtShare", "ayShare", "wopr", "adot", "rz", "ez", "routes", "routePct", "tprr", "yprr", "snapPct"];
+export const usageOrderFor = (pos) => (pos === "RB" ? RB_USAGE_ORDER : CATCHER_USAGE_ORDER);
+
+// Same ruling: the RB week-by-week block drops the air-yards-share bars (his carries and rush share already
+// show in the rushing block below); WR and TE keep all three weekly strips.
+export const RB_WEEKLY_KEYS = ["v", "snap"];
+export const CATCHER_WEEKLY_KEYS = ["v", "ay", "snap"];
+export const weeklyKeysFor = (pos) => (pos === "RB" ? RB_WEEKLY_KEYS : CATCHER_WEEKLY_KEYS);
+
 export async function renderPlayer(ctx, params, query) {
   const { root, isCurrent } = ctx;
   const gsis = params.gsis;
@@ -110,32 +123,36 @@ export async function renderPlayer(ctx, params, query) {
   const activeKey = st.window === "range" && st.from && st.from === st.to ? st.from : null;
   const sub = `${st.season}${st.with2025 ? " + 2025" : ""} · ${v.weeks.length ? (v.weeks.length === 1 ? weekLabel(v.weeks[0], st.season) : `${weekLabel(v.weeks[0], st.season)} to ${weekLabel(v.weeks[v.weeks.length - 1], st.season)}`) : "no games"}${st.window === "last3" ? " (his club's last 3 games)" : ""} · league reference: ${v.pos}s with ${st.minTgt}+ targets in the same window (${v.lg.n})`;
 
-  // 2. Usage strip.
-  const usage = [
-    tile("Targets", int(r.tgt ?? 0), { lg: fix(L.tgt, 1), title: `Targets (${st.pi === false ? "excludes" : "includes"} pass-interference targets)` }),
-    tile("Tgt %", pct(r.tgtShare), { tier: tierOf("tgtShare", r.tgtShare), lg: pct(L.tgtShare), title: "His targets / his club's pass attempts in his games" }),
-    tile("AY %", pct(r.ayShare), { tier: tierOf("ayShare", r.ayShare), lg: pct(L.ayShare), title: "His air yards / his club's air yards in his games" }),
-    tile("WOPR", fix(r.wopr, 2), { tier: tierOf("wopr", r.wopr), lg: fix(L.wopr, 2), title: "1.5 x target share + 0.7 x air-yards share" }),
-    tile("aDOT", fix(r.adot, 1), { lg: fix(L.adot, 1), title: "Air yards per target" }),
-    tile("RZ tgt", int(r.rz ?? 0), { lg: fix(L.rz, 1), title: "Red-zone targets (inside the 20)" }),
-    tile("EZ tgt", int(r.ez ?? 0), { lg: fix(L.ez, 1), title: "End-zone targets" }),
-    tile("Routes", int(r.routes), { lg: fix(L.routes, 0), title: "Routes run (heatradar, charted)" }),
-    tile("Rt %", pct(r.routePct, 0), { tier: tierOf("routePct", r.routePct), lg: pct(L.routePct, 0), title: "Routes / club dropbacks" }),
-    tile("TPRR", fix(r.tprr, 2), { tier: tierOf("tprr", r.tprr), lg: fix(L.tprr, 2), title: "Targets per route run" }),
-    tile("YPRR", fix(r.yprr, 2), { tier: tierOf("yprr", r.yprr), lg: fix(L.yprr, 2), title: "Receiving yards per route run" }),
-    tile("Snap %", pct(r.snapPct, 0), { tier: tierOf("snapPct", r.snapPct), lg: pct(L.snapPct, 0), title: "Share of his club's offensive snaps" }),
-  ].join("");
+  // 2. Usage strip. RB leads with involvement and drops the air-yards tiles (D182); WR/TE keep the full set.
+  const usageTiles = {
+    tgt: tile("Targets", int(r.tgt ?? 0), { lg: fix(L.tgt, 1), title: `Targets (${st.pi === false ? "excludes" : "includes"} pass-interference targets)` }),
+    tgtShare: tile("Tgt %", pct(r.tgtShare), { tier: tierOf("tgtShare", r.tgtShare), lg: pct(L.tgtShare), title: "His targets / his club's pass attempts in his games" }),
+    ayShare: tile("AY %", pct(r.ayShare), { tier: tierOf("ayShare", r.ayShare), lg: pct(L.ayShare), title: "His air yards / his club's air yards in his games" }),
+    wopr: tile("WOPR", fix(r.wopr, 2), { tier: tierOf("wopr", r.wopr), lg: fix(L.wopr, 2), title: "1.5 x target share + 0.7 x air-yards share" }),
+    adot: tile("aDOT", fix(r.adot, 1), { lg: fix(L.adot, 1), title: "Air yards per target" }),
+    rz: tile("RZ tgt", int(r.rz ?? 0), { lg: fix(L.rz, 1), title: "Red-zone targets (inside the 20)" }),
+    ez: tile("EZ tgt", int(r.ez ?? 0), { lg: fix(L.ez, 1), title: "End-zone targets" }),
+    routes: tile("Routes", int(r.routes), { lg: fix(L.routes, 0), title: "Routes run (heatradar, charted)" }),
+    routePct: tile("Rt %", pct(r.routePct, 0), { tier: tierOf("routePct", r.routePct), lg: pct(L.routePct, 0), title: "Routes / club dropbacks" }),
+    tprr: tile("TPRR", fix(r.tprr, 2), { tier: tierOf("tprr", r.tprr), lg: fix(L.tprr, 2), title: "Targets per route run" }),
+    yprr: tile("YPRR", fix(r.yprr, 2), { tier: tierOf("yprr", r.yprr), lg: fix(L.yprr, 2), title: "Receiving yards per route run" }),
+    snapPct: tile("Snap %", pct(r.snapPct, 0), { tier: tierOf("snapPct", r.snapPct), lg: pct(L.snapPct, 0), title: "Share of his club's offensive snaps" }),
+  };
+  const usage = usageOrderFor(v.pos).map((k) => usageTiles[k]).join("");
 
-  // 3. Week by week.
+  // 3. Week by week. RB drops the air-yards-share strip (D182); his carries and rush share already show below.
   const shareStrip = (k, label, totKey, fixedScale) => {
     const tot = r[totKey], avg = L[totKey];
     const maxV = Math.max(0, ...v.series.map((s) => s[k] ?? 0));
     return { k, label, scale: Math.max(fixedScale, maxV * 1.05), fmt: (x) => `${(x * 100).toFixed(1)}%`, short: (x) => String(Math.round(x * 100)),
       total: tot, totalText: `${wn} ${isNum(tot) ? (tot * 100).toFixed(1) + "%" : "–"}`, avg, avgText: `lg avg ${isNum(avg) ? Math.round(avg * 100) + "%" : "–"}`, tier: (x) => tierOf(totKey, x) };
   };
-  const weekly = v.series.length ? weeklyStrips(v.series, [
-    shareStrip("v", "Target share", "tgtShare", 0.4), shareStrip("ay", "Air-yards share", "ayShare", 0.5), shareStrip("snap", "Snap share", "snapPct", 1),
-  ], { season: st.season, activeKey }) : `<div class="an-note">No weeks loaded.</div>`;
+  const weeklyStripDefs = {
+    v: () => shareStrip("v", "Target share", "tgtShare", 0.4),
+    ay: () => shareStrip("ay", "Air-yards share", "ayShare", 0.5),
+    snap: () => shareStrip("snap", "Snap share", "snapPct", 1),
+  };
+  const weekly = v.series.length ? weeklyStrips(v.series, weeklyKeysFor(v.pos).map((k) => weeklyStripDefs[k]()), { season: st.season, activeKey }) : `<div class="an-note">No weeks loaded.</div>`;
 
   // 4. Target zones.
   const zoneHtml = () => `<div class="an-pl-zhead"><div class="an-seg" data-zmode>${ZONE_MODES.map((m) => `<button type="button" data-v="${m.k}" class="${ui.zoneMode === m.k ? "on" : ""}">${m.label}</button>`).join("")}</div>${zoneLegend(ui.zoneMode)}</div>
