@@ -175,3 +175,113 @@ td[class*=" t-"] > span { color:var(--t); font-weight:700; }
 .an-note { color:var(--dim); font-size:12px; margin-top:6px; }
 
 .an-foot { color:var(--dim); font-size:11.5px; margin:10px 2px 0; max-width:1100px; }
+
+/* ---- player page (#/player/:gsis, D182) ---- */
+.an-pl { display:flex; flex-direction:column; gap:12px; }
+.an-pl-head { display:flex; align-items:center; flex-wrap:wrap; gap:8px 12px; }
+.an-pl-head h1 { margin:0; font-size:24px; font-weight:800; }
+.an-pl-pill { font-size:13px; padding:2px 8px; }
+.an-pl-head .an-pospill { font-size:12.5px; padding:2px 8px; }
+.an-pl-ovr { display:inline-flex; align-items:baseline; gap:3px; padding:1px 9px; border-radius:var(--r-chip); background:color-mix(in srgb, var(--t) 22%, transparent); border:1px solid color-mix(in srgb, var(--t) 60%, transparent); }
+.an-pl-ovr b { font-size:16px; color:var(--t); }
+.an-pl-ovr small { font-size:10px; font-weight:800; color:var(--muted); letter-spacing:.06em; }
+.an-pl-links { display:flex; gap:16px; margin-left:auto; font-size:13px; }
+.an-pl-links a { color:var(--accent); text-decoration:none; font-weight:600; }
+.an-pl-links a:hover { text-decoration:underline; }
+.an-pl-bar { display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
+/* Team, opponent and the position chips do not apply to one man: hidden on this page only. */
+.an-pl .an-fgroup:has(.an-poses), .an-pl .an-fgroup:has(select) { display:none; }
+.an-pl-sub { margin-top:-4px; }
+.an-pl-tiles { display:grid; gap:6px; }
+.an-pl-usage { grid-template-columns:repeat(12, minmax(0, 1fr)); max-width:1860px; }
+@media (max-width:1760px) { .an-pl-usage { grid-template-columns:repeat(6, minmax(0, 1fr)); max-width:1100px; } }
+.an-pl-tiles-4 { grid-template-columns:repeat(4, minmax(118px, 1fr)); }
+.an-pl .an-tile b { font-size:19px; }
+.an-pl .an-tile em { white-space:nowrap; }
+.an-pl-row { display:flex; flex-wrap:wrap; gap:12px; align-items:flex-start; }
+.an-card { background:var(--panel2); border:1px solid var(--line); border-radius:var(--r-card); padding:12px 14px 14px; min-width:0; }
+.an-pl-scroll { overflow-x:auto; }
+.an-pl-weeks { flex:0 1 auto; max-width:100%; }
+
+/* Weekly strips, page size */
+.an-wbars-lg text { font-size:11px; }
+.an-wbars-lg .an-wb-lab { font-size:12px; }
+.an-wbars-lg .an-wb-tot { font-size:13.5px; }
+.an-wbars-lg .an-wb-val { font-size:11px; }
+.an-wbars .dim { opacity:.32; }
+.an-wbars .an-wb-wk.on { fill:var(--accent); font-weight:800; }
+.an-wbars .an-wb-opp { text-anchor:middle; fill:var(--dim); font-size:10px; }
+.an-wbars .an-wb-season { fill:var(--muted); font-size:11px; font-weight:800; letter-spacing:.08em; }
+.an-wbars .an-wb-div { stroke:#3a434d; stroke-dasharray:3 3; }
+.an-wb-hit { fill:transparent; cursor:pointer; }
+.an-wb-hit:hover { fill:rgba(255,255,255,.05); }
+.an-wb-hit.on { fill:rgba(255,213,74,.07); stroke:rgba(255,213,74,.35); }
+
+/* Target-zone field: one grid, his figure against his position's (see charts/zonefield.js) */
+.an-pl-zones { flex:0 0 auto; }
+.an-pl-zhead { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:8px; }
+.an-zf-leg { display:inline-flex; align-items:center; gap:3px; color:var(--dim); font-size:11px; }
+.an-zf-leg i { width:14px; height:10px; border-radius:2px; border:1px solid #20262d; }
+.an-zf-leg i:last-of-type { margin-right:5px; }
+.an-pl-zbody { display:flex; gap:14px; align-items:flex-start; }
+.an-zf { display:grid; grid-template-columns:62px repeat(3, 104px); gap:4px; }
+.an-zf-h { color:var(--dim); font-size:11px; text-align:center; }
+.an-zf-r { display:flex; flex-direction:column; justify-content:center; color:var(--muted); font-size:12px; font-weight:600; line-height:1.15; }
+.an-zf-r small { color:var(--dim); font-size:10.5px; font-weight:500; }
+.an-zf-r.los, .an-zf-r.los ~ .an-zf-c { margin-top:6px; }
+.an-zf-r.los { border-top:2px dashed #4a535d; padding-top:4px; }
+.an-zf-c { font:inherit; color:var(--ink); height:62px; border-radius:6px; border:1px solid #20262d; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1px; cursor:pointer; line-height:1.1; padding:0 4px; }
+.an-zf-c:disabled { cursor:default; }
+.an-zf-c b { font-size:17px; }
+.an-zf-c small { font-size:10.5px; color:rgba(232,235,239,.78); white-space:nowrap; }
+.an-zf-c small em { font-style:normal; color:rgba(232,235,239,.55); }
+.an-zf-c:not(:disabled):hover { outline:1px solid rgba(255,255,255,.35); }
+.an-zf-c.sel { outline:2px solid var(--accent); outline-offset:-1px; }
+.an-zf-c.heat, .an-zf-leg i.heat { background:color-mix(in srgb, var(--tier-elite) calc(var(--heat) * 70%), #161b21); }
+.an-zf-c.up, .an-zf-leg i.up { background:color-mix(in srgb, var(--tier-elite) calc(var(--d) * 72% + 8%), #161b21); }
+.an-zf-c.down, .an-zf-leg i.down { background:color-mix(in srgb, var(--tier-flat) calc(var(--d) * 72% + 8%), #161b21); }
+.an-zf-c.few, .an-zf-leg i.few { background:#1b2027; }
+.an-zf-c.few b { color:var(--muted); }
+.an-pl-plays { width:360px; min-height:100px; }
+.an-pl-plhead { display:flex; align-items:baseline; gap:8px; margin-bottom:4px; font-size:12.5px; }
+.an-pl-plhead span { color:var(--dim); }
+.an-pl-plhead button { margin-left:auto; font:inherit; font-size:16px; line-height:1; color:var(--muted); background:none; border:0; cursor:pointer; }
+.an-pl-plhead button:hover { color:var(--ink); }
+.an-pl-pltable { max-height:268px; overflow-y:auto; }
+.an-pl-pltable table { border-collapse:collapse; width:100%; font-size:12px; font-variant-numeric:tabular-nums; }
+.an-pl-pltable th { color:var(--dim); font-weight:700; font-size:10.5px; text-align:left; padding:2px 6px; position:sticky; top:0; background:var(--panel2); }
+.an-pl-pltable td { padding:3px 6px; border-top:1px solid #1a1f25; white-space:nowrap; }
+.an-pl-pltable td small { color:var(--dim); }
+.an-pl-pltable .num { text-align:right; }
+.an-pl-pltable tr.res-catch td:nth-child(4), .an-pl-pltable tr.res-td td:nth-child(4) { color:var(--tier-elite); font-weight:700; }
+.an-pl-pltable tr.res-incomplete td:nth-child(4) { color:var(--muted); }
+.an-pl-pltable tr.res-int td:nth-child(4) { color:var(--tier-flat); font-weight:700; }
+.an-pl-pltable tr.res-dpi td:nth-child(4) { color:var(--accent); font-weight:700; }
+
+/* Efficiency, rushing, blocking, routes */
+.an-pl-eff { flex:0 0 auto; }
+.an-pl-rush { flex:0 1 auto; max-width:100%; }
+.an-pl-rush .an-pl-tiles { margin-bottom:10px; max-width:560px; }
+.an-pl-rush .an-wb-bar { fill:var(--band-BACKFIELD); }
+.an-pl-block { flex:0 0 420px; }
+.an-rb { display:flex; flex-direction:column; gap:8px; }
+.an-rb-row { display:grid; grid-template-columns:112px 1fr 30px 70px; align-items:center; gap:8px; }
+.an-rb-lab { color:var(--muted); font-size:12.5px; font-weight:600; }
+.an-rb-track { position:relative; height:14px; border-radius:4px; background:#1b2027; }
+.an-rb-fill { position:absolute; left:0; top:0; bottom:0; border-radius:4px; background:var(--t); }
+.an-rb-med { position:absolute; top:-3px; bottom:-3px; width:2px; margin-left:-1px; background:#e8ebef; opacity:.85; border-radius:1px; }
+.an-rb-v { font-size:15px; color:var(--t); text-align:right; }
+.an-rb-m { font-style:normal; color:var(--dim); font-size:11px; }
+.an-pl-routes { flex:0 0 auto; }
+.an-rl { display:grid; grid-template-columns:150px 240px 96px 36px 60px 60px; gap:5px 10px; align-items:center; font-size:12.5px; font-variant-numeric:tabular-nums; }
+.an-rl-h, .an-rl-row { display:contents; }
+.an-rl-h span { color:var(--dim); font-size:10.5px; font-weight:700; }
+.an-rl-h em { font-style:normal; font-weight:500; }
+.an-rl-name { color:var(--ink); font-weight:600; }
+.an-rl-track { position:relative; height:16px; }
+.an-rl-lg { position:absolute; left:0; top:0; bottom:0; border-radius:3px; background:rgba(232,235,239,.16); }
+.an-rl-me { position:absolute; left:0; top:4px; bottom:4px; border-radius:3px; background:var(--band-color, var(--band-WR)); }
+.an-rl-pct { color:var(--ink); font-size:12px; white-space:nowrap; }
+.an-rl-pct em { font-style:normal; color:var(--dim); font-size:11px; }
+.an-rl-row > b, .an-rl-row > span:nth-child(n+4) { text-align:right; }
+.an-rl-h span:nth-child(n+4) { text-align:right; }

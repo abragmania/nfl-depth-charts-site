@@ -31,7 +31,7 @@ export function staticPathFor(url) {
   if (parts.length === 3 && parts[1] === "analytics" && parts[2] === "identity") return "api/analytics/identity.json";
   // D177 analytics: /api/analytics/{season}/manifest|players and /api/analytics/{season}/w/{week} (week -> two digits)
   if (parts[1] === "analytics" && /^\d{4}$/.test(seg(2) ?? "")) {
-    if (parts.length === 4 && (parts[3] === "manifest" || parts[3] === "players")) return `api/analytics/${seg(2)}/${parts[3]}.json`;
+    if (parts.length === 4 && (parts[3] === "manifest" || parts[3] === "players" || parts[3] === "madden")) return `api/analytics/${seg(2)}/${parts[3]}.json`;
     if (parts.length === 5 && parts[3] === "w" && /^\d{1,2}$/.test(seg(4))) return `api/analytics/${seg(2)}/w${seg(4).padStart(2, "0")}.json`;
   }
   return null;

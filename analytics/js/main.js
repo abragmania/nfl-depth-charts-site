@@ -3,6 +3,7 @@
 // and fill in over the next increments.
 import * as router from "./router.js";
 import { renderUsage } from "./views/usage.js";
+import { renderPlayer } from "./views/player.js";
 
 const root = document.getElementById("app");
 const nav = document.getElementById("an-nav");
@@ -37,7 +38,7 @@ const stub = (title, blurb) => async () => {
 
 router.on("/", view("usage", (p, q, ctx) => renderUsage(ctx, q)));
 router.on("/usage", view("usage", (p, q, ctx) => renderUsage(ctx, q)));
-router.on("/player/:gsis", view("usage", stub("Player", "One player's week-by-week usage, target zones and efficiency.")));
+router.on("/player/:gsis", view("usage", (p, q, ctx) => renderPlayer(ctx, p, q)));
 router.on("/qb", view("qb", stub("Quarterbacks", "EPA per dropback, CPOE, success rate, aDOT, pressure and play-action splits, with the zone chart.")));
 router.on("/rushing", view("rushing", stub("Rushing", "Carries, yards per carry and over expected, success rate and EPA per rush.")));
 router.on("/team", view("team", stub("Teams", "Team offence and defence side by side.")));
