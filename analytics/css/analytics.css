@@ -352,3 +352,31 @@ td[class*=" t-"] > span { color:var(--t); font-weight:700; }
 .an-qbp-tgt { max-width:110px; overflow:hidden; text-overflow:ellipsis; }
 .an-qbp-madden { min-width:0; }
 .an-qbp-madden .an-rb-row { grid-template-columns:120px 1fr 30px 70px; }
+
+/* ---- rushing leaderboard (#/rushing) ---- */
+.an-rush-table .g-v { background:rgba(202,160,83,.035); }
+.an-rush-table thead tr.an-grp th.g-v { color:var(--band-BACKFIELD); }
+.an-rush-table .g-i { background:rgba(94,168,216,.03); }
+.an-rush-table thead tr.an-grp th.g-i { color:var(--band-WR); }
+.an-rush-spark path { stroke:var(--band-BACKFIELD); }
+.an-rush-spark circle { fill:var(--band-BACKFIELD); }
+.an-rush .an-wb-bar.an-qb-bar.plain { fill:var(--band-BACKFIELD); }
+.an-rush-din { gap:28px; flex-wrap:wrap; }
+.an-rush-din .an-dtiles { grid-template-columns:repeat(2, 118px); }
+.an-rush-mid { width:300px; }
+.an-rbins { --b0:var(--tier-flat); --b1:#6b7480; --b2:var(--tier-strong); --b3:var(--tier-elite); }
+.an-rbins-me, .an-rbins-lg { display:flex; border-radius:4px; overflow:hidden; background:#161b21; }
+.an-rbins-me { height:22px; }
+.an-rbins-lg { height:6px; margin-top:3px; opacity:.55; }
+.an-rbins i { display:block; height:100%; }
+.an-rbins .b0 { --c:var(--b0); } .an-rbins .b1 { --c:var(--b1); } .an-rbins .b2 { --c:var(--b2); } .an-rbins .b3 { --c:var(--b3); }
+.an-rbins-me i, .an-rbins-lg i { background:var(--c); }
+.an-rbins-me i + i { box-shadow:inset 1px 0 0 #0f1317; }
+.an-rbins-leg { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:4px 12px; margin-top:8px; font-size:11.5px; color:var(--muted); }
+.an-rbins-leg span { display:flex; align-items:center; gap:5px; white-space:nowrap; }
+.an-rbins-leg span > i { width:9px; height:9px; border-radius:2px; background:var(--c); flex:none; }
+.an-rbins-leg b { color:var(--ink); margin-left:auto; }
+.an-rbins-leg em { font-style:normal; color:var(--dim); font-size:10.5px; min-width:44px; text-align:right; }
+.an-rush-zone { display:flex; gap:8px; margin-top:12px; }
+.an-rush-zone span { flex:1; background:#161b21; border:1px solid #232a31; border-radius:var(--r-row); padding:4px 8px; color:var(--dim); font-size:10.5px; font-weight:700; text-align:center; }
+.an-rush-zone b { display:block; color:var(--ink); font-size:16px; }

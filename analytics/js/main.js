@@ -6,6 +6,7 @@ import { renderUsage } from "./views/usage.js";
 import { renderPlayer } from "./views/player.js";
 import { renderQb } from "./views/qb.js";
 import { renderQbPlayer } from "./views/qbplayer.js";
+import { renderRushing } from "./views/rushing.js";
 import { loadSeason } from "./data.js";
 import { fromQuery, seasonsOf } from "./filters.js";
 
@@ -55,7 +56,7 @@ router.on("/player/:gsis", view("usage", async (p, q, ctx) => {
   return renderPlayer(ctx, p, q);
 }));
 router.on("/qb", view("qb", (p, q, ctx) => renderQb(ctx, q)));
-router.on("/rushing", view("rushing", stub("Rushing", "Carries, yards per carry and over expected, success rate and EPA per rush.")));
+router.on("/rushing", view("rushing", (p, q, ctx) => renderRushing(ctx, q)));
 router.on("/team", view("team", stub("Teams", "Team offence and defence side by side.")));
 router.on("/team/:abbr", view("team", stub("Team", "One club's offence and defence.")));
 router.on("/defense", view("defense", stub("Defense", "Team defence: EPA allowed, pressure and blitz rates.")));
