@@ -159,7 +159,7 @@ export const FIT_HYSTERESIS = 1.05;
 // floor still takes its step (tests/viewfit.test.mjs pins both sides — 1 percent under stays at "none", 4
 // percent under steps). NOTE, because D134's own text still cites it: the 1536x864 laptop no longer needs a
 // step. Since D141 shortened the canvas — and since the phantom back-row reserve came out of heightBudget —
-// it draws its team page at 0.8282, clear of the floor, and takes NO cascade step; its key is folded by the
+// it draws its team page at 0.8055 (0.8282 until D180's lower edge step grew the canvas), clear of the floor, and takes NO cascade step; its key is folded by the
 // width rule below (D107), which is not a step and buys it nothing.
 export const FIT_STEP_MARGIN = 1.02;
 
@@ -596,7 +596,7 @@ export function mountScaledField({ root, probe, build, onDraw, onText, panel = n
       const expandedHeight = step === "none" ? box.height : box.height - headerGain;
       // While an overlapping expansion has forced full depth back, the "less depth" step is off the
       // table — the reduced probe would otherwise win the next ordinary refit and report "depth"/"scroll"
-      // with scrolls:false, drawing the FULL canvas (field.js's BOTH_SIDES_HEIGHT, 850 units since D141)
+      // with scrolls:false, drawing the FULL canvas (field.js's BOTH_SIDES_HEIGHT, 874 units since D180)
       // below the floor with no way to scroll to it.
       const ask = (current) => chooseFitStep({
         width: box.width, height: expandedHeight, headerGain, full: probe,

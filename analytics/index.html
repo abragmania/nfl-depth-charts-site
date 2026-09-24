@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+<!-- Google tag (gtag.js) --><script async src="https://www.googletagmanager.com/gtag/js?id=G-Y8MNFFYKRD"></script><script>window.dataLayer = window.dataLayer || [];function gtag(){dataLayer.push(arguments);}gtag('js', new Date());gtag('config', 'G-Y8MNFFYKRD');window.addEventListener('hashchange', function () { gtag('event', 'page_view', { page_location: location.href, page_path: location.pathname + location.hash }); });</script>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- D177: the analytics app, a separate page from the depth charts. Same D67 convention as the depth charts'
+     index.html: the publish step rewrites this to "1" in the published copy, and js/data.js then reads the
+     pre-rendered files under ../api/analytics/ instead of the local server. -->
+<meta name="nfl-static" content="1">
+<title>NFL Analytics</title>
+<link rel="stylesheet" href="css/analytics.css">
+</head>
+<body>
+<header class="an-top">
+  <a class="an-brand" href="#/usage">NFL ANALYTICS</a>
+  <nav id="an-nav" class="an-nav" aria-label="Sections"></nav>
+  <span id="an-asof" class="an-asof" hidden></span>
+</header>
+<main id="app" class="an-main" aria-live="polite"></main>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

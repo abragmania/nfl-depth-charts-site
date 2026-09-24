@@ -193,7 +193,12 @@ const DEF_LEVEL_LABEL = { LINE: "LINE", EDGE: "EDGE", LB: "LINEBACKERS", FRONT: 
 //              D141's full card (LABEL_RESERVE + a line-one row, plus air), so the corner's own label pill
 //              sits BELOW the bottom of the safety's line-one card rather than beside it.
 //   FRONT      the edge rushers step below the off-ball linebackers (D141), which is what makes the backers
-//              read as the higher, further-from-the-line group they are.
+//              read as the higher, further-from-the-line group they are. The step keys on the EDGE BAND, never
+//              the chart label, so a DE-labelled column that D54/D66 fan out into the edge spot (the Falcons')
+//              takes it exactly as an OLB or EDGE column does. D180 raised it from 18 units to 30: at 18 the
+//              rusher's label pill sat beside the backer's own line-one card and Adam read the four columns as
+//              "almost even"; at 30 the pill starts past the middle of that card, a clear but small step that is
+//              still well under a full card (40), so the row keeps reading as one row, not two.
 // A two-row model has neither: its corners and its edge rushers have rows of their own.
 //
 // D146 (2): THE CORNER STEP IS THE PAGE'S OWN CARD, NOT ONE NUMBER FOR ALL PAGES. A line-one row is 23 units
@@ -215,7 +220,7 @@ export function secondaryCornerDrop(style = {}) {
 // caller or a test asking "how far below the safeties do the corners start?" and getting the Team page's
 // answer on an Offense/Defense page, where a line-one card carries a headshot and the step is 64. The only
 // way to ask is secondaryCornerDrop(style), with the style of the page actually being drawn.
-const FRONT_LB_LIFT = 18;
+const FRONT_LB_LIFT = 30;
 // `drop` is a FUNCTION of the style now, not a number, so every reader (the reserved row height, the
 // constant canvas, the placement pass) asks the same question about the page actually being drawn.
 const ROW_DROPS = {
@@ -263,7 +268,7 @@ function defRowFullH(style = {}) {
 }
 const DEF_ROW_FULL_H = defRowFullH();
 // D111/D141: with the secondary AND the front each on one row, DEF_ROW_ORDER.length is 3 rather than 5, and
-// both stagger steps are reserved on top of it — BOTH_SIDES_HALF/BOTH_SIDES_HEIGHT are currently 385 / 850
+// both stagger steps are reserved on top of it — BOTH_SIDES_HALF/BOTH_SIDES_HEIGHT are currently 397 / 874
 // and stay DERIVED, never hardcoded, so a future ruling that adds or removes a defensive row moves the
 // canvas with it (with both switches off the same arithmetic gives D109's 535 / 1106 exactly).
 const DEF_LEVEL_BOUNDARIES = DEF_ROW_ORDER.reduce(

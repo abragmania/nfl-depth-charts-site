@@ -18,6 +18,12 @@
 <link rel="stylesheet" href="css/matchup.css">
 <link rel="stylesheet" href="css/phone.css">
 <link rel="stylesheet" href="css/guide.css">
+<style>
+  /* Sits at the right end of the app bar; when the team filter is showing it already takes the free space. */
+  .topbar-analytics { margin-left:auto; color:var(--muted); font-size:13px; font-weight:600; text-decoration:none; white-space:nowrap; }
+  .topbar-analytics:hover { color:var(--ink); text-decoration:underline; }
+  .search:not([hidden]) ~ .topbar-analytics { margin-left:0; }
+</style>
 </head>
 <body>
 <header class="topbar">
@@ -25,6 +31,8 @@
   <input id="search" class="search" type="search" placeholder="Filter teams" autocomplete="off" hidden>
   <a id="guide-link" class="nav-help topbar-help" href="#/guide" title="What every number, badge and mark means" hidden><span class="nav-help-q" aria-hidden="true">?</span>How to read</a>
   <span id="asof" class="asof" hidden></span>
+  <!-- D177: the one way into the separate Analytics app, always in a new tab; nothing analytics renders here. -->
+  <a class="topbar-analytics" href="./analytics/" target="_blank" rel="noopener" title="Open NFL Analytics in a new tab">Analytics ↗</a>
 </header>
 <main id="app" aria-live="polite"></main>
 <script type="module" src="js/main.js"></script>

@@ -1,0 +1,79 @@
+{
+ "season": 2026,
+ "cols": [
+  "game_id",
+  "posteam",
+  "defteam",
+  "homeOff",
+  "qtr",
+  "down",
+  "ydstogo",
+  "yardline_100",
+  "type",
+  "passer",
+  "target",
+  "rusher",
+  "band",
+  "dir",
+  "air",
+  "yac",
+  "yards",
+  "complete",
+  "td",
+  "int",
+  "epa",
+  "success",
+  "cpoe",
+  "pa",
+  "screen",
+  "motion",
+  "rpo",
+  "blitzers",
+  "rushers",
+  "redzone",
+  "ezTarget",
+  "route",
+  "pressure"
+ ],
+ "weeks": [
+  {
+   "week": 1,
+   "hash": "b22ba0fb09da43bd",
+   "plays": 1907,
+   "builtAt": "2026-09-24T20:32:04.053Z"
+  },
+  {
+   "week": 2,
+   "hash": "f39a42cc55320ff3",
+   "plays": 1923,
+   "builtAt": "2026-09-24T20:32:04.053Z"
+  }
+ ],
+ "sources": {
+  "pbp": {
+   "fetchedAt": "2026-09-24T20:37:58.698Z",
+   "sha": "e6af6596d230d570d13262c8e6a6eaacb244fc47cc052c97dc01d241e9ef922d"
+  },
+  "ftn": {
+   "fetchedAt": "2026-09-24T20:37:58.977Z",
+   "sha": "11a389b6bb394ec5e3f037bccdabdd9dcf3c21543c0c5cf3c009b3b6efac9025"
+  },
+  "ngs": {
+   "fetchedAt": "2026-09-24T20:37:59.637Z",
+   "sha": "3cd03db87af80863"
+  },
+  "pfr": {
+   "fetchedAt": "2026-09-24T20:38:00.128Z",
+   "sha": "641aa103362fd0e2"
+  },
+  "routes": {
+   "fetchedAt": "2026-09-24T20:38:03.223Z",
+   "sha": "51af93f49c67860acba41686c670a330f9037c1f80532d0a936e8657062d2ab6"
+  },
+  "participation": null,
+  "snaps": {
+   "fetchedAt": "2026-09-23T14:13:08.456Z",
+   "sha": "de7dee6776781052e85fd697d13e6c1d18fb22e04df0b2794cfd0ec758c7efab"
+  }
+ }
+}

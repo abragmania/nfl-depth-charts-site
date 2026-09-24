@@ -141,10 +141,16 @@ function bioRowHtml(card) {
 // "Snap-share as a thin bar when snap data exists" (Adam) — the compile fills card.snapShare from nflverse's
 // snap counts (server/compile/chart.js's snapShares), and it stays null for a man the file has no rows for.
 // Guarded on it being a real number, so such a man gets nothing at all rather than a fake zero bar.
+// Shared by snapShareHtml and the Game log totals row (D181): both print the same season figure, so the
+// fraction-or-percent-already conversion lives in one place rather than twice.
+function snapSharePercent(v) {
+  if (v == null || !Number.isFinite(Number(v))) return null;
+  return Math.max(0, Math.min(100, Math.round(Number(v) <= 1 ? Number(v) * 100 : Number(v))));
+}
+
 export function snapShareHtml(card) {
-  const v = card.snapShare;
-  if (v == null || !Number.isFinite(Number(v))) return "";
-  const pct = Math.max(0, Math.min(100, Math.round(Number(v) <= 1 ? Number(v) * 100 : Number(v))));
+  const pct = snapSharePercent(card.snapShare);
+  if (pct == null) return "";
   // D150: a share this app pooled out of the snap counts stands on its own; one it could only average out of
   // the source's per-game percentages says so, here and in the card's tooltip (public/js/cards.js), because
   // which of the two a number is is Adam's own rule.
@@ -342,7 +348,26 @@ export const GAMELOG_FAMILIES = {
 // `withTeam` was played for another club, and wherever the club changes between two consecutive games a
 // full-width "Traded from X to Y" row sits between them (Adam, 2026-09-23: the opponents stay real, the move is
 // the signal).
-export function gameLogTableHtml(family, entries, season = null, club = null) {
+// D181 (Adam, 2026-09-24: totals apply anywhere a figure is broken down by week): a pinned tfoot row sums the
+// season's played games. `snapShare` is the card's season snap share ALREADY converted to a percent (by
+// snapSharePercent, the same conversion snapShareHtml uses) — this function only prints it, never recomputes
+// it, so the total always agrees with the bar above the tab switch. A "did not play" game contributes nothing;
+// a trade separator is not a real row (it's drawn between two entries, not one), so it is never summed. Summing
+// happens on the raw stats objects and only then are the family's column functions re-run on the sum, which is
+// what makes AVG (a weighted per-game rate) come out correct instead of an average-of-averages.
+function gameLogTotalsRowHtml(cols, playedRows, snapShare) {
+  if (!playedRows.length) return "";
+  const sum = {};
+  for (const g of playedRows) {
+    if (!g.stats) continue;
+    for (const [k, v] of Object.entries(g.stats)) sum[k] = (sum[k] ?? 0) + (Number(v) || 0);
+  }
+  const cells = cols.map(([, get]) => `<td>${esc(get(sum))}</td>`).join("");
+  const snapCell = snapShare == null ? dash : esc(snapShare);
+  return `<tfoot><tr class="panel-gamelog-total"><td>Total</td><td>${playedRows.length} G</td><td>${snapCell}</td>${cells}</tr></tfoot>`;
+}
+
+export function gameLogTableHtml(family, entries, season = null, club = null, snapShare = null) {
   const rows = Array.isArray(entries) ? entries : [];
   if (!rows.length) return `<div class="panel-stats-empty">No ${season != null ? `${esc(season)} ` : ""}regular-season games on file yet.</div>`;
   const cols = GAMELOG_FAMILIES[family] || [];
@@ -359,8 +384,9 @@ export function gameLogTableHtml(family, entries, season = null, club = null) {
     const cells = cols.map(([, get]) => `<td>${g.stats ? esc(get(g.stats)) : dash}</td>`).join("");
     return `${move}<tr>${lead}${snap}${cells}</tr>`;
   }).join("");
+  const totals = gameLogTotalsRowHtml(cols, rows.filter((g) => g.played !== false), snapShare);
   const wide = cols.length >= 8 ? " panel-stats-wide" : ""; // D169: the QB log has eleven columns
-  return `<table class="panel-stats-table panel-gamelog-table${wide}"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
+  return `<table class="panel-stats-table panel-gamelog-table${wide}"><thead><tr>${head}</tr></thead><tbody>${body}</tbody>${totals}</table>`;
 }
 
 // The tab switch. Season stats is the default and is what the box has always shown; the game log is fetched
@@ -380,7 +406,7 @@ function showStatsTab(asideEl, tab) {
   getGameLog(g.abbr)
     .then((file) => {
       if (asideEl._panelGen !== g.gen) return;
-      log.innerHTML = gameLogTableHtml(g.family, file?.players?.[g.playerKey] ?? null, file?.season ?? g.season, file?.team ?? null);
+      log.innerHTML = gameLogTableHtml(g.family, file?.players?.[g.playerKey] ?? null, file?.season ?? g.season, file?.team ?? null, snapSharePercent(g.snapShare));
     })
     .catch((err) => {
       if (asideEl._panelGen !== g.gen) return;
@@ -621,7 +647,7 @@ export function openPanel(asideEl, card, teamView, teamMeta) {
   asideEl._histSeasons = null;
   asideEl._espnStats = null;
   // D165: what the Game log tab fetches when it is first opened (showStatsTab); gen ties it to this opening.
-  asideEl._gameLogReq = { gen: myGen, abbr, playerKey: String(card.playerKey ?? ""), family, season: teamView?.season ?? null, started: false };
+  asideEl._gameLogReq = { gen: myGen, abbr, playerKey: String(card.playerKey ?? ""), family, season: teamView?.season ?? null, snapShare: card.snapShare ?? null, started: false };
 
   fetchGamesSeasons(card, abbr)
     .then((seasons) => {
