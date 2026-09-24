@@ -12,6 +12,7 @@ import { isStatic } from "../../../js/api.js";
 import { playerView, maddenBlocking, maddenEdition } from "../agg_player.js";
 import { renderFilterBar } from "../filterbar.js";
 import { tierOf } from "../table.js";
+import { tierNote } from "../agg.js";
 import { weeklyStrips } from "../charts/bars.js";
 import { zoneField, zoneLegend, ZONE_MODES, zoneName } from "../charts/zonefield.js";
 import { ratingBars, routeList } from "../charts/hbars.js";
@@ -55,6 +56,13 @@ function teamPill(abbr, teams, q) {
 
 const tile = (label, val, { tier = "", lg = null, title = "" } = {}) =>
   `<div class="an-tile${tier ? " t-" + tier : ""}"${title ? ` title="${esc(title)}"` : ""}><span>${label}</span><b>${val}</b>${lg !== null && !String(lg).includes("an-na") ? `<em> · lg ${lg}</em>` : ""}</div>`;
+
+// A coloured tile's tier and hover text: the tier comes from his position's reference-pool percentiles; when his
+// position's pool was too small the title says the league-wide cuts were used instead.
+const tiered = (k, val, cuts, pos, title) => {
+  const note = isNum(val) ? tierNote(cuts?.[k], pos) : "";
+  return { tier: tierOf(k, val, cuts), title: [title, note].filter(Boolean).join(". ") };
+};
 
 function windowName(st, weeks) {
   if (st.window === "last3") return "Last 3";
@@ -121,22 +129,22 @@ export async function renderPlayer(ctx, params, query) {
   const L = v.lg.overall;
   const r = v.row || {};
   const activeKey = st.window === "range" && st.from && st.from === st.to ? st.from : null;
-  const sub = `${st.season}${st.with2025 ? " + 2025" : ""} · ${v.weeks.length ? (v.weeks.length === 1 ? weekLabel(v.weeks[0], st.season) : `${weekLabel(v.weeks[0], st.season)} to ${weekLabel(v.weeks[v.weeks.length - 1], st.season)}`) : "no games"}${st.window === "last3" ? " (his club's last 3 games)" : ""} · league reference: ${v.pos}s with ${st.minTgt}+ targets in the same window (${v.lg.n})`;
+  const sub = `${st.season}${st.with2025 ? " + 2025" : ""} · ${v.weeks.length ? (v.weeks.length === 1 ? weekLabel(v.weeks[0], st.season) : `${weekLabel(v.weeks[0], st.season)} to ${weekLabel(v.weeks[v.weeks.length - 1], st.season)}`) : "no games"}${st.window === "last3" ? " (his club's last 3 games)" : ""} · league reference: ${v.refText}`;
 
   // 2. Usage strip. RB leads with involvement and drops the air-yards tiles (D182); WR/TE keep the full set.
   const usageTiles = {
     tgt: tile("Targets", int(r.tgt ?? 0), { lg: fix(L.tgt, 1), title: `Targets (${st.pi === false ? "excludes" : "includes"} pass-interference targets)` }),
-    tgtShare: tile("Tgt %", pct(r.tgtShare), { tier: tierOf("tgtShare", r.tgtShare), lg: pct(L.tgtShare), title: "His targets / his club's pass attempts in his games" }),
-    ayShare: tile("AY %", pct(r.ayShare), { tier: tierOf("ayShare", r.ayShare), lg: pct(L.ayShare), title: "His air yards / his club's air yards in his games" }),
-    wopr: tile("WOPR", fix(r.wopr, 2), { tier: tierOf("wopr", r.wopr), lg: fix(L.wopr, 2), title: "1.5 x target share + 0.7 x air-yards share" }),
+    tgtShare: tile("Tgt %", pct(r.tgtShare), { ...tiered("tgtShare", r.tgtShare, v.cuts, v.pos, "His targets / his club's pass attempts in his games"), lg: pct(L.tgtShare) }),
+    ayShare: tile("AY %", pct(r.ayShare), { ...tiered("ayShare", r.ayShare, v.cuts, v.pos, "His air yards / his club's air yards in his games"), lg: pct(L.ayShare) }),
+    wopr: tile("WOPR", fix(r.wopr, 2), { ...tiered("wopr", r.wopr, v.cuts, v.pos, "1.5 x target share + 0.7 x air-yards share"), lg: fix(L.wopr, 2) }),
     adot: tile("aDOT", fix(r.adot, 1), { lg: fix(L.adot, 1), title: "Air yards per target" }),
     rz: tile("RZ tgt", int(r.rz ?? 0), { lg: fix(L.rz, 1), title: "Red-zone targets (inside the 20)" }),
     ez: tile("EZ tgt", int(r.ez ?? 0), { lg: fix(L.ez, 1), title: "End-zone targets" }),
     routes: tile("Routes", int(r.routes), { lg: fix(L.routes, 0), title: "Routes run (heatradar, charted)" }),
-    routePct: tile("Rt %", pct(r.routePct, 0), { tier: tierOf("routePct", r.routePct), lg: pct(L.routePct, 0), title: "Routes / club dropbacks" }),
-    tprr: tile("TPRR", fix(r.tprr, 2), { tier: tierOf("tprr", r.tprr), lg: fix(L.tprr, 2), title: "Targets per route run" }),
-    yprr: tile("YPRR", fix(r.yprr, 2), { tier: tierOf("yprr", r.yprr), lg: fix(L.yprr, 2), title: "Receiving yards per route run" }),
-    snapPct: tile("Snap %", pct(r.snapPct, 0), { tier: tierOf("snapPct", r.snapPct), lg: pct(L.snapPct, 0), title: "Share of his club's offensive snaps" }),
+    routePct: tile("Rt %", pct(r.routePct, 0), { ...tiered("routePct", r.routePct, v.cuts, v.pos, "Routes / club dropbacks"), lg: pct(L.routePct, 0) }),
+    tprr: tile("TPRR", fix(r.tprr, 2), { ...tiered("tprr", r.tprr, v.cuts, v.pos, "Targets per route run"), lg: fix(L.tprr, 2) }),
+    yprr: tile("YPRR", fix(r.yprr, 2), { ...tiered("yprr", r.yprr, v.cuts, v.pos, "Receiving yards per route run"), lg: fix(L.yprr, 2) }),
+    snapPct: tile("Snap %", pct(r.snapPct, 0), { ...tiered("snapPct", r.snapPct, v.cuts, v.pos, "Share of his club's offensive snaps"), lg: pct(L.snapPct, 0) }),
   };
   const usage = usageOrderFor(v.pos).map((k) => usageTiles[k]).join("");
 
@@ -145,7 +153,7 @@ export async function renderPlayer(ctx, params, query) {
     const tot = r[totKey], avg = L[totKey];
     const maxV = Math.max(0, ...v.series.map((s) => s[k] ?? 0));
     return { k, label, scale: Math.max(fixedScale, maxV * 1.05), fmt: (x) => `${(x * 100).toFixed(1)}%`, short: (x) => String(Math.round(x * 100)),
-      total: tot, totalText: `${wn} ${isNum(tot) ? (tot * 100).toFixed(1) + "%" : "–"}`, avg, avgText: `lg avg ${isNum(avg) ? Math.round(avg * 100) + "%" : "–"}`, tier: (x) => tierOf(totKey, x) };
+      total: tot, totalText: `${wn} ${isNum(tot) ? (tot * 100).toFixed(1) + "%" : "–"}`, avg, avgText: `lg avg ${isNum(avg) ? Math.round(avg * 100) + "%" : "–"}`, tier: (x) => tierOf(totKey, x, v.cuts) };
   };
   const weeklyStripDefs = {
     v: () => shareStrip("v", "Target share", "tgtShare", 0.4),
@@ -162,7 +170,7 @@ export async function renderPlayer(ctx, params, query) {
   const E = v.eff, LE = v.lgEff;
   const ngsTile = (k, ...a) => (isNum(E[k]) || isNum(LE[k]) ? tile(...a) : "");
   const eff = [
-    tile("EPA/tgt", signed(E.epaTgt, 2), { tier: tierOf("epaTgt", E.epaTgt), lg: signed(LE.epaTgt, 2), title: "Expected points added per target" }),
+    tile("EPA/tgt", signed(E.epaTgt, 2), { ...tiered("epaTgt", E.epaTgt, v.cuts, v.pos, "Expected points added per target"), lg: signed(LE.epaTgt, 2) }),
     tile("Success %", pct(E.succPct, 0), { lg: pct(LE.succPct, 0), title: "Share of his targets that were successful plays (nflverse success)" }),
     tile("Catch %", pct(E.catchPct, 0), { lg: pct(LE.catchPct, 0), title: "Catches / targets (a pass-interference target is neither)" }),
     tile("YAC/rec", fix(E.yacRec, 1), { lg: fix(LE.yacRec, 1), title: "Yards after the catch per reception" }),
@@ -175,18 +183,19 @@ export async function renderPlayer(ctx, params, query) {
   let rushHtml = "";
   if (v.rush) {
     const R = v.rush, RL = R.lg;
+    const rt = (k, val, title) => tiered(k, val, R.cuts, v.pos, title);
     const maxCar = Math.max(1, ...v.series.map((s) => s.car ?? 0));
     const maxSh = Math.max(0.6, ...v.series.map((s) => s.rushShare ?? 0));
     const strips = [
       { k: "car", label: "Carries", scale: maxCar * 1.05, fmt: (x) => `${x} carries`, short: (x) => String(x), total: R.car, totalText: `${wn} ${R.car}`, avg: RL.carG, avgText: `lg avg ${isNum(RL.carG) ? RL.carG.toFixed(1) : "–"}/g` },
       { k: "rushShare", label: "Rush share", scale: maxSh * 1.05, fmt: (x) => `${(x * 100).toFixed(1)}% of club runs`, short: (x) => String(Math.round(x * 100)), total: R.rushShare, totalText: `${wn} ${isNum(R.rushShare) ? (R.rushShare * 100).toFixed(1) + "%" : "–"}`, avg: RL.rushShare, avgText: `lg avg ${isNum(RL.rushShare) ? Math.round(RL.rushShare * 100) + "%" : "–"}` },
     ];
-    rushHtml = `<div class="an-card an-pl-rush"><div class="an-dh">Rushing <span class="an-dsub">league reference: ${esc(v.pos)}s with 5+ carries (${R.n})</span></div>
+    rushHtml = `<div class="an-card an-pl-rush"><div class="an-dh">Rushing <span class="an-dsub">league reference: ${esc(R.refText)}</span></div>
       <div class="an-pl-tiles an-pl-tiles-4">${[
-        tile("Carries", int(R.car), { lg: fix(RL.car, 0) }), tile("Yards", int(R.yds)), tile("YPC", fix(R.ypc, 1), { lg: fix(RL.ypc, 1) }),
-        tile("Success %", pct(R.succPct, 0), { lg: pct(RL.succPct, 0) }), tile("EPA/carry", signed(R.epaCar, 2), { lg: signed(RL.epaCar, 2) }),
-        tile("RYOE/att", signed(R.ryoeAtt, 2), { lg: signed(RL.ryoeAtt, 2), title: "NGS rush yards over expected per carry (weeks NGS lists him)" }),
-        tile("RZ carries", int(R.rz)), tile("Rush share", pct(R.rushShare), { lg: pct(RL.rushShare), title: "His carries / his club's designed runs in his games" }),
+        tile("Carries", int(R.car), { lg: fix(RL.car, 0) }), tile("Yards", int(R.yds)), tile("YPC", fix(R.ypc, 1), { ...rt("ypc", R.ypc, "Yards per carry"), lg: fix(RL.ypc, 1) }),
+        tile("Success %", pct(R.succPct, 0), { ...rt("succPct", R.succPct, "Share of his carries that were successful plays"), lg: pct(RL.succPct, 0) }), tile("EPA/carry", signed(R.epaCar, 2), { ...rt("epaCar", R.epaCar, "Expected points added per carry"), lg: signed(RL.epaCar, 2) }),
+        tile("RYOE/att", signed(R.ryoeAtt, 2), { ...rt("ryoeAtt", R.ryoeAtt, "NGS rush yards over expected per carry (weeks NGS lists him)"), lg: signed(RL.ryoeAtt, 2) }),
+        tile("RZ carries", int(R.rz)), tile("Rush share", pct(R.rushShare), { ...rt("rushShare", R.rushShare, "His carries / his club's designed runs in his games"), lg: pct(RL.rushShare) }),
       ].join("")}</div>
       <div class="an-pl-scroll">${weeklyStrips(v.series, strips, { season: st.season, activeKey, sh: 50 })}</div></div>`;
   }

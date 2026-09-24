@@ -122,6 +122,9 @@ export function aggregateUsage(blocks, players, st) {
     }
   }
 
+  // The club's games in the window (after the filters): the reference pool's per-game rule scales with it.
+  const clubWin = new Map();
+  for (const gk of inWin) if (gameOk(gk)) { const t = gk.split("|")[1]; clubWin.set(t, (clubWin.get(t) || 0) + 1); }
   const weeks = [...new Set([...inWin].filter(gameOk).map((gk) => gk.split("|")[0]))].sort();
   const rows = [];
   for (const [id, p] of acc) {
@@ -161,7 +164,7 @@ export function aggregateUsage(blocks, players, st) {
     const lastGk = g[g.length - 1];
     rows.push({
       gsis: id, name: meta.name || id, pos, espnId: meta.espnId ?? null,
-      team: lastGk ? lastGk.split("|")[1] : "", g: g.length,
+      team: lastGk ? lastGk.split("|")[1] : "", g: g.length, clubG: lastGk ? clubWin.get(lastGk.split("|")[1]) || 0 : 0,
       tgt: p.tgt, tgtShare, ay: p.air, ayShare, wopr, adot: ratio(p.air, p.adotN),
       rz: p.rz, ez: p.ez, rec: p.rec, yds: p.yds, td: p.td, epaTgt: p.epaN ? p.epa / p.epaN : null,
       routes, routePct, tprr, yprr, snapPct, series, zones: p.zones,
@@ -171,10 +174,10 @@ export function aggregateUsage(blocks, players, st) {
 }
 
 // PERSPECTIVE (Adam, 2026-09-24): every rate is shown against the league average for the same window. The
-// average is the plain mean over the qualifying players (the rows that pass the position chips and have at
-// least `minTgt` targets), so it narrows to his position when the chips do. `weekly[key]` holds the same means
-// for each week, over the qualifying players who played that week. The caller passes rows aggregated with no
-// team or opponent filter, so a one-club view still compares with the whole league.
+// average is the plain mean over the rows given with at least `minTgt` targets; usageReference below passes one
+// position's reference pool with minTgt 0. `weekly[key]` holds the same means for each week, over the players
+// who played that week. Rows come aggregated with no team or opponent filter, so a one-club view still compares
+// with the whole league.
 const AVG_KEYS = ["tgtShare", "ayShare", "wopr", "adot", "epaTgt", "yprr", "tprr", "routePct", "snapPct"];
 export function leagueAverages(rows, minTgt = 0) {
   const q = rows.filter((r) => r.tgt >= minTgt);
@@ -184,6 +187,77 @@ export function leagueAverages(rows, minTgt = 0) {
   for (const r of q) r.series.forEach((s) => { (weekly[s.key] ||= { v: [], ay: [], snap: [] }); for (const k of ["v", "ay", "snap"]) weekly[s.key][k].push(s[k]); });
   for (const key of Object.keys(weekly)) for (const k of ["v", "ay", "snap"]) weekly[key][k] = mean(weekly[key][k]);
   return { overall, weekly, n: q.length };
+}
+
+// ---- the reference pool and position tiers (Adam, 2026-09-24) -------------------------------------------
+// POOL: the league reference and the colour tiers count the players AT HIS POSITION averaging at least 2
+// targets per game of his club's games in the window, with a floor of 5 targets (carries likewise for the
+// rushing references). One rule that scales with the window: 5 over one or two club games, 6 over three, 34
+// over seventeen. The leaderboard's Min targets box is separate (it only hides rows).
+export const POOL_PER_GAME = 2, POOL_FLOOR = 5;
+export const poolMin = (clubG) => Math.max(POOL_FLOOR, POOL_PER_GAME * (clubG || 0));
+export const inPool = (count, clubG) => (count || 0) >= poolMin(clubG);
+export const REF_POS = new Set(["WR", "TE", "RB", "FB"]);
+// "WRs with 2+ targets/game (min 5) in the window (84)"
+export const referenceText = (pos, n, unit = "targets") => `${pos}s with ${POOL_PER_GAME}+ ${unit}/game (min ${POOL_FLOOR}) in the window (${n})`;
+
+// TIERS: each coloured metric is cut at its position pool's 90th, 70th, 40th and 15th percentiles (linear
+// interpolation between ranks); a value at or above a cut takes that tier: elite, strong, avg, weak, else flat
+// ("low"). A pool under MIN_POOL men with a value falls back to the league-wide pool (every pass-catching position
+// together) for that metric; under MIN_POOL there too, the metric is left uncoloured.
+export const TIER_PCTS = [0.9, 0.7, 0.4, 0.15];
+export const TIER_NAMES = ["elite", "strong", "avg", "weak", "flat"];
+export const MIN_POOL = 8;
+export const USAGE_TIER_KEYS = ["tgtShare", "ayShare", "wopr", "routePct", "snapPct", "tprr", "yprr", "epaTgt"];
+const finite = (x) => x !== null && x !== undefined && Number.isFinite(+x);
+export function percentileCuts(vals) {
+  const v = vals.filter(finite).map(Number).sort((a, b) => a - b);
+  if (!v.length) return null;
+  const at = (p) => { const i = (v.length - 1) * p, lo = Math.floor(i), hi = Math.ceil(i); return v[lo] + (v[hi] - v[lo]) * (i - lo); };
+  return TIER_PCTS.map(at);
+}
+export function tierFromCuts(v, cuts) {
+  if (!cuts || !finite(v)) return "";
+  const i = cuts.findIndex((c) => v >= c);
+  return TIER_NAMES[i < 0 ? 4 : i];
+}
+// { [key]: { cuts, n (men in the pool that set the cuts), posN (men at his position with a value), src: "pos" |
+// "league" | null } } for one position, from his position's pool items and the league-wide pool items.
+export function tierCuts(posItems, leagueItems, keys) {
+  const out = {};
+  for (const k of keys) {
+    const pv = posItems.map((x) => x[k]).filter(finite);
+    if (pv.length >= MIN_POOL) { out[k] = { cuts: percentileCuts(pv), n: pv.length, posN: pv.length, src: "pos" }; continue; }
+    const lv = leagueItems.map((x) => x[k]).filter(finite);
+    out[k] = lv.length >= MIN_POOL ? { cuts: percentileCuts(lv), n: lv.length, posN: pv.length, src: "league" } : { cuts: null, n: lv.length, posN: pv.length, src: null };
+  }
+  return out;
+}
+// The hover text for a coloured value: empty when his own position set the cuts, else why it did not.
+export function tierNote(entry, pos) {
+  if (!entry || entry.src === "pos") return "";
+  if (entry.src === "league") return `Colour from the league-wide cuts: only ${entry.posN} ${pos}${entry.posN === 1 ? "" : "s"} in the reference pool (under ${MIN_POOL})`;
+  return `Not coloured: under ${MIN_POOL} players in the reference pool`;
+}
+
+// The usage reference for every position from rows aggregated with no team, opponent or position filter (the
+// whole league, the same window): `at(pos)` gives { lg (leagueAverages over his position's pool, with tgt, rz,
+// ez and routes means added), n, cuts, text }. `league` is every pass-catching position's pool together.
+export function usageReference(rows) {
+  const pool = rows.filter((r) => REF_POS.has(r.pos) && inPool(r.tgt, r.clubG));
+  const mean = (vals) => { const v = vals.filter(finite); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
+  const cache = new Map();
+  const at = (posIn) => {
+    const pos = String(posIn || "").toUpperCase();
+    if (!cache.has(pos)) {
+      const q = pool.filter((r) => r.pos === pos);
+      const lg = leagueAverages(q, 0);
+      for (const k of ["tgt", "rz", "ez", "routes"]) lg.overall[k] = mean(q.map((r) => r[k]));
+      cache.set(pos, { pos, lg, n: q.length, cuts: tierCuts(q, pool, USAGE_TIER_KEYS), text: referenceText(pos, q.length) });
+    }
+    return cache.get(pos);
+  };
+  return { at, pool, n: pool.length };
 }
 
 // Sort helper shared by the table: nulls always last, whichever direction.

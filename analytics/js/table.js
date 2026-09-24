@@ -8,7 +8,7 @@
 //    beside it (a dashed "lg avg 18%" line on bars, "· lg 18.4" beside a stat), so good or bad reads at a glance.
 // 2. TOTALS: anything broken down by week also prints its window total. A share totals by weighting (his
 //    targets / the club attempts over the window), never as a mean of the weekly percentages.
-import { sortRows } from "./agg.js";
+import { sortRows, tierFromCuts, tierNote, TIER_NAMES, USAGE_TIER_KEYS, MIN_POOL } from "./agg.js";
 import { weekLabel, POSITIONS } from "./filters.js";
 
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -40,25 +40,12 @@ const fix = (v, d) => (v === null || v === undefined ? DASH : (+v).toFixed(d));
 const signed = (v, d) => (v === null || v === undefined ? DASH : (v > 0 ? "+" : v < 0 ? "−" : "") + Math.abs(v).toFixed(d));
 const int = (v) => (v === null || v === undefined ? DASH : String(Math.round(v)));
 
-// Tier cut-offs (elite, strong, avg, weak; below the last is flat), fantasy-usage norms for a pass catcher.
-// Share columns are fractions. Chosen so a WR1 reads green, a rotational man amber, a gadget player red.
-export const TIERS = {
-  tgtShare: [0.25, 0.20, 0.15, 0.10],
-  ayShare: [0.35, 0.25, 0.15, 0.08],
-  wopr: [0.65, 0.50, 0.35, 0.20],
-  routePct: [0.90, 0.80, 0.65, 0.50],
-  snapPct: [0.85, 0.70, 0.55, 0.40],
-  tprr: [0.28, 0.22, 0.17, 0.12],
-  yprr: [2.5, 2.0, 1.5, 1.0],
-  epaTgt: [0.50, 0.25, 0.0, -0.25],
-};
-const TIER_NAMES = ["elite", "strong", "avg", "weak", "flat"];
-export function tierOf(key, v) {
-  const cuts = TIERS[key];
-  if (!cuts || v === null || v === undefined) return "";
-  const i = cuts.findIndex((c) => v >= c);
-  return TIER_NAMES[i < 0 ? 4 : i];
-}
+// Tier colours (Adam, 2026-09-24): POSITION-SPECIFIC. `cuts` is one position's map from agg.js's
+// usageReference(...).at(pos).cuts (or the rushing block's): each metric cut at that position's reference-pool
+// 90th, 70th, 40th and 15th percentiles over the window, so a back's 20% target share reads elite among backs.
+// No cuts (or too small a pool league-wide as well) leaves the value uncoloured.
+export const tierOf = (key, v, cuts) => tierFromCuts(v, cuts?.[key]?.cuts);
+const TIER_KEYS = new Set(USAGE_TIER_KEYS);
 
 // Columns. `bar` draws a magnitude bar behind the number (the share columns, scaled to `max`).
 const COLS = [
@@ -118,7 +105,8 @@ export function sparkline(series, st) {
 // Small multiples: one strip per measure, a bar per week, each strip on its own scale, value on top.
 // Each strip carries its window total on the left ("Season 35.1%": shares are total targets / total club
 // attempts, from the row, never a mean of the weekly bars) and a dashed league-average line with its label.
-function weeklyBars(row, st, lg, windowName) {
+function weeklyBars(row, st, P, windowName) {
+  const lg = P?.lg, cuts = P?.cuts;
   const strips = [["v", "Target share", 0.5, "tgtShare"], ["ay", "Air-yards share", 0.7, "ayShare"], ["snap", "Snap share", 1, "snapPct"]];
   const n = row.series.length, bw = 30, gap = 8, lw = 118, sh = 46, rw = 74;
   const W = lw + n * (bw + gap) + rw, H = strips.length * (sh + 14) + 16;
@@ -127,7 +115,7 @@ function weeklyBars(row, st, lg, windowName) {
     const top = si * (sh + 14) + 12;
     const tot = row[tierKey], avg = lg?.overall?.[tierKey];
     g += `<text class="an-wb-lab" x="0" y="${top + sh / 2 - 3}">${label}</text>`
-      + `<text class="an-wb-tot t-${tierOf(tierKey, tot)}" x="0" y="${top + sh / 2 + 12}">${esc(windowName)} ${tot === null || tot === undefined ? "–" : (tot * 100).toFixed(1) + "%"}</text>`
+      + `<text class="an-wb-tot t-${tierOf(tierKey, tot, cuts)}" x="0" y="${top + sh / 2 + 12}">${esc(windowName)} ${tot === null || tot === undefined ? "–" : (tot * 100).toFixed(1) + "%"}</text>`
       + `<line class="an-wb-base" x1="${lw - 4}" x2="${W - rw + 4}" y1="${top + sh}" y2="${top + sh}"/>`;
     let avgSvg = ""; // drawn after the bars so the line reads across them
     if (avg !== null && avg !== undefined) {
@@ -138,7 +126,7 @@ function weeklyBars(row, st, lg, windowName) {
       const v = s[k], bx = lw + i * (bw + gap);
       if (v === null || v === undefined) { g += `<text class="an-wb-na" x="${bx + bw / 2}" y="${top + sh - 3}">–</text>`; return; }
       const h = Math.max(1.5, Math.min(1, v / scale) * (sh - 12));
-      g += `<rect class="an-wb-bar t-${tierOf(tierKey, v)}" x="${bx}" y="${(top + sh - h).toFixed(1)}" width="${bw}" height="${h.toFixed(1)}" rx="3"><title>${esc(`${weekLabel(s.key, st.season)} ${label}: ${(v * 100).toFixed(1)}%`)}</title></rect>`
+      g += `<rect class="an-wb-bar t-${tierOf(tierKey, v, cuts)}" x="${bx}" y="${(top + sh - h).toFixed(1)}" width="${bw}" height="${h.toFixed(1)}" rx="3"><title>${esc(`${weekLabel(s.key, st.season)} ${label}: ${(v * 100).toFixed(1)}%`)}</title></rect>`
         + `<text class="an-wb-val" x="${bx + bw / 2}" y="${(top + sh - h - 3).toFixed(1)}">${Math.round(v * 100)}</text>`;
     });
     g += avgSvg;
@@ -164,17 +152,18 @@ function zoneGrid(row) {
     + `</div>${total ? "" : `<div class="an-note">No targets with a depth and direction in this window.</div>`}`;
 }
 
-function detailHtml(row, st, q, lg, windowName) {
-  const L = lg?.overall || {};
-  const tile = (label, val, tier = "", avg = "") => `<div class="an-tile${tier ? " t-" + tier : ""}"><span>${label}</span><b>${val}</b>${avg && !avg.includes("an-na") ? `<em title="League average, same window and positions"> · lg ${avg}</em>` : ""}</div>`;
+function detailHtml(row, st, q, P, windowName) {
+  const L = P?.lg?.overall || {}, cuts = P?.cuts;
+  const t = (k, v) => tierOf(k, v, cuts);
+  const tile = (label, val, tier = "", avg = "") => `<div class="an-tile${tier ? " t-" + tier : ""}"><span>${label}</span><b>${val}</b>${avg && !avg.includes("an-na") ? `<em title="League average: ${esc(P?.text || "his position, same window")}"> · lg ${avg}</em>` : ""}</div>`;
   const depth = `../#/team/${encodeURIComponent(row.team)}/player/${encodeURIComponent(row.gsis)}`;
   return `<div class="an-detail-in">
-    <div class="an-dcol"><div class="an-dh">Week by week</div>${row.series.length ? weeklyBars(row, st, lg, windowName) : `<div class="an-note">No weeks in this window.</div>`}</div>
+    <div class="an-dcol"><div class="an-dh">Week by week</div>${row.series.length ? weeklyBars(row, st, P, windowName) : `<div class="an-note">No weeks in this window.</div>`}</div>
     <div class="an-dcol"><div class="an-dh">Target zones <span class="an-dsub">${row.tgt} targets</span></div>${zoneGrid(row)}</div>
     <div class="an-dcol an-dtiles">
-      ${tile("Tgt %", pct(row.tgtShare), tierOf("tgtShare", row.tgtShare), pct(L.tgtShare))}${tile("AY %", pct(row.ayShare), tierOf("ayShare", row.ayShare), pct(L.ayShare))}
-      ${tile("WOPR", fix(row.wopr, 2), tierOf("wopr", row.wopr), fix(L.wopr, 2))}${tile("aDOT", fix(row.adot, 1), "", fix(L.adot, 1))}
-      ${tile("EPA/Tgt", signed(row.epaTgt, 2), tierOf("epaTgt", row.epaTgt), signed(L.epaTgt, 2))}${tile("YPRR", fix(row.yprr, 2), tierOf("yprr", row.yprr), fix(L.yprr, 2))}
+      ${tile("Tgt %", pct(row.tgtShare), t("tgtShare", row.tgtShare), pct(L.tgtShare))}${tile("AY %", pct(row.ayShare), t("ayShare", row.ayShare), pct(L.ayShare))}
+      ${tile("WOPR", fix(row.wopr, 2), t("wopr", row.wopr), fix(L.wopr, 2))}${tile("aDOT", fix(row.adot, 1), "", fix(L.adot, 1))}
+      ${tile("EPA/Tgt", signed(row.epaTgt, 2), t("epaTgt", row.epaTgt), signed(L.epaTgt, 2))}${tile("YPRR", fix(row.yprr, 2), t("yprr", row.yprr), fix(L.yprr, 2))}
       <div class="an-dlinks"><a href="#/player/${encodeURIComponent(row.gsis)}${q ? "?" + q : ""}">Player page →</a><a href="${depth}" target="_blank" rel="noopener">Depth chart ↗</a></div>
     </div></div>`;
 }
@@ -184,8 +173,9 @@ export const anchor = { id: null, top: null };
 
 // ---- table ---------------------------------------------------------------------------------------------
 // The table's markup as a pure string (no DOM): everything renderTable needs to know to decide what to show,
-// split out so tests can check column visibility and RB dashing without a document. `view`: { lg
-// (agg.leagueAverages over the league-wide rows), windowName ("Season", "Last 3", "W1–W2") }.
+// split out so tests can check column visibility and RB dashing without a document. `view`: { ref
+// (agg.usageReference over the league-wide rows: each row's league reference and tier cuts come from
+// ref.at(row.pos)), windowName ("Season", "Last 3", "W1–W2"), teams }.
 export function tableHtml(allRows, st, query, view = {}) {
   const rows = sortRows(allRows.filter((r) => r.tgt >= st.minTgt), st.sort, st.dir);
   const q = query || "";
@@ -203,9 +193,11 @@ export function tableHtml(allRows, st, query, view = {}) {
     // D182: a mixed table keeps the air-yards columns for perspective, but an RB's own numbers there are not
     // meaningful, so his cells show a dash instead of the real (but misleading) figure.
     const v = AY_ONLY_KEYS.has(c.k) && r.pos === "RB" ? null : r[c.k];
-    const tier = tierOf(c.k, v);
+    const P = view.ref?.at(r.pos);
+    const tier = tierOf(c.k, v, P?.cuts);
+    const note = TIER_KEYS.has(c.k) && v !== null && v !== undefined ? tierNote(P?.cuts?.[c.k], r.pos) : "";
     const bar = c.bar && v !== null && v !== undefined ? `<i class="an-bar" style="width:${Math.min(100, (v / c.bar) * 100).toFixed(1)}%"></i>` : "";
-    return `<td class="num g-${c.grp}${c.gs ? " gs" : ""}${tier ? " t-" + tier : ""}${bar ? " has-bar" : ""}">${bar}<span>${c.f(v)}</span></td>`;
+    return `<td class="num g-${c.grp}${c.gs ? " gs" : ""}${tier ? " t-" + tier : ""}${bar ? " has-bar" : ""}"${note ? ` title="${esc(note)}"` : ""}>${bar}<span>${c.f(v)}</span></td>`;
   };
   const body = rows.map((r, i) => {
     const open = st.open === r.gsis;
@@ -216,15 +208,15 @@ export function tableHtml(allRows, st, query, view = {}) {
       <td class="num">${r.g}</td>
       ${cols.map((c) => cell(c, r)).join("")}
       <td class="c-spark">${sparkline(r.series, st)}</td></tr>`
-      + (open ? `<tr class="an-detail"><td colspan="${nCols}"><div class="an-detail-wrap">${detailHtml(r, st, q, view.lg, view.windowName || "Window")}</div></td></tr>` : "");
+      + (open ? `<tr class="an-detail"><td colspan="${nCols}"><div class="an-detail-wrap">${detailHtml(r, st, q, view.ref?.at(r.pos), view.windowName || "Window")}</div></td></tr>` : "");
   }).join("");
 
   return `<div class="an-tbar">
       <label class="an-min">Min targets <input type="number" min="0" step="1" value="${st.minTgt}" data-min></label>
       <label class="an-switch" title="A defensive pass interference is a no-play in the play-by-play; on, it counts as a target for the receiver (never a pass attempt, catch or yards)"><input type="checkbox" data-pi${st.pi === false ? "" : " checked"}><span>${st.pi === false ? "excl. PI targets" : "PI targets"}</span></label>
       <span class="an-count">${rows.length} player${rows.length === 1 ? "" : "s"}</span>
-      <span class="an-legend" title="The depth charts' rating colours, on the share and efficiency columns">
-        ${TIER_NAMES.map((t) => `<i class="t-${t}"></i>`).join("")}<span>elite → low</span></span>
+      <span class="an-legend" title="The depth charts' rating colours on the share and efficiency columns, by position: each value against his own position's reference pool in this window (elite at its 90th percentile or above, then the 70th, 40th and 15th; low below). A position with under ${MIN_POOL} men in the pool uses the league-wide cuts for that column (hover the cell).">
+        ${TIER_NAMES.map((t) => `<i class="t-${t}"></i>`).join("")}<span>elite → low by position</span></span>
       <span class="an-hint">Click a row to open it</span>
     </div>
     <div class="an-tscroll"><table class="an-table"><thead>${groupRow}${head}</thead><tbody>${body || `<tr><td colspan="${nCols}" class="an-empty">No players match these filters.</td></tr>`}</tbody></table></div>`;

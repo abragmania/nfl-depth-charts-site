@@ -2,7 +2,7 @@
 // and running backs together by default; every filter, the sort, the minimum and the open row live in the hash.
 import { fromQuery, toQuery, seasonsOf, weekLabel, POSITIONS } from "../filters.js";
 import { loadFor, loadTeams } from "../data.js";
-import { aggregateUsage, clubGames, leagueAverages } from "../agg.js";
+import { aggregateUsage, clubGames, usageReference, REF_POS, POOL_PER_GAME, POOL_FLOOR } from "../agg.js";
 import { renderFilterBar } from "../filterbar.js";
 import { renderTable, anchor } from "../table.js";
 
@@ -46,9 +46,11 @@ export async function renderUsage(ctx, query) {
   }
   if (!isCurrent()) return;
   const { rows, weeks } = aggregateUsage(data.blocks, data.players, st);
-  // League averages always come from the whole league, so a one-club or one-opponent view still has perspective.
-  const lgRows = st.team || st.opp ? aggregateUsage(data.blocks, data.players, { ...st, team: "", opp: "" }).rows : rows;
-  const lg = leagueAverages(lgRows, st.minTgt);
+  // League references and tier cuts always come from the whole league at every position (each row is judged
+  // against his own position's pool), so a one-club, one-opponent or one-position view still has perspective.
+  const ref = usageReference(aggregateUsage(data.blocks, data.players, { ...st, team: "", opp: "", pos: {} }).rows);
+  const shownPos = [...REF_POS].filter((p) => rows.some((r) => r.pos === p));
+  const refLine = `League reference and colour tiers, by position: players with ${POOL_PER_GAME}+ targets/game (min ${POOL_FLOOR}) in the window (${shownPos.map((p) => `${p}s ${ref.at(p).n}`).join(" · ") || "none"})`;
   const windowName = st.window === "last3" ? "Last 3" : st.window === "range" && weeks.length ? `${weekLabel(weeks[0], st.season)}–${weekLabel(weeks[weeks.length - 1], st.season)}` : "Season";
   const clubTeams = [...new Set(clubGames(data.blocks).map((g) => g.team))].sort();
   const teamsByAbbr = new Map(teams.map((t) => [t.abbr, t]));
@@ -63,12 +65,13 @@ export async function renderUsage(ctx, query) {
       <div class="an-sub">${esc(st.season)}${st.with2025 ? " + 2025" : ""} · ${esc(windowText(st, weeks))} · ${esc(posText)}${exText.length ? ` · excluding ${esc(exText.join(", "))}` : ""}${st.team ? ` · ${esc(st.team)}` : ""}${st.opp ? ` · vs ${esc(st.opp)}` : ""}</div>
       ${data.missing.length ? `<div class="an-warn">${esc(data.missing.join(", "))} files are not built yet; showing ${esc(seasonsOf(st).filter((s) => !data.missing.includes(s)).join(", "))} only.</div>` : ""}
     </div>
+    <div class="an-sub an-ref">${esc(refLine)}</div>
     <div class="an-filters"></div>
     <div class="an-tablewrap"></div>
     <p class="an-foot">Targets, air yards, receptions, EPA and zones: nflverse play-by-play. Routes, route %, TPRR, YPRR: heatradar.app (charted; a week under 8 routes is not listed). Snaps: nflverse snap counts. Target share counts only the games he played.</p>
   </section>`;
   renderFilterBar(root.querySelector(".an-filters"), st, { keys: data.keys, teams: clubTeams }, go);
-  renderTable(root.querySelector(".an-tablewrap"), rows, st, qs, go, { lg, windowName, teams: teamsByAbbr });
+  renderTable(root.querySelector(".an-tablewrap"), rows, st, qs, go, { ref, windowName, teams: teamsByAbbr });
   // Keep the clicked row where the reader clicked it rather than letting the re-render jump the page.
   if (anchor.id) {
     const tr = [...root.querySelectorAll("tr.an-row")].find((t) => t.dataset.id === anchor.id);
