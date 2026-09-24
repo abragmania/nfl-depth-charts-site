@@ -176,11 +176,11 @@ export async function renderStatus(el) {
 // newest per-source success" logic renderStatus/newestSuccess already use elsewhere in this file. Reuses
 // poll() and dispatches the same "nfl:data-refreshed" event as the manual trigger() so every open view
 // re-renders identically regardless of which path started the cycle.
-// D65 keeps this 6-hour trigger exactly as it was: the question "should this page ask for a refresh at all"
-// is still answered here, but WHAT that refresh fetches is now the server's decision, per source. So opening
-// the app after six hours reads the injury feeds and leaves the football sources alone until the NFL week
-// has moved on.
-export async function autoRefreshIfStale({ maxAgeHours = 6 } = {}) {
+// D65: the question "should this page ask for a refresh at all" is answered here, but WHAT that refresh fetches
+// is the server's decision, per source. So opening the app after two hours (D171; was six) reads the injury
+// feeds and leaves the football sources alone until the NFL week has moved on. The desktop's 2-hour scheduled
+// task does the same without anyone opening the app.
+export async function autoRefreshIfStale({ maxAgeHours = 2 } = {}) {
   if (isStatic()) return; // D67: the published copy never contacts a football source
   if (autoRefreshAttemptedThisLoad) return; // never more than once per page load
   autoRefreshAttemptedThisLoad = true;
