@@ -4,6 +4,10 @@
 import * as router from "./router.js";
 import { renderUsage } from "./views/usage.js";
 import { renderPlayer } from "./views/player.js";
+import { renderQb } from "./views/qb.js";
+import { renderQbPlayer } from "./views/qbplayer.js";
+import { loadSeason } from "./data.js";
+import { fromQuery, seasonsOf } from "./filters.js";
 
 const root = document.getElementById("app");
 const nav = document.getElementById("an-nav");
@@ -38,8 +42,19 @@ const stub = (title, blurb) => async () => {
 
 router.on("/", view("usage", (p, q, ctx) => renderUsage(ctx, q)));
 router.on("/usage", view("usage", (p, q, ctx) => renderUsage(ctx, q)));
-router.on("/player/:gsis", view("usage", (p, q, ctx) => renderPlayer(ctx, p, q)));
-router.on("/qb", view("qb", stub("Quarterbacks", "EPA per dropback, CPOE, success rate, aDOT, pressure and play-action splits, with the zone chart.")));
+// D182: a player page is built for his position. A quarterback (the newest loaded season's players file says QB)
+// gets the QB page with the Quarterbacks pill lit; everyone else the pass-catcher page.
+async function isQb(gsis, query) {
+  for (const s of seasonsOf(fromQuery(query))) {
+    try { const p = (await loadSeason(s)).players?.[gsis]; if (p) return String(p.pos || "").toUpperCase() === "QB"; } catch { /* season not built */ }
+  }
+  return false;
+}
+router.on("/player/:gsis", view("usage", async (p, q, ctx) => {
+  if (await isQb(p.gsis, q)) { if (ctx.isCurrent()) paintNav("qb", q); return renderQbPlayer(ctx, p, q); }
+  return renderPlayer(ctx, p, q);
+}));
+router.on("/qb", view("qb", (p, q, ctx) => renderQb(ctx, q)));
 router.on("/rushing", view("rushing", stub("Rushing", "Carries, yards per carry and over expected, success rate and EPA per rush.")));
 router.on("/team", view("team", stub("Teams", "Team offence and defence side by side.")));
 router.on("/team/:abbr", view("team", stub("Team", "One club's offence and defence.")));

@@ -285,3 +285,69 @@ td[class*=" t-"] > span { color:var(--t); font-weight:700; }
 .an-rl-pct em { font-style:normal; color:var(--dim); font-size:11px; }
 .an-rl-row > b, .an-rl-row > span:nth-child(n+4) { text-align:right; }
 .an-rl-h span:nth-child(n+4) { text-align:right; }
+/* ---- Quarterbacks (#/qb) and the QB player page (D182: QBs are their own thing) ---- */
+/* Adam (2026-09-24): passing vs running must be obvious. Passing is the dominant block (about 63% of the width);
+   rushing is its own separate block beside it with a headline that lights up (tier colours) for runners and sits
+   grey for pocket passers. */
+.an-qb .an-fgroup:has(.an-poses) { display:none; }
+.an-qb-table .g-r { background:rgba(202,160,83,.035); }
+.an-qb-table thead tr.an-grp th.g-r { color:var(--band-BACKFIELD); }
+.an-qb-spark path { stroke:var(--band-QB); }
+.an-qb-spark circle.up { fill:var(--tier-elite); } .an-qb-spark circle.down { fill:var(--tier-flat); }
+.an-wb-bar.an-qb-bar.up { fill:var(--tier-strong); }
+.an-wb-bar.an-qb-bar.down { fill:var(--tier-flat); }
+.an-wb-bar.an-qb-bar.plain { fill:var(--band-QB); }
+.an-wbars .an-wb-base.zero { stroke:#4a535d; }
+.an-qb-tip { fill:transparent; }
+.an-qb-tip:hover { fill:rgba(255,255,255,.04); }
+.an-detail-in.an-qb-din { display:grid; grid-template-columns:minmax(0, 65fr) minmax(280px, 35fr); gap:16px; padding:12px 18px 16px 46px; align-items:start; }
+.an-qb-din .an-dtiles { grid-template-columns:repeat(2, 124px); }
+.an-qb-din .an-qb-passrow { gap:14px 22px; flex-wrap:nowrap; }
+.an-qb-pass, .an-qb-rush, .an-qb-blk { border-radius:var(--r-card); padding:10px 14px 12px; min-width:0; }
+.an-qb-pass { background:rgba(139,109,209,.05); border:1px solid color-mix(in srgb, var(--band-QB) 38%, transparent); }
+.an-qb-rush { background:rgba(202,160,83,.045); border:1px solid color-mix(in srgb, var(--band-BACKFIELD) 36%, transparent); }
+.an-qb-blockh { font-size:12px; font-weight:800; letter-spacing:.12em; text-transform:uppercase; margin-bottom:8px; }
+.an-qb-pass > .an-qb-blockh { color:var(--band-QB); }
+.an-qb-rush > .an-qb-blockh { color:var(--band-BACKFIELD); }
+.an-qb-passrow { display:flex; flex-wrap:wrap; gap:14px 26px; align-items:flex-start; }
+.an-qb-rhs { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:8px; margin-bottom:6px; }
+.an-qb-rh { background:#161b21; border:1px solid #232a31; border-radius:var(--r-row); padding:7px 10px 8px; display:flex; flex-direction:column; }
+.an-qb-rh[class*=" t-"] { background:color-mix(in srgb, var(--t) 13%, #161b21); border-color:color-mix(in srgb, var(--t) 45%, #232a31); }
+.an-qb-rh b { font-size:24px; line-height:1.1; color:var(--t, var(--muted)); font-variant-numeric:tabular-nums; }
+.an-qb-rh span { color:var(--muted); font-size:11px; font-weight:700; }
+.an-qb-rh em { font-style:normal; color:var(--dim); font-size:11px; font-weight:600; }
+.an-zf.an-zf-sm { grid-template-columns:50px repeat(3, 74px); gap:3px; }
+.an-zf-sm .an-zf-c { height:44px; }
+.an-zf-sm .an-zf-c b { font-size:14px; }
+.an-zf-sm .an-zf-c small { font-size:9.5px; }
+.an-zf-sm .an-zf-r { font-size:11px; }
+/* the QB player page: Passing (about 63%) and a side column with Rushing and Madden; they stack under 1500px. */
+.an-qbp-split { display:grid; grid-template-columns:minmax(0, 63fr) minmax(360px, 37fr); gap:14px; align-items:start; max-width:2200px; }
+@media (max-width:1500px) { .an-qbp-split { grid-template-columns:minmax(0, 1fr); } }
+.an-qbp-pass, .an-qbp-rush { padding:12px 16px 14px; }
+.an-qbp .an-qb-blockh { font-size:13.5px; }
+.an-qbp-tiles { grid-template-columns:repeat(8, minmax(0, 1fr)); margin-bottom:12px; }
+@media (max-width:1760px) { .an-qbp-tiles { grid-template-columns:repeat(5, minmax(0, 1fr)); } }
+.an-qbp-row { display:flex; flex-wrap:wrap; gap:12px; align-items:flex-start; }
+.an-qbp-weeks { flex:0 1 auto; max-width:100%; }
+.an-qbp-zones { flex:0 0 auto; }
+.an-qbp-splitsc { flex:0 1 auto; }
+.an-qbp-side { display:flex; flex-direction:column; gap:12px; min-width:0; }
+.an-qbp-rush .an-qb-rh b { font-size:30px; }
+.an-qbp-rtiles { grid-template-columns:repeat(3, minmax(0, 1fr)); margin:8px 0 10px; }
+.an-qbp .an-tile b small { font-size:11px; color:var(--muted); font-weight:600; }
+.an-qbp-rush .an-wb-bar.an-qb-bar.plain { fill:var(--band-BACKFIELD); }
+.an-qbp-scr { margin-left:12px; text-transform:none; letter-spacing:0; font-weight:600; }
+.an-qbp-splits { border-collapse:collapse; font-size:12.5px; font-variant-numeric:tabular-nums; }
+.an-qbp-splits th { text-align:left; color:var(--muted); font-weight:600; padding:3px 10px 3px 0; white-space:nowrap; }
+.an-qbp-splits thead th { color:var(--dim); font-size:10.5px; font-weight:700; }
+.an-qbp-splits th.num, .an-qbp-splits td.num { text-align:right; }
+.an-qbp-splits td { padding:3px 0 3px 14px; white-space:nowrap; color:var(--ink); font-weight:600; }
+.an-qbp-splits td em { font-style:normal; color:var(--dim); font-size:10.5px; font-weight:500; margin-left:4px; }
+.an-qbp-splits td.up { color:var(--tier-elite); } .an-qbp-splits td.down { color:var(--tier-flat); }
+.an-qbp-splits tr.an-qbp-sfirst th, .an-qbp-splits tr.an-qbp-sfirst td, .an-qbp-splits tr.an-qbp-sgap th, .an-qbp-splits tr.an-qbp-sgap td { border-top:1px solid #232a31; }
+.an-qbp-splits .an-note { white-space:normal; max-width:380px; font-weight:500; }
+.an-qbp .an-pl-plays { width:440px; }
+.an-qbp-tgt { max-width:110px; overflow:hidden; text-overflow:ellipsis; }
+.an-qbp-madden { min-width:0; }
+.an-qbp-madden .an-rb-row { grid-template-columns:120px 1fr 30px 70px; }
