@@ -37,6 +37,16 @@ async function getJson(url, bust) {
 
 const seasons = new Map(); // season -> Promise<{ manifest, players }>
 const weekFiles = new Map(); // "season-week" -> Promise<week file>
+let teamsPromise = null; // the team registry (colours, names): same for every season, fetched once
+
+// The team registry for colour-coding (table.js's team pill). Routed through resolveAnalyticsUrl, not
+// public/js/api.js's own getTeams(), because that module's relative static path assumes it is called from
+// a page at the site root; this app is served one folder down (/analytics/) and needs the "../" prefix
+// resolveAnalyticsUrl already knows how to add.
+export function loadTeams() {
+  if (!teamsPromise) teamsPromise = getJson("/api/teams").catch((e) => { teamsPromise = null; throw e; });
+  return teamsPromise;
+}
 
 export function loadSeason(season) {
   if (!seasons.has(season)) {

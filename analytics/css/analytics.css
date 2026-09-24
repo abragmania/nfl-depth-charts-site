@@ -82,9 +82,13 @@ a { color:inherit; }
 
 /* ---- table ---- */
 /* clip (not auto) so the header rows stay sticky against the page scroll; narrower windows scroll sideways. */
-.an-tscroll { overflow-x:clip; border:1px solid var(--line); border-radius:var(--r-card); background:var(--panel2); }
+/* D177: the table sizes to its own content and stops there — a wide monitor doesn't mean a table stretched
+   to fill it. width:max-content hugs the columns; max-width caps it at the available page width so it never
+   overflows the .an-main padding, and left-aligns (the block default) rather than centring, matching the
+   rest of the page's left-flowing layout. */
+.an-tscroll { overflow-x:clip; border:1px solid var(--line); border-radius:var(--r-card); background:var(--panel2); width:max-content; max-width:100%; }
 @media (max-width:1400px) { .an-tscroll { overflow-x:auto; } }
-.an-table { width:100%; border-collapse:separate; border-spacing:0; font-variant-numeric:tabular-nums; }
+.an-table { width:auto; border-collapse:separate; border-spacing:0; font-variant-numeric:tabular-nums; }
 .an-table th { position:sticky; top:0; background:var(--panel); color:var(--muted); font-size:11.5px; font-weight:700; text-align:right; padding:6px 7px; white-space:nowrap; cursor:pointer; user-select:none; border-bottom:1px solid var(--line); }
 .an-table thead tr.an-grp th { top:var(--bar-h); cursor:default; font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--dim); text-align:center; padding:6px 7px 2px; border-bottom:0; }
 .an-table thead tr.an-grp th[class^="g-"] { border-bottom:2px solid #2a323b; }
@@ -93,7 +97,7 @@ a { color:inherit; }
 .an-table th.sorted { color:var(--accent); }
 .an-table th.sorted.desc::after { content:" ▾"; } .an-table th.sorted.asc::after { content:" ▴"; }
 .an-table th.c-name, .an-table td.c-name { text-align:left; }
-.an-table th.c-pos, .an-table td.c-pos, .an-table th.c-spark { text-align:center; }
+.an-table th.c-spark { text-align:center; }
 .an-table td { padding:4px 7px; border-bottom:1px solid #1a1f25; white-space:nowrap; text-align:right; }
 .an-table td.num { position:relative; }
 .an-table td.num > span { position:relative; }
@@ -104,15 +108,19 @@ a { color:inherit; }
 .an-row.open { background:rgba(255,213,74,.06); }
 .an-row.open td { border-bottom-color:transparent; }
 .c-rank { color:var(--dim); width:34px; font-size:12px; }
-.c-name { min-width:210px; }
+/* Name, team pill and Pos chip sit in one cell now (D177 readability fix): a tight flex row with normal
+   word gaps, sized to its content rather than a fixed min-width, so the column no longer spreads out just
+   because the monitor is wide. */
+.c-name { display:flex; align-items:center; gap:6px; }
 .an-pname { color:var(--ink); font-weight:700; text-decoration:none; }
 .an-pname:hover { color:var(--accent); }
-.an-team { margin-left:8px; color:var(--muted); font-size:11.5px; font-weight:700; letter-spacing:.04em; text-decoration:none; }
-.an-team:hover { color:var(--ink); text-decoration:underline; }
-.an-dc { margin-left:6px; color:var(--dim); font-size:11px; text-decoration:none; opacity:0; transition:opacity .12s; }
+.an-teampill { display:inline-block; padding:1px 6px; border-radius:var(--r-chip); font-size:11px; font-weight:800; letter-spacing:.03em;
+  background:var(--team-bg, #2a323b); color:var(--team-ink, var(--muted)); text-decoration:none; }
+.an-teampill:hover { filter:brightness(1.12); text-decoration:underline; }
+.an-dc { color:var(--dim); font-size:11px; text-decoration:none; opacity:0; transition:opacity .12s; }
 .an-row:hover .an-dc, .an-row.open .an-dc, .an-dc:focus { opacity:1; }
 .an-dc:hover { color:var(--accent); }
-.an-pospill { display:inline-block; min-width:30px; padding:1px 6px; border-radius:var(--r-chip); font-size:11px; font-weight:800; color:var(--band-color); background:color-mix(in srgb, var(--band-color) 16%, transparent); }
+.an-pospill { display:inline-block; min-width:30px; padding:1px 6px; border-radius:var(--r-chip); font-size:11px; font-weight:800; color:var(--band-color); background:color-mix(in srgb, var(--band-color) 16%, transparent); text-align:center; }
 .an-na { color:var(--dim); }
 /* Tier colour on the number; share columns also get a faint magnitude bar in the same colour. */
 td[class*=" t-"] > span { color:var(--t); font-weight:700; }

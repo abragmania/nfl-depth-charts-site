@@ -1,7 +1,7 @@
 // Usage: the pass-game usage leaderboard (D177's first priority, with fantasy in mind). Receivers, tight ends
 // and running backs together by default; every filter, the sort, the minimum and the open row live in the hash.
 import { fromQuery, toQuery, seasonsOf, weekLabel, POSITIONS } from "../filters.js";
-import { loadFor } from "../data.js";
+import { loadFor, loadTeams } from "../data.js";
 import { aggregateUsage, clubGames, leagueAverages } from "../agg.js";
 import { renderFilterBar } from "../filterbar.js";
 import { renderTable, anchor } from "../table.js";
@@ -30,8 +30,12 @@ export async function renderUsage(ctx, query) {
   const st = fromQuery(query);
   document.title = "Usage · NFL Analytics";
   if (!root.querySelector(".an-usage")) root.innerHTML = `<div class="an-msg">Loading usage…</div>`;
-  let data;
-  try { data = await loadFor(seasonsOf(st), st); }
+  let data, teams;
+  try {
+    // Teams (for the player column's colour pill) load alongside the analytics data; a failure there is
+    // decorative, not fatal, so it falls back to an empty list rather than blocking the leaderboard.
+    [data, teams] = await Promise.all([loadFor(seasonsOf(st), st), loadTeams().then((j) => j.teams || []).catch(() => [])]);
+  }
   catch (e) {
     if (!isCurrent()) return;
     const notBuilt = e.status === 404 || e.status === 503;
@@ -46,7 +50,8 @@ export async function renderUsage(ctx, query) {
   const lgRows = st.team || st.opp ? aggregateUsage(data.blocks, data.players, { ...st, team: "", opp: "" }).rows : rows;
   const lg = leagueAverages(lgRows, st.minTgt);
   const windowName = st.window === "last3" ? "Last 3" : st.window === "range" && weeks.length ? `${weekLabel(weeks[0], st.season)}–${weekLabel(weeks[weeks.length - 1], st.season)}` : "Season";
-  const teams = [...new Set(clubGames(data.blocks).map((g) => g.team))].sort();
+  const clubTeams = [...new Set(clubGames(data.blocks).map((g) => g.team))].sort();
+  const teamsByAbbr = new Map(teams.map((t) => [t.abbr, t]));
   if (asof) { asof.textContent = builtText(data.manifests); asof.hidden = false; }
 
   const posText = POSITIONS.filter((p) => st.pos[p] === "in").join(" · ") || "All positions";
@@ -62,8 +67,8 @@ export async function renderUsage(ctx, query) {
     <div class="an-tablewrap"></div>
     <p class="an-foot">Targets, air yards, receptions, EPA and zones: nflverse play-by-play. Routes, route %, TPRR, YPRR: heatradar.app (charted; a week under 8 routes is not listed). Snaps: nflverse snap counts. Target share counts only the games he played.</p>
   </section>`;
-  renderFilterBar(root.querySelector(".an-filters"), st, { keys: data.keys, teams }, go);
-  renderTable(root.querySelector(".an-tablewrap"), rows, st, qs, go, { lg, windowName });
+  renderFilterBar(root.querySelector(".an-filters"), st, { keys: data.keys, teams: clubTeams }, go);
+  renderTable(root.querySelector(".an-tablewrap"), rows, st, qs, go, { lg, windowName, teams: teamsByAbbr });
   // Keep the clicked row where the reader clicked it rather than letting the re-render jump the page.
   if (anchor.id) {
     const tr = [...root.querySelectorAll("tr.an-row")].find((t) => t.dataset.id === anchor.id);

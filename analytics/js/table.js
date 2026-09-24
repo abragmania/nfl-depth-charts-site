@@ -13,6 +13,28 @@ import { weekLabel } from "./filters.js";
 
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const DASH = `<span class="an-na">–</span>`;
+
+// Copied two-line rule from public/js/landing.js's isLightWash (relative luminance of the team's primary
+// colour decides light or dark ink for the team pill below): keep the two in step if that threshold ever
+// changes, same as analytics.css already does for its copied colour tokens.
+function luminance(hex) {
+  const raw = String(hex || "").trim().replace(/^#/, "");
+  const full = raw.length === 3 ? raw.split("").map((c) => c + c).join("") : raw;
+  if (!/^[0-9a-f]{6}$/i.test(full)) return null;
+  const n = parseInt(full, 16);
+  const lin = (c) => { const v = c / 255; return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };
+  return 0.2126 * lin((n >> 16) & 255) + 0.7152 * lin((n >> 8) & 255) + 0.0722 * lin(n & 255);
+}
+const isLightWash = (primary) => (luminance(primary) ?? 0) > 0.40;
+
+// The team abbreviation as a small pill in the team's own colours (primary background, readable ink).
+// `teams` is the Map<abbr, {colourPrimary, colourSecondary}> from public/js/api.js's getTeams(), or empty
+// if that load failed; an unknown abbr falls back to the neutral colours set on .an-teampill itself.
+function teamPill(abbr, teams, q) {
+  const t = teams?.get(abbr);
+  const style = t ? ` style="--team-bg:${esc(t.colourPrimary)};--team-ink:${isLightWash(t.colourPrimary) ? "#14181d" : "#fff"}"` : "";
+  return `<a class="an-teampill" href="#/team/${esc(abbr)}${q ? "?" + q : ""}"${style}>${esc(abbr)}</a>`;
+}
 const pct = (v, d = 1) => (v === null || v === undefined ? DASH : (v * 100).toFixed(d));
 const fix = (v, d) => (v === null || v === undefined ? DASH : (+v).toFixed(d));
 const signed = (v, d) => (v === null || v === undefined ? DASH : (v > 0 ? "+" : v < 0 ? "−" : "") + Math.abs(v).toFixed(d));
@@ -159,10 +181,12 @@ export const anchor = { id: null, top: null };
 export function renderTable(el, allRows, st, query, onState, view = {}) {
   const rows = sortRows(allRows.filter((r) => r.tgt >= st.minTgt), st.sort, st.dir);
   const q = query || "";
-  const nCols = 4 + COLS.length + 1;
+  const teams = view.teams;
+  // Player, team and Pos now share one cell (c-name), so the fixed columns are rank/player/games, not four.
+  const nCols = 3 + COLS.length + 1;
   const th = (k, h, t, cls = "") => `<th class="${cls}${st.sort === k ? " sorted " + st.dir : ""}" data-sort="${k}" title="${esc(t)}">${h}</th>`;
-  const groupRow = `<tr class="an-grp"><th colspan="4"></th>${GROUPS.map(([g, l]) => `<th colspan="${COLS.filter((c) => c.grp === g).length}" class="g-${g} gs">${l}</th>`).join("")}<th></th></tr>`;
-  const head = `<tr>${th("rank", "#", "Rank", "c-rank")}${th("name", "Player", "Player", "c-name")}${th("pos", "Pos", "Position", "c-pos")}${th("g", "G", "Games in the window")}${COLS.map((c) => th(c.k, c.h, c.t, "g-" + c.grp + (c.gs ? " gs" : ""))).join("")}<th class="c-spark" title="Weekly target share; hover a point for the week">Tgt % by week</th></tr>`;
+  const groupRow = `<tr class="an-grp"><th colspan="3"></th>${GROUPS.map(([g, l]) => `<th colspan="${COLS.filter((c) => c.grp === g).length}" class="g-${g} gs">${l}</th>`).join("")}<th></th></tr>`;
+  const head = `<tr>${th("rank", "#", "Rank", "c-rank")}${th("name", "Player", "Player, team, position", "c-name")}${th("g", "G", "Games in the window")}${COLS.map((c) => th(c.k, c.h, c.t, "g-" + c.grp + (c.gs ? " gs" : ""))).join("")}<th class="c-spark" title="Weekly target share; hover a point for the week">Tgt % by week</th></tr>`;
   const cell = (c, r) => {
     const v = r[c.k];
     const tier = tierOf(c.k, v);
@@ -174,8 +198,7 @@ export function renderTable(el, allRows, st, query, onState, view = {}) {
     const depth = `../#/team/${encodeURIComponent(r.team)}/player/${encodeURIComponent(r.gsis)}`;
     return `<tr class="an-row${open ? " open" : ""}" data-id="${esc(r.gsis)}" tabindex="0" aria-expanded="${open}">
       <td class="c-rank">${i + 1}</td>
-      <td class="c-name"><a class="an-pname" href="#/player/${encodeURIComponent(r.gsis)}${q ? "?" + q : ""}">${esc(r.name)}</a><a class="an-team" href="#/team/${esc(r.team)}${q ? "?" + q : ""}">${esc(r.team)}</a><a class="an-dc" href="${depth}" target="_blank" rel="noopener" title="Open his depth-chart card in a new tab" aria-label="Depth chart">↗</a></td>
-      <td class="c-pos"><span class="an-pospill" data-band="${BAND(r.pos)}">${esc(r.pos)}</span></td>
+      <td class="c-name"><a class="an-pname" href="#/player/${encodeURIComponent(r.gsis)}${q ? "?" + q : ""}">${esc(r.name)}</a>${teamPill(r.team, teams, q)}<span class="an-pospill" data-band="${BAND(r.pos)}">${esc(r.pos)}</span><a class="an-dc" href="${depth}" target="_blank" rel="noopener" title="Open his depth-chart card in a new tab" aria-label="Depth chart">↗</a></td>
       <td class="num">${r.g}</td>
       ${COLS.map((c) => cell(c, r)).join("")}
       <td class="c-spark">${sparkline(r.series, st)}</td></tr>`
