@@ -10,6 +10,7 @@ import { weekKey, splitKey } from "./filters.js";
 // an analytics URL: /api/analytics/{s}/manifest -> api/analytics/{s}/manifest.json, .../players -> players.json,
 // .../w/{n} -> w{NN}.json.
 export function analyticsStaticPath(url) {
+  if (/^\/?api\/analytics\/identity$/.test(String(url).split("?")[0])) return "api/analytics/identity.json";
   const m = String(url).split("?")[0].match(/^\/?api\/analytics\/(\d{4})\/(manifest|players|w\/(\d+))$/);
   if (!m) return null;
   if (m[3]) return `api/analytics/${m[1]}/w${String(+m[3]).padStart(2, "0")}.json`;
@@ -38,6 +39,34 @@ async function getJson(url, bust) {
 const seasons = new Map(); // season -> Promise<{ manifest, players }>
 const weekFiles = new Map(); // "season-week" -> Promise<week file>
 let teamsPromise = null; // the team registry (colours, names): same for every season, fetched once
+let identityPromise = null; // D183: {builtAt, players: {[gsis]: {name, onChart}}}, or null when it cannot be had
+let identityNames = null; // gsis -> the depth-chart spelling, once loaded
+let lastPlayers = {}; // the merged players of the latest loadFor(), displayName()'s fallback
+
+// D183: the identity file's printed name per gsis (the depth chart's spelling for every man a chart carries, else
+// nflverse's). Never fails: a missing or unreadable file resolves to null and names fall back to players.json.
+export function loadIdentity() {
+  if (!identityPromise) {
+    identityPromise = getJson("/api/analytics/identity")
+      .then((body) => { identityNames = new Map(Object.entries(body?.players || {}).map(([g, p]) => [g, p?.name]).filter(([, n]) => n)); return body; })
+      .catch(() => { identityPromise = null; return null; });
+  }
+  return identityPromise;
+}
+
+// D183: the name to print for a gsis id. The identity file's (depth-chart) spelling first, then the name the
+// season's players.json carries (`players`, default: the latest loadFor()'s merged map), then the id itself.
+export function displayName(gsis, players = lastPlayers) {
+  return identityNames?.get(gsis) ?? players?.[gsis]?.name ?? gsis ?? null;
+}
+
+// PURE: the merged players map with every name the identity file knows replaced by its depth-chart spelling.
+export function applyIdentityNames(players, names) {
+  if (!names || !names.size) return players;
+  const out = {};
+  for (const [g, p] of Object.entries(players || {})) out[g] = names.has(g) ? { ...p, name: names.get(g) } : p;
+  return out;
+}
 
 // The team registry for colour-coding (table.js's team pill). Routed through resolveAnalyticsUrl, not
 // public/js/api.js's own getTeams(), because that module's relative static path assumes it is called from
@@ -78,7 +107,10 @@ export function weeksNeeded(allKeys, st) {
 // `seasonList` is filters.seasonsOf(st). A season whose files are absent (e.g. 2025 before its compile has run)
 // is reported in `missing` rather than failing the whole page, unless it is the only season asked for.
 export async function loadFor(seasonList, st) {
-  const got = await Promise.all(seasonList.map((s) => loadSeason(s).then((v) => ({ s, ...v }), (e) => ({ s, error: e }))));
+  const [got] = await Promise.all([
+    Promise.all(seasonList.map((s) => loadSeason(s).then((v) => ({ s, ...v }), (e) => ({ s, error: e })))),
+    loadIdentity(),
+  ]);
   const ok = got.filter((g) => !g.error);
   if (!ok.length) throw got[0].error;
   const missing = got.filter((g) => g.error).map((g) => g.s);
@@ -91,7 +123,9 @@ export async function loadFor(seasonList, st) {
     season: x.season, week: splitKey(k).week, key: k, cols: f.cols || x.cols,
     plays: f.plays || [], snaps: f.snaps || null, routes: f.routes || null, ngs: f.ngs || null, pfr: f.pfr || null,
   }));
-  return { blocks, players: mergePlayers(ok.map((g) => ({ season: g.s, players: g.players }))), keys, manifests: ok.map((g) => ({ season: g.s, ...g.manifest })), missing };
+  // D183: the players map views read carries the depth-chart spelling already; displayName() is the same lookup.
+  lastPlayers = applyIdentityNames(mergePlayers(ok.map((g) => ({ season: g.s, players: g.players }))), identityNames);
+  return { blocks, players: lastPlayers, keys, manifests: ok.map((g) => ({ season: g.s, ...g.manifest })), missing };
 }
 
 // PURE: the per-season players files merged into one map whose `teams` are keyed by week key ("2025-14"),

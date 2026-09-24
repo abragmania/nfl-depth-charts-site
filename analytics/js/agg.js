@@ -12,11 +12,16 @@
 //   target share    = his targets / his club's pass attempts in his games (pass plays only: no sacks, scrambles)
 //   air-yards share = his air yards on targets / his club's air yards on pass attempts in his games
 //   WOPR            = 1.5 x target share + 0.7 x air-yards share
-//   aDOT            = his air yards / his targets
+//   aDOT            = his air yards / his targets (a pass-interference target with no air yards is left out)
 //   TPRR, YPRR      = targets and receiving yards in the weeks the routes table covers him / his routes there
 //   route %         = routes / the club dropbacks implied by each week's own route % (routes / pct)
 //   snap %          = the mean of his weekly offensive snap percentages (the snap table gives 0-100 per week)
 //   zones           = his targets by depth band (D179: B behind the line, S 1-9, I 10-19, D 20+) and direction
+// PASS-INTERFERENCE TARGETS (D178 open decision 1, Adam 2026-09-24): a row with pi=1 is a defensive pass
+// interference no-play the ledger kept. It counts as a target for the receiver (targets, target share's numerator,
+// red-zone targets, EPA per target, TPRR) but it is NOT a pass attempt, so the club's pass attempts (target share's
+// denominator) and club air yards leave it out; it is never a completion and adds no yards. With st.pi false
+// ("excl. PI targets") pi rows are skipped entirely, as if the ledger had dropped them.
 // Routes and snaps are weekly tables, so they go blank (null) under a down or quarter filter. A week the
 // routes table does not list a man for (heatradar lists 8+ routes only) is left out of his route figures,
 // never counted as zero.
@@ -62,7 +67,7 @@ export function aggregateUsage(blocks, players, st) {
   const teamAtt = new Map(), teamAir = new Map();
   const acc = new Map();
   const P = (id) => {
-    if (!acc.has(id)) acc.set(id, { tgt: 0, air: 0, rz: 0, ez: 0, rec: 0, yds: 0, td: 0, epa: 0, epaN: 0,
+    if (!acc.has(id)) acc.set(id, { tgt: 0, air: 0, adotN: 0, rz: 0, ez: 0, rec: 0, yds: 0, td: 0, epa: 0, epaN: 0,
       games: new Set(), wk: new Map(), wkAir: new Map(), wkRec: new Map(), snaps: new Map(), routes: new Map(), zones: {} });
     return acc.get(id);
   };
@@ -74,22 +79,25 @@ export function aggregateUsage(blocks, players, st) {
     for (const r of b.plays || []) {
       const gk = `${b.key}|${r[C.posteam]}`;
       if (!gameOk(gk)) continue;
+      const pi = truthy(r[C.pi]);
+      if (pi && st.pi === false) continue;
       // Appearance on any play (before the down/quarter filter) makes it one of his games.
       for (const col of ["passer", "target", "rusher"]) if (r[C[col]]) P(r[C[col]]).games.add(gk);
       if (!pred(r)) continue;
       if (r[C.type] !== "pass") continue;
       const air = num(r[C.air]);
-      add(teamAtt, gk, 1);
-      add(teamAir, gk, air ?? 0);
+      // A pass-interference target is not a pass attempt: the club's attempts and air yards leave it out.
+      if (!pi) { add(teamAtt, gk, 1); add(teamAir, gk, air ?? 0); }
       const id = r[C.target];
       if (!id) continue;
       const p = P(id);
       p.tgt++; p.air += air ?? 0; add(p.wkAir, gk, air ?? 0);
+      if (!(pi && air === null)) p.adotN++;
       const band = r[C.band], dir = r[C.dir];
       if (band && dir) p.zones[`${band}${dir}`] = (p.zones[`${band}${dir}`] || 0) + 1;
       if (truthy(r[C.redzone])) p.rz++;
       if (truthy(r[C.ezTarget])) p.ez++;
-      if (truthy(r[C.complete])) { p.rec++; const y = num(r[C.yards]) ?? 0; p.yds += y; add(p.wkRec, gk, y); }
+      if (!pi && truthy(r[C.complete])) { p.rec++; const y = num(r[C.yards]) ?? 0; p.yds += y; add(p.wkRec, gk, y); }
       if (truthy(r[C.td]) && !truthy(r[C.int])) p.td++;
       const e = num(r[C.epa]); if (e !== null) { p.epa += e; p.epaN++; }
       add(p.wk, gk, 1);
@@ -154,7 +162,7 @@ export function aggregateUsage(blocks, players, st) {
     rows.push({
       gsis: id, name: meta.name || id, pos, espnId: meta.espnId ?? null,
       team: lastGk ? lastGk.split("|")[1] : "", g: g.length,
-      tgt: p.tgt, tgtShare, ay: p.air, ayShare, wopr, adot: ratio(p.air, p.tgt),
+      tgt: p.tgt, tgtShare, ay: p.air, ayShare, wopr, adot: ratio(p.air, p.adotN),
       rz: p.rz, ez: p.ez, rec: p.rec, yds: p.yds, td: p.td, epaTgt: p.epaN ? p.epa / p.epaN : null,
       routes, routePct, tprr, yprr, snapPct, series, zones: p.zones,
     });

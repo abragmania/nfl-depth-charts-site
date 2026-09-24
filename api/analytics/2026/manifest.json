@@ -33,20 +33,21 @@
   "redzone",
   "ezTarget",
   "route",
-  "pressure"
+  "pressure",
+  "pi"
  ],
  "weeks": [
   {
    "week": 1,
-   "hash": "a07f485405438810",
-   "plays": 1907,
-   "builtAt": "2026-09-24T20:50:18.486Z"
+   "hash": "e6bfbbe5ed6d0c5d",
+   "plays": 1924,
+   "builtAt": "2026-09-24T20:54:02.256Z"
   },
   {
    "week": 2,
-   "hash": "4a87c07ef16d570f",
-   "plays": 1923,
-   "builtAt": "2026-09-24T20:50:18.486Z"
+   "hash": "35c38cf45a478968",
+   "plays": 1936,
+   "builtAt": "2026-09-24T20:54:02.256Z"
   }
  ],
  "sources": {

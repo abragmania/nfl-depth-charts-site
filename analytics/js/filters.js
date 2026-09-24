@@ -25,6 +25,7 @@ export function defaultState() {
     // these three if set, but nothing sets them: the filter bar has no control and the hash ignores them.
     ha: "", downs: [], qtrs: [],
     minTgt: 5, sort: "tgt", dir: "desc",
+    pi: true,                             // count pass-interference targets (D178 open decision 1); false = "excl. PI targets", hash pi=0
     open: "",                             // the leaderboard row expanded in place (a gsis id), so it is linkable
   };
 }
@@ -86,6 +87,7 @@ export function toQuery(st) {
   if (st.team) q.set("team", st.team);
   if (st.opp) q.set("opp", st.opp);
   if (st.minTgt !== d.minTgt) q.set("min", st.minTgt);
+  if (st.pi === false) q.set("pi", "0");
   if (st.sort !== d.sort) q.set("sort", st.sort);
   if (st.dir !== d.dir) q.set("dir", st.dir);
   if (st.open) q.set("open", st.open);
@@ -107,6 +109,7 @@ export function fromQuery(qs) {
   st.team = abbr(q.get("team"));
   st.opp = abbr(q.get("opp"));
   if (q.has("min") && Number.isFinite(+q.get("min")) && +q.get("min") >= 0) st.minTgt = Math.floor(+q.get("min"));
+  st.pi = q.get("pi") !== "0";
   if (/^[a-zA-Z0-9]+$/.test(q.get("sort") || "")) st.sort = q.get("sort");
   if (["asc", "desc"].includes(q.get("dir"))) st.dir = q.get("dir");
   if (/^[A-Za-z0-9_.:-]{1,40}$/.test(q.get("open") || "")) st.open = q.get("open");

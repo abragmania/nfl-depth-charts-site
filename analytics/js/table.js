@@ -186,7 +186,9 @@ export function renderTable(el, allRows, st, query, onState, view = {}) {
   const nCols = 3 + COLS.length + 1;
   const th = (k, h, t, cls = "") => `<th class="${cls}${st.sort === k ? " sorted " + st.dir : ""}" data-sort="${k}" title="${esc(t)}">${h}</th>`;
   const groupRow = `<tr class="an-grp"><th colspan="3"></th>${GROUPS.map(([g, l]) => `<th colspan="${COLS.filter((c) => c.grp === g).length}" class="g-${g} gs">${l}</th>`).join("")}<th></th></tr>`;
-  const head = `<tr>${th("rank", "#", "Rank", "c-rank")}${th("name", "Player", "Player, team, position", "c-name")}${th("g", "G", "Games in the window")}${COLS.map((c) => th(c.k, c.h, c.t, "g-" + c.grp + (c.gs ? " gs" : ""))).join("")}<th class="c-spark" title="Weekly target share; hover a point for the week">Tgt % by week</th></tr>`;
+  // The Tgt header says whether pass-interference targets are in the count (the "PI targets" switch below).
+  const colTitle = (c) => (c.k === "tgt" ? `${c.t} (${st.pi === false ? "excludes" : "includes"} pass-interference targets)` : c.t);
+  const head = `<tr>${th("rank", "#", "Rank", "c-rank")}${th("name", "Player", "Player, team, position", "c-name")}${th("g", "G", "Games in the window")}${COLS.map((c) => th(c.k, c.h, colTitle(c), "g-" + c.grp + (c.gs ? " gs" : ""))).join("")}<th class="c-spark" title="Weekly target share; hover a point for the week">Tgt % by week</th></tr>`;
   const cell = (c, r) => {
     const v = r[c.k];
     const tier = tierOf(c.k, v);
@@ -207,6 +209,7 @@ export function renderTable(el, allRows, st, query, onState, view = {}) {
 
   el.innerHTML = `<div class="an-tbar">
       <label class="an-min">Min targets <input type="number" min="0" step="1" value="${st.minTgt}" data-min></label>
+      <label class="an-switch" title="A defensive pass interference is a no-play in the play-by-play; on, it counts as a target for the receiver (never a pass attempt, catch or yards)"><input type="checkbox" data-pi${st.pi === false ? "" : " checked"}><span>${st.pi === false ? "excl. PI targets" : "PI targets"}</span></label>
       <span class="an-count">${rows.length} player${rows.length === 1 ? "" : "s"}</span>
       <span class="an-legend" title="The depth charts' rating colours, on the share and efficiency columns">
         ${TIER_NAMES.map((t) => `<i class="t-${t}"></i>`).join("")}<span>elite → low</span></span>
@@ -222,6 +225,7 @@ export function renderTable(el, allRows, st, query, onState, view = {}) {
   }));
   const min = el.querySelector("[data-min]");
   min?.addEventListener("change", () => { const v = Math.max(0, Math.floor(+min.value || 0)); onState({ ...st, minTgt: v }); });
+  el.querySelector("[data-pi]")?.addEventListener("change", (e) => onState({ ...st, pi: e.target.checked, open: "" }));
   const toggle = (tr) => {
     const id = tr.dataset.id;
     anchor.id = id; anchor.top = tr.getBoundingClientRect().top;
