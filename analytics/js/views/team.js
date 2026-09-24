@@ -4,6 +4,7 @@
 // league line (D181 totals); the pass zone field compares each cell with every attempt in the league; the target and
 // carry distributions list the club's pass catchers and ball carriers, each a way into his player page (D177
 // interactivity). Every figure comes from agg_team.js (pure); this file draws and wires clicks.
+import { backLink } from "../router.js";
 import { fromQuery, toQuery, seasonsOf, weekLabel } from "../filters.js";
 import { loadFor, loadTeams, displayName } from "../data.js";
 import { aggregateTeams, teamReference, teamTier, teamRank, teamZones, teamTargets, teamCarries } from "../agg_team.js";
@@ -169,8 +170,8 @@ export async function renderTeam(ctx, params, query) {
   const pill = t ? teamPill(abbr, teams, qs, "an-pl-pill an-tm-headpill") : "";
   root.innerHTML = `<section class="an-pl an-tm">
     <div class="an-pl-head">
-      ${pill}<h1>${esc(t?.name || abbr)}</h1><span class="an-tm-side">Offense</span>
-      <div class="an-pl-links"><a href="../#/team/${encodeURIComponent(abbr)}" target="_blank" rel="noopener">Depth chart ↗</a><a href="#/defense?${new URLSearchParams([...new URLSearchParams(qs), ["open", abbr]]).toString()}">Defense →</a><a href="#/teams${qs ? "?" + qs : ""}">All teams ←</a></div>
+      ${backLink(`#/teams${qs ? "?" + qs : ""}`, "Teams")}${pill}<h1>${esc(t?.name || abbr)}</h1><span class="an-tm-side">Offense</span>
+      <div class="an-pl-links"><a href="../#/team/${encodeURIComponent(abbr)}" target="_blank" rel="noopener">Depth chart ↗</a><a href="#/defense?${new URLSearchParams([...new URLSearchParams(qs), ["open", abbr]]).toString()}">Defense →</a></div>
     </div>
     <div class="an-pl-bar"><div class="an-filters"></div></div>
     <div class="an-sub an-pl-sub">${esc(sub)}</div>

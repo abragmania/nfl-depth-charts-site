@@ -5,8 +5,10 @@
 // opponent and the position chips do not apply to one man and are hidden. Every figure comes from
 // agg_player.js (pure); this file only draws and wires clicks.
 // Interactivity (D177): a weekly bar sets the window to that week and back; a zone cell lists the plays behind it;
-// the header links to his depth-chart card (new tab), his team page and back to Usage.
+// the header has a Back button (router.js backLink: the page he came from, else Usage) and links to his depth-chart
+// card (new tab) and his team page.
 import { fromQuery, toQuery, seasonsOf, weekLabel } from "../filters.js";
+import { backLink } from "../router.js";
 import { loadFor, loadTeams, displayName } from "../data.js";
 import { isStatic } from "../../../js/api.js";
 import { playerView, maddenBlocking, maddenEdition } from "../agg_player.js";
@@ -253,8 +255,8 @@ function headerHtml(v, name, block, teams, qs) {
   const ovr = block.status === "ok" && isNum(block.ovr) ? `<span class="an-pl-ovr t-${block.ovr >= 90 ? "elite" : block.ovr >= 80 ? "strong" : block.ovr >= 70 ? "avg" : block.ovr >= 60 ? "weak" : "flat"}" title="${esc(block.title)} overall"><b>${block.ovr}</b><small>OVR</small></span>` : "";
   const depth = `../#/team/${encodeURIComponent(v.team)}/player/${encodeURIComponent(v.gsis)}`;
   return `<div class="an-pl-head">
-    <h1>${esc(name)}</h1>${v.team ? teamPill(v.team, teams, qs) : ""}<span class="an-pospill" data-band="${BAND(v.pos)}">${esc(v.pos)}</span>${ovr}
-    <div class="an-pl-links"><a href="${depth}" target="_blank" rel="noopener">Depth chart ↗</a>${v.team ? `<a href="#/team/${esc(v.team)}${qs ? "?" + qs : ""}">Team page →</a>` : ""}<a href="#/usage${qs ? "?" + qs : ""}">Usage ←</a></div>
+    ${backLink(`#/usage${qs ? "?" + qs : ""}`, "Usage")}<h1>${esc(name)}</h1>${v.team ? teamPill(v.team, teams, qs) : ""}<span class="an-pospill" data-band="${BAND(v.pos)}">${esc(v.pos)}</span>${ovr}
+    <div class="an-pl-links"><a href="${depth}" target="_blank" rel="noopener">Depth chart ↗</a>${v.team ? `<a href="#/team/${esc(v.team)}${qs ? "?" + qs : ""}">Team page →</a>` : ""}</div>
   </div>`;
 }
 

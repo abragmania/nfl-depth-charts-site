@@ -186,6 +186,10 @@ td[class*=" t-"] > span { color:var(--t); font-weight:700; }
 .an-pl-ovr { display:inline-flex; align-items:baseline; gap:3px; padding:1px 9px; border-radius:var(--r-chip); background:color-mix(in srgb, var(--t) 22%, transparent); border:1px solid color-mix(in srgb, var(--t) 60%, transparent); }
 .an-pl-ovr b { font-size:16px; color:var(--t); }
 .an-pl-ovr small { font-size:10px; font-weight:800; color:var(--muted); letter-spacing:.06em; }
+/* Back button on the detail pages (player, QB, team): the page the reader came from, with its name underneath. */
+.an-back { display:inline-flex; flex-direction:column; align-items:flex-start; padding:4px 12px 4px 10px; margin-right:4px; border-radius:var(--r-chip); border:1px solid var(--line); background:var(--panel); color:var(--ink); text-decoration:none; font-size:13px; font-weight:700; line-height:1.15; white-space:nowrap; }
+.an-back small { font-size:10.5px; font-weight:600; color:var(--muted); letter-spacing:.04em; }
+.an-back:hover { border-color:var(--accent); color:var(--accent); }
 .an-pl-links { display:flex; gap:16px; margin-left:auto; font-size:13px; }
 .an-pl-links a { color:var(--accent); text-decoration:none; font-weight:600; }
 .an-pl-links a:hover { text-decoration:underline; }

@@ -4,8 +4,10 @@
 // its own block beside it, led by three headline figures that light up for runners and sit grey for pocket passers;
 // the Madden passing attributes sit under Rushing. Every figure comes from agg_qb.js (pure); this file only draws
 // and wires clicks. Interactivity (D177): a weekly column sets the window to that week and back; a zone cell lists
-// the plays behind it; the header links to his depth-chart card (new tab), his team page and back to Quarterbacks.
+// the plays behind it; the header has a Back button (router.js backLink: the page he came from, else Quarterbacks)
+// and links to his depth-chart card (new tab) and his team page.
 import { fromQuery, seasonsOf, weekLabel, splitKey } from "../filters.js";
+import { backLink } from "../router.js";
 import { loadFor, loadTeams, displayName } from "../data.js";
 import { isStatic } from "../../../js/api.js";
 import { clubGames } from "../agg.js";
@@ -197,8 +199,8 @@ export async function renderQbPlayer(ctx, params, query) {
 
   root.innerHTML = `<section class="an-pl an-qbp">
     <div class="an-pl-head">
-      <h1>${esc(name)}</h1>${team ? teamPill(team, teams, qs, "an-pl-pill") : ""}<span class="an-pospill" data-band="QB">QB</span>${ovr}
-      <div class="an-pl-links"><a href="${depth}" target="_blank" rel="noopener">Depth chart ↗</a>${team ? `<a href="#/team/${esc(team)}${qs ? "?" + qs : ""}">Team page →</a>` : ""}<a href="#/qb${qs ? "?" + qs : ""}">Quarterbacks ←</a></div>
+      ${backLink(`#/qb${qs ? "?" + qs : ""}`, "Quarterbacks")}<h1>${esc(name)}</h1>${team ? teamPill(team, teams, qs, "an-pl-pill") : ""}<span class="an-pospill" data-band="QB">QB</span>${ovr}
+      <div class="an-pl-links"><a href="${depth}" target="_blank" rel="noopener">Depth chart ↗</a>${team ? `<a href="#/team/${esc(team)}${qs ? "?" + qs : ""}">Team page →</a>` : ""}</div>
     </div>
     <div class="an-pl-bar"><div class="an-filters"></div></div>
     <div class="an-sub an-pl-sub">${esc(sub)}</div>
