@@ -47,31 +47,74 @@ function tile(t) {
   </a>`;
 }
 
-// D46: a compact "build a matchup" shortcut above the division grid. Defaults to the first team
-// alphabetically and, when known, that team's opponent from this week's schedule (both teams already
-// carry `nextOpponent` on the /api/teams payload, so no extra fetch is needed just to fill the form).
-function matchupBarHtml(teams) {
+// D172 (replaces D46's pick-two-teams form as the top bar itself): one chip per this week's game, away at
+// home, kickoff order. The old form still exists for building an arbitrary matchup, but it's tucked behind
+// an "Any matchup..." toggle at the end of the bar so the games are what the bar reads as by default.
+const KICKOFF_FMT = new Intl.DateTimeFormat(undefined, { weekday: "short", hour: "numeric", minute: "2-digit" });
+
+// Pure: the two display lines for one chip (away line first, home line second - the caller adds the tags
+// and does the escaping). The favorite's line sits by the favorite; the total, in brackets, sits by the
+// other team; a pick'em prints "pk" by the home team and the total by the away team (D172).
+//
+// Team name: the nickname was tried first (D172 draft), but a full 16-game slate at 1920 wide truncates it
+// mid-word once the line/total number is appended, so this reads the abbreviation instead - the same one
+// the division grid above it already uses, and it never truncates at any slate size.
+export function gameChipLines(g, teamsByAbbr) {
+  const away = teamsByAbbr.get(g.away), home = teamsByAbbr.get(g.home);
+  const awayName = away?.abbr || g.away;
+  const homeName = home?.abbr || g.home;
+  const hasOdds = g.favorite != null || g.overUnder != null;
+  const isPickEm = hasOdds && g.favorite == null;
+  const awayText = g.favorite === g.away ? `${awayName} -${g.line}`
+    : hasOdds ? `${awayName} (${g.overUnder})` : awayName;
+  const homeText = g.favorite === g.home ? `${homeName} -${g.line}`
+    : isPickEm ? `${homeName} pk`
+    : hasOdds ? `${homeName} (${g.overUnder})` : homeName;
+  return { awayLine: `${awayText} ${g.neutral ? "vs" : "at"}`, homeLine: homeText };
+}
+
+function gameChipHtml(g, teamsByAbbr) {
+  const { awayLine, homeLine } = gameChipLines(g, teamsByAbbr);
+  const title = g.kickoff ? KICKOFF_FMT.format(new Date(g.kickoff)) : "";
+  return `<a class="game-chip" href="#/matchup/${esc(g.away)}/${esc(g.home)}" title="${esc(title)}">
+    <span class="game-chip-line">${esc(awayLine)}</span>
+    <span class="game-chip-line">${esc(homeLine)}</span>
+  </a>`;
+}
+
+// D46's original picker, now hidden behind the "Any matchup..." toggle rather than shown by default.
+// Defaults to the first team alphabetically and, when known, that team's opponent from this week's
+// schedule (both teams already carry `nextOpponent` on the /api/teams payload, so no extra fetch is
+// needed just to fill the form).
+function matchupFormHtml(teams) {
   const sorted = teams.slice().sort((a, b) => a.abbr.localeCompare(b.abbr));
   const defaultA = sorted[0];
   const defaultB = defaultA?.nextOpponent?.abbr && sorted.some((t) => t.abbr === defaultA.nextOpponent.abbr)
     ? defaultA.nextOpponent.abbr
     : (sorted[1] ? sorted[1].abbr : "");
   const opts = (selected) => sorted.map((t) => `<option value="${t.abbr}" ${t.abbr === selected ? "selected" : ""}>${esc(t.abbr)} — ${esc(t.name)}</option>`).join("");
+  return `<form id="matchup-bar-form" class="matchup-bar-form" hidden>
+    <select id="matchup-bar-a" aria-label="Offense team">${opts(defaultA?.abbr)}</select>
+    <span class="matchup-bar-vs">offense vs</span>
+    <select id="matchup-bar-b" aria-label="Defense team">${opts(defaultB)}</select>
+    <span class="matchup-bar-vs">defense</span>
+    <button type="submit">Go</button>
+  </form>`;
+}
+
+export function matchupBarHtml(teams, games) {
+  const teamsByAbbr = new Map(teams.map((t) => [t.abbr, t]));
+  const chips = games.map((g) => gameChipHtml(g, teamsByAbbr)).join("");
   return `<div class="matchup-bar">
-    <span class="matchup-bar-label">Matchup</span>
-    <form id="matchup-bar-form" class="matchup-bar-form">
-      <select id="matchup-bar-a" aria-label="Offense team">${opts(defaultA?.abbr)}</select>
-      <span class="matchup-bar-vs">offense vs</span>
-      <select id="matchup-bar-b" aria-label="Defense team">${opts(defaultB)}</select>
-      <span class="matchup-bar-vs">defense</span>
-      <button type="submit">Go</button>
-    </form>
+    <div class="games-row">${chips}</div>
+    <button type="button" id="matchup-bar-any-toggle" class="matchup-bar-any">Any matchup…</button>
+    ${matchupFormHtml(teams)}
   </div>`;
 }
 
 export async function renderLanding(root, search) {
-  const { teams } = await getTeams();
-  root.innerHTML = `${matchupBarHtml(teams)}<div class="divisions">${DIVISION_ORDER.map((d) =>
+  const { teams, games } = await getTeams();
+  root.innerHTML = `${matchupBarHtml(teams, games ?? [])}<div class="divisions">${DIVISION_ORDER.map((d) =>
     `<section class="division"><h2>${d}</h2>${teams.filter((t) => t.division === d).map(tile).join("")}</section>`
   ).join("")}</div>`;
   search.hidden = false;
@@ -81,7 +124,11 @@ export async function renderLanding(root, search) {
     const q = search.value.trim().toLowerCase();
     root.querySelectorAll(".tile").forEach((el) => el.classList.toggle("dim", !!q && !el.dataset.q.includes(q)));
   };
+  const anyToggle = root.querySelector("#matchup-bar-any-toggle");
   const matchupForm = root.querySelector("#matchup-bar-form");
+  if (anyToggle && matchupForm) {
+    anyToggle.addEventListener("click", () => { matchupForm.hidden = !matchupForm.hidden; });
+  }
   if (matchupForm) {
     matchupForm.addEventListener("submit", (e) => {
       e.preventDefault();

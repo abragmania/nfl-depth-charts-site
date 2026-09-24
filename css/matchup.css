@@ -87,13 +87,35 @@
   .matchup-team-name { font-size:16px; }
 }
 
-/* ---- landing page "Matchup" bar (public/js/landing.js) ---- */
+/* ---- landing page top bar: this week's games (public/js/landing.js, D172) ---- */
 
 /* Every pixel here comes out of the landing grid's own height budget. */
-.matchup-bar { display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding:6px 12px; margin-bottom:8px;
+.matchup-bar { display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding:8px 12px; margin-bottom:8px;
   background:var(--panel); border:1px solid #22282f; border-radius:10px; }
-.matchup-bar-label { font-size:12px; font-weight:800; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); flex:none; }
-.matchup-bar-form { display:flex; align-items:center; gap:8px; flex-wrap:wrap; flex:1 1 auto; }
+
+/* One row of chips at 1920 and 1536 wide (D172); narrower windows may wrap. */
+.games-row { display:flex; align-items:center; gap:6px; flex:1 1 auto; flex-wrap:wrap; min-width:0; }
+.game-chip { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1px;
+  padding:4px 8px; border-radius:7px; border:1px solid #2a323b; background:#0f1317; color:var(--ink);
+  text-decoration:none; line-height:1.25; flex:1 1 0; min-width:0; }
+.game-chip:hover { border-color:#ffd54a; background:#181d23; }
+.game-chip-line { font-size:11.5px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; }
+.game-chip-line:last-child { color:var(--muted); font-weight:600; }
+
+/* A full 16-game slate has less room per chip below ~1700px; tighten padding/gap/type rather than let the
+   line/total text ellipsis, which a 1536-wide window (D172's own QA width) otherwise hits. */
+@media (max-width:1700px) {
+  .games-row { gap:3px; }
+  .game-chip { padding:4px 5px; }
+  .game-chip-line { font-size:10.5px; }
+}
+
+.matchup-bar-any { padding:6px 12px; border-radius:6px; border:1px solid #2a323b; background:transparent;
+  color:var(--muted); font-size:12px; font-weight:700; cursor:pointer; flex:none; white-space:nowrap; }
+.matchup-bar-any:hover { color:var(--ink); border-color:#4a5560; }
+
+.matchup-bar-form { display:flex; align-items:center; gap:8px; flex-wrap:wrap; flex:1 1 100%; }
+.matchup-bar-form[hidden] { display:none; }
 .matchup-bar-form select { padding:6px 10px; border-radius:6px; border:1px solid #2a323b; background:#0f1317; color:var(--ink); font-size:13px; max-width:220px; }
 .matchup-bar-vs { font-size:12px; color:var(--muted); flex:none; }
 .matchup-bar-form button { padding:6px 16px; border-radius:6px; border:1px solid #2a323b; background:var(--ink); color:var(--bg); font-weight:800; font-size:13px; cursor:pointer; flex:none; }
