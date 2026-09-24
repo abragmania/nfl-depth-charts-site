@@ -1,0 +1,46 @@
+/* D174: the How to read page (public/js/guide.js) and the "How to read" help control that opens it. */
+
+/* The help control: help, not a page. An outlined pill with a "?" disc, set apart from the four page pills
+   (nav.js puts it after Matchup) and, on the landing page, in the app bar beside Filter teams. */
+.nav-help { display:inline-flex; align-items:center; gap:5px; margin-left:6px; padding:2px 10px 2px 3px; border-radius:999px;
+  border:1px dashed #56616d; background:transparent; color:#b9c1ca; text-decoration:none; font-size:11px; font-weight:600;
+  letter-spacing:.02em; white-space:nowrap; }
+.nav-help:hover { border-color:#5cc8ff; color:#fff; }
+.nav-help[hidden] { display:none; }
+.nav-help-q { display:inline-flex; align-items:center; justify-content:center; width:15px; height:15px; border-radius:50%;
+  background:#5cc8ff; color:#0b1620; font-size:10px; font-weight:900; line-height:1; }
+.topbar-help { margin-left:0; padding:4px 12px 4px 4px; font-size:13px; }
+.topbar-help .nav-help-q { width:19px; height:19px; font-size:12px; }
+
+/* The page: the sample card on the left, a colour-matched box per part on the right, the status key under both. */
+.guide { max-width:1400px; margin:0 auto; padding:18px 24px 60px; color:var(--ink); }
+.guide h1 { margin:16px 0 6px; font-size:28px; font-weight:800; }
+.guide-lede { margin:0 0 22px; color:#b9c1ca; font-size:15px; }
+.guide-back { display:inline-flex; padding:4px 12px; border-radius:999px; border:1px solid #2a323b; background:#14181d;
+  color:var(--ink); text-decoration:none; font-size:12.5px; font-weight:700; }
+.guide-back:hover { border-color:#4a5560; }
+
+.guide-plate { display:flex; gap:48px; align-items:flex-start; justify-content:center; }
+.guide-fig { position:relative; flex:none; margin:0; padding:40px 48px; border-radius:12px; border:1px solid #1a2027;
+  background:radial-gradient(120% 90% at 50% 40%, #141b22 0%, #0b0f13 70%); }
+/* Shown larger than on the field so every part is easy to see; the parts and their proportions are the field's. */
+.guide-stage { width:max-content; zoom:1.9; }
+/* A real column is placed absolutely on the field canvas; here it sits in normal flow. */
+.guide-stage .column { position:relative !important; left:auto !important; top:auto !important; height:auto !important; }
+.guide-outlines { position:absolute; inset:0; pointer-events:none; }
+.guide-outline { position:absolute; box-sizing:border-box; border:2px solid var(--c); border-radius:4px; }
+.guide-outline[hidden] { display:none; }
+
+.guide-boxes { list-style:none; margin:0; padding:0; display:grid; gap:12px; flex:0 1 560px; min-width:0; }
+.guide-box { display:flex; flex-direction:column; gap:3px; padding:10px 14px; border-radius:8px; border:1px solid var(--c);
+  border-left-width:5px; background:color-mix(in srgb, var(--c) 10%, #0f1317); font-size:15px; line-height:1.4; color:#dfe3e8; }
+.guide-box b { color:var(--c); font-size:13px; font-weight:800; letter-spacing:.04em; text-transform:uppercase; }
+.guide-key { max-width:1100px; margin:28px auto 0; padding:12px 16px; border-radius:10px; background:#0f1317; border:1px solid #1c2229;
+  font-size:14px; line-height:1.6; color:#c6ccd3; }
+.guide-key b { color:#fff; }
+.guide-key-head { font-weight:800; color:#fff; margin-right:4px; }
+
+@media (max-width: 900px) {
+  .guide-plate { flex-direction:column; align-items:center; }
+  .guide-boxes { flex-basis:auto; width:100%; }
+}

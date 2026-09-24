@@ -25,6 +25,9 @@ function switcherOptionsHtml(teams, abbr) {
 //   primary/secondary  the team's colours, so the strip is tinted like the rest of the page's chrome
 // The D50 one-line injury summary does NOT render here: it already shows once, as the red chip in the
 // team header.
+// D174: help, not a page: an outlined control with a "?" disc after the four page pills, so it never reads as a
+// fifth page. It opens the How to read page (public/js/guide.js).
+export const HELP_LINK = `<a class="nav-help" href="#/guide" title="What every number, badge and mark means"><span class="nav-help-q" aria-hidden="true">?</span>How to read</a>`;
 export function navStripHtml({ teams, abbr, page, unit, bandLabel, bandSlug, opponentAbbr, primary, secondary }) {
   const A = esc(abbr);
   const offLit = page === "off" || (page === "group" && unit === "OFF");
@@ -35,6 +38,7 @@ export function navStripHtml({ teams, abbr, page, unit, bandLabel, bandSlug, opp
     ${pill("Offense", `#/team/${A}/off`, offLit)}
     ${pill("Defense", `#/team/${A}/def`, defLit)}
     ${pill("Matchup", `#/matchup/${A}`, page === "matchup")}
+    ${HELP_LINK}
   </span>`;
   // A group page's crumb links nowhere (D59 spec) — it names the band you are already looking at.
   const crumb = page === "group" && bandLabel

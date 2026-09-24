@@ -23,7 +23,7 @@ export function fmtKickoffShort(iso) {
 // (the over/under, printed with a muted "O/U"), "pk" (pick'em, home row) or null (ESPN lists no odds).
 export function gameChipData(g) {
   const hasOdds = g.favorite != null || g.overUnder != null;
-  const isPickEm = hasOdds && g.favorite == null;
+  const isPickEm = g.line === 0; // 🔵 review: a total with no usable spread is not a pick'em
   const total = g.overUnder != null ? { kind: "total", text: String(g.overUnder) } : null;
   const rowData = (abbr, isHome) => {
     if (g.favorite === abbr) return g.line != null ? { kind: "line", text: `-${g.line}` } : null;
@@ -126,6 +126,7 @@ export function conditionsHtml(g) {
     const head = [e.summary, e.tempF != null ? `${e.tempF}°F` : null].filter(Boolean).join(", ");
     return `<span class="game-wx">${icon("stadium")}${icon(espnIconKey(e.summary))}<span>${esc(head)}</span></span>`;
   }
+  if (!g.venue) return ""; // 🔵 review: no venue on file means nothing to claim about the stadium
   return `<span class="game-wx">${icon("stadium")}<span>Open air · forecast not out yet</span></span>`;
 }
 

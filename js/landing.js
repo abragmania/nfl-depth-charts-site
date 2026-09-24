@@ -87,6 +87,9 @@ export async function renderLanding(root, search) {
     `<section class="division"><h2>${d}</h2>${teams.filter((t) => t.division === d).map(tile).join("")}</section>`
   ).join("")}</div>`;
   search.hidden = false;
+  // D174: the How to read control in the app bar, beside Filter teams (main.js hides it on every other route).
+  const guideLink = document.getElementById("guide-link");
+  if (guideLink) guideLink.hidden = false;
   search.value = "";
   // Filtering dims non-matches in place so the 8x4 division-grid geometry never changes.
   search.oninput = () => {

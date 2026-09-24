@@ -3,6 +3,7 @@ import { renderLanding } from "./landing.js";
 import { renderTeam } from "./team.js";
 import { renderZoomSide, renderZoomGroup } from "./zoom.js";
 import { renderMatchup } from "./matchup.js";
+import { renderGuide } from "./guide.js";
 import { openPanel } from "./panel.js";
 import { esc } from "./cards.js";
 import { disposeCurrentView } from "./viewfit.js";
@@ -11,6 +12,8 @@ import "./refresh.js"; // side effect only: defines window.NFLRefresh
 const root = document.getElementById("app");
 const search = document.getElementById("search");
 const asof = document.getElementById("asof");
+// D174: the landing page shows a "How to read" control in the app bar (landing.js); every route hides it on entry.
+const guideLink = document.getElementById("guide-link");
 // Ruling E trimmed <main>'s padding right down so the team pages fit 1700x900 with no scrolling. The
 // landing grid has no such constraint and reads better with room around it, so it keeps the old padding
 // through one marker class (styles.css's `main.page-landing`) that every route clears on entry and only
@@ -23,6 +26,7 @@ const asof = document.getElementById("asof");
 // field it is opening the panel on with nothing left to re-fit it.
 const guard = (fn, { keepView = false } = {}) => (p) => {
   root.classList.remove("page-landing");
+  if (guideLink) guideLink.hidden = true;
   if (!keepView) disposeCurrentView();
   // e.message can carry anything (a network error string, etc.); esc() it before it reaches innerHTML.
   return fn(p).catch((e) => { root.innerHTML = `<div class="notfound">Something broke: ${esc(e.message)}</div>`; });
@@ -78,6 +82,7 @@ router.on("/team/:abbr/off", guard(({ abbr }) => renderZoomSide(root, search, ab
 router.on("/team/:abbr/def", guard(({ abbr }) => renderZoomSide(root, search, abbr, "DEF")));
 router.on("/team/:abbr/group/:band", guard(({ abbr, band }) => renderZoomGroup(root, search, abbr, band))); // D45 zoom: position-group view
 router.on("/matchup/:a", guard(({ a }) => renderMatchup(root, search, a))); // D46: resolves :b from A's next opponent, or shows a bye picker
+router.on("/guide", guard(() => renderGuide(root, search))); // D174: the How to read page
 router.on("/matchup/:a/:b", guard(({ a, b }) => renderMatchup(root, search, a, b)));
 router.start(() => { root.innerHTML = `<div class="notfound">Page not found. <a class="back" href="#/">Back to all teams</a></div>`; });
 window.NFLRefresh?.autoRefreshIfStale(); // D53: refresh on open if data is older than 6h (public/js/refresh.js)
