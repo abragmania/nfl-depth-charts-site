@@ -41,6 +41,7 @@ const CSS = `
    tier colour, are what the eye lands on. */
 .hist-ovrpair { display:inline-flex; align-items:baseline; gap:3px; }
 .hist-arrow { color:var(--muted,#8a94a0); font-size:11px; font-weight:400; }
+.hist-arrow.hist-same { margin-left:4px; font-size:12px; } /* D176: the current season's "unchanged since launch" mark */
 .hist-ovr.hist-now { font-size:12px; }
 .hist-tag { display:inline-block; font-size:9.5px; text-transform:uppercase; letter-spacing:.06em; padding:1px 5px; border-radius:8px; margin-left:5px; background:#2a323b; color:#c6ccd3; }
 .hist-tag.launch { background:#3a3320; color:#ffd54a; }
@@ -147,7 +148,7 @@ function stripHtml(rows) {
 // same markup as before. r.teamRaw only ever differs from r.team for a single-team season (a real historical
 // franchise-code divergence, e.g. an old "OAK" row under the current "LV") - it is never compared against a
 // multi-team r.team string, which would always differ from a single old code for the wrong reason.
-function rowHtml(r, teams) {
+function rowHtml(r, teams, isCurrentSeason = false) {
   const stints = r.teams?.length ? r.teams : r.team ? [{ abbr: r.team }] : [];
   const old = stints.length === 1 && r.teamRaw && r.teamRaw !== stints[0].abbr ? `<span class="hist-oldcode">${esc(r.teamRaw)}</span>` : "";
   const logos = stints.map((s) => {
@@ -158,7 +159,13 @@ function rowHtml(r, teams) {
   const star = r.ovr != null && r.matchConfidence !== "id" ? `<span class="hist-star" title="matched by ${esc(r.matchMethod)}, not by player id">*</span>` : "";
   // D87: a row carrying a live rating is not a "launch only" season — the launch tag (and the footnote that
   // explains it, in historyHtml below) is for seasons where the launch capture is the only rating that exists.
-  const tag = r.ovr != null && r.ratingKind === "LAUNCH" && r.ovrCurrent == null ? `<span class="hist-tag launch" title="Only the launch rating exists for this season">launch</span>` : "";
+  // D176 (Adam, 2026-09-24): on the CURRENT season's row an unchanged rating prints a sideways double arrow
+  // ("92 ↔", hover: unchanged since launch) instead of the LAUNCH tag; past seasons keep the tag, where it means
+  // only the launch capture exists for that year.
+  const unchangedNow = isCurrentSeason && r.ovr != null && r.ratingKind === "LAUNCH" && r.ovrCurrent == null;
+  const tag = unchangedNow
+    ? `<span class="hist-arrow hist-same" title="Unchanged since launch: EA's latest update still has him at ${esc(r.ovr)}">↔</span>`
+    : r.ovr != null && r.ratingKind === "LAUNCH" && r.ovrCurrent == null ? `<span class="hist-tag launch" title="Only the launch rating exists for this season">launch</span>` : "";
   // D87: the season being played right now carries this year's Madden LAUNCH rating in r.ovr and, when the live
   // EA rating on the card has since moved off it, that live number in r.ovrCurrent - printed "99 → 97", launch
   // first then now. The server only ever sets r.ovrCurrent when it differs from r.ovr (server/history/index.js),
@@ -182,7 +189,8 @@ export function historyHtml(data, teamsMeta) {
   const teams = teamList(teamsMeta);
   const rows = [...(data.seasons || [])].sort((a, b) => b.season - a.season); // newest first: reads down from the card's current rating
   const anyStar = rows.some((r) => r.ovr != null && r.matchConfidence !== "id");
-  const anyLaunch = rows.some((r) => r.ovr != null && r.ratingKind === "LAUNCH" && r.ovrCurrent == null);
+  const currentSeason = Number(data.currentSeason) || null; // the API always stamps it; without it no row is "current"
+  const anyLaunch = rows.some((r) => Number(r.season) !== currentSeason && r.ovr != null && r.ratingKind === "LAUNCH" && r.ovrCurrent == null);
   const notes = [];
   if (anyStar) notes.push("* rating matched by name, not by player id");
   if (anyLaunch) notes.push("launch = only the launch rating exists for that season");
@@ -192,7 +200,7 @@ export function historyHtml(data, teamsMeta) {
   const blank = (r) => !r.team && r.ovr == null && r.ovrCurrent == null && !r.positionOfRecord; // same test rowHtml uses
   while (shownCount > 0 && blank(rows[shownCount - 1])) shownCount--;
   const collapsedCount = rows.length - shownCount;
-  const bodyRows = rows.slice(0, shownCount).map((r) => rowHtml(r, teams)).join("")
+  const bodyRows = rows.slice(0, shownCount).map((r) => rowHtml(r, teams, Number(r.season) === currentSeason)).join("")
     + (collapsedCount ? `<tr class="empty hist-collapsed"><td colspan="5">No earlier seasons on file</td></tr>` : "");
   return `
   <div class="hist">
