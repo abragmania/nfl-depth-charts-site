@@ -11,6 +11,7 @@ import { weekKey, splitKey } from "./filters.js";
 // .../w/{n} -> w{NN}.json.
 export function analyticsStaticPath(url) {
   if (/^\/?api\/analytics\/identity$/.test(String(url).split("?")[0])) return "api/analytics/identity.json";
+  if (/^\/?api\/analytics\/seasons$/.test(String(url).split("?")[0])) return "api/analytics/seasons.json";
   const m = String(url).split("?")[0].match(/^\/?api\/analytics\/(\d{4})\/(manifest|players|w\/(\d+))$/);
   if (!m) return null;
   if (m[3]) return `api/analytics/${m[1]}/w${String(+m[3]).padStart(2, "0")}.json`;
@@ -40,6 +41,7 @@ const seasons = new Map(); // season -> Promise<{ manifest, players }>
 const weekFiles = new Map(); // "season-week" -> Promise<week file>
 let teamsPromise = null; // the team registry (colours, names): same for every season, fetched once
 let identityPromise = null; // D183: {builtAt, players: {[gsis]: {name, onChart}}}, or null when it cannot be had
+let seasonsPromise = null; // D184: the sorted [year,...] every season the API has data for, or null when it cannot be had
 let identityNames = null; // gsis -> the depth-chart spelling, once loaded
 let lastPlayers = {}; // the merged players of the latest loadFor(), displayName()'s fallback
 
@@ -66,6 +68,17 @@ export function applyIdentityNames(players, names) {
   const out = {};
   for (const [g, p] of Object.entries(players || {})) out[g] = names.has(g) ? { ...p, name: names.get(g) } : p;
   return out;
+}
+
+// D184: every season the seasons endpoint lists, ascending. Never fails: a missing/unreadable endpoint resolves
+// to null and callers fall back to the current season alone.
+export function loadSeasons() {
+  if (!seasonsPromise) {
+    seasonsPromise = getJson("/api/analytics/seasons")
+      .then((body) => (Array.isArray(body?.seasons) ? body.seasons.map(Number).sort((a, b) => a - b) : null))
+      .catch(() => { seasonsPromise = null; return null; });
+  }
+  return seasonsPromise;
 }
 
 // The team registry for colour-coding (table.js's team pill). Routed through resolveAnalyticsUrl, not

@@ -15,9 +15,20 @@ export const QUARTERS = [1, 2, 3, 4, 5]; // 5 = overtime
 // Three-way position chips: "in" (show only included positions), "out" (always hide), absent = neutral.
 export const DEFAULT_POS = Object.freeze({ WR: "in", TE: "in", RB: "in" });
 
-export function defaultState() {
+// D184: the season a picker should start on when nothing says otherwise: the newest season the seasons
+// endpoint lists, or CURRENT_SEASON when that list is empty/unavailable (loadSeasons() failed, or no ctx yet).
+export function defaultSeason(seasons) {
+  return seasons && seasons.length ? Math.max(...seasons) : CURRENT_SEASON;
+}
+
+// D184: is season-1 on the list, i.e. is there a "previous season" to offer the Include switch for?
+export function prevAvailable(season, seasons) {
+  return Array.isArray(seasons) && seasons.includes(season - 1);
+}
+
+export function defaultState(seasons) {
   return {
-    season: CURRENT_SEASON, with2025: false,
+    season: defaultSeason(seasons), with2025: false,
     window: "season", from: null, to: null,
     pos: { ...DEFAULT_POS },
     team: "", opp: "",
@@ -40,8 +51,9 @@ export function weekLabel(key, currentSeason = CURRENT_SEASON) {
   return season === currentSeason ? `W${week}` : `${String(season).slice(-2)}·W${week}`;
 }
 
-// The seasons a state reads, newest first.
-export const seasonsOf = (st) => (st.with2025 && st.season !== 2025 ? [st.season, 2025] : [st.season]);
+// The seasons a state reads, newest first. D184: "Include previous" is always relative to the picked season
+// (season-1), not fixed to 2025.
+export const seasonsOf = (st) => (st.with2025 ? [st.season, st.season - 1] : [st.season]);
 
 // Three-way chip: neutral -> in -> out -> neutral.
 export function cyclePos(posState, pos) {
@@ -75,11 +87,15 @@ function posFromString(s) {
 }
 const KEY_RE = /^\d{4}-\d{2}$/;
 
+// D184: the hash uses "s" for season and "prev" for Include-previous (was "season"/"with2025"), so
+// #/qb?s=2023&prev=1 is a link to 2023 with 2022 folded in. defaultState() has no seasons list here, so "s" is
+// always written unless it equals the bare CURRENT_SEASON fallback; a page comparing against its own fetched
+// seasons list (filterbar.js) still shows the right season as selected either way.
 export function toQuery(st) {
   const d = defaultState();
   const q = new URLSearchParams();
-  if (st.season !== d.season) q.set("season", st.season);
-  if (st.with2025) q.set("with2025", "1");
+  if (st.season !== d.season) q.set("s", st.season);
+  if (st.with2025) q.set("prev", "1");
   if (st.window !== d.window) q.set("window", st.window);
   if (st.window === "range") { if (st.from) q.set("from", st.from); if (st.to) q.set("to", st.to); }
   const ps = posToString(st.pos);
@@ -97,8 +113,8 @@ export function toQuery(st) {
 export function fromQuery(qs) {
   const q = new URLSearchParams(String(qs || "").replace(/^\?/, ""));
   const st = defaultState();
-  if (q.has("season") && /^\d{4}$/.test(q.get("season"))) st.season = +q.get("season");
-  st.with2025 = q.get("with2025") === "1";
+  if (q.has("s") && /^\d{4}$/.test(q.get("s"))) st.season = +q.get("s");
+  st.with2025 = q.get("prev") === "1";
   if (WINDOWS.includes(q.get("window"))) st.window = q.get("window");
   if (st.window === "range") {
     st.from = KEY_RE.test(q.get("from") || "") ? q.get("from") : null;

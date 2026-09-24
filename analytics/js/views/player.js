@@ -64,10 +64,16 @@ const tiered = (k, val, cuts, pos, title) => {
   return { tier: tierOf(k, val, cuts), title: [title, note].filter(Boolean).join(". ") };
 };
 
-function windowName(st, weeks) {
+export function windowName(st, weeks) {
   if (st.window === "last3") return "Last 3";
   if (st.window === "range" && weeks.length) return weeks.length === 1 ? weekLabel(weeks[0], st.season) : `${weekLabel(weeks[0], st.season)}–${weekLabel(weeks[weeks.length - 1], st.season)}`;
-  return st.with2025 ? "25+26" : "Season";
+  return st.with2025 ? `${String(st.season - 1).slice(-2)}+${String(st.season).slice(-2)}` : "Season";
+}
+
+// The "picked season[ + previous season]" prefix that opens every sub-header (D184: derived from st.season, not
+// hard-coded to any real year, so a historical pick like 2023 reads "2023 + 2022").
+export function seasonLabel(st) {
+  return `${st.season}${st.with2025 ? " + " + (st.season - 1) : ""}`;
 }
 
 // Page-local view state that does not belong in the link: the zone measure and the open zone.
@@ -129,7 +135,7 @@ export async function renderPlayer(ctx, params, query) {
   const L = v.lg.overall;
   const r = v.row || {};
   const activeKey = st.window === "range" && st.from && st.from === st.to ? st.from : null;
-  const sub = `${st.season}${st.with2025 ? " + 2025" : ""} · ${v.weeks.length ? (v.weeks.length === 1 ? weekLabel(v.weeks[0], st.season) : `${weekLabel(v.weeks[0], st.season)} to ${weekLabel(v.weeks[v.weeks.length - 1], st.season)}`) : "no games"}${st.window === "last3" ? " (his club's last 3 games)" : ""} · league reference: ${v.refText}`;
+  const sub = `${seasonLabel(st)} · ${v.weeks.length ? (v.weeks.length === 1 ? weekLabel(v.weeks[0], st.season) : `${weekLabel(v.weeks[0], st.season)} to ${weekLabel(v.weeks[v.weeks.length - 1], st.season)}`) : "no games"}${st.window === "last3" ? " (his club's last 3 games)" : ""} · league reference: ${v.refText}`;
 
   // 2. Usage strip. RB leads with involvement and drops the air-yards tiles (D182); WR/TE keep the full set.
   const usageTiles = {
@@ -207,7 +213,7 @@ export async function renderPlayer(ctx, params, query) {
       : ratingBars(block.bars, block.pos) + `<div class="an-note">EA's blocking attributes; the tick is the ${esc(block.pos)} median (${block.peers} rated). No free per-player blocking stat exists this season (D182).</div>`}</div>`;
 
   // 8. Routes (2025).
-  const routesHtml = st.with2025 && v.routes && v.routes.length ? `<div class="an-card an-pl-routes" data-band="${BAND(v.pos)}"><div class="an-dh">Routes · 2025 <span class="an-dsub">${v.routes.reduce((s, x) => s + x.n, 0)} targets with a route label (nflverse participation)</span></div>${routeList(v.routes)}</div>` : "";
+  const routesHtml = st.with2025 && v.routes && v.routes.length ? `<div class="an-card an-pl-routes" data-band="${BAND(v.pos)}"><div class="an-dh">Routes · ${st.season - 1} <span class="an-dsub">${v.routes.reduce((s, x) => s + x.n, 0)} targets with a route label (nflverse participation)</span></div>${routeList(v.routes)}</div>` : "";
 
   root.innerHTML = `<section class="an-pl">
     ${head}

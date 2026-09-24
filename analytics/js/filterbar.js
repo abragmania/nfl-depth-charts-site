@@ -1,6 +1,26 @@
 // The filter bar every analytics page carries. It only reads a state and hands back a new one (onChange);
 // the page turns that into the hash, so every filter combination is a link (filters.js).
-import { POSITIONS, cyclePos, weekLabel, defaultState } from "./filters.js";
+import { POSITIONS, cyclePos, weekLabel, defaultState, prevAvailable } from "./filters.js";
+import { loadSeasons } from "./data.js";
+
+// D184: the seasons list for the picker, fetched once and cached. `ctx.seasons` can override it (tests, or a
+// caller that already has the list); otherwise the bar paints with what it has (falls back to the picked
+// season alone) and repaints itself once the fetch resolves.
+let seasonsCache = null;
+let seasonsPending = false;
+function seasonsFor(el, st, ctx, onChange) {
+  if (ctx.seasons) return ctx.seasons;
+  if (seasonsCache) return seasonsCache;
+  if (!seasonsPending) {
+    seasonsPending = true;
+    loadSeasons().then((list) => {
+      seasonsPending = false;
+      seasonsCache = list && list.length ? list : [st.season];
+      if (el.isConnected) renderFilterBar(el, st, ctx, onChange);
+    });
+  }
+  return [st.season];
+}
 
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const clone = (st) => ({ ...st, pos: { ...st.pos }, downs: [...st.downs], qtrs: [...st.qtrs] });
@@ -11,6 +31,8 @@ const group = (label, html, cls = "") => `<div class="an-fgroup ${cls}"><span cl
 // `ctx`: { keys (every week key loaded for the season set), teams (abbrs) }.
 export function renderFilterBar(el, st, ctx, onChange) {
   const keys = ctx.keys || [];
+  const seasons = [...seasonsFor(el, st, ctx, onChange)].sort((a, b) => b - a); // newest first
+  const showPrev = prevAvailable(st.season, seasons);
   // Week range: a two-handle slider (two range inputs over one track) with the chosen span printed beside it.
   const idx = (k, dflt) => { const i = keys.indexOf(k); return i < 0 ? dflt : i; };
   const lo = idx(st.from, 0), hi = idx(st.to, Math.max(0, keys.length - 1)), last = Math.max(0, keys.length - 1);
@@ -28,10 +50,11 @@ export function renderFilterBar(el, st, ctx, onChange) {
   };
   // Reset shows only when a filter (not the sort, the minimum or the open row) differs from the default.
   const filtersOnly = (s) => JSON.stringify({ ...s, open: "", sort: "", dir: "", minTgt: 0 });
-  const isDefault = filtersOnly(st) === filtersOnly(defaultState());
+  const isDefault = filtersOnly(st) === filtersOnly(defaultState(seasons));
 
   el.innerHTML = `<div class="an-fbar">
-    ${group("Season", `<span class="an-season">${st.season}</span><label class="an-switch" title="Add last season's weeks to every figure"><input type="checkbox" data-k="with2025"${st.with2025 ? " checked" : ""}><span>Include 2025</span></label>`)}
+    ${group("Season", seg("season", seasons.map((s) => [s, String(s)]), st.season)
+      + (showPrev ? `<label class="an-switch" title="Add ${st.season - 1}'s weeks to every figure"><input type="checkbox" data-k="with2025"${st.with2025 ? " checked" : ""}><span>Include ${st.season - 1}</span></label>` : ""))}
     ${group("Window", seg("window", [["season", "Season"], ["last3", "Last 3", "Each club's last three games"], ["range", "Weeks"]], st.window)
       + (st.window === "range" ? rangeHtml() : ""))}
     ${group("Position", `<div class="an-poses">${POSITIONS.map(posChip).join("")}</div>`)}
@@ -44,8 +67,16 @@ export function renderFilterBar(el, st, ctx, onChange) {
   el.querySelectorAll("[data-seg] button").forEach((b) => b.addEventListener("click", () => {
     const name = b.parentElement.dataset.seg;
     fire((n) => {
-      n[name] = b.dataset.v;
-      if (name === "window" && n.window === "range") { n.from = n.from || keys[0] || null; n.to = n.to || keys[keys.length - 1] || null; }
+      if (name === "season") {
+        // D184: switching season invalidates any picked week range (it belongs to the old season), and the
+        // Include-previous switch is dropped if the new season's season-1 is not on the list.
+        n.season = +b.dataset.v;
+        n.from = null; n.to = null;
+        if (n.with2025 && !prevAvailable(n.season, seasons)) n.with2025 = false;
+      } else {
+        n[name] = b.dataset.v;
+        if (name === "window" && n.window === "range") { n.from = n.from || keys[0] || null; n.to = n.to || keys[keys.length - 1] || null; }
+      }
     });
   }));
   el.querySelectorAll("[data-pos]").forEach((b) => b.addEventListener("click", () => fire((n) => { n.pos = cyclePos(n.pos, b.dataset.pos); })));
@@ -67,5 +98,5 @@ export function renderFilterBar(el, st, ctx, onChange) {
     });
   }
   el.querySelector('input[data-k="with2025"]')?.addEventListener("change", (e) => fire((n) => { n.with2025 = e.target.checked; }));
-  el.querySelector("[data-reset]")?.addEventListener("click", () => onChange({ ...defaultState(), minTgt: st.minTgt, sort: st.sort, dir: st.dir }));
+  el.querySelector("[data-reset]")?.addEventListener("click", () => onChange({ ...defaultState(seasons), minTgt: st.minTgt, sort: st.sort, dir: st.dir }));
 }

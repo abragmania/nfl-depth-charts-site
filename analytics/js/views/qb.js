@@ -276,6 +276,11 @@ export function qbQuery(st, minDb) {
   return q.toString();
 }
 
+// Same "picked season[ + previous season]" prefix as player.js's seasonLabel (D184).
+export function seasonLabel(st) {
+  return `${st.season}${st.with2025 ? " + " + (st.season - 1) : ""}`;
+}
+
 function windowText(st, weeks) {
   if (!weeks.length) return "no games";
   const span = weeks.length === 1 ? weekLabel(weeks[0], st.season) : `${weekLabel(weeks[0], st.season)} to ${weekLabel(weeks[weeks.length - 1], st.season)}`;
@@ -324,7 +329,7 @@ export async function renderQb(ctx, query) {
   root.innerHTML = `<section class="an-qb">
     <div class="an-head">
       <h1>Quarterbacks</h1>
-      <div class="an-sub">${esc(st.season)}${st.with2025 ? " + 2025" : ""} · ${esc(windowText(st, agg.weeks))}${st.team ? ` · ${esc(st.team)}` : ""}${st.opp ? ` · vs ${esc(st.opp)}` : ""}</div>
+      <div class="an-sub">${esc(seasonLabel(st))} · ${esc(windowText(st, agg.weeks))}${st.team ? ` · ${esc(st.team)}` : ""}${st.opp ? ` · vs ${esc(st.opp)}` : ""}</div>
       ${data.missing.length ? `<div class="an-warn">${esc(data.missing.join(", "))} files are not built yet.</div>` : ""}
     </div>
     <div class="an-sub an-ref">League reference and colour tiers: ${esc(ref.text)}${pnote ? ` · ${esc(pnote)}` : ""}</div>

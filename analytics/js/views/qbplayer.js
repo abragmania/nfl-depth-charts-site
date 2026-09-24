@@ -44,10 +44,15 @@ export function maddenQb(madden, gsis, season) {
 
 // The page ignores team, opponent and the position chips (one man; his reference is every QB in the window).
 const pageState = (st) => ({ ...st, team: "", opp: "", ha: "", downs: [], qtrs: [], pos: {} });
-function windowName(st, weeks) {
+export function windowName(st, weeks) {
   if (st.window === "last3") return "Last 3";
   if (st.window === "range" && weeks.length) return weeks.length === 1 ? weekLabel(weeks[0], st.season) : `${weekLabel(weeks[0], st.season)}–${weekLabel(weeks[weeks.length - 1], st.season)}`;
-  return st.with2025 ? "25+26" : "Season";
+  return st.with2025 ? `${String(st.season - 1).slice(-2)}+${String(st.season).slice(-2)}` : "Season";
+}
+
+// Same "picked season[ + previous season]" prefix as player.js's seasonLabel (D184).
+export function seasonLabel(st) {
+  return `${st.season}${st.with2025 ? " + " + (st.season - 1) : ""}`;
 }
 
 // Page-local view state that does not belong in the link: the zone measure, the open zone, screens in the splits.
@@ -166,7 +171,7 @@ export async function renderQbPlayer(ctx, params, query) {
       : mq.status === "unrated" ? `<div class="an-note">No ${esc(maddenEdition(st.season))} rating on file for him.</div>`
       : ratingBars(mq.bars, "QB") + `<div class="an-note">EA's passing attributes; the tick is the QB median (${mq.peers} rated).</div>`}</div>`;
 
-  const sub = `${st.season}${st.with2025 ? " + 2025" : ""} · ${win.weeks.length ? (win.weeks.length === 1 ? weekLabel(win.weeks[0], st.season) : `${weekLabel(win.weeks[0], st.season)} to ${weekLabel(win.weeks[win.weeks.length - 1], st.season)}`) : "no games"}${st.window === "last3" ? " (each club's last 3 games)" : ""} · league reference: ${ref.text}${pnote ? " · " + pnote : ""}`;
+  const sub = `${seasonLabel(st)} · ${win.weeks.length ? (win.weeks.length === 1 ? weekLabel(win.weeks[0], st.season) : `${weekLabel(win.weeks[0], st.season)} to ${weekLabel(win.weeks[win.weeks.length - 1], st.season)}`) : "no games"}${st.window === "last3" ? " (each club's last 3 games)" : ""} · league reference: ${ref.text}${pnote ? " · " + pnote : ""}`;
   const ovr = isNum(mq.ovr) ? `<span class="an-pl-ovr t-${ratingTier(mq.ovr)}" title="${esc(mq.title)} overall"><b>${mq.ovr}</b><small>OVR</small></span>` : "";
   const depth = `../#/team/${encodeURIComponent(team)}/player/${encodeURIComponent(gsis)}`;
 
@@ -227,7 +232,7 @@ export function splitsHtml(sp, st) {
   const rows = SPLITS.map(([k]) => {
     const s = sp[k];
     if (k === "pressure" && !s.available) {
-      return `<tr class="an-qbp-sgap"><th>Pressured / clean</th><td colspan="6" class="an-note">${st.with2025 ? "No per-play pressure for him in the 2025 weeks of this window." : "Per-play pressure exists only in the 2025 participation file: switch on Include 2025. (PFR gives 2026 weekly totals only: see Pressure %.)"}</td></tr>`;
+      return `<tr class="an-qbp-sgap"><th>Pressured / clean</th><td colspan="6" class="an-note">${st.with2025 ? `No per-play pressure for him in the ${st.season - 1} weeks of this window.` : `Per-play pressure exists only in the ${st.season - 1} participation file: switch on Include ${st.season - 1}. (PFR gives ${st.season} weekly totals only: see Pressure %.)`}</td></tr>`;
     }
     return `<tr class="an-qbp-sfirst"><th>${esc(s.yesLabel)}</th>${cells(s.yes, s.lgYes)}</tr><tr><th>${esc(s.noLabel)}</th>${cells(s.no, s.lgNo)}</tr>`;
   }).join("");

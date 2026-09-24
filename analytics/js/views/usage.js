@@ -9,6 +9,11 @@ import { renderTable, anchor } from "../table.js";
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const go = (st) => { const q = toQuery(st); location.hash = `#/usage${q ? "?" + q : ""}`; };
 
+// Same "picked season[ + previous season]" prefix as player.js's seasonLabel (D184).
+export function seasonLabel(st) {
+  return `${st.season}${st.with2025 ? " + " + (st.season - 1) : ""}`;
+}
+
 function windowText(st, weeks) {
   if (!weeks.length) return "no games";
   const span = weeks.length === 1 ? weekLabel(weeks[0], st.season) : `${weekLabel(weeks[0], st.season)} to ${weekLabel(weeks[weeks.length - 1], st.season)}`;
@@ -62,7 +67,7 @@ export async function renderUsage(ctx, query) {
   root.innerHTML = `<section class="an-usage">
     <div class="an-head">
       <h1>Pass-game usage</h1>
-      <div class="an-sub">${esc(st.season)}${st.with2025 ? " + 2025" : ""} · ${esc(windowText(st, weeks))} · ${esc(posText)}${exText.length ? ` · excluding ${esc(exText.join(", "))}` : ""}${st.team ? ` · ${esc(st.team)}` : ""}${st.opp ? ` · vs ${esc(st.opp)}` : ""}</div>
+      <div class="an-sub">${esc(seasonLabel(st))} · ${esc(windowText(st, weeks))} · ${esc(posText)}${exText.length ? ` · excluding ${esc(exText.join(", "))}` : ""}${st.team ? ` · ${esc(st.team)}` : ""}${st.opp ? ` · vs ${esc(st.opp)}` : ""}</div>
       ${data.missing.length ? `<div class="an-warn">${esc(data.missing.join(", "))} files are not built yet; showing ${esc(seasonsOf(st).filter((s) => !data.missing.includes(s)).join(", "))} only.</div>` : ""}
     </div>
     <div class="an-sub an-ref">${esc(refLine)}</div>
