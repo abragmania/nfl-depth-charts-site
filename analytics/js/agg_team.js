@@ -20,12 +20,13 @@
 //                  blitzers / dropbacks faced FTN charted.
 //   Pressure % (offence, allowed) = the club's QBs' PFR pressures / their PFR dropbacks, over the weeks PFR lists them
 //                  (pfr.pass is keyed by QB; his club that week comes from the players file).
-//   Pressure % (defence) = the QB SIDE (the lead, 2026-09-24, flagged to Adam under D178): the opposing QBs' PFR
-//                  pressures / their PFR dropbacks against this defence, one pressure per dropback at most, so it
-//                  cannot double count. Kept beside it for the tooltip as `pressPctDef`: the club's defenders' PFR
-//                  pressures summed (pfr.def is keyed by defender gsis; his club that week comes from players.json
-//                  teams[week]) / the dropbacks the defence faced in the weeks PFR lists any of its defenders; this
-//                  double counts a throw two men pressured. A defender the players file cannot place is in `unmapped`.
+//   Pressure % (defence) = the QB SIDE: the opposing QBs' PFR pressures / their PFR dropbacks against this defence,
+//                  one pressure per dropback at most.
+//   Pressures/g (defence) = the club's defenders' PFR pressures summed (pfr.def is keyed by defender gsis; his club
+//                  that week comes from players.json teams[week]) / the club's games in the window. A throw two men
+//                  pressured counts twice here, by design: it is a volume figure, not a rate, so it never conflicts
+//                  with Pressure % above (Adam's pairing, 2026-09-24, resolving D178: two figures, no double-count
+//                  tooltip). A defender the players file cannot place is in `unmapped`.
 // LEAGUE REFERENCE (Adam's perspective rule, D177): the plain mean over the clubs in the window (32 in a full week;
 // fewer on a week with byes), and colour tiers at the clubs' 90/70/40/15th percentiles (agg.js; under 8 clubs,
 // uncoloured). Lower-is-better keys are cut on the negated value; neutral keys (pass rate, aDOT, blitz %) are not
@@ -171,17 +172,17 @@ export function aggregateTeams(blocks, players, st, opts = {}) {
       const w = a.wk.get(key) || { plays: 0, db: 0, epa: 0, epaN: 0 };
       return { key, opp: gm.opp, home: gm.home, side, plays: w.plays, db: w.db, passRate: ratio(w.db, w.plays), epaPlay: ratio(w.epa, w.epaN) };
     });
-    // The defence's shown pressure is the QB side; the defender sum rides along for the tooltip.
-    const dr = { ...sideRates(d, g), pressPct: ratio(d.qbPress, d.qbDb), pfrDb: d.qbDb, pfrWeeks: d.qbWeeks.size, pressPctDef: ratio(d.pfrPress, d.pfrDb), pfrPressDef: d.pfrPress, pfrWeeksDef: d.pfrWeeks.size };
+    // The defence's Pressure % is the QB side; Pressures/g is the defenders' own sum, per game (D178 pairing).
+    const dr = { ...sideRates(d, g), pressPct: ratio(d.qbPress, d.qbDb), pfrDb: d.qbDb, pfrWeeks: d.qbWeeks.size, pressuresG: ratio(d.pfrPress, g), pfrPressDef: d.pfrPress, pfrWeeksDef: d.pfrWeeks.size };
     return { team, g, off: sideRates(o, g), def: dr, series: { off: series(o, "off"), def: series(d, "def") } };
   });
   return { rows, weeks, lgZones, pfrThrough, latestKey: weeks[weeks.length - 1] || null, unmapped };
 }
 
 // ---- the league reference among clubs ------------------------------------------------------------------------
-export const TEAM_LG_KEYS = ["plays", "playsG", "passRate", "epaPlay", "epaDb", "epaCar", "succPct", "adot", "cmpPct", "sackPct", "pressPct", "pressPctDef", "paPct", "blitzPct", "explPct"];
+export const TEAM_LG_KEYS = ["plays", "playsG", "passRate", "epaPlay", "epaDb", "epaCar", "succPct", "adot", "cmpPct", "sackPct", "pressPct", "pressuresG", "paPct", "blitzPct", "explPct"];
 export const OFF_TIER = { epaPlay: 1, epaDb: 1, epaCar: 1, succPct: 1, cmpPct: 1, explPct: 1, sackPct: -1, pressPct: -1 };
-export const DEF_TIER = { epaPlay: -1, epaDb: -1, epaCar: -1, succPct: -1, cmpPct: -1, explPct: -1, sackPct: 1, pressPct: 1 };
+export const DEF_TIER = { epaPlay: -1, epaDb: -1, epaCar: -1, succPct: -1, cmpPct: -1, explPct: -1, sackPct: 1, pressPct: 1, pressuresG: 1 };
 const dirOf = (side) => (side === "def" ? DEF_TIER : OFF_TIER);
 
 // { n (clubs), lg: { off: {k: mean}, def: {k: mean} }, cuts: { off: {k: {cuts, n}}, def } , text }.

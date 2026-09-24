@@ -19,7 +19,8 @@ export const DEF_COLS = [
   { k: "epaCar", h: "EPA/car", t: "EPA per designed run allowed (lower is better)", f: (v) => signed(v, 3), grp: "e" },
   { k: "succPct", h: "Succ %", t: "Share of plays faced that were successful for the offence (lower is better)", f: (v) => P(v, 1), grp: "e" },
   { k: "sackPct", h: "Sack %", t: "Sacks / dropbacks faced", f: (v) => P(v, 1), grp: "r" },
-  { k: "pressPct", h: "Press %", t: "PFR: the opposing quarterbacks' pressured dropbacks / their dropbacks against this defence (a week behind; hover a cell for the defender sum)", f: (v) => P(v, 1), grp: "r" },
+  { k: "pressPct", h: "Press %", t: "PFR: the opposing quarterbacks' pressured dropbacks / their dropbacks against this defence, one pressure per throw at most (a week behind)", f: (v) => P(v, 1), grp: "r" },
+  { k: "pressuresG", h: "Press/g", t: "PFR: the club's defenders' pressures summed / games in the window — a throw two men pressured counts twice here (a week behind)", f: (v) => fix(v, 1), grp: "r" },
   { k: "blitzPct", h: "Blitz %", t: "FTN: dropbacks faced with 1+ blitzers / dropbacks faced charted", f: (v) => P(v, 0), grp: "r" },
   { k: "cmpPct", h: "Cmp %", t: "Completion % allowed (lower is better)", f: (v) => P(v, 1), grp: "c" },
   { k: "adot", h: "aDOT", t: "Air yards per attempt faced", f: (v) => fix(v, 1), grp: "c" },
@@ -49,8 +50,10 @@ function defSpark(series) {
     }).join("") + `</svg>`;
 }
 
-// The pressure tooltip: the QB-side figure shown, the defender sum beside it (the lead's ruling, 2026-09-24, D178 flag).
-export const pressTip = (D) => `Opposing QBs' PFR pressures / their dropbacks over ${D.pfrWeeks} week${D.pfrWeeks === 1 ? "" : "s"}. Defender pressures summed (double counts shared pressures): ${isNum(D.pressPctDef) ? (D.pressPctDef * 100).toFixed(1) + "%" : "–"}`;
+// Two pressure figures, no conflict (Adam's pairing, 2026-09-24, D178): Press % is the QB side, one pressure per
+// throw at most; Pressures/g is the defenders' own sum per game, so a throw two men pressured counts twice there.
+export const pressPctTip = (D) => `Opposing quarterbacks' PFR pressures / their dropbacks against this defence, one pressure per throw at most, over ${D.pfrWeeks} week${D.pfrWeeks === 1 ? "" : "s"}.`;
+export const pressGTip = (D) => `The club's defenders' PFR pressures summed / games in the window, over ${D.pfrWeeksDef} week${D.pfrWeeksDef === 1 ? "" : "s"} — a throw two men pressured counts twice here.`;
 
 const ui = { zoneMode: "cmpPct", zone: null, team: null };
 
@@ -73,7 +76,8 @@ function detailHtml(r, st, q, ref, wn, lgZones, players) {
       <div data-zones>${zoneBlock(zones, st, players, q)}</div></div>
     <div class="an-dcol"><div class="an-dh">Pass rush</div><div class="an-dtiles">
       ${tile("Sack %", PP(D.sackPct), "sackPct", PP(L.sackPct), "Sacks / dropbacks faced")}
-      ${tile("Press %", PP(D.pressPct), "pressPct", PP(L.pressPct), pressTip(D))}
+      ${tile("Press %", PP(D.pressPct), "pressPct", PP(L.pressPct), pressPctTip(D))}
+      ${tile("Press/g", isNum(D.pressuresG) ? D.pressuresG.toFixed(1) : NA, "pressuresG", isNum(L.pressuresG) ? L.pressuresG.toFixed(1) : NA, pressGTip(D))}
       ${tile("Blitz %", PP(D.blitzPct, 0), "", PP(L.blitzPct, 0), "FTN: 1+ blitzers")}
       ${tile("Expl %", PP(D.explPct), "explPct", PP(L.explPct), "Runs of 10+ and completions of 20+ allowed / plays faced")}
       <div class="an-dlinks"><a href="#/team/${encodeURIComponent(r.team)}${q ? "?" + q : ""}">Offense →</a><a href="../#/team/${encodeURIComponent(r.team)}" target="_blank" rel="noopener">Depth chart ↗</a></div>
@@ -98,7 +102,7 @@ export function defTableHtml(rows, st, query, view) {
     const open = st.open === r.team;
     const cells = DEF_COLS.map((c) => {
       const v = r.def[c.k], t = teamTier("def", c.k, v, ref.cuts);
-      const title = c.k === "pressPct" && isNum(v) ? pressTip(r.def) : "";
+      const title = c.k === "pressPct" && isNum(v) ? pressPctTip(r.def) : c.k === "pressuresG" && isNum(v) ? pressGTip(r.def) : "";
       return `<td class="num g-${c.grp}${c.gs ? " gs" : ""}${t ? " t-" + t : ""}"${title ? ` title="${esc(title)}"` : ""}><span>${c.f(v)}</span></td>`;
     }).join("");
     return `<tr class="an-row${open ? " open" : ""}" data-id="${esc(r.team)}" tabindex="0" aria-expanded="${open}">
@@ -109,7 +113,7 @@ export function defTableHtml(rows, st, query, view) {
   }).join("");
   return `<div class="an-tbar">
       <span class="an-count">${list.length} defense${list.length === 1 ? "" : "s"}</span>
-      <span class="an-legend" title="Each value against every club's in this window: elite at the clubs' 90th percentile or better, then the 70th, 40th and 15th; low below. Lower allowed is better for EPA, success, completion % and explosive plays; higher is better for sack % and pressure %. Plays/g, blitz % and aDOT are not coloured.">
+      <span class="an-legend" title="Each value against every club's in this window: elite at the clubs' 90th percentile or better, then the 70th, 40th and 15th; low below. Lower allowed is better for EPA, success, completion % and explosive plays; higher is better for sack %, pressure % and pressures/g. Plays/g, blitz % and aDOT are not coloured.">
         ${TIER_NAMES.map((t) => `<i class="t-${t}"></i>`).join("")}<span>elite → low among the clubs</span></span>
       <span class="an-hint">Click a row to open the defense</span>
     </div>
@@ -158,7 +162,7 @@ export async function renderDefense(ctx, query) {
     </div>
     <div class="an-filters"></div>
     <div class="an-tablewrap"></div>
-    <p class="an-foot">Plays faced, EPA, success, sacks, completions, aDOT, explosive plays and the zone field: nflverse play-by-play (defensive pass interference no-plays are left out). Blitz: FTN charting. Pressure: PFR advanced stats, the opposing quarterbacks' pressured dropbacks against each defence; the tooltip adds the club's defenders' pressures summed, which double counts a throw two men pressured${agg.unmapped.length ? ` (${agg.unmapped.length} defender-week row${agg.unmapped.length === 1 ? "" : "s"} could not be placed on a club)` : ""}. Zone references pool every attempt in the window.</p>
+    <p class="an-foot">Plays faced, EPA, success, sacks, completions, aDOT, explosive plays and the zone field: nflverse play-by-play (defensive pass interference no-plays are left out). Blitz: FTN charting. Pressure %: PFR advanced stats, the opposing quarterbacks' pressured dropbacks against each defence, one pressure per throw at most. Pressures/g: the club's defenders' PFR pressures summed, divided by games in the window — a throw two men pressured counts twice there${agg.unmapped.length ? ` (${agg.unmapped.length} defender-week row${agg.unmapped.length === 1 ? "" : "s"} could not be placed on a club)` : ""}. Zone references pool every attempt in the window.</p>
   </section>`;
   renderFilterBar(root.querySelector(".an-filters"), st, { keys: data.keys, teams: [] }, go);
   const el = root.querySelector(".an-tablewrap");

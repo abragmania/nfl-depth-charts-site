@@ -1,6 +1,6 @@
 // The filter bar every analytics page carries. It only reads a state and hands back a new one (onChange);
 // the page turns that into the hash, so every filter combination is a link (filters.js).
-import { POSITIONS, cyclePos, weekLabel, defaultState, prevAvailable } from "./filters.js";
+import { POSITIONS, cyclePos, weekLabel, defaultState, prevAvailable, splitKey, REG_SEASON_WEEKS } from "./filters.js";
 import { loadSeasons } from "./data.js";
 
 // D184: the seasons list for the picker, fetched once and cached. `ctx.seasons` can override it (tests, or a
@@ -30,7 +30,11 @@ const group = (label, html, cls = "") => `<div class="an-fgroup ${cls}"><span cl
 
 // `ctx`: { keys (every week key loaded for the season set), teams (abbrs) }.
 export function renderFilterBar(el, st, ctx, onChange) {
-  const keys = ctx.keys || [];
+  const allKeys = ctx.keys || [];
+  // Playoffs chip (Adam, 2026-09-24): off by default, weeks 19+ dropped from the slider's own domain too, not just
+  // the aggregation (filters.gamesInWindow does that half); shown only when the loaded weeks actually reach one.
+  const hasPlayoffs = allKeys.some((k) => splitKey(k).week > REG_SEASON_WEEKS);
+  const keys = st.po ? allKeys : allKeys.filter((k) => splitKey(k).week <= REG_SEASON_WEEKS);
   const seasons = [...seasonsFor(el, st, ctx, onChange)].sort((a, b) => b - a); // newest first
   const showPrev = prevAvailable(st.season, seasons);
   // Week range: a two-handle slider (two range inputs over one track) with the chosen span printed beside it.
@@ -56,6 +60,7 @@ export function renderFilterBar(el, st, ctx, onChange) {
     ${group("Season", seg("season", seasons.map((s) => [s, String(s)]), st.season)
       + (showPrev ? `<label class="an-switch" title="Add ${st.season - 1}'s weeks to every figure"><input type="checkbox" data-k="with2025"${st.with2025 ? " checked" : ""}><span>Include ${st.season - 1}</span></label>` : ""))}
     ${group("Window", seg("window", [["season", "Season"], ["last3", "Last 3", "Each club's last three games"], ["range", "Weeks"]], st.window)
+      + (hasPlayoffs ? `<label class="an-switch" title="Add weeks 19+ (the postseason) to this window"><input type="checkbox" data-k="po"${st.po ? " checked" : ""}><span>Playoffs</span></label>` : "")
       + (st.window === "range" ? rangeHtml() : ""))}
     ${group("Position", `<div class="an-poses">${POSITIONS.map(posChip).join("")}</div>`)}
     ${group("Team", `<select data-k="team" aria-label="Team">${teamOpts(st.team, "All")}</select>`)}
@@ -98,5 +103,6 @@ export function renderFilterBar(el, st, ctx, onChange) {
     });
   }
   el.querySelector('input[data-k="with2025"]')?.addEventListener("change", (e) => fire((n) => { n.with2025 = e.target.checked; }));
+  el.querySelector('input[data-k="po"]')?.addEventListener("change", (e) => fire((n) => { n.po = e.target.checked; }));
   el.querySelector("[data-reset]")?.addEventListener("click", () => onChange({ ...defaultState(seasons), minTgt: st.minTgt, sort: st.sort, dir: st.dir }));
 }

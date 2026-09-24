@@ -12,6 +12,11 @@ export const WINDOWS = ["season", "last3", "range"];
 export const DOWNS = [1, 2, 3, 4];
 export const QUARTERS = [1, 2, 3, 4, 5]; // 5 = overtime
 
+// Adam (2026-09-24): "Season" means the REGULAR season everywhere in this app; weeks 19+ (a prior season's week
+// files run to 22) are playoffs and are out unless the Playoffs chip (hash po=1) is on. WC/DIV/CONF/SB label them.
+export const REG_SEASON_WEEKS = 18;
+const PLAYOFF_LABELS = { 19: "WC", 20: "DIV", 21: "CONF", 22: "SB" };
+
 // Three-way position chips: "in" (show only included positions), "out" (always hide), absent = neutral.
 export const DEFAULT_POS = Object.freeze({ WR: "in", TE: "in", RB: "in" });
 
@@ -29,7 +34,7 @@ export function prevAvailable(season, seasons) {
 export function defaultState(seasons) {
   return {
     season: defaultSeason(seasons), with2025: false,
-    window: "season", from: null, to: null,
+    window: "season", from: null, to: null, po: false,
     pos: { ...DEFAULT_POS },
     team: "", opp: "",
     // Adam (2026-09-24): no home/away, down or quarter splits in this app. The predicates below still honour
@@ -48,7 +53,8 @@ export function splitKey(key) {
 }
 export function weekLabel(key, currentSeason = CURRENT_SEASON) {
   const { season, week } = splitKey(key);
-  return season === currentSeason ? `W${week}` : `${String(season).slice(-2)}·W${week}`;
+  const w = PLAYOFF_LABELS[week] || `W${week}`;
+  return season === currentSeason ? w : `${String(season).slice(-2)}·${w}`;
 }
 
 // The seasons a state reads, newest first. D184: "Include previous" is always relative to the picked season
@@ -98,6 +104,7 @@ export function toQuery(st) {
   if (st.with2025) q.set("prev", "1");
   if (st.window !== d.window) q.set("window", st.window);
   if (st.window === "range") { if (st.from) q.set("from", st.from); if (st.to) q.set("to", st.to); }
+  if (st.po) q.set("po", "1");
   const ps = posToString(st.pos);
   if (ps !== posToString(d.pos)) q.set("pos", ps || "none");
   if (st.team) q.set("team", st.team);
@@ -120,6 +127,7 @@ export function fromQuery(qs) {
     st.from = KEY_RE.test(q.get("from") || "") ? q.get("from") : null;
     st.to = KEY_RE.test(q.get("to") || "") ? q.get("to") : null;
   }
+  st.po = q.get("po") === "1";
   if (q.has("pos")) st.pos = q.get("pos") === "none" ? {} : posFromString(q.get("pos"));
   const abbr = (v) => (/^[A-Z]{2,3}$/.test(String(v || "").toUpperCase()) ? String(v).toUpperCase() : "");
   st.team = abbr(q.get("team"));
@@ -135,14 +143,17 @@ export function fromQuery(qs) {
 // ---- window and predicates -----------------------------------------------------------------------------
 
 // Which (week, team) games count. `games` is [{ key, team, gameId }] for every club-game loaded (one entry per
-// club per game). season: all of them; range: from..to inclusive (either end open when null); last3: each
-// club's three most recent games, so a club on a bye still gets three games, not three weeks.
+// club per game). season: every regular-season game; range: from..to inclusive (either end open when null);
+// last3: each club's three most recent games within scope, so a club on a bye still gets three games, not three
+// weeks. Every window first drops weeks 19+ (playoffs) unless st.po is on (Adam, 2026-09-24: Season means the
+// regular season app-wide); the Playoffs chip adds them back for whichever window is chosen.
 // Returns a Set of `${key}|${team}`.
 export function gamesInWindow(games, st) {
+  const inScope = (g) => st.po || splitKey(g.key).week <= REG_SEASON_WEEKS;
   const out = new Set();
   if (st.window === "last3") {
     const byTeam = new Map();
-    for (const g of games) { if (!byTeam.has(g.team)) byTeam.set(g.team, []); byTeam.get(g.team).push(g); }
+    for (const g of games) { if (!inScope(g)) continue; if (!byTeam.has(g.team)) byTeam.set(g.team, []); byTeam.get(g.team).push(g); }
     for (const list of byTeam.values()) {
       const uniq = [...new Map(list.map((g) => [g.key, g])).values()].sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
       for (const g of uniq.slice(-3)) out.add(`${g.key}|${g.team}`);
@@ -150,6 +161,7 @@ export function gamesInWindow(games, st) {
     return out;
   }
   for (const g of games) {
+    if (!inScope(g)) continue;
     if (st.window === "range") {
       if (st.from && g.key < st.from) continue;
       if (st.to && g.key > st.to) continue;
