@@ -7,6 +7,8 @@ import { renderPlayer } from "./views/player.js";
 import { renderQb } from "./views/qb.js";
 import { renderQbPlayer } from "./views/qbplayer.js";
 import { renderRushing } from "./views/rushing.js";
+import { renderTeams, renderTeam } from "./views/team.js";
+import { renderDefense } from "./views/defense.js";
 import { loadSeason } from "./data.js";
 import { fromQuery, seasonsOf } from "./filters.js";
 
@@ -19,7 +21,7 @@ const SECTIONS = [
   { path: "usage", label: "Usage" },
   { path: "qb", label: "Quarterbacks" },
   { path: "rushing", label: "Rushing" },
-  { path: "team", label: "Teams" },
+  { path: "teams", label: "Teams" },
   { path: "defense", label: "Defense" },
 ];
 
@@ -34,11 +36,6 @@ const view = (section, fn) => async (params, query) => {
   paintNav(section, query);
   try { await fn(params, query, { root, asof, isCurrent: () => my === seq }); }
   catch (e) { if (my === seq) root.innerHTML = `<div class="an-msg an-msg-err">Something broke: ${esc(e.message)}</div>`; }
-};
-
-const stub = (title, blurb) => async () => {
-  document.title = `${title} · NFL Analytics`;
-  root.innerHTML = `<div class="an-msg"><div class="an-msg-title">${esc(title)}</div>${esc(blurb)} Coming next.</div>`;
 };
 
 router.on("/", view("usage", (p, q, ctx) => renderUsage(ctx, q)));
@@ -57,7 +54,10 @@ router.on("/player/:gsis", view("usage", async (p, q, ctx) => {
 }));
 router.on("/qb", view("qb", (p, q, ctx) => renderQb(ctx, q)));
 router.on("/rushing", view("rushing", (p, q, ctx) => renderRushing(ctx, q)));
-router.on("/team", view("team", stub("Teams", "Team offence and defence side by side.")));
-router.on("/team/:abbr", view("team", stub("Team", "One club's offence and defence.")));
-router.on("/defense", view("defense", stub("Defense", "Team defence: EPA allowed, pressure and blitz rates.")));
+// #/teams (and a bare #/team) is the club picker; #/team/:abbr the club's offence; #/defense the defence
+// leaderboard, whose expanded row is the defence page in v1 (D179).
+router.on("/teams", view("teams", (p, q, ctx) => renderTeams(ctx, q)));
+router.on("/team", view("teams", (p, q, ctx) => renderTeams(ctx, q)));
+router.on("/team/:abbr", view("teams", (p, q, ctx) => renderTeam(ctx, p, q)));
+router.on("/defense", view("defense", (p, q, ctx) => renderDefense(ctx, q)));
 router.start(() => { paintNav("", ""); root.innerHTML = `<div class="an-msg">Page not found. <a href="#/usage">Back to Usage</a></div>`; });
