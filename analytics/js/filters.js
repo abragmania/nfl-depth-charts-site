@@ -18,7 +18,10 @@ export const REG_SEASON_WEEKS = 18;
 const PLAYOFF_LABELS = { 19: "WC", 20: "DIV", 21: "CONF", 22: "SB" };
 
 // Three-way position chips: "in" (show only included positions), "out" (always hide), absent = neutral.
-export const DEFAULT_POS = Object.freeze({ WR: "in", TE: "in", RB: "in" });
+// D193 (2026-09-25): Usage becomes the Receivers page, so its default is WR/TE only; a running back who lands
+// here (a link, a search) comes back into view with his own RB chip lit rather than the page's default excluding
+// him outright - Running backs (agg_rush.js RUSH_DEFAULT_POS) keeps its own RB/FB default unchanged.
+export const DEFAULT_POS = Object.freeze({ WR: "in", TE: "in" });
 
 // D184: the season a picker should start on when nothing says otherwise: the newest season the seasons
 // endpoint lists, or CURRENT_SEASON when that list is empty/unavailable (loadSeasons() failed, or no ctx yet).

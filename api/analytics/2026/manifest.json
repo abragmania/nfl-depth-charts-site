@@ -34,20 +34,22 @@
   "ezTarget",
   "route",
   "pressure",
-  "pi"
+  "pi",
+  "fumbler",
+  "fumLost"
  ],
  "weeks": [
   {
    "week": 1,
-   "hash": "e6bfbbe5ed6d0c5d",
+   "hash": "ab17aca73ee44aad",
    "plays": 1924,
-   "builtAt": "2026-09-24T20:54:02.256Z"
+   "builtAt": "2026-09-25T17:36:35.522Z"
   },
   {
    "week": 2,
-   "hash": "35c38cf45a478968",
+   "hash": "75c67aeef982fbe8",
    "plays": 1936,
-   "builtAt": "2026-09-24T20:54:02.256Z"
+   "builtAt": "2026-09-25T17:36:35.522Z"
   }
  ],
  "sources": {
@@ -67,6 +69,8 @@
    "fetchedAt": "2026-09-24T20:38:00.128Z",
    "sha": "641aa103362fd0e2"
   },
+  "pfrRush": null,
+  "pfrRec": null,
   "routes": {
    "fetchedAt": "2026-09-24T20:38:03.223Z",
    "sha": "51af93f49c67860acba41686c670a330f9037c1f80532d0a936e8657062d2ab6"

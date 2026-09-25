@@ -172,7 +172,7 @@ export async function renderRushing(ctx, query) {
     // jump to exactly that set that changes more than one is the Reset: send it to the rushing default instead.
     const diff = POSITIONS.filter((p) => (n.pos[p] || "") !== (st.pos[p] || "")).length;
     if (diff > 1 && samePos(n.pos, DEFAULT_POS)) n = { ...n, pos: { ...RUSH_DEFAULT_POS } };
-    const q = rushQuery(n, mc); location.hash = `#/rushing${q ? "?" + q : ""}`;
+    const q = rushQuery(n, mc); location.hash = `#/rbs${q ? "?" + q : ""}`;
   };
   if (!root.querySelector(".an-rush")) root.innerHTML = `<div class="an-msg">Loading rushing…</div>`;
   let data, teams;

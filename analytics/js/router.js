@@ -39,7 +39,18 @@ export function previousPage() {
   for (let i = trail.length - 2; i >= 0; i--) if (split(trail[i]).path !== here) return trail[i];
   return null;
 }
-const SECTION_NAMES = { usage: "Usage", qb: "Quarterbacks", rushing: "Rushing", teams: "Teams", team: "Teams", defense: "Defense", player: "Player" };
+// D193 (2026-09-25): Usage became Receivers and Rushing became Running backs, and the app bar's Teams group split
+// into Offense and Defense with Grid added; the old hash segments (usage, rushing, teams, team) still resolve as
+// aliases (main.js), so their labels follow the page's new name rather than the old link text.
+const SECTION_NAMES = {
+  usage: "Receivers", receivers: "Receivers",
+  rushing: "Running backs", rbs: "Running backs",
+  qb: "Quarterbacks",
+  teams: "Offense", team: "Offense",
+  defense: "Defense",
+  grid: "Grid",
+  player: "Player",
+};
 export function pageName(hash) {
   const segs = split(hash).path.split("/").filter(Boolean);
   if (segs[0] === "team" && segs[1]) return segs[1].toUpperCase();

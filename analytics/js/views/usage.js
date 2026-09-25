@@ -7,7 +7,7 @@ import { renderFilterBar } from "../filterbar.js";
 import { renderTable, anchor } from "../table.js";
 
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-const go = (st) => { const q = toQuery(st); location.hash = `#/usage${q ? "?" + q : ""}`; };
+const go = (st) => { const q = toQuery(st); location.hash = `#/receivers${q ? "?" + q : ""}`; };
 
 // Same "picked season[ + previous season]" prefix as player.js's seasonLabel (D184).
 export function seasonLabel(st) {
