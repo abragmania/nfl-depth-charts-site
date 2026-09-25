@@ -4,13 +4,18 @@
 // underneath; the Rank view swaps the big number to the rank on a plain one-hue ramp. Every number is formatted through
 // agg_grid.js's displayed(v, f), so the text and the rank's tie rule share one rounding. The cells come from
 // aggregateTeams() rows, so every figure equals the one the Offense and Defense pages show.
+// Under the grid, D196's "What each defense allows, by position" (views/allowed_table.js; Adam, 2026-09-25: on this
+// page, not the Defense page), on the same filters and window; its own sort (psort, pdir) and vs-usual switch (vs=1)
+// ride in the same hash. The Rating / Rank switch is the grid's only.
 import { fromQuery, toQuery, seasonsOf, weekLabel, defaultState } from "../filters.js";
 import { loadFor, loadTeams } from "../data.js";
 import { aggregateTeams } from "../agg_team.js";
+import { allowedByPosition, allowedVsUsual } from "../agg_allowed.js";
 import { gridRows, GRID_CATEGORIES, displayed } from "../agg_grid.js";
 import { renderFilterBar } from "../filterbar.js";
 import { esc, teamPill, pfrNote, seasonLabel } from "./qb.js";
 import { teamPageState, ordinal } from "./team.js";
+import { allowedState, allowedQuery, posCells, allowedSectionHtml, posBestDir } from "./allowed_table.js";
 
 const SIDES = [["off", "Offense"], ["def", "Defense"]];
 const PFR = /PFR/;
@@ -50,7 +55,8 @@ export function figText(v, f) {
 }
 
 // The page's view state from the hash: sort (a column key or "team"), dir ("desc" = best first for a column, A to Z
-// for the club column's "asc"), mode ("rating" or "rank"; hash view=rank).
+// for the club column's "asc"), mode ("rating" or "rank"; hash view=rank), al (the by-position table's allowedState:
+// its sort, dir and vs).
 export function gridState(query) {
   const q = new URLSearchParams(String(query || "").replace(/^\?/, ""));
   const st = fromQuery(query);
@@ -58,12 +64,12 @@ export function gridState(query) {
   const sort = has ? st.sort : DEFAULT_SORT;
   // toQuery leaves out "desc" (the app default), so a missing dir reads as desc.
   const dir = has ? st.dir : "desc";
-  return { st, sort, dir, mode: q.get("view") === "rank" ? "rank" : "rating" };
+  return { st, sort, dir, mode: q.get("view") === "rank" ? "rank" : "rating", al: allowedState(query) };
 }
-// The hash for a state: the filters, the sort, and view=rank when the Rank view is on.
-export function gridQuery(st, sort, dir, mode) {
-  const q = toQuery({ ...st, open: "", sort, dir });
-  return q + (mode === "rank" ? `${q ? "&" : ""}view=rank` : "");
+// The hash for a state: the filters, the sort, view=rank when the Rank view is on, then the by-position table's keys
+// (al; omitted = its defaults).
+export function gridQuery(st, sort, dir, mode, al) {
+  return [toQuery({ ...st, open: "", sort, dir }), mode === "rank" ? "view=rank" : "", al ? allowedQuery(al) : ""].filter(Boolean).join("&");
 }
 
 const cellOf = (r, col) => r.cells?.[col.cat.key]?.[col.side] || null;
@@ -159,9 +165,9 @@ export function hasPfrFigure(rows) {
 
 export async function renderGrid(ctx, query) {
   const { root, asof, isCurrent } = ctx;
-  const { st, sort, dir, mode } = gridState(query);
+  const { st, sort, dir, mode, al } = gridState(query);
   document.title = "Grid · NFL Analytics";
-  const go = (n, s = sort, d = dir, m = mode) => { const q = gridQuery(n, s, d, m); location.hash = `#/grid${q ? "?" + q : ""}`; };
+  const go = (n, s = sort, d = dir, m = mode, a = al) => { const q = gridQuery(n, s, d, m, a); location.hash = `#/grid${q ? "?" + q : ""}`; };
   if (!root.querySelector(".an-grid")) root.innerHTML = `<div class="an-msg">Loading the team grid…</div>`;
   let data, teams;
   try {
@@ -177,8 +183,12 @@ export async function renderGrid(ctx, query) {
     return;
   }
   if (!isCurrent()) return;
-  const agg = aggregateTeams(data.blocks, data.players, teamPageState(st));
+  const pst = teamPageState(st);
+  const agg = aggregateTeams(data.blocks, data.players, pst);
   const rows = gridRows(agg);
+  // The by-position table on the grid's own club-level state, so both tables cover the same games.
+  const allowed = allowedByPosition(data.blocks, data.players, pst);
+  const usual = al.vs ? allowedVsUsual(data.blocks, data.players, pst) : null;
   const pnote = hasPfrFigure(rows) ? pfrNote(agg.pfrThrough, agg.latestKey, st.season) : "";
   if (asof) {
     const m = data.manifests.find((x) => x.season === st.season) || data.manifests[0];
@@ -199,12 +209,19 @@ export async function renderGrid(ctx, query) {
     ${gridBarHtml(mode, pnote)}
     <div class="an-tablewrap">${gridTableHtml(rows, { teams, q: linkQ, sort, dir, mode })}</div>
     <p class="an-foot">Every figure is the one the Offense and Defense pages show. EPA, rushing, stuffed runs, sacks and explosive plays: nflverse play-by-play. Pressure, hits, yards before contact and coverage: PFR advanced stats, about a week behind the games; a club PFR has not charted yet reads "not yet" and is left out of the ratings. Hover a cell for every figure behind it and its source.</p>
-  </section>`;
+  </section>
+  ${allowedSectionHtml(posCells(allowed, usual, al.vs), { teams, q: linkQ, sort: al.sort, dir: al.dir, vs: al.vs, audit: allowed })}`;
   renderFilterBar(root.querySelector(".an-filters"), { ...st, sort, dir }, { keys: data.keys, teams: [] }, (n) => go(n));
   root.querySelectorAll("[data-gmode] button").forEach((b) => b.addEventListener("click", () => { if (b.dataset.v !== mode) go(st, sort, dir, b.dataset.v); }));
   root.querySelectorAll(".an-grid-table th[data-sort]").forEach((h) => h.addEventListener("click", () => {
     const k = h.dataset.sort;
     const first = k === "team" ? "asc" : "desc";
     go(st, k, sort === k ? (dir === "desc" ? "asc" : "desc") : first);
+  }));
+  const sec = root.querySelector(".an-gallow");
+  sec.querySelectorAll("[data-dvs] button").forEach((b) => b.addEventListener("click", () => { const v = b.dataset.v === "1"; if (v !== al.vs) go(st, sort, dir, mode, { ...al, vs: v }); }));
+  sec.querySelectorAll(".an-dpos-table th[data-sort]").forEach((h) => h.addEventListener("click", () => {
+    const k = h.dataset.sort;
+    go(st, sort, dir, mode, { ...al, sort: k, dir: al.sort === k ? (al.dir === "desc" ? "asc" : "desc") : posBestDir(k) });
   }));
 }

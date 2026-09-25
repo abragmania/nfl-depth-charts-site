@@ -63,3 +63,20 @@
 .gc.gc-rank { --amt:calc(6% + 58% * var(--r)); background:color-mix(in oklab, var(--gr-hue) var(--amt), var(--panel2)); }
 .gc.gc-null { background:transparent; border:1px dashed #262d35; }
 .gc.gc-null b { font-size:11px; font-weight:600; color:var(--dim); font-style:italic; text-shadow:none; }
+
+/* ---- D196: what each defense allows, by position, the section under the grid (views/allowed_table.js). It hugs its
+   own table and centres under the grid (D190); its heading carries the vs-usual switch. ---- */
+.an-gallow { width:max-content; max-width:100%; margin:30px auto 0; padding-top:18px; border-top:1px solid var(--line); }
+.an-gallow-head { display:flex; align-items:center; flex-wrap:wrap; gap:8px 16px; }
+.an-gallow-head h2 { margin:0; font-size:17px; font-weight:800; letter-spacing:.01em; }
+.an-gallow .an-tbar { margin-top:8px; }
+/* Moved unchanged from analytics_recut.css (D196 D, first built for the Defense page). */
+.an-dpos-table em.an-dp-rk { display:block; line-height:1.15; margin-top:1px; }
+.an-dpos-table thead tr.an-grp th.g-QB { color:var(--band-QB); }
+.an-dpos-table thead tr.an-grp th.g-RB { color:var(--band-BACKFIELD); }
+.an-dpos-table thead tr.an-grp th.g-WR { color:var(--band-WR); }
+.an-dpos-table thead tr.an-grp th.g-TE { color:var(--band-TE); }
+.an-dpos-table td.an-dp-club { text-align:left; }
+/* 👁: the vs-usual explanation must wrap at the table's width, never widen the column; value cells share a width. */
+.an-dpos-note { width:0; min-width:100%; white-space:normal; }
+.an-dpos-table td.an-dp-v { min-width:58px; }

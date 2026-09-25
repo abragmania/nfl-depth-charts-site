@@ -322,16 +322,6 @@
 .an-tm-lostpos { color:var(--dim); font-size:10.5px; font-weight:800; }
 .an-tm-lostitem { white-space:nowrap; }
 
-/* ---- D196 D: the Defense page's By position view (views/defense.js posTableHtml) ---- */
-.an-dpos-table em.an-dp-rk { display:block; line-height:1.15; margin-top:1px; }
-.an-dpos-table thead tr.an-grp th.g-QB { color:var(--band-QB); }
-.an-dpos-table thead tr.an-grp th.g-RB { color:var(--band-BACKFIELD); }
-.an-dpos-table thead tr.an-grp th.g-WR { color:var(--band-WR); }
-.an-dpos-table thead tr.an-grp th.g-TE { color:var(--band-TE); }
-.an-dpos-table td.an-dp-club { text-align:left; }
 /* 👁: when Club targets cannot sit beside the zones, it goes under the zone grid in the zones' column, at its own width. */
 .an-pl-rc .an-pl-rczones > .an-pl-rcclub { width:fit-content; max-width:100%; margin-top:14px; }
-/* 👁: the vs-usual explanation must wrap at the table's width, never widen the column; value cells share a width. */
-.an-dpos-note { width:0; min-width:100%; white-space:normal; }
-.an-dpos-table td.an-dp-v { min-width:58px; }
 .an-tm-lostside { color:var(--dim); font-size:10.5px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; margin-right:-10px; }
