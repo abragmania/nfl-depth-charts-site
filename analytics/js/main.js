@@ -54,8 +54,8 @@ router.on("/player/:gsis", view("usage", async (p, q, ctx) => {
 }));
 router.on("/qb", view("qb", (p, q, ctx) => renderQb(ctx, q)));
 router.on("/rushing", view("rushing", (p, q, ctx) => renderRushing(ctx, q)));
-// #/teams (and a bare #/team) is the club picker; #/team/:abbr the club's offence; #/defense the defence
-// leaderboard, whose expanded row is the defence page in v1 (D179).
+// #/teams (and a bare #/team) is the club picker; #/team/:abbr the club's offense; #/defense the defense
+// leaderboard, whose expanded row is the defense page in v1 (D179).
 router.on("/teams", view("teams", (p, q, ctx) => renderTeams(ctx, q)));
 router.on("/team", view("teams", (p, q, ctx) => renderTeams(ctx, q)));
 router.on("/team/:abbr", view("teams", (p, q, ctx) => renderTeam(ctx, p, q)));

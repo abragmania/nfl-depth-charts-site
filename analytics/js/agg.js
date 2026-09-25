@@ -134,7 +134,7 @@ export function aggregateUsage(blocks, players, st) {
       const e = num(r[C.epa]); if (e !== null) { p.epa += e; p.epaN++; }
       add(p.wk, gk, 1);
     }
-    // Snaps (percent of the club's offensive snaps, null when he did not play offence); his club that week
+    // Snaps (percent of the club's offensive snaps, null when he did not play offense); his club that week
     // comes from the players file.
     for (const [id, s] of Object.entries(b.snaps || {})) {
       const off = num(s?.off);

@@ -52,7 +52,7 @@ export const FIELD_VARIANT = "A";
 const SECONDARY_ONE_ROW = true;
 
 // D141: the off-ball LINEBACKERS and the EDGE rushers draw on one row (backers on the row's top line, edge
-// columns a FRONT_LB_LIFT step below, so the two groups still read apart), which drops the defence another
+// columns a FRONT_LB_LIFT step below, so the two groups still read apart), which drops the defense another
 // row and shortens the canvas with it. Horizontal placement is untouched but for the one shape the ruling
 // names: a club charting a LONE edge column takes the left edge spot on the shared row.
 const FRONT_ONE_ROW = true;
@@ -243,8 +243,8 @@ function frontRowLabel(cols) {
 
 // D107 — ONE FIELD SCALE FOR EVERY CLUB, on the team and matchup pages alike. The both-sides canvas is a
 // CONSTANT computed from the row constants alone and never from a club's own rows: when it was the club's
-// own height, the fit engine MAGNIFIED a club with a shorter chart (a defence with no EDGE row) against one
-// with a taller chart. BOTH_SIDES_HALF is the tallest defence this engine can draw at its natural pitch:
+// own height, the fit engine MAGNIFIED a club with a shorter chart (a defense with no EDGE row) against one
+// with a taller chart. BOTH_SIDES_HALF is the tallest defense this engine can draw at its natural pitch:
 // every row of DEF_ROW_ORDER, each as tall as a FULL column (label pill + one bold row + MAX_DEPTH_ROWS slim
 // rows — DEF_ROW_FULL_H; a "+N more" tail costs nothing extra since it REPLACES the last slim row instead of
 // adding one), spaced at BAND_GAP inside a level and + LEVEL_GAP_EXTRA at a level boundary. A club shorter
@@ -310,7 +310,7 @@ const OFF_ROW_LEVEL = { PASS_CATCHERS: "PASS_CATCHERS", LINE: "LINE", BACKFIELD:
 const OFF_LEVEL_LABEL = { PASS_CATCHERS: "PASS CATCHERS", LINE: "LINE", BACKFIELD: "BACKFIELD" };
 
 // D125 — the whole secondary is pitched off the CENTRE of the line, with ONE set of numbers on every page
-// that draws a defence, each landmark exactly one pitch outside the next. 0.6 is the floor while a card is
+// that draws a defense, each landmark exactly one pitch outside the next. 0.6 is the floor while a card is
 // 216 wide (neighbours need a full pitch between centres); it supersedes D71/D110's and D119/D122's numbers.
 const S_PITCH_FROM_CENTER = 0.6;
 const NB_PITCH_FROM_CENTER = 1.6;
@@ -886,7 +886,7 @@ function layoutBackfieldRow(offSlots, lm, style) {
   const cols = [];
   const qbXs = spanPoints(lm.C, lm.C, qb.length);
   qb.forEach((slot, i) => cols.push(col(slot, qbXs[i], "QB")));
-  // The backs spread across the same tackle-to-tackle span the rest of the offence uses, skipping the
+  // The backs spread across the same tackle-to-tackle span the rest of the offense uses, skipping the
   // centre so the quarterback keeps it to himself. Stepping them out from the centre by a fixed MIN_PITCH
   // instead opened a ~600px hole beside a lone running back once the side view scaled the row up.
   const half = Math.ceil(backs.length / 2);
@@ -1123,8 +1123,8 @@ const LABEL_CLEAR_X = 190;
 // line of scrimmage.
 const LABEL_LIFT = 27;
 
-// D138 (the phone list): this engine's own rows, merged into LEVELS and in reading order — offence LINE,
-// PASS CATCHERS, BACKFIELD (D130); defence LINE, EDGE, LINEBACKERS, SECONDARY. Derived from the very lists
+// D138 (the phone list): this engine's own rows, merged into LEVELS and in reading order — offense LINE,
+// PASS CATCHERS, BACKFIELD (D130); defense LINE, EDGE, LINEBACKERS, SECONDARY. Derived from the very lists
 // the field is drawn from (OFF_ROW_GROUPS, DEF_ROW_ORDER and their level maps), so a ruling that reorders
 // the field reorders the list with it and the order is never written down a second time. Consecutive rows
 // of one level merge (the one-row secondary is one SECONDARY level here).
@@ -1193,8 +1193,8 @@ export function computeLayout(teamView, opts = {}) {
 
   // D111/D141: each merged row is used unless THIS club's own columns cannot be drawn on it without being
   // re-pitched or hanging off the sideline (colsFitOneRow). The two questions are asked separately, so a club
-  // that fails one keeps the merged row it does fit. A fallback adds a row to that club's defence; if that
-  // outgrew BOTH_SIDES_HALF, D152 would give it the offence's spare room (and only a club whose two halves
+  // that fails one keeps the merged row it does fit. A fallback adds a row to that club's defense; if that
+  // outgrew BOTH_SIDES_HALF, D152 would give it the offense's spare room (and only a club whose two halves
   // TOGETHER did not fit would grow its own canvas) rather than draw its rows through each other. Pittsburgh,
   // the one club that falls back, still fits inside BOTH_SIDES_HALF and draws at everyone's size.
   const secOneRow = colsFitOneRow(defColsFor(DEF_ROWS_ONE_SEC_ONE_FRONT.bands.SECONDARY));
@@ -1266,7 +1266,7 @@ export function computeLayout(teamView, opts = {}) {
   let losY, layoutHeight, halves = null;
   if (bothSides) {
     // D107: the canvas is the CONSTANT BOTH_SIDES_HEIGHT, so every club draws on an identical canvas and
-    // scale — it used to be the taller side's own natural height, and a shorter chart (a four-row defence)
+    // scale — it used to be the taller side's own natural height, and a shorter chart (a four-row defense)
     // came out MAGNIFIED by the fit engine. D152 decides how that one canvas is DIVIDED, and D96's equal
     // halves with the line on the midpoint hold only while both sides fit in half of it: a side that needs
     // more takes the other side's spare rather than making the whole canvas taller (the room arithmetic
@@ -1315,7 +1315,7 @@ export function computeLayout(teamView, opts = {}) {
     const offHalf = room - defHalf;
     const spreadGap = (rows, natural, sideHalf) => (rows.length > 1 && sideHalf > natural) ? (sideHalf - natural) / (rows.length - 1) : 0;
     placeSpan(defRowsTopDown, MARGIN_TOP, spreadGap(defRowsTopDown, defMin, defHalf));
-    // D107/D152: a side's boundary is its SHARE of the shared room, not its own rows' height — a defence with
+    // D107/D152: a side's boundary is its SHARE of the shared room, not its own rows' height — a defense with
     // fewer rows than its share can hold (a 4-3 with no EDGE row) leaves the spare as air at the bottom of its
     // own half instead of dragging the line up, so two clubs with the same needs put the line in the same place.
     losY = MARGIN_TOP + defHalf + LOS_HALF_GAP;

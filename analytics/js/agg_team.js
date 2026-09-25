@@ -1,21 +1,21 @@
-// PURE (no DOM, no fetch): team figures for the team page (#/team/:abbr, the offence) and the defence leaderboard
-// (#/defense; D179: defence is team-only in v1). One pass over the play rows builds every club's OFFENCE (its own
-// plays, keyed by posteam) and DEFENCE (the plays it faced, keyed by defteam), so a defence's "allowed" figure is
+// PURE (no DOM, no fetch): team figures for the team page (#/team/:abbr, the offense) and the defense leaderboard
+// (#/defense; D179: defense is team-only in v1). One pass over the play rows builds every club's OFFENSE (its own
+// plays, keyed by posteam) and DEFENSE (the plays it faced, keyed by defteam), so a defense's "allowed" figure is
 // exactly its opponents' offensive figure on those plays. Every figure has one source (D178):
 //   play-by-play (nflverse): plays, dropbacks, pass rate, EPA, success, aDOT, completions, sacks, explosive plays, zones;
-//   FTN charting (on the play rows): play action (offence), blitz (defence: 1+ blitzers);
+//   FTN charting (on the play rows): play action (offense), blitz (defense: 1+ blitzers);
 //   PFR advanced stats (about a week behind the games): pressure %.
 //
 // Definitions (a club's "games" are its club-games in the window; the week window is judged per club, so "last 3"
-// is each club's own last three games, on offence and on defence):
+// is each club's own last three games, on offense and on defense):
 //   play         = a pass attempt, a sack, a scramble or a designed run. A defensive-pass-interference no-play the
 //                  ledger kept (pi=1) is a receiver's target only and is in no team figure (as on the QB views).
 //   dropback     = a pass attempt, a sack or a scramble. Pass rate = dropbacks / plays (plain: the ledger carries no
 //                  score, so no neutral-situation rate).
 //   EPA/play, Success %  = over plays carrying the figure; EPA/dropback over dropbacks; EPA/carry over designed runs.
-//   YPC (defence, D192)  = rushing yards allowed / designed runs faced (a scramble is not a designed run; summed
+//   YPC (defense, D192)  = rushing yards allowed / designed runs faced (a scramble is not a designed run; summed
 //                  over the window, not a mean of per-game averages). Lower is better.
-//   Run succ %, Run expl % (defence, D192) = success % and explosive-run % (10+ yards) over designed runs faced
+//   Run succ %, Run expl % (defense, D192) = success % and explosive-run % (10+ yards) over designed runs faced
 //                  only (a scramble is not a designed run), same accounting as the whole-play versions above.
 //                  Lower is better for both (fewer successful/explosive runs allowed).
 //   aDOT         = air yards / attempts with air yards. Comp % = completions / attempts. Sack % = sacks / dropbacks.
@@ -23,11 +23,11 @@
 //                  over plays.
 //   PA %         = FTN: play-action dropbacks / dropbacks FTN charted. Blitz % = FTN: dropbacks faced with 1+
 //                  blitzers / dropbacks faced FTN charted.
-//   Pressure % (offence, allowed) = the club's QBs' PFR pressures / their PFR dropbacks, over the weeks PFR lists them
+//   Pressure % (offense, allowed) = the club's QBs' PFR pressures / their PFR dropbacks, over the weeks PFR lists them
 //                  (pfr.pass is keyed by QB; his club that week comes from the players file).
-//   Pressure % (defence) = the QB SIDE: the opposing QBs' PFR pressures / their PFR dropbacks against this defence,
+//   Pressure % (defense) = the QB SIDE: the opposing QBs' PFR pressures / their PFR dropbacks against this defense,
 //                  one pressure per dropback at most.
-//   Pressures/g (defence) = the club's defenders' PFR pressures summed (pfr.def is keyed by defender gsis; his club
+//   Pressures/g (defense) = the club's defenders' PFR pressures summed (pfr.def is keyed by defender gsis; his club
 //                  that week comes from players.json teams[week]) / the club's games in the window. A throw two men
 //                  pressured counts twice here, by design: it is a volume figure, not a rate, so it never conflicts
 //                  with Pressure % above (Adam's pairing, 2026-09-24, resolving D178: two figures, no double-count
@@ -115,7 +115,7 @@ function sideRates(a, g) {
   };
 }
 
-// Every club's offence and defence in the window. Returns { rows: [{ team, g, off, def, series: { off, def } }],
+// Every club's offense and defense in the window. Returns { rows: [{ team, g, off, def, series: { off, def } }],
 // weeks (window week keys, sorted), lgZones (pooled over every attempt), pfrThrough (latest window week with any PFR
 // row), latestKey, unmapped ([{ key, gsis }] PFR defender rows the players file cannot place) }.
 // `opts.playsFor`: a club whose zone cells (both sides) also keep the play list.
@@ -147,7 +147,7 @@ export function aggregateTeams(blocks, players, st, opts = {}) {
       if (okOff && e.att && e.band && e.dir && lgZones[e.band + e.dir]) addCell(lgZones[e.band + e.dir], e);
     }
   }
-  // PFR: the offence's QB rows, and the defence's defender rows (plus the QB-side check for the defence).
+  // PFR: the offense's QB rows, and the defense's defender rows (plus the QB-side check for the defense).
   for (const b of blocks) {
     let any = false;
     for (const [id, p] of Object.entries(b.pfr?.pass || {})) {
@@ -185,7 +185,7 @@ export function aggregateTeams(blocks, players, st, opts = {}) {
       return { key, opp: gm.opp, home: gm.home, side, plays: w.plays, db: w.db, runs: w.runs, passRate: ratio(w.db, w.plays),
         epaPlay: ratio(w.epa, w.epaN), epaDb: ratio(w.dbEpa, w.dbEpaN), epaCar: ratio(w.runEpa, w.runEpaN) };
     });
-    // The defence's Pressure % is the QB side; Pressures/g is the defenders' own sum, per game (D178 pairing).
+    // The defense's Pressure % is the QB side; Pressures/g is the defenders' own sum, per game (D178 pairing).
     const dr = { ...sideRates(d, g), pressPct: ratio(d.qbPress, d.qbDb), pfrDb: d.qbDb, pfrWeeks: d.qbWeeks.size, pressuresG: ratio(d.pfrPress, g), pfrPressDef: d.pfrPress, pfrWeeksDef: d.pfrWeeks.size };
     return { team, g, off: sideRates(o, g), def: dr, series: { off: series(o, "off"), def: series(d, "def") } };
   });
@@ -251,7 +251,7 @@ export function teamCarries(blocks, players, st, team) {
     .sort((a, b) => b.car - a.car || String(a.name).localeCompare(String(b.name)));
 }
 
-// Sort the defence rows on one side's key; nulls last whichever direction; ties by team.
+// Sort the defense rows on one side's key; nulls last whichever direction; ties by team.
 export function sortTeamRows(rows, side, key, dir = "asc") {
   const s = dir === "asc" ? 1 : -1;
   return [...rows].sort((a, b) => {

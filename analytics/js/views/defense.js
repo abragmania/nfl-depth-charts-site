@@ -1,5 +1,5 @@
-// Defense: the team defence leaderboard (#/defense). D179: defence is team-only in v1, so one row per club, and the
-// expanded row is the defence page: the zone field FACED (what opponents complete, gain and add there against the
+// Defense: the team defense leaderboard (#/defense). D179: defense is team-only in v1, so one row per club, and the
+// expanded row is the defense page: the zone field FACED (what opponents complete, gain and add there against the
 // league) and the weekly EPA/play allowed with the league line (D181 totals). Tiers are among the clubs, lower
 // allowed = better where that applies (agg_team.js DEF_TIER). Every figure comes from agg_team.js (pure).
 import { fromQuery, toQuery, seasonsOf, weekLabel } from "../filters.js";
@@ -13,18 +13,18 @@ import { teamPageState, clubZoneField, clubZoneLegend, zonePlaysHtml, TEAM_ZONE_
 
 const P = (v, d = 1) => (isNum(v) ? pct(v, d) : NA);
 // D192 (Adam, 2026-09-24): the headline "how good are they" measure, EPA/play allowed, leads the table with a bar
-// (signed, centred on zero — a defence can be above or below the league); the rest split into pass and run defence.
+// (signed, centred on zero — a defense can be above or below the league); the rest split into pass and run defense.
 const EPA_BAR_SPAN = 0.4;
 export const DEF_COLS = [
   { k: "epaPlay", h: "EPA/play", t: "EPA per play allowed (lower is better)", f: (v) => signed(v, 3), grp: "ov", bar: EPA_BAR_SPAN, signed: true },
-  { k: "succPct", h: "Succ %", t: "Share of plays faced that were successful for the offence (lower is better)", f: (v) => P(v, 1), grp: "ov" },
+  { k: "succPct", h: "Succ %", t: "Share of plays faced that were successful for the offense (lower is better)", f: (v) => P(v, 1), grp: "ov" },
   { k: "explPct", h: "Expl %", t: "Explosive plays allowed: runs of 10+ yards and completions of 20+ / plays faced (lower is better)", f: (v) => P(v, 1), grp: "ov" },
   { k: "playsG", h: "Plays/g", t: "Plays faced per game: pass attempts, sacks, scrambles and designed runs", f: (v) => fix(v, 1), grp: "ov" },
   { k: "epaDb", h: "EPA/db", t: "EPA per dropback allowed (sacks and scrambles included; lower is better)", f: (v) => signed(v, 3), grp: "pd" },
   { k: "cmpPct", h: "Cmp %", t: "Completion % allowed (lower is better)", f: (v) => P(v, 1), grp: "pd" },
   { k: "adot", h: "aDOT", t: "Air yards per attempt faced", f: (v) => fix(v, 1), grp: "pd" },
   { k: "sackPct", h: "Sack %", t: "Sacks / dropbacks faced", f: (v) => P(v, 1), grp: "pd" },
-  { k: "pressPct", h: "Press %", t: "PFR: the opposing quarterbacks' pressured dropbacks / their dropbacks against this defence, one pressure per throw at most (a week behind)", f: (v) => P(v, 1), grp: "pd" },
+  { k: "pressPct", h: "Press %", t: "PFR: the opposing quarterbacks' pressured dropbacks / their dropbacks against this defense, one pressure per throw at most (a week behind)", f: (v) => P(v, 1), grp: "pd" },
   { k: "pressuresG", h: "Press/g", t: "PFR: the club's defenders' pressures summed / games in the window — a throw two men pressured counts twice here (a week behind)", f: (v) => fix(v, 1), grp: "pd" },
   { k: "blitzPct", h: "Blitz %", t: "FTN: dropbacks faced with 1+ blitzers / dropbacks faced charted", f: (v) => P(v, 0), grp: "pd" },
   { k: "epaCar", h: "EPA/car", t: "EPA per designed run allowed (lower is better)", f: (v) => signed(v, 3), grp: "rd" },
@@ -56,7 +56,7 @@ function defSpark(series) {
 
 // Two pressure figures, no conflict (Adam's pairing, 2026-09-24, D178): Press % is the QB side, one pressure per
 // throw at most; Pressures/g is the defenders' own sum per game, so a throw two men pressured counts twice there.
-export const pressPctTip = (D) => `Opposing quarterbacks' PFR pressures / their dropbacks against this defence, one pressure per throw at most, over ${D.pfrWeeks} week${D.pfrWeeks === 1 ? "" : "s"}.`;
+export const pressPctTip = (D) => `Opposing quarterbacks' PFR pressures / their dropbacks against this defense, one pressure per throw at most, over ${D.pfrWeeks} week${D.pfrWeeks === 1 ? "" : "s"}.`;
 export const pressGTip = (D) => `The club's defenders' PFR pressures summed / games in the window, over ${D.pfrWeeksDef} week${D.pfrWeeksDef === 1 ? "" : "s"} — a throw two men pressured counts twice here.`;
 
 const ui = { zoneMode: "cmpPct", zone: null, team: null };
@@ -93,7 +93,7 @@ function detailHtml(r, st, q, ref, wn, lgZones, players) {
       <div class="an-dblk"><div class="an-dh">Run defense</div><div class="an-dtiles">
         ${tile("EPA/car", signed(D.epaCar, 3), "epaCar", signed(L.epaCar, 3), "EPA per designed run allowed")}
         ${tile("YPC", isNum(D.ypc) ? D.ypc.toFixed(1) : NA, "ypc", isNum(L.ypc) ? L.ypc.toFixed(1) : NA, "Yards per designed run allowed")}
-        ${tile("Run succ %", PP(D.runSuccPct), "runSuccPct", PP(L.runSuccPct), "Share of designed runs faced that were successful for the offence")}
+        ${tile("Run succ %", PP(D.runSuccPct), "runSuccPct", PP(L.runSuccPct), "Share of designed runs faced that were successful for the offense")}
         ${tile("Expl run %", PP(D.runExplPct), "runExplPct", PP(L.runExplPct), "Designed runs of 10+ yards allowed / designed runs faced")}
       </div></div>
       <div class="an-dlinks"><a href="#/team/${encodeURIComponent(r.team)}${q ? "?" + q : ""}">Offense →</a><a href="../#/team/${encodeURIComponent(r.team)}" target="_blank" rel="noopener">Depth chart ↗</a></div>
@@ -191,7 +191,7 @@ export async function renderDefense(ctx, query) {
     </div>
     <div class="an-filters"></div>
     <div class="an-tablewrap"></div>
-    <p class="an-foot">Plays faced, EPA, success, sacks, completions, aDOT, explosive plays and the zone field: nflverse play-by-play (defensive pass interference no-plays are left out). Blitz: FTN charting. Pressure %: PFR advanced stats, the opposing quarterbacks' pressured dropbacks against each defence, one pressure per throw at most. Pressures/g: the club's defenders' PFR pressures summed, divided by games in the window — a throw two men pressured counts twice there${agg.unmapped.length ? ` (${agg.unmapped.length} defender-week row${agg.unmapped.length === 1 ? "" : "s"} could not be placed on a club)` : ""}. Zone references pool every attempt in the window.</p>
+    <p class="an-foot">Plays faced, EPA, success, sacks, completions, aDOT, explosive plays and the zone field: nflverse play-by-play (defensive pass interference no-plays are left out). Blitz: FTN charting. Pressure %: PFR advanced stats, the opposing quarterbacks' pressured dropbacks against each defense, one pressure per throw at most. Pressures/g: the club's defenders' PFR pressures summed, divided by games in the window — a throw two men pressured counts twice there${agg.unmapped.length ? ` (${agg.unmapped.length} defender-week row${agg.unmapped.length === 1 ? "" : "s"} could not be placed on a club)` : ""}. Zone references pool every attempt in the window.</p>
   </section>`;
   renderFilterBar(root.querySelector(".an-filters"), st, { keys: data.keys, teams: [] }, go);
   const el = root.querySelector(".an-tablewrap");

@@ -394,7 +394,7 @@ td[class*=" t-"] > span { color:var(--t); font-weight:700; }
 .an-rush-zone span { flex:1; background:#161b21; border:1px solid #232a31; border-radius:var(--r-row); padding:4px 8px; color:var(--dim); font-size:10.5px; font-weight:700; text-align:center; }
 .an-rush-zone b { display:block; color:var(--ink); font-size:16px; }
 
-/* ---- teams picker (#/teams) and the team page (#/team/:abbr, the offence) ---- */
+/* ---- teams picker (#/teams) and the team page (#/team/:abbr, the offense) ---- */
 .an-tm-grid { display:grid; grid-template-columns:repeat(4, minmax(220px, 280px)); gap:14px 18px; margin-top:6px; }
 @media (max-width:1100px) { .an-tm-grid { grid-template-columns:repeat(2, minmax(200px, 1fr)); } }
 .an-tm-div { background:var(--panel2); border:1px solid var(--line); border-radius:var(--r-card); padding:10px 12px; }
@@ -424,7 +424,7 @@ td[class*=" t-"] > span { color:var(--t); font-weight:700; }
 .an-tm-sub { color:var(--muted); font-size:11.5px; white-space:nowrap; }
 .an-tm-epa { font-weight:700; color:var(--t, var(--ink)); }
 
-/* ---- defence leaderboard (#/defense) ---- */
+/* ---- defense leaderboard (#/defense) ---- */
 .an-def-name { color:var(--ink); font-weight:700; }
 /* D192: EPA/play's headline bar is signed and centred on zero (an-bar-ctr sets left/width inline); a hairline
    marks the zero point so a positive (worse) or negative (better) lean reads without checking the number. */
@@ -437,11 +437,11 @@ td[class*=" t-"] > span { color:var(--t); font-weight:700; }
 .an-def-spark rect.bad { fill:var(--tier-flat); }
 .an-def-spark rect.good { fill:var(--tier-strong); }
 .an-detail-in.an-def-din { flex-wrap:wrap; }
-/* Allowed EPA: above zero is bad for a defence, so the signed bars swap colours here. */
+/* Allowed EPA: above zero is bad for a defense, so the signed bars swap colours here. */
 .an-def-w .an-wb-bar.an-qb-bar.up { fill:var(--tier-flat); }
 .an-def-w .an-wb-bar.an-qb-bar.down { fill:var(--tier-strong); }
 .an-def-w .an-wb-bar.an-qb-bar.plain { fill:#5d6671; }
-/* The zone field faced: a cell above the league there is bad for the defence, so green and red swap. */
+/* The zone field faced: a cell above the league there is bad for the defense, so green and red swap. */
 .an-zf-inv .an-zf-c.up { background:color-mix(in srgb, var(--tier-flat) calc(var(--d) * 72% + 8%), #161b21); }
 .an-zf-inv .an-zf-c.down { background:color-mix(in srgb, var(--tier-elite) calc(var(--d) * 72% + 8%), #161b21); }
 .an-def .an-pl-zbody { flex-wrap:wrap; }

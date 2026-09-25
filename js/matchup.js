@@ -175,7 +175,7 @@ const unitChipHtml = (unit) => `<span class="matchup-unit-chip">${esc(unit)}</sp
 // mountScaledField and D134's step (1) is never offered here at all — it had nothing left to buy.
 
 // D113 (Adam, 2026-09-16): the centre block used to print its own "A offense vs B defense" line here — the
-// exact small grey text that read as "Denver's positions rewritten" rather than "Jacksonville's defence".
+// exact small grey text that read as "Denver's positions rewritten" rather than "Jacksonville's defense".
 // That announcement now lives on the field itself, as a full-width banner in each club's own colours
 // across the top and bottom edge (see halfBannerHtml/fieldHtml), so this block keeps only the opponent
 // picker, the swap link and the legend.

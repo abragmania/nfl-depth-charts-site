@@ -55,7 +55,7 @@ const RESPREAD_TOLERANCE = 0.04; // rebuild only when the ideal spread is >4% of
 const MAX_REBUILDS = 2;         // bounded so a rebuild can never oscillate
 const K_EPSILON = 0.002;        // ignore scale changes too small to see
 // 1650, not a narrower value: a narrower design canvas leaves black space on the right whenever the side
-// view's scale is HEIGHT-bound (defence's four levels) rather than width-bound, since the canvas itself is
+// view's scale is HEIGHT-bound (defense's four levels) rather than width-bound, since the canvas itself is
 // then too narrow for the window and no amount of scale-up can reach the right edge.
 const FIT_DESIGN_WIDTH = 1650;  // the side views' fixed design canvas
 const MAX_FILL_GROW = 1.9;      // fill mode: a two-card group must not balloon into a wall of headshots

@@ -1,5 +1,5 @@
-// Teams: the club picker (#/teams, 32 team pills by division) and the team page (#/team/:abbr, the OFFENCE; the
-// defence lives on the Defense leaderboard's expanded row in v1, D179). Tiles carry the league reference among the
+// Teams: the club picker (#/teams, 32 team pills by division) and the team page (#/team/:abbr, the OFFENSE; the
+// defense lives on the Defense leaderboard's expanded row in v1, D179). Tiles carry the league reference among the
 // clubs and are tier-coloured among them (D177 perspective); the week-by-week bars carry the window's figure and the
 // league line (D181 totals); the pass zone field compares each cell with every attempt in the league; the target and
 // carry distributions list the club's pass catchers and ball carriers, each a way into his player page (D177
@@ -22,12 +22,12 @@ export const teamPageState = (st) => ({ ...st, team: "", opp: "", ha: "", downs:
 
 // qbZoneField speaks of one passer ("his", "every QB"); on a club's field the words become the club's and the league's.
 export function clubZoneField(zones, mode, opts, side = "off") {
-  const whose = side === "def" ? "the attempts it faced" : "the offence's";
+  const whose = side === "def" ? "the attempts it faced" : "the offense's";
   return qbZoneField(zones, mode, opts).replace(/of his zoned attempts/g, `of ${whose} zoned attempts`).replace(/every QB's/g, "the league's").replace(/every QB /g, "the league ");
 }
 export function clubZoneLegend(mode, side = "off") {
   if (mode === "att") return `<span class="an-zf-leg"><i class="heat" style="--heat:.15"></i><i class="heat" style="--heat:.5"></i><i class="heat" style="--heat:1"></i> more attempts · "lg" = share of every attempt in the league</span>`;
-  // The legend sits outside the field's colour swap, so the defence's reads green (allows less) to red (allows more).
+  // The legend sits outside the field's colour swap, so the defense's reads green (allows less) to red (allows more).
   const sw = (a, b) => `<i class="${a}" style="--d:1"></i><i class="${a}" style="--d:.4"></i><i class="few"></i><i class="${b}" style="--d:.4"></i><i class="${b}" style="--d:1"></i>`;
   return side === "def"
     ? `<span class="an-zf-leg">${sw("up", "down")} allows less → more than the league there · grey: under 3 attempts</span>`
@@ -43,7 +43,7 @@ export function zonePlaysHtml(zones, zone, st, players, q, side = "off") {
     + `<td>${p.down ? `${ord(p.down)} &amp; ${p.togo ?? ""}` : ""}</td><td>${who(p.passer)}</td><td>${who(p.target)}</td><td>${esc(p.result)}</td>`
     + `<td class="num">${isNum(p.air) ? p.air : ""}</td><td class="num">${p.yards}</td><td class="num">${signed(p.epa, 2)}</td></tr>`).join("");
   return `<div class="an-pl-plhead"><b>${esc(qbZoneName(zone))}</b> <span>${plays.length} attempt${plays.length === 1 ? "" : "s"}</span><button type="button" data-close title="Close">×</button></div>
-    <div class="an-pl-pltable"><table><thead><tr><th>Wk</th><th>${side === "def" ? "Offence" : "Opp"}</th><th>Down</th><th>Passer</th><th>Target</th><th>Result</th><th class="num">Air</th><th class="num">Yds</th><th class="num">EPA</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+    <div class="an-pl-pltable"><table><thead><tr><th>Wk</th><th>${side === "def" ? "Offense" : "Opp"}</th><th>Down</th><th>Passer</th><th>Target</th><th>Result</th><th class="num">Air</th><th class="num">Yds</th><th class="num">EPA</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 
 // A horizontal distribution bar list. items: [{ gsis, name, pos, share, tier, main, sub, title }]; `max` scales the bars.
@@ -71,13 +71,13 @@ export async function renderTeams(ctx, query) {
     divs.get(t.division).push(t);
   }
   root.innerHTML = teams.length ? `<section class="an-teams">
-    <div class="an-head"><h1>Teams</h1><div class="an-sub">Pick a club for its offence: tiles against the league, week by week, the pass zone field, and who gets the targets and carries. Its defence is on the <a href="#/defense${q ? "?" + q : ""}">Defense</a> page.</div></div>
+    <div class="an-head"><h1>Teams</h1><div class="an-sub">Pick a club for its offense: tiles against the league, week by week, the pass zone field, and who gets the targets and carries. Its defense is on the <a href="#/defense${q ? "?" + q : ""}">Defense</a> page.</div></div>
     <div class="an-tm-grid">${[...divs].map(([d, list]) => `<div class="an-tm-div"><div class="an-dh">${esc(d)}</div>${list.map((t) =>
       `<div class="an-tm-pick">${teamPill(t.abbr, new Map([[t.abbr, t]]), q, "an-tm-pill")}<a href="#/team/${esc(t.abbr)}${q ? "?" + q : ""}">${esc(t.name)}</a></div>`).join("")}</div>`).join("")}</div>
   </section>` : `<div class="an-msg">The team list could not be loaded.</div>`;
 }
 
-// ---- #/team/:abbr: the offence ---------------------------------------------------------------------------------
+// ---- #/team/:abbr: the offense ---------------------------------------------------------------------------------
 const ui = { team: null, zoneMode: "att", zone: null };
 
 export async function renderTeam(ctx, params, query) {
