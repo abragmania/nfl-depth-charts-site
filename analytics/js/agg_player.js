@@ -13,7 +13,7 @@
 // The weekly chart always spans every loaded week (the whole timeline, both seasons when Include 2025 is on) so a
 // one-week window can be seen in context; the window's weeks are flagged `inWin` and drawn bright.
 import { aggregateUsage, clubGames, colIndex, usageReference, inPool, tierCuts, referenceText } from "./agg.js";
-import { gamesInWindow, splitKey } from "./filters.js";
+import { gamesInWindow, splitKey, isSituational } from "./filters.js";
 import { aggregateRush, rushReference } from "./agg_rush.js";
 import { fantasyByPlayer } from "./agg_fantasy.js";
 
@@ -327,6 +327,7 @@ export function playerView(blocks, players, stIn, gsis) {
   }
 
   result.recut = recutLayers({ blocks, players, st, gsis, pos, row, uRef, ref, lgEff, eff });
+  result.recut.trend = trendFigures(blocks, players, st, gsis, RUSHER_POS.has(pos));
 
   if (has2025Routes) {
     const list = [...myRoute.entries()].map(([route, c]) => ({ route, ...cellRates(c), lgShare: ratio(lgRoute.get(route)?.n || 0, lgRouted), lg: cellRates(lgRoute.get(route)) }));
@@ -406,6 +407,103 @@ function withHeadlineCuts(cuts, q, league, keys) {
 }
 const freezePool = (q) => Object.freeze(q.map((r) => Object.freeze(r)));
 const meanOf = (rows, k) => mean(rows.map((r) => (r[k] === null || r[k] === undefined ? null : +r[k])));
+
+// ---- the Trend strip (D196, Adam's answer B) --------------------------------------------------------------
+// `recut.trend`: each involvement share over his LAST 3 GAMES PLAYED inside the window beside the same share over
+// every game he played inside the window. A game his club played that he did not (no snap, no target, carry or pass)
+// is left out, never a zero. Under 3 games played, the last-3 figure covers what he has (`last3Games` says how many,
+// `short` is true). The window is the page's own (st.window over the loaded weeks), so the previous season is in only
+// when Include-previous loaded it and the window reaches it. Every share is total over total in the counted games,
+// with the row's definitions (agg.js, agg_rush.js), except snap share, which the row too takes as the mean of his
+// weekly snap percentages (the snap table has no club snap counts):
+//   oppShare    = (targets + designed runs) / (club pass attempts + club designed runs)            (back)
+//   tgtShare    = targets / club pass attempts                                                      (both)
+//   ayShare     = air yards on his targets / club air yards on pass attempts                        (receiver)
+//   snapPct     = mean of his weekly offensive snap % over the counted games with a snap figure     (both)
+//   routePct    = routes / the club dropbacks each charted week's route % implies; charted games only, null when a
+//                 charted week has no route %                                                       (both)
+//   rzShare     = (red-zone targets + red-zone designed runs) / (club red-zone pass attempts + club red-zone
+//                 designed runs)                                                                    (back)
+//   rzTgtShare  = red-zone targets / club red-zone pass attempts                                    (receiver)
+// A pass-interference target is his target but never a club attempt (agg.js); with "excl. PI targets" the row is
+// skipped outright. Snap and route shares are null under a down or quarter filter, as on the row.
+// Shape (frozen): { kind: "back" | "receiver", keys, games, last3Games, short, last3Weeks: [week keys],
+//   figures: { [key]: { last3, season, pts (last3 - season, in percentage points), n3, n } } } where n3 and n are the
+//   games that fed the figure (fewer than the games counted when snaps or routes are missing that week).
+export const RB_TREND_KEYS = ["oppShare", "snapPct", "tgtShare", "rzShare", "routePct"];
+export const REC_TREND_KEYS = ["tgtShare", "ayShare", "snapPct", "routePct", "rzTgtShare"];
+
+function trendFigures(blocks, players, st, gsis, back) {
+  const winSet = gamesInWindow(clubGames(blocks), st);
+  const situational = isSituational(st);
+  const per = new Map(); // gk -> { club and his counts in that game }
+  const club = new Map(); // gk -> { att, air, runs, rzAtt, rzRuns }
+  const C0 = () => ({ att: 0, air: 0, runs: 0, rzAtt: 0, rzRuns: 0 });
+  const M = (gk) => {
+    if (!per.has(gk)) per.set(gk, { tgt: 0, air: 0, des: 0, rzTgt: 0, rzDes: 0, snap: null, routes: null, pct: null });
+    return per.get(gk);
+  };
+  for (const b of blocks) {
+    const C = colIndex(b.cols);
+    for (const r of b.plays || []) {
+      const gk = `${b.key}|${r[C.posteam]}`;
+      if (!winSet.has(gk)) continue;
+      const pi = truthy(r[C.pi]);
+      if (pi && st.pi === false) continue;
+      const type = r[C.type], rz = truthy(r[C.redzone]);
+      if (!club.has(gk)) club.set(gk, C0());
+      const c = club.get(gk);
+      if (type === "run") { c.runs++; if (rz) c.rzRuns++; }
+      if (type === "pass" && !pi) { c.att++; c.air += num(r[C.air]) ?? 0; if (rz) c.rzAtt++; }
+      if (![C.passer, C.target, C.rusher].some((i) => i !== undefined && r[i] === gsis)) continue;
+      const m = M(gk);
+      if (type === "pass" && r[C.target] === gsis) { m.tgt++; m.air += num(r[C.air]) ?? 0; if (rz) m.rzTgt++; }
+      if (type === "run" && r[C.rusher] === gsis) { m.des++; if (rz) m.rzDes++; }
+    }
+    const team = players?.[gsis]?.teams?.[b.key];
+    const gk = `${b.key}|${team}`;
+    if (!team || !winSet.has(gk)) continue;
+    const off = num(b.snaps?.[gsis]?.off);
+    if (off !== null && off > 0) M(gk).snap = off / 100;
+    const rt = b.routes?.[gsis];
+    const n = num(rt?.routes);
+    // Routes alone never make a game his (agg.js's rule: a game is a snap or a play); they join a game he played.
+    if (n !== null && per.has(gk)) { const m = per.get(gk); m.routes = n; m.pct = routeFrac(rt.routePct); }
+  }
+  const played = [...per.keys()].sort();
+  const last3 = played.slice(-3);
+  const fig = (gks) => {
+    const s = { tgt: 0, air: 0, des: 0, rzTgt: 0, rzDes: 0, att: 0, cAir: 0, runs: 0, rzAtt: 0, rzRuns: 0, snap: 0, snapN: 0, routes: 0, drop: 0, routeN: 0, pctOk: true };
+    for (const gk of gks) {
+      const m = per.get(gk), c = club.get(gk) || C0();
+      s.tgt += m.tgt; s.air += m.air; s.des += m.des; s.rzTgt += m.rzTgt; s.rzDes += m.rzDes;
+      s.att += c.att; s.cAir += c.air; s.runs += c.runs; s.rzAtt += c.rzAtt; s.rzRuns += c.rzRuns;
+      if (m.snap !== null) { s.snap += m.snap; s.snapN++; }
+      if (m.routes !== null) { s.routes += m.routes; s.routeN++; if (m.pct) s.drop += m.routes / m.pct; else if (m.routes > 0) s.pctOk = false; }
+    }
+    return {
+      oppShare: [ratio(s.tgt + s.des, s.att + s.runs), gks.length],
+      tgtShare: [ratio(s.tgt, s.att), gks.length],
+      ayShare: [ratio(s.air, s.cAir), gks.length],
+      snapPct: situational ? [null, 0] : [ratio(s.snap, s.snapN), s.snapN],
+      routePct: situational ? [null, 0] : [s.pctOk ? ratio(s.routes, s.drop) : null, s.routeN],
+      rzShare: [ratio(s.rzTgt + s.rzDes, s.rzAtt + s.rzRuns), gks.length],
+      rzTgtShare: [ratio(s.rzTgt, s.rzAtt), gks.length],
+    };
+  };
+  const keys = back ? RB_TREND_KEYS : REC_TREND_KEYS;
+  const a = fig(last3), w = fig(played);
+  const figures = {};
+  for (const k of keys) {
+    const [l3, n3] = a[k], [season, n] = w[k];
+    figures[k] = Object.freeze({ last3: l3, season, pts: l3 === null || season === null ? null : (l3 - season) * 100, n3, n });
+  }
+  return Object.freeze({
+    kind: back ? "back" : "receiver", keys: Object.freeze([...keys]), games: played.length, last3Games: last3.length,
+    short: last3.length < 3, last3Weeks: Object.freeze(last3.map((gk) => gk.split("|")[0])), figures: Object.freeze(figures),
+  });
+}
+const routeFrac = (p) => { const x = num(p); if (x === null || x <= 0) return null; return x > 1.5 ? x / 100 : x; };
 
 function lastTeam(meta) {
   const ks = Object.keys(meta?.teams || {}).sort();

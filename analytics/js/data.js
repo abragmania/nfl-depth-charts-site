@@ -12,6 +12,7 @@ import { weekKey, splitKey } from "./filters.js";
 export function analyticsStaticPath(url) {
   if (/^\/?api\/analytics\/identity$/.test(String(url).split("?")[0])) return "api/analytics/identity.json";
   if (/^\/?api\/analytics\/seasons$/.test(String(url).split("?")[0])) return "api/analytics/seasons.json";
+  if (/^\/?api\/analytics\/status$/.test(String(url).split("?")[0])) return "api/analytics/status.json";
   const m = String(url).split("?")[0].match(/^\/?api\/analytics\/(\d{4})\/(manifest|players|w\/(\d+))$/);
   if (!m) return null;
   if (m[3]) return `api/analytics/${m[1]}/w${String(+m[3]).padStart(2, "0")}.json`;
@@ -41,6 +42,7 @@ const seasons = new Map(); // season -> Promise<{ manifest, players }>
 const weekFiles = new Map(); // "season-week" -> Promise<week file>
 let teamsPromise = null; // the team registry (colours, names): same for every season, fetched once
 let identityPromise = null; // D183: {builtAt, players: {[gsis]: {name, onChart}}}, or null when it cannot be had
+let statusPromise = null; // D196: the injury-status players map ({} when it cannot be had)
 let seasonsPromise = null; // D184: the sorted [year,...] every season the API has data for, or null when it cannot be had
 let identityNames = null; // gsis -> the depth-chart spelling, once loaded
 let lastPlayers = {}; // the merged players of the latest loadFor(), displayName()'s fallback
@@ -69,6 +71,27 @@ export function applyIdentityNames(players, names) {
   for (const [g, p] of Object.entries(players || {})) out[g] = names.has(g) ? { ...p, name: names.get(g) } : p;
   return out;
 }
+
+// D196: the depth-chart compile's injury-status feed, { season, builtAt, players: {[gsis]: {team, pos, code, label,
+// scratch, detail, returnDate, updatedAt, shortComment, source, willNotPlay, fillIn, lastPlayed, playedThisSeason,
+// missed, missedThrough}} }. The statuses are the CURRENT season's; a page viewing another season gates on
+// `season`. Fetched once per page load when it succeeds. Never fails: a missing file (404 before the first build),
+// a network error or a malformed body resolve to { season: null, builtAt: null, players: {} }, and the next call
+// asks again.
+function statusFeed() {
+  if (!statusPromise) {
+    statusPromise = getJson("/api/analytics/status")
+      .then((body) => {
+        if (!body?.players || typeof body.players !== "object") throw new Error("malformed status feed");
+        return { season: body.season ?? null, builtAt: body.builtAt ?? null, players: body.players };
+      })
+      .catch(() => { statusPromise = null; return { season: null, builtAt: null, players: {} }; });
+  }
+  return statusPromise;
+}
+export function loadStatusFeed() { return statusFeed(); }
+// The players map alone ({} when the feed cannot be had).
+export function loadStatus() { return statusFeed().then((f) => f.players); }
 
 // D184: every season the seasons endpoint lists, ascending. Never fails: a missing/unreadable endpoint resolves
 // to null and callers fall back to the current season alone.
