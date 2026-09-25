@@ -12,21 +12,25 @@ import { windowName } from "./qbplayer.js";
 import { teamPageState, clubZoneField, clubZoneLegend, zonePlaysHtml, TEAM_ZONE_MODES } from "./team.js";
 
 const P = (v, d = 1) => (isNum(v) ? pct(v, d) : NA);
+// D192 (Adam, 2026-09-24): the headline "how good are they" measure, EPA/play allowed, leads the table with a bar
+// (signed, centred on zero — a defence can be above or below the league); the rest split into pass and run defence.
+const EPA_BAR_SPAN = 0.4;
 export const DEF_COLS = [
-  { k: "playsG", h: "Plays/g", t: "Plays faced per game: pass attempts, sacks, scrambles and designed runs", f: (v) => fix(v, 1), grp: "v" },
-  { k: "epaPlay", h: "EPA/play", t: "EPA per play allowed (lower is better)", f: (v) => signed(v, 3), grp: "e" },
-  { k: "epaDb", h: "EPA/db", t: "EPA per dropback allowed (sacks and scrambles included; lower is better)", f: (v) => signed(v, 3), grp: "e" },
-  { k: "epaCar", h: "EPA/car", t: "EPA per designed run allowed (lower is better)", f: (v) => signed(v, 3), grp: "e" },
-  { k: "succPct", h: "Succ %", t: "Share of plays faced that were successful for the offence (lower is better)", f: (v) => P(v, 1), grp: "e" },
-  { k: "sackPct", h: "Sack %", t: "Sacks / dropbacks faced", f: (v) => P(v, 1), grp: "r" },
-  { k: "pressPct", h: "Press %", t: "PFR: the opposing quarterbacks' pressured dropbacks / their dropbacks against this defence, one pressure per throw at most (a week behind)", f: (v) => P(v, 1), grp: "r" },
-  { k: "pressuresG", h: "Press/g", t: "PFR: the club's defenders' pressures summed / games in the window — a throw two men pressured counts twice here (a week behind)", f: (v) => fix(v, 1), grp: "r" },
-  { k: "blitzPct", h: "Blitz %", t: "FTN: dropbacks faced with 1+ blitzers / dropbacks faced charted", f: (v) => P(v, 0), grp: "r" },
-  { k: "cmpPct", h: "Cmp %", t: "Completion % allowed (lower is better)", f: (v) => P(v, 1), grp: "c" },
-  { k: "adot", h: "aDOT", t: "Air yards per attempt faced", f: (v) => fix(v, 1), grp: "c" },
-  { k: "explPct", h: "Expl %", t: "Explosive plays allowed: runs of 10+ yards and completions of 20+ / plays faced (lower is better)", f: (v) => P(v, 1), grp: "c" },
+  { k: "epaPlay", h: "EPA/play", t: "EPA per play allowed (lower is better)", f: (v) => signed(v, 3), grp: "ov", bar: EPA_BAR_SPAN, signed: true },
+  { k: "succPct", h: "Succ %", t: "Share of plays faced that were successful for the offence (lower is better)", f: (v) => P(v, 1), grp: "ov" },
+  { k: "explPct", h: "Expl %", t: "Explosive plays allowed: runs of 10+ yards and completions of 20+ / plays faced (lower is better)", f: (v) => P(v, 1), grp: "ov" },
+  { k: "playsG", h: "Plays/g", t: "Plays faced per game: pass attempts, sacks, scrambles and designed runs", f: (v) => fix(v, 1), grp: "ov" },
+  { k: "epaDb", h: "EPA/db", t: "EPA per dropback allowed (sacks and scrambles included; lower is better)", f: (v) => signed(v, 3), grp: "pd" },
+  { k: "cmpPct", h: "Cmp %", t: "Completion % allowed (lower is better)", f: (v) => P(v, 1), grp: "pd" },
+  { k: "adot", h: "aDOT", t: "Air yards per attempt faced", f: (v) => fix(v, 1), grp: "pd" },
+  { k: "sackPct", h: "Sack %", t: "Sacks / dropbacks faced", f: (v) => P(v, 1), grp: "pd" },
+  { k: "pressPct", h: "Press %", t: "PFR: the opposing quarterbacks' pressured dropbacks / their dropbacks against this defence, one pressure per throw at most (a week behind)", f: (v) => P(v, 1), grp: "pd" },
+  { k: "pressuresG", h: "Press/g", t: "PFR: the club's defenders' pressures summed / games in the window — a throw two men pressured counts twice here (a week behind)", f: (v) => fix(v, 1), grp: "pd" },
+  { k: "blitzPct", h: "Blitz %", t: "FTN: dropbacks faced with 1+ blitzers / dropbacks faced charted", f: (v) => P(v, 0), grp: "pd" },
+  { k: "epaCar", h: "EPA/car", t: "EPA per designed run allowed (lower is better)", f: (v) => signed(v, 3), grp: "rd" },
+  { k: "ypc", h: "YPC", t: "Yards per designed run allowed (lower is better)", f: (v) => fix(v, 1), grp: "rd" },
 ];
-const GROUPS = [["v", "Volume"], ["e", "EPA allowed"], ["r", "Pass rush"], ["c", "Coverage"]];
+const GROUPS = [["ov", "Overall"], ["pd", "Pass defense"], ["rd", "Run defense"]];
 DEF_COLS.forEach((c, i) => { c.gs = i === 0 || DEF_COLS[i - 1].grp !== c.grp; });
 const SORTABLE = new Set([...DEF_COLS.map((c) => c.k), "team", "g"]);
 // First click on a column sorts best-first: ascending where lower allowed is better.
@@ -59,10 +63,14 @@ const ui = { zoneMode: "cmpPct", zone: null, team: null };
 
 function detailHtml(r, st, q, ref, wn, lgZones, players) {
   const D = r.def, L = ref.lg.def;
-  const maxPlays = Math.max(70, ...r.series.def.map((s) => s.plays || 0));
+  const maxDb = Math.max(45, ...r.series.def.map((s) => s.db || 0));
+  const maxRuns = Math.max(25, ...r.series.def.map((s) => s.runs || 0));
   const strips = [
     { k: "epaPlay", label: "EPA/play allowed", signed: true, span: 0.4, fmt: (v) => signed(v, 3), short: (v) => signed(v, 2).replace(/^([+−])0/, "$1"), total: D.epaPlay, totalText: `${wn} ${isNum(D.epaPlay) ? signed(D.epaPlay, 3) : "–"}`, avg: L.epaPlay, avgText: `lg ${isNum(L.epaPlay) ? signed(L.epaPlay, 3) : "–"}`, tier: (v) => teamTier("def", "epaPlay", v, ref.cuts) },
-    { k: "plays", label: "Plays faced", signed: false, span: maxPlays * 1.05, fmt: (v) => `${v} plays`, short: (v) => String(v), total: D.plays, totalText: `${wn} ${D.plays}`, avg: L.playsG, avgText: `lg ${isNum(L.playsG) ? L.playsG.toFixed(1) : "–"}/g` },
+    { k: "epaDb", label: "EPA/dropback allowed", signed: true, span: 0.6, fmt: (v) => signed(v, 3), short: (v) => signed(v, 2).replace(/^([+−])0/, "$1"), total: D.epaDb, totalText: `${wn} ${isNum(D.epaDb) ? signed(D.epaDb, 3) : "–"}`, avg: L.epaDb, avgText: `lg ${isNum(L.epaDb) ? signed(L.epaDb, 3) : "–"}`, tier: (v) => teamTier("def", "epaDb", v, ref.cuts) },
+    { k: "epaCar", label: "EPA/carry allowed", signed: true, span: 0.6, fmt: (v) => signed(v, 3), short: (v) => signed(v, 2).replace(/^([+−])0/, "$1"), total: D.epaCar, totalText: `${wn} ${isNum(D.epaCar) ? signed(D.epaCar, 3) : "–"}`, avg: L.epaCar, avgText: `lg ${isNum(L.epaCar) ? signed(L.epaCar, 3) : "–"}`, tier: (v) => teamTier("def", "epaCar", v, ref.cuts) },
+    { k: "db", label: "Dropbacks faced", signed: false, span: maxDb * 1.05, fmt: (v) => `${v} dropbacks`, short: (v) => String(v), total: D.db, totalText: `${wn} ${D.db}`, avg: L.dbG, avgText: `lg ${isNum(L.dbG) ? L.dbG.toFixed(1) : "–"}/g` },
+    { k: "runs", label: "Runs faced", signed: false, span: maxRuns * 1.05, fmt: (v) => `${v} runs`, short: (v) => String(v), total: D.runs, totalText: `${wn} ${D.runs}`, avg: L.runsG, avgText: `lg ${isNum(L.runsG) ? L.runsG.toFixed(1) : "–"}/g` },
   ];
   const zones = teamZones(D, lgZones);
   const tile = (label, val, k, lg, title = "") => {
@@ -74,14 +82,22 @@ function detailHtml(r, st, q, ref, wn, lgZones, players) {
     <div class="an-dcol an-def-w"><div class="an-dh">Week by week <span class="an-dsub">${D.plays} plays faced in ${D.g} game${D.g === 1 ? "" : "s"}</span></div>${qbStrips(r.series.def.map((s) => ({ ...s, dnp: false })), strips, { season: st.season, bw: 28, gap: 7, sh: 50, lw: 128, rw: 70 })}</div>
     <div class="an-dcol"><div class="an-dh">Zone field faced <span class="an-dsub">what opponents do there vs the league</span></div>
       <div data-zones>${zoneBlock(zones, st, players, q)}</div></div>
-    <div class="an-dcol"><div class="an-dh">Pass rush</div><div class="an-dtiles">
-      ${tile("Sack %", PP(D.sackPct), "sackPct", PP(L.sackPct), "Sacks / dropbacks faced")}
-      ${tile("Press %", PP(D.pressPct), "pressPct", PP(L.pressPct), pressPctTip(D))}
-      ${tile("Press/g", isNum(D.pressuresG) ? D.pressuresG.toFixed(1) : NA, "pressuresG", isNum(L.pressuresG) ? L.pressuresG.toFixed(1) : NA, pressGTip(D))}
-      ${tile("Blitz %", PP(D.blitzPct, 0), "", PP(L.blitzPct, 0), "FTN: 1+ blitzers")}
-      ${tile("Expl %", PP(D.explPct), "explPct", PP(L.explPct), "Runs of 10+ and completions of 20+ allowed / plays faced")}
+    <div class="an-dcol an-def-rush">
+      <div class="an-dblk"><div class="an-dh">Pass rush</div><div class="an-dtiles">
+        ${tile("Sack %", PP(D.sackPct), "sackPct", PP(L.sackPct), "Sacks / dropbacks faced")}
+        ${tile("Press %", PP(D.pressPct), "pressPct", PP(L.pressPct), pressPctTip(D))}
+        ${tile("Press/g", isNum(D.pressuresG) ? D.pressuresG.toFixed(1) : NA, "pressuresG", isNum(L.pressuresG) ? L.pressuresG.toFixed(1) : NA, pressGTip(D))}
+        ${tile("Blitz %", PP(D.blitzPct, 0), "", PP(L.blitzPct, 0), "FTN: 1+ blitzers")}
+        ${tile("Expl %", PP(D.explPct), "explPct", PP(L.explPct), "Runs of 10+ and completions of 20+ allowed / plays faced")}
+      </div></div>
+      <div class="an-dblk"><div class="an-dh">Run defense</div><div class="an-dtiles">
+        ${tile("EPA/car", signed(D.epaCar, 3), "epaCar", signed(L.epaCar, 3), "EPA per designed run allowed")}
+        ${tile("YPC", isNum(D.ypc) ? D.ypc.toFixed(1) : NA, "ypc", isNum(L.ypc) ? L.ypc.toFixed(1) : NA, "Yards per designed run allowed")}
+        ${tile("Run succ %", PP(D.runSuccPct), "runSuccPct", PP(L.runSuccPct), "Share of designed runs faced that were successful for the offence")}
+        ${tile("Expl run %", PP(D.runExplPct), "runExplPct", PP(L.runExplPct), "Designed runs of 10+ yards allowed / designed runs faced")}
+      </div></div>
       <div class="an-dlinks"><a href="#/team/${encodeURIComponent(r.team)}${q ? "?" + q : ""}">Offense →</a><a href="../#/team/${encodeURIComponent(r.team)}" target="_blank" rel="noopener">Depth chart ↗</a></div>
-    </div></div></div>`;
+    </div></div>`;
 }
 function zoneBlock(zones, st, players, q) {
   return `<div class="an-pl-zhead"><div class="an-seg" data-zmode>${TEAM_ZONE_MODES.map((m) => `<button type="button" data-v="${m.k}" class="${ui.zoneMode === m.k ? "on" : ""}">${m.label}</button>`).join("")}</div>${clubZoneLegend(ui.zoneMode, "def")}</div>
@@ -103,7 +119,20 @@ export function defTableHtml(rows, st, query, view) {
     const cells = DEF_COLS.map((c) => {
       const v = r.def[c.k], t = teamTier("def", c.k, v, ref.cuts);
       const title = c.k === "pressPct" && isNum(v) ? pressPctTip(r.def) : c.k === "pressuresG" && isNum(v) ? pressGTip(r.def) : "";
-      return `<td class="num g-${c.grp}${c.gs ? " gs" : ""}${t ? " t-" + t : ""}"${title ? ` title="${esc(title)}"` : ""}><span>${c.f(v)}</span></td>`;
+      let bar = "";
+      if (c.bar && isNum(v)) {
+        if (c.signed) {
+          // Each half is inset 3px from its outer edge, same as every other .an-bar's left:3px/max-width:calc(100% - 6px);
+          // the fraction of that inset half-width comes from the value's share of the span.
+          const ratio = Math.min(1, Math.abs(v) / c.bar).toFixed(4);
+          const w = `calc((50% - 3px) * ${ratio})`;
+          const left = v >= 0 ? "50%" : `calc(50% - (50% - 3px) * ${ratio})`;
+          bar = `<i class="an-bar an-bar-ctr" style="left:${left};width:${w}"></i>`;
+        } else {
+          bar = `<i class="an-bar" style="width:${Math.min(100, (v / c.bar) * 100).toFixed(1)}%"></i>`;
+        }
+      }
+      return `<td class="num g-${c.grp}${c.gs ? " gs" : ""}${t ? " t-" + t : ""}${bar ? " has-bar" : ""}${c.signed ? " c-signed" : ""}"${title ? ` title="${esc(title)}"` : ""}>${bar}<span>${c.f(v)}</span></td>`;
     }).join("");
     return `<tr class="an-row${open ? " open" : ""}" data-id="${esc(r.team)}" tabindex="0" aria-expanded="${open}">
       <td class="c-rank">${i + 1}</td>
@@ -113,7 +142,7 @@ export function defTableHtml(rows, st, query, view) {
   }).join("");
   return `<div class="an-tbar">
       <span class="an-count">${list.length} defense${list.length === 1 ? "" : "s"}</span>
-      <span class="an-legend" title="Each value against every club's in this window: elite at the clubs' 90th percentile or better, then the 70th, 40th and 15th; low below. Lower allowed is better for EPA, success, completion % and explosive plays; higher is better for sack %, pressure % and pressures/g. Plays/g, blitz % and aDOT are not coloured.">
+      <span class="an-legend" title="Each value against every club's in this window: elite at the clubs' 90th percentile or better, then the 70th, 40th and 15th; low below. Lower allowed is better for EPA, success, completion %, explosive plays and YPC; higher is better for sack %, pressure % and pressures/g. Plays/g, blitz % and aDOT are not coloured.">
         ${TIER_NAMES.map((t) => `<i class="t-${t}"></i>`).join("")}<span>elite → low among the clubs</span></span>
       <span class="an-hint">Click a row to open the defense</span>
     </div>

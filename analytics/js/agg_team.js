@@ -13,6 +13,11 @@
 //   dropback     = a pass attempt, a sack or a scramble. Pass rate = dropbacks / plays (plain: the ledger carries no
 //                  score, so no neutral-situation rate).
 //   EPA/play, Success %  = over plays carrying the figure; EPA/dropback over dropbacks; EPA/carry over designed runs.
+//   YPC (defence, D192)  = rushing yards allowed / designed runs faced (a scramble is not a designed run; summed
+//                  over the window, not a mean of per-game averages). Lower is better.
+//   Run succ %, Run expl % (defence, D192) = success % and explosive-run % (10+ yards) over designed runs faced
+//                  only (a scramble is not a designed run), same accounting as the whole-play versions above.
+//                  Lower is better for both (fewer successful/explosive runs allowed).
 //   aDOT         = air yards / attempts with air yards. Comp % = completions / attempts. Sack % = sacks / dropbacks.
 //   Explosive %  = plays gaining 10+ yards on the ground (designed runs and scrambles) or 20+ on a completed pass,
 //                  over plays.
@@ -62,24 +67,30 @@ export function teamPlay(r, C) {
 
 const emptyCell = () => ({ n: 0, cmp: 0, yds: 0, td: 0, int: 0, epa: 0, epaN: 0 });
 function addCell(c, e) { c.n++; if (e.complete) { c.cmp++; c.yds += e.yards; } if (e.td) c.td++; if (e.int) c.int++; if (e.epa !== null) { c.epa += e.epa; c.epaN++; } }
-const newSide = () => ({ games: new Set(), plays: 0, epa: 0, epaN: 0, succ: 0, succN: 0, db: 0, dbEpa: 0, dbEpaN: 0, runs: 0, runEpa: 0, runEpaN: 0,
+const newSide = () => ({ games: new Set(), plays: 0, epa: 0, epaN: 0, succ: 0, succN: 0, db: 0, dbEpa: 0, dbEpaN: 0, runs: 0, runEpa: 0, runEpaN: 0, runYds: 0,
+  runSucc: 0, runSuccN: 0, runExpl: 0,
   att: 0, cmp: 0, yds: 0, air: 0, airN: 0, sacks: 0, pa: 0, paN: 0, bl: 0, blN: 0, expl: 0,
   zones: Object.fromEntries(ZONE_KEYS.map((k) => [k, emptyCell()])), wk: new Map(),
   pfrPress: 0, pfrDb: 0, pfrWeeks: new Set(), qbPress: 0, qbDb: 0, qbWeeks: new Set() });
 
 function addPlay(a, key, e, playRec) {
   a.plays++;
-  const w = a.wk.get(key) || { plays: 0, db: 0, epa: 0, epaN: 0 };
+  const w = a.wk.get(key) || { plays: 0, db: 0, epa: 0, epaN: 0, runs: 0, dbEpa: 0, dbEpaN: 0, runEpa: 0, runEpaN: 0 };
   w.plays++; if (e.db) w.db++;
   if (e.epa !== null) { a.epa += e.epa; a.epaN++; w.epa += e.epa; w.epaN++; }
   a.wk.set(key, w);
   if (e.succ !== null) { a.succ += e.succ; a.succN++; }
   if (e.db) {
     a.db++;
-    if (e.epa !== null) { a.dbEpa += e.epa; a.dbEpaN++; }
+    if (e.epa !== null) { a.dbEpa += e.epa; a.dbEpaN++; w.dbEpa += e.epa; w.dbEpaN++; }
     if (e.pa !== null) { a.paN++; if (e.pa) a.pa++; }
     if (e.blitz !== null) { a.blN++; if (e.blitz) a.bl++; }
-  } else { a.runs++; if (e.epa !== null) { a.runEpa += e.epa; a.runEpaN++; } }
+  } else {
+    a.runs++; a.runYds += e.yards; w.runs++;
+    if (e.epa !== null) { a.runEpa += e.epa; a.runEpaN++; w.runEpa += e.epa; w.runEpaN++; }
+    if (e.succ !== null) { a.runSucc += e.succ; a.runSuccN++; }
+    if (e.expl) a.runExpl++;
+  }
   if (e.type === "sack") a.sacks++;
   if (e.expl) a.expl++;
   if (e.att) {
@@ -94,10 +105,11 @@ function addPlay(a, key, e, playRec) {
 // { plays, playsG, passRate, epaPlay, ... } for one side of one club.
 function sideRates(a, g) {
   return {
-    g, plays: a.plays, playsG: ratio(a.plays, g), db: a.db, runs: a.runs, att: a.att, cmp: a.cmp, sacks: a.sacks,
-    passRate: ratio(a.db, a.plays), epaPlay: ratio(a.epa, a.epaN), epaDb: ratio(a.dbEpa, a.dbEpaN), epaCar: ratio(a.runEpa, a.runEpaN),
+    g, plays: a.plays, playsG: ratio(a.plays, g), db: a.db, dbG: ratio(a.db, g), runs: a.runs, runsG: ratio(a.runs, g), att: a.att, cmp: a.cmp, sacks: a.sacks,
+    passRate: ratio(a.db, a.plays), epaPlay: ratio(a.epa, a.epaN), epaDb: ratio(a.dbEpa, a.dbEpaN), epaCar: ratio(a.runEpa, a.runEpaN), ypc: ratio(a.runYds, a.runs),
     succPct: ratio(a.succ, a.succN), adot: ratio(a.air, a.airN), cmpPct: ratio(a.cmp, a.att), sackPct: ratio(a.sacks, a.db),
     paPct: ratio(a.pa, a.paN), blitzPct: ratio(a.bl, a.blN), explPct: ratio(a.expl, a.plays), expl: a.expl,
+    runSuccPct: ratio(a.runSucc, a.runSuccN), runExplPct: ratio(a.runExpl, a.runs),
     pressPct: ratio(a.pfrPress, a.pfrDb), pfrPress: a.pfrPress, pfrDb: a.pfrDb, pfrWeeks: a.pfrWeeks.size,
     zones: a.zones,
   };
@@ -168,9 +180,10 @@ export function aggregateTeams(blocks, players, st, opts = {}) {
     const g = [...inWin].filter((gk) => gk.endsWith("|" + team)).length;
     const series = (a, side) => weeks.map((key) => {
       const gm = info.get(`${key}|${team}`);
-      if (!gm || !inWin.has(`${key}|${team}`)) return { key, bye: true, plays: null, passRate: null, epaPlay: null };
-      const w = a.wk.get(key) || { plays: 0, db: 0, epa: 0, epaN: 0 };
-      return { key, opp: gm.opp, home: gm.home, side, plays: w.plays, db: w.db, passRate: ratio(w.db, w.plays), epaPlay: ratio(w.epa, w.epaN) };
+      if (!gm || !inWin.has(`${key}|${team}`)) return { key, bye: true, plays: null, db: null, passRate: null, epaPlay: null, epaDb: null, epaCar: null, runs: null };
+      const w = a.wk.get(key) || { plays: 0, db: 0, epa: 0, epaN: 0, runs: 0, dbEpa: 0, dbEpaN: 0, runEpa: 0, runEpaN: 0 };
+      return { key, opp: gm.opp, home: gm.home, side, plays: w.plays, db: w.db, runs: w.runs, passRate: ratio(w.db, w.plays),
+        epaPlay: ratio(w.epa, w.epaN), epaDb: ratio(w.dbEpa, w.dbEpaN), epaCar: ratio(w.runEpa, w.runEpaN) };
     });
     // The defence's Pressure % is the QB side; Pressures/g is the defenders' own sum, per game (D178 pairing).
     const dr = { ...sideRates(d, g), pressPct: ratio(d.qbPress, d.qbDb), pfrDb: d.qbDb, pfrWeeks: d.qbWeeks.size, pressuresG: ratio(d.pfrPress, g), pfrPressDef: d.pfrPress, pfrWeeksDef: d.pfrWeeks.size };
@@ -180,9 +193,9 @@ export function aggregateTeams(blocks, players, st, opts = {}) {
 }
 
 // ---- the league reference among clubs ------------------------------------------------------------------------
-export const TEAM_LG_KEYS = ["plays", "playsG", "passRate", "epaPlay", "epaDb", "epaCar", "succPct", "adot", "cmpPct", "sackPct", "pressPct", "pressuresG", "paPct", "blitzPct", "explPct"];
+export const TEAM_LG_KEYS = ["plays", "playsG", "dbG", "runsG", "passRate", "epaPlay", "epaDb", "epaCar", "succPct", "adot", "cmpPct", "sackPct", "pressPct", "pressuresG", "paPct", "blitzPct", "explPct", "ypc", "runSuccPct", "runExplPct"];
 export const OFF_TIER = { epaPlay: 1, epaDb: 1, epaCar: 1, succPct: 1, cmpPct: 1, explPct: 1, sackPct: -1, pressPct: -1 };
-export const DEF_TIER = { epaPlay: -1, epaDb: -1, epaCar: -1, succPct: -1, cmpPct: -1, explPct: -1, sackPct: 1, pressPct: 1, pressuresG: 1 };
+export const DEF_TIER = { epaPlay: -1, epaDb: -1, epaCar: -1, succPct: -1, cmpPct: -1, explPct: -1, sackPct: 1, pressPct: 1, pressuresG: 1, ypc: -1, runSuccPct: -1, runExplPct: -1 };
 const dirOf = (side) => (side === "def" ? DEF_TIER : OFF_TIER);
 
 // { n (clubs), lg: { off: {k: mean}, def: {k: mean} }, cuts: { off: {k: {cuts, n}}, def } , text }.

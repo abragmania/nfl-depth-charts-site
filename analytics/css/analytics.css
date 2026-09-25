@@ -426,6 +426,13 @@ td[class*=" t-"] > span { color:var(--t); font-weight:700; }
 
 /* ---- defence leaderboard (#/defense) ---- */
 .an-def-name { color:var(--ink); font-weight:700; }
+/* D192: EPA/play's headline bar is signed and centred on zero (an-bar-ctr sets left/width inline); a hairline
+   marks the zero point so a positive (worse) or negative (better) lean reads without checking the number. */
+.an-def-table td.c-signed { overflow:hidden; }
+.an-def-table td.c-signed::before { content:""; position:absolute; left:50%; top:4px; bottom:4px; width:1px; background:#2a323b; }
+/* Pass rush and Run defense stack in one column (an-def-rush) so the expanded row stays three columns at every
+   width instead of the fourth wrapping onto its own orphaned line at 1536/2560. */
+.an-def-rush { display:flex; flex-direction:column; gap:14px; }
 .an-def-spark line { stroke:#2a323b; }
 .an-def-spark rect.bad { fill:var(--tier-flat); }
 .an-def-spark rect.good { fill:var(--tier-strong); }
