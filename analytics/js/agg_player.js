@@ -14,6 +14,8 @@
 // one-week window can be seen in context; the window's weeks are flagged `inWin` and drawn bright.
 import { aggregateUsage, clubGames, colIndex, usageReference, inPool, tierCuts, referenceText } from "./agg.js";
 import { gamesInWindow, splitKey } from "./filters.js";
+import { aggregateRush, rushReference } from "./agg_rush.js";
+import { fantasyByPlayer } from "./agg_fantasy.js";
 
 const num = (v) => (v === null || v === undefined || v === "" || !Number.isFinite(+v) ? null : +v);
 const truthy = (v) => v === true || v === 1 || v === "1" || v === "true";
@@ -83,7 +85,8 @@ export function playerView(blocks, players, stIn, gsis) {
   // position's is small): his row, and his position's reference and tier cuts.
   const win = aggregateUsage(blocks, players, st);
   const row = win.rows.find((r) => r.gsis === gsis) || null;
-  const ref = usageReference(win.rows).at(pos);
+  const uRef = usageReference(win.rows);
+  const ref = uRef.at(pos);
   const lg = ref.lg;
 
   // The whole timeline: every loaded week, window or not.
@@ -307,6 +310,8 @@ export function playerView(blocks, players, stIn, gsis) {
     result.rush = { ...mineR, yds: my.ryds, rz: my.rz, td: my.rtd, lg: lgR, n: qR.length, cuts: tierCuts(qR, allR, [...RUSH_TIER_KEYS, ...OPP_TIER_KEYS]), refText: referenceText(pos, qR.length, "carries") };
   }
 
+  result.recut = recutLayers({ blocks, players, st, gsis, pos, row, uRef, ref, lgEff, eff });
+
   if (has2025Routes) {
     const list = [...myRoute.entries()].map(([route, c]) => ({ route, ...cellRates(c), lgShare: ratio(lgRoute.get(route)?.n || 0, lgRouted), lg: cellRates(lgRoute.get(route)) }));
     const tot = list.reduce((s, x) => s + x.n, 0);
@@ -315,6 +320,66 @@ export function playerView(blocks, players, stIn, gsis) {
   }
   return result;
 }
+
+// ---- the re-cut's five layers (increment 3, PROJECT.md Part 4 A and B2) ------------------------------------
+// Plain values for the headline, opportunity and variance layers, each beside its league figure; the passing and
+// rushing blocks read the existing `row`, `eff` and `rush` plus `recut.rushRow`. A back (RB, FB) reads his Running
+// backs table row (agg_rush.js) and its reference, so his headline, DK and opportunity tiles are the table's figures
+// and colours (D191's rushing-pool rule, now for DK too); a WR or TE reads his Receivers (Usage) row and reference.
+//   headline, back:     dkG, dk, scrimYds (rush yds + rec yds), totTd (rush td + rec td), ydsOpp, epaOpp
+//   headline, receiver: dkG, dk, rec, yds, ydsG (yds / g), td, yprr, epaTgt
+//   opportunity, back:  oppG, oppShare, car, rushShare, tgt, tgtShare, rzOpp, gl, snapPct, routePct
+//   opportunity, rec.:  tgtG, tgtShare, tprr, ayShare, adot, wopr, rz, ez, routePct, snapPct
+//   variance, back:     rzOppTdRate, in10TdRate, yds20Share, ybcCar, flRate, dkTdShare (league: rushReference pooled)
+//   variance, receiver: tdTgt, rzTdRate, cpoeTgt, yacOE, dropPer100, flRate, dkTdShare (league: usageReference pooled;
+//                       yacOE's league is the NGS mean the efficiency tiles already use)
+// headlineLg and opportunityLg are plain means over his position's reference pool (the row keys' own references).
+// `recut.cuts` (the name is RECUT_CUTS) is his position pool's tier cuts for both the headline and opportunity tiles:
+// a back's are the Running backs table's (rushReference), a receiver's the Receivers table's (usageReference).
+export const RECUT_CUTS = "cuts";
+// `rushRow` is his Running backs row (any position, null with no carries: "Rushing block only when he has carries").
+export const RB_HEADLINE_KEYS = ["dkG", "dk", "scrimYds", "totTd", "ydsOpp", "epaOpp"];
+export const REC_HEADLINE_KEYS = ["dkG", "dk", "rec", "yds", "ydsG", "td", "yprr", "epaTgt"];
+export const RB_OPP_KEYS = ["oppG", "oppShare", "car", "rushShare", "tgt", "tgtShare", "rzOpp", "gl", "snapPct", "routePct"];
+export const REC_OPP_KEYS = ["tgtG", "tgtShare", "tprr", "ayShare", "adot", "wopr", "rz", "ez", "routePct", "snapPct"];
+export const RB_VARIANCE_KEYS = ["rzOppTdRate", "in10TdRate", "yds20Share", "ybcCar", "flRate", "dkTdShare"];
+export const REC_VARIANCE_KEYS = ["tdTgt", "rzTdRate", "cpoeTgt", "yacOE", "dropPer100", "flRate", "dkTdShare"];
+const withDerived = (r, back) => (r ? (back
+  ? { ...r, scrimYds: (r.yds ?? 0) + (r.recYds ?? 0), totTd: (r.td ?? 0) + (r.recTd ?? 0) }
+  : { ...r, ydsG: ratio(r.yds, r.g) }) : null);
+const pick = (r, keys) => Object.fromEntries(keys.map((k) => [k, r?.[k] ?? null]));
+
+function recutLayers({ blocks, players, st, gsis, pos, row, uRef, ref, lgEff, eff }) {
+  const back = RUSHER_POS.has(pos);
+  const rush = aggregateRush(blocks, players, st);
+  const rRef = rushReference(rush.rows);
+  const rr = rRef.at(pos);
+  const rushRow = rush.rows.find((r) => r.gsis === gsis) || null;
+  const f = fantasyByPlayer(blocks, players, st).get(gsis) || null;
+  const fantasy = { parts: f?.parts ?? null, games: f?.games ?? [] };
+  if (back) {
+    // A back with no carries still has his Receivers row: its scrimmage figures stand in (rushYds, rushTd, yds, td).
+    const src = withDerived(rushRow, true) || (row ? { ...row, scrimYds: (row.yds ?? 0) + (row.rushYds ?? 0), totTd: (row.td ?? 0) + (row.rushTd ?? 0) } : null);
+    const q = rRef.pool.filter((r) => r.pos === pos).map((r) => withDerived(r, true));
+    return {
+      kind: "back", rushRow, fantasy: { ...fantasy, ...pick(src, ["dk", "dkG", "dkTdShare"]) },
+      headline: pick(src, RB_HEADLINE_KEYS), headlineLg: Object.fromEntries(RB_HEADLINE_KEYS.map((k) => [k, meanOf(q, k)])),
+      opportunity: pick(rushRow || row, RB_OPP_KEYS), opportunityLg: pick(rr.lg, RB_OPP_KEYS), cuts: rr.cuts, opportunityRefText: rr.text,
+      variance: pick(rushRow, RB_VARIANCE_KEYS), varianceLg: pick(rr.pooled, RB_VARIANCE_KEYS),
+      rushRef: { lg: rr.lg, cuts: rr.cuts, n: rr.n, text: rr.text, pooled: rr.pooled },
+    };
+  }
+  const src = withDerived(row, false);
+  const q = uRef.pool.filter((r) => r.pos === pos).map((r) => withDerived(r, false));
+  return {
+    kind: "receiver", rushRow, fantasy: { ...fantasy, ...pick(src, ["dk", "dkG", "dkTdShare"]) },
+    headline: pick(src, REC_HEADLINE_KEYS), headlineLg: Object.fromEntries(REC_HEADLINE_KEYS.map((k) => [k, meanOf(q, k)])),
+    opportunity: pick(row, REC_OPP_KEYS), opportunityLg: Object.fromEntries(REC_OPP_KEYS.map((k) => [k, meanOf(q, k)])), cuts: ref.cuts, opportunityRefText: ref.text,
+    variance: { ...pick(row, REC_VARIANCE_KEYS), yacOE: eff?.yacOE ?? null }, varianceLg: { ...pick(ref.pooled, REC_VARIANCE_KEYS), yacOE: lgEff?.yacOE ?? null },
+    rushRef: rushRow ? { lg: rr.lg, cuts: rr.cuts, n: rr.n, text: rr.text, pooled: rr.pooled } : null,
+  };
+}
+const meanOf = (rows, k) => mean(rows.map((r) => (r[k] === null || r[k] === undefined ? null : +r[k])));
 
 function lastTeam(meta) {
   const ks = Object.keys(meta?.teams || {}).sort();

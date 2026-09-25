@@ -36,8 +36,22 @@
 // REFERENCE POOL (Adam, 2026-09-24; agg.js's rule with carries): players AT HIS POSITION averaging 2+ carries per
 // game of his club's games in the window, floor 5. The league line is the plain mean over that pool; the colour tiers
 // are its 90/70/40/15th percentiles (agg.js tierCuts; under 8 men, the league-wide pool of every position).
-import { colIndex, clubGames, aggregateUsage, inPool, tierCuts, tierFromCuts, referenceText, rushEvent } from "./agg.js";
-import { gamesInWindow, playPredicate, posAllowed, POSITIONS } from "./filters.js";
+// RE-CUT ADDITIONS (increment 3, PROJECT.md Part 4 B2; new keys only, no existing key changes):
+//   in10, in10Td = carries from the opponent's 10 or closer (yardline_100 <= 10) and their TDs; in10TdRate = in10Td / in10.
+//   rzTd         = TDs on his red-zone carries.  yds20 = rush yards on carries of 20+; yds20Share = yds20 / yds.
+//   from his Usage row (every position, the same filters): rec, epaTgt, yprr, tprr, catchPct, routePct, rzTgt (his
+//                  red-zone targets), rzTgtTd (TDs on them); (recYds and recTd were already here.)
+//   rzOpp        = rz + rzTgt.  rzOppTd = rzTd + rzTgtTd.  rzOppTdRate = rzOppTd / rzOpp.
+//   fum, fl      = rows where he is the fumbler (the offense fumbled) and those lost, any play type.  flRate = fl / fum.
+//   ybcCar, btCar = PFR rushing (decision 3): Σ yards before contact / Σ PFR carries and Σ broken tackles / Σ PFR
+//                  carries over the weeks PFR's rushing file lists him in his games (pfrCar = that denominator); null
+//                  when it lists him in none (the file may be empty). PFR's carry count is only this denominator; the
+//                  play-by-play carries stay canonical (D178).
+//   dk, dkG, dkTdShare = agg_fantasy.js (DraftKings, D194), dkG over this row's g.
+// Weekly-table figures (the PFR two) and DK go blank under a down or quarter filter.
+import { colIndex, clubGames, aggregateUsage, inPool, tierCuts, tierFromCuts, referenceText, rushEvent, pooledRatio, plainMean } from "./agg.js";
+import { gamesInWindow, playPredicate, posAllowed, POSITIONS, isSituational } from "./filters.js";
+import { fantasyByPlayer, dkFields } from "./agg_fantasy.js";
 
 const num = (v) => (v === null || v === undefined || v === "" || !Number.isFinite(+v) ? null : +v);
 const truthy = (v) => v === true || v === 1 || v === "1" || v === "true";
@@ -52,9 +66,12 @@ export const BIN_LABELS = ["0 or less", "1–3", "4–9", "10+"];
 const binOf = (y) => (y <= 0 ? 0 : y <= 3 ? 1 : y <= 9 ? 2 : 3);
 
 // Colour tiers by position. Eff is cut on the negated value (lower is better).
-export const RUSH_TIER_KEYS = ["opp", "oppG", "oppShare", "carG", "rushShare", "ypc", "succPct", "epaCar", "ryoeAtt", "eff", "explPct", "snapPct", "tgtShare"];
+export const RUSH_TIER_KEYS = ["opp", "oppG", "oppShare", "carG", "rushShare", "ypc", "succPct", "epaCar", "ryoeAtt", "eff", "explPct", "snapPct", "tgtShare", "dkG"];
 export const RUSH_LOWER_BETTER = new Set(["eff"]);
-export const RUSH_LG_KEYS = ["opp", "oppG", "oppShare", "ydsOpp", "epaOpp", "tdOpp", "car", "carG", "rushShare", "yds", "ypc", "succPct", "epaCar", "ryoeAtt", "eff", "rz", "gl", "td", "long", "explPct", "snapPct", "routes", "tgt", "tgtShare"];
+export const RUSH_LG_KEYS = ["opp", "oppG", "oppShare", "ydsOpp", "epaOpp", "tdOpp", "car", "carG", "rushShare", "yds", "ypc", "succPct", "epaCar", "ryoeAtt", "eff", "rz", "gl", "td", "long", "explPct", "snapPct", "routes", "tgt", "tgtShare",
+  // re-cut increment 3 (B2)
+  "in10", "in10Td", "rzTd", "yds20", "rec", "recYds", "recTd", "epaTgt", "yprr", "tprr", "catchPct", "routePct", "rzTgt", "rzOpp", "fum", "fl", "dk", "dkG", "dkTdShare", "ybcCar", "btCar"];
+export const IN10 = 10, LONG_RUN = 20;
 export const rushTier = (k, v, cuts) => (finite(v) ? tierFromCuts(RUSH_LOWER_BETTER.has(k) ? -v : +v, cuts?.[k]?.cuts) : "");
 
 // One play row as a carry, or null: { id, designed }. Defined in agg.js (the Usage page's opportunities count carries
@@ -69,7 +86,7 @@ function gamePasses(st, g) {
 }
 
 const newAcc = () => ({ games: new Set(), car: 0, des: 0, scr: 0, yds: 0, epa: 0, epaN: 0, succ: 0, succN: 0, rz: 0, gl: 0, td: 0,
-  long: null, expl: 0, bins: [0, 0, 0, 0], wk: new Map(), snaps: new Map() });
+  long: null, expl: 0, bins: [0, 0, 0, 0], wk: new Map(), snaps: new Map(), in10: 0, in10Td: 0, rzTd: 0, yds20: 0 });
 
 // Rows for every man with a carry in the window after the team, opponent and position filters. Returns
 // { rows, weeks (window week keys, sorted) }. Each row's `series` spans the window's weeks:
@@ -85,6 +102,7 @@ export function aggregateRush(blocks, players, st) {
   const clubRuns = new Map(); // gk -> the club's designed runs
   const clubAtt = new Map(); // gk -> the club's pass attempts (agg.js's rule: a pass-interference target is not one)
   const add = (m, k, v) => m.set(k, (m.get(k) || 0) + v);
+  const fumOf = new Map(); // gsis -> { fum, fl }; apart from acc so a fumbler-only man never adds a row
 
   for (const b of blocks) {
     const C = colIndex(b.cols);
@@ -95,6 +113,8 @@ export function aggregateRush(blocks, players, st) {
       const pi = truthy(r[C.pi]);
       if (!(pi && st.pi === false)) for (const col of ["passer", "target", "rusher"]) if (r[C[col]]) A(r[C[col]]).games.add(gk);
       if (!pred(r)) continue;
+      const fid = C.fumbler === undefined ? null : r[C.fumbler];
+      if (fid) { const f = fumOf.get(fid) || { fum: 0, fl: 0 }; f.fum++; if (truthy(r[C.fumLost])) f.fl++; fumOf.set(fid, f); }
       if (r[C.type] === "run") add(clubRuns, gk, 1);
       if (r[C.type] === "pass" && !pi) add(clubAtt, gk, 1);
       const e = rushEvent(r, C);
@@ -108,6 +128,9 @@ export function aggregateRush(blocks, players, st) {
       if (truthy(r[C.redzone])) a.rz++;
       if (yl !== null && yl <= GOAL_LINE) a.gl++;
       if (truthy(r[C.td])) a.td++;
+      if (yl !== null && yl <= IN10) { a.in10++; if (truthy(r[C.td])) a.in10Td++; }
+      if (truthy(r[C.redzone]) && truthy(r[C.td])) a.rzTd++;
+      if (y >= LONG_RUN) a.yds20 += y;
       if (a.long === null || y > a.long) a.long = y;
       if (y >= EXPLOSIVE) a.expl++;
       a.bins[binOf(y)]++;
@@ -138,6 +161,22 @@ export function aggregateRush(blocks, players, st) {
       ngs.set(id, x);
     }
   }
+
+  // PFR rushing (weekly, decision 3): yards before contact and broken tackles over PFR's own carries, the weeks it
+  // lists him in one of his window games.
+  const situational = isSituational(st);
+  const pfr = new Map();
+  if (!situational) for (const b of blocks) {
+    for (const [id, x] of Object.entries(b.pfr?.rush || {})) {
+      const a = acc.get(id), car = num(x?.carries);
+      if (!a || car === null || car <= 0 || ![...a.games].some((gk) => gk.startsWith(b.key + "|"))) continue;
+      const p = pfr.get(id) || { ybc: 0, ybcCar: 0, bt: 0, btCar: 0 };
+      if (num(x.ybc) !== null) { p.ybc += +x.ybc; p.ybcCar += car; }
+      if (num(x.brokenTkl) !== null) { p.bt += +x.brokenTkl; p.btCar += car; }
+      pfr.set(id, p);
+    }
+  }
+  const fantasy = fantasyByPlayer(blocks, players, st);
 
   // Involvement: targets, target share and routes from the Usage aggregation (every position, the same filters).
   const usage = new Map(aggregateUsage(blocks, players, { ...st, pos: {} }).rows.map((r) => [r.gsis, r]));
@@ -181,14 +220,31 @@ export function aggregateRush(blocks, players, st) {
       opp, oppG: ratio(opp, g.length), oppShare: ratio(a.des + tgt, runs + att),
       ydsOpp: ratio(a.yds + (u?.yds ?? 0), opp), epaOpp: ratio(a.epa + (u?.recEpa ?? 0), opp), tdOpp: ratio(a.td + (u?.td ?? 0), opp),
       series,
+      ...recutRush(a, u, fumOf.get(id), pfr.get(id)),
+      ...dkFields(fantasy.get(id), g.length, st),
     });
   }
   return { rows, weeks };
 }
 
+// The re-cut's additive rushing keys (see the header).
+function recutRush(a, u, f, p) {
+  const rzTgt = u?.rz ?? 0, rzTgtTd = u?.rzTd ?? 0;
+  const rzOpp = a.rz + rzTgt, rzOppTd = a.rzTd + rzTgtTd;
+  const fum = f?.fum ?? 0, fl = f?.fl ?? 0;
+  return {
+    in10: a.in10, in10Td: a.in10Td, in10TdRate: ratio(a.in10Td, a.in10), rzTd: a.rzTd, yds20: a.yds20, yds20Share: ratio(a.yds20, a.yds),
+    rec: u?.rec ?? 0, piTgt: u?.piTgt ?? 0, epaTgt: u?.epaTgt ?? null, yprr: u?.yprr ?? null, tprr: u?.tprr ?? null, catchPct: u?.catchPct ?? null,
+    routePct: u?.routePct ?? null, rzTgt, rzTgtTd, rzOpp, rzOppTd, rzOppTdRate: ratio(rzOppTd, rzOpp),
+    fum, fl, flRate: ratio(fl, fum),
+    ybcCar: p ? ratio(p.ybc, p.ybcCar) : null, btCar: p ? ratio(p.bt, p.btCar) : null, pfrCar: p ? p.ybcCar : null, pfrYbc: p ? p.ybc : null,
+  };
+}
+
 // The league reference from rows aggregated with no team, opponent or position filter (the whole league, the same
 // window): `at(pos)` gives { lg (plain means over his position's pool, plus `bins`, the pool's carries by gain pooled
-// as shares), n, cuts, text }. `pool` is every position's pool together (the league-wide tier fallback).
+// as shares), n, cuts, text, pooled }. `pooled` (re-cut B2, the variance strip): each rate as the position pool's
+// summed numerator over its summed denominator, except dkTdShare, the plain pool mean; lg's plain means are untouched. `pool` is every position's pool together (the league-wide tier fallback).
 export function rushReference(rows) {
   const pool = rows.filter((r) => inPool(r.car, r.clubG));
   const forCuts = (list) => list.map((r) => ({ ...r, eff: finite(r.eff) ? -r.eff : null }));
@@ -202,11 +258,23 @@ export function rushReference(rows) {
       const bins = [0, 1, 2, 3].map((i) => q.reduce((s, r) => s + r.bins[i], 0));
       const tot = bins.reduce((s, x) => s + x, 0);
       lg.bins = tot ? bins.map((x) => x / tot) : null;
-      cache.set(pos, { pos, lg, n: q.length, cuts: tierCuts(forCuts(q), lgPool, RUSH_TIER_KEYS), text: referenceText(pos, q.length, "carries") });
+      cache.set(pos, { pos, lg, n: q.length, cuts: tierCuts(forCuts(q), lgPool, RUSH_TIER_KEYS), text: referenceText(pos, q.length, "carries"), pooled: rushPooled(q) });
     }
     return cache.get(pos);
   };
   return { at, pool, n: pool.length };
+}
+
+export function rushPooled(q) {
+  return {
+    rzOppTdRate: pooledRatio(q, (r) => r.rzOppTd, (r) => r.rzOpp),
+    in10TdRate: pooledRatio(q, (r) => r.in10Td, (r) => r.in10),
+    yds20Share: pooledRatio(q, (r) => r.yds20, (r) => r.yds),
+    ybcCar: pooledRatio(q, (r) => r.pfrYbc, (r) => r.pfrCar),
+    catchPct: pooledRatio(q, (r) => r.rec, (r) => r.tgt - (r.piTgt || 0)),
+    flRate: pooledRatio(q, (r) => r.fl, (r) => r.fum),
+    dkTdShare: plainMean(q.map((r) => r.dkTdShare)),
+  };
 }
 
 // Sort, nulls always last whichever direction; ties by carries.

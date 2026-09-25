@@ -32,6 +32,19 @@
 //                  pressured counts twice here, by design: it is a volume figure, not a rate, so it never conflicts
 //                  with Pressure % above (Adam's pairing, 2026-09-24, resolving D178: two figures, no double-count
 //                  tooltip). A defender the players file cannot place is in `unmapped`.
+// Team grid additions (D195; additive, no existing figure changes):
+//   Rush yds/g   = rushing yards on designed runs / the club's games (offense gained, defense allowed).
+//   Stuffed %    = designed runs gaining 0 or less / designed runs (offense suffered, defense forced).
+//   Pressure % allowed / Hits % (PFR) = the club's QBs' PFR pressures (hits) / their PFR dropbacks on offense; on
+//                  defense the opposing QBs' rows (the Press % rule), so pressPctAllowed always equals pressPct. Sack %
+//                  stays the play-by-play sackPct above (D178: one source per figure).
+//   Coverage (defense, PFR charting) = the club's CB and safety rows (COVER_POS by players.json position) summed:
+//                  covTgt, covCmp, covYds, covTd, covInt; covYdsTgt = covYds / covTgt; covCmpPct = covCmp / covTgt;
+//                  covRating = the NFL passer
+//                  rating on those sums with covTgt as attempts (null with no targets).
+//   YBC/carry (PFR advanced rushing) = Σ yards before contact / Σ PFR carries over the club's rushers' rows (offense)
+//                  or its opponents' rushers' rows (defense), quarterbacks left out (PFR's carries include their
+//                  scrambles and kneels, which are not designed runs); null while the week files' rush block is empty.
 // LEAGUE REFERENCE (Adam's perspective rule, D177): the plain mean over the clubs in the window (32 in a full week;
 // fewer on a week with byes), and colour tiers at the clubs' 90/70/40/15th percentiles (agg.js; under 8 clubs,
 // uncoloured). Lower-is-better keys are cut on the negated value; neutral keys (pass rate, aDOT, blitz %) are not
@@ -48,6 +61,19 @@ const finite = (x) => x !== null && x !== undefined && Number.isFinite(+x);
 const mean = (vals) => { const v = vals.filter(finite).map(Number); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
 
 export const EXPL_RUN = 10, EXPL_PASS = 20;
+// Coverage defenders (D195): players.json positions counted as cornerbacks and safeties.
+export const COVER_POS = (() => {
+  const s = new Set(["CB", "SAF", "S", "FS", "SS", "DB"]);
+  s.add = s.delete = s.clear = () => { throw new TypeError("COVER_POS is read-only"); };
+  return Object.freeze(s);
+})();
+// The NFL passer rating on (completions, attempts, yards, TDs, interceptions): four parts each clipped to 0-2.375,
+// summed, / 6 × 100 (0 to 158.3). null with no attempts.
+export function passerRating(cmp, att, yds, td, int) {
+  if (!(att > 0)) return null;
+  const c = (x) => Math.min(2.375, Math.max(0, x));
+  return ((c((cmp / att - 0.3) * 5) + c((yds / att - 3) * 0.25) + c((td / att) * 20) + c(2.375 - (int / att) * 25)) / 6) * 100;
+}
 
 // One play row as a team play, or null (a pi row, or a type the ledger uses for nothing else).
 export function teamPlay(r, C) {
@@ -71,7 +97,11 @@ const newSide = () => ({ games: new Set(), plays: 0, epa: 0, epaN: 0, succ: 0, s
   runSucc: 0, runSuccN: 0, runExpl: 0,
   att: 0, cmp: 0, yds: 0, air: 0, airN: 0, sacks: 0, pa: 0, paN: 0, bl: 0, blN: 0, expl: 0,
   zones: Object.fromEntries(ZONE_KEYS.map((k) => [k, emptyCell()])), wk: new Map(),
-  pfrPress: 0, pfrDb: 0, pfrWeeks: new Set(), qbPress: 0, qbDb: 0, qbWeeks: new Set() });
+  pfrPress: 0, pfrDb: 0, pfrWeeks: new Set(), qbPress: 0, qbDb: 0, qbWeeks: new Set(),
+  // Grid additions (D195): stuffed designed runs; PFR QB hits on the same QB rows as pressure; PFR coverage
+  // charting (defense); PFR yards before contact.
+  runStuff: 0, pfrHits: 0, qbHits: 0,
+  covTgt: 0, covCmp: 0, covYds: 0, covTd: 0, covInt: 0, covWeeks: new Set(), ybc: 0, ybcCar: 0, ybcWeeks: new Set() });
 
 function addPlay(a, key, e, playRec) {
   a.plays++;
@@ -87,6 +117,7 @@ function addPlay(a, key, e, playRec) {
     if (e.blitz !== null) { a.blN++; if (e.blitz) a.bl++; }
   } else {
     a.runs++; a.runYds += e.yards; w.runs++;
+    if (e.yards <= 0) a.runStuff++;
     if (e.epa !== null) { a.runEpa += e.epa; a.runEpaN++; w.runEpa += e.epa; w.runEpaN++; }
     if (e.succ !== null) { a.runSucc += e.succ; a.runSuccN++; }
     if (e.expl) a.runExpl++;
@@ -112,6 +143,10 @@ function sideRates(a, g) {
     runSuccPct: ratio(a.runSucc, a.runSuccN), runExplPct: ratio(a.runExpl, a.runs),
     pressPct: ratio(a.pfrPress, a.pfrDb), pfrPress: a.pfrPress, pfrDb: a.pfrDb, pfrWeeks: a.pfrWeeks.size,
     zones: a.zones,
+    // Grid additions (D195), additive.
+    rushYds: a.runYds, rushYdsG: ratio(a.runYds, g), stuffed: a.runStuff, stuffPct: ratio(a.runStuff, a.runs),
+    pressPctAllowed: ratio(a.pfrPress, a.pfrDb), hitPctAllowed: ratio(a.pfrHits, a.pfrDb), pfrHits: a.pfrHits,
+    ybc: a.ybc, ybcCarries: a.ybcCar, ybcCar: ratio(a.ybc, a.ybcCar), ybcWeeks: a.ybcWeeks.size,
   };
 }
 
@@ -154,8 +189,12 @@ export function aggregateTeams(blocks, players, st, opts = {}) {
       const team = players?.[id]?.teams?.[b.key], db = num(p?.dropbacks);
       if (!team || db === null || db <= 0 || !inWin.has(`${b.key}|${team}`)) continue;
       const a = S(off, team); a.pfrPress += num(p.pressures) ?? 0; a.pfrDb += db; a.pfrWeeks.add(b.key); any = true;
+      a.pfrHits += num(p.hits) ?? 0;
       const opp = info.get(`${b.key}|${team}`)?.opp;
-      if (opp && inWin.has(`${b.key}|${opp}`)) { const d = S(def, opp); d.qbPress += num(p.pressures) ?? 0; d.qbDb += db; d.qbWeeks.add(b.key); }
+      if (opp && inWin.has(`${b.key}|${opp}`)) {
+        const d = S(def, opp); d.qbPress += num(p.pressures) ?? 0; d.qbDb += db; d.qbWeeks.add(b.key);
+        d.qbHits += num(p.hits) ?? 0;
+      }
     }
     const defKeys = new Map(); // team -> pressures this week
     for (const [id, p] of Object.entries(b.pfr?.def || {})) {
@@ -163,6 +202,24 @@ export function aggregateTeams(blocks, players, st, opts = {}) {
       if (!team) { unmapped.push({ key: b.key, gsis: id }); continue; }
       if (!inWin.has(`${b.key}|${team}`)) continue;
       defKeys.set(team, (defKeys.get(team) || 0) + (num(p?.pressures) ?? 0));
+      // Coverage (D195): the club's CBs and safeties only, by players.json position; a row with no targets adds nothing.
+      const tgt = num(p?.covTgt);
+      if (COVER_POS.has(String(players?.[id]?.pos || "").toUpperCase()) && tgt !== null && tgt > 0) {
+        const d = S(def, team);
+        d.covTgt += tgt; d.covCmp += num(p.covCmp) ?? 0; d.covYds += num(p.covYds) ?? 0; d.covTd += num(p.covTd) ?? 0; d.covInt += num(p.covInt) ?? 0;
+        d.covWeeks.add(b.key);
+      }
+    }
+    // Yards before contact (D195, PFR advanced rushing; the block is {} until the refresh fetches the file): the
+    // offense over its own rushers' rows, the defense over its opponents' rushers' rows (the QB-side pattern above).
+    // Quarterbacks are left out: PFR's carries count their scrambles and kneels, which are not designed runs.
+    for (const [id, p] of Object.entries(b.pfr?.rush || {})) {
+      const team = players?.[id]?.teams?.[b.key], car = num(p?.carries), ybc = num(p?.ybc);
+      if (String(players?.[id]?.pos || "").toUpperCase() === "QB") continue;
+      if (!team || car === null || car <= 0 || ybc === null || !inWin.has(`${b.key}|${team}`)) continue;
+      const a = S(off, team); a.ybc += ybc; a.ybcCar += car; a.ybcWeeks.add(b.key);
+      const opp = info.get(`${b.key}|${team}`)?.opp;
+      if (opp && inWin.has(`${b.key}|${opp}`)) { const d = S(def, opp); d.ybc += ybc; d.ybcCar += car; d.ybcWeeks.add(b.key); }
     }
     for (const [team, pr] of defKeys) {
       const d = S(def, team), faced = d.wk.get(b.key)?.db || 0;
@@ -186,16 +243,27 @@ export function aggregateTeams(blocks, players, st, opts = {}) {
         epaPlay: ratio(w.epa, w.epaN), epaDb: ratio(w.dbEpa, w.dbEpaN), epaCar: ratio(w.runEpa, w.runEpaN) };
     });
     // The defense's Pressure % is the QB side; Pressures/g is the defenders' own sum, per game (D178 pairing).
-    const dr = { ...sideRates(d, g), pressPct: ratio(d.qbPress, d.qbDb), pfrDb: d.qbDb, pfrWeeks: d.qbWeeks.size, pressuresG: ratio(d.pfrPress, g), pfrPressDef: d.pfrPress, pfrWeeksDef: d.pfrWeeks.size };
+    const dr = { ...sideRates(d, g), pressPct: ratio(d.qbPress, d.qbDb), pfrDb: d.qbDb, pfrWeeks: d.qbWeeks.size, pressuresG: ratio(d.pfrPress, g), pfrPressDef: d.pfrPress, pfrWeeksDef: d.pfrWeeks.size,
+      // Grid additions (D195): pressure and hits from the opposing QBs' rows (the Press % rule), and coverage.
+      pressPctAllowed: ratio(d.qbPress, d.qbDb), hitPctAllowed: ratio(d.qbHits, d.qbDb), pfrHits: d.qbHits,
+      covTgt: d.covTgt, covCmp: d.covCmp, covYds: d.covYds, covTd: d.covTd, covInt: d.covInt, covWeeks: d.covWeeks.size,
+      covYdsTgt: ratio(d.covYds, d.covTgt), covCmpPct: ratio(d.covCmp, d.covTgt), covRating: passerRating(d.covCmp, d.covTgt, d.covYds, d.covTd, d.covInt) };
     return { team, g, off: sideRates(o, g), def: dr, series: { off: series(o, "off"), def: series(d, "def") } };
   });
   return { rows, weeks, lgZones, pfrThrough, latestKey: weeks[weeks.length - 1] || null, unmapped };
 }
 
 // ---- the league reference among clubs ------------------------------------------------------------------------
-export const TEAM_LG_KEYS = ["plays", "playsG", "dbG", "runsG", "passRate", "epaPlay", "epaDb", "epaCar", "succPct", "adot", "cmpPct", "sackPct", "pressPct", "pressuresG", "paPct", "blitzPct", "explPct", "ypc", "runSuccPct", "runExplPct"];
-export const OFF_TIER = { epaPlay: 1, epaDb: 1, epaCar: 1, succPct: 1, cmpPct: 1, explPct: 1, sackPct: -1, pressPct: -1 };
-export const DEF_TIER = { epaPlay: -1, epaDb: -1, epaCar: -1, succPct: -1, cmpPct: -1, explPct: -1, sackPct: 1, pressPct: 1, pressuresG: 1, ypc: -1, runSuccPct: -1, runExplPct: -1 };
+export const TEAM_LG_KEYS = ["plays", "playsG", "dbG", "runsG", "passRate", "epaPlay", "epaDb", "epaCar", "succPct", "adot", "cmpPct", "sackPct", "pressPct", "pressuresG", "paPct", "blitzPct", "explPct", "ypc", "runSuccPct", "runExplPct",
+  "rushYdsG", "stuffPct", "pressPctAllowed", "hitPctAllowed", "ybcCar", "covYdsTgt", "covCmpPct", "covRating"];
+// Direction: 1 = higher is better, -1 = lower is better. The grid additions (D195): on offense more rushing yards,
+// YPC and yards before contact are better, and fewer stuffed runs, pressures and hits allowed; on defense the
+// reverse for the run figures, more stuffed runs forced and more pressure and hits forced, and a lower passer
+// rating and fewer yards per target allowed in coverage.
+export const OFF_TIER = { epaPlay: 1, epaDb: 1, epaCar: 1, succPct: 1, cmpPct: 1, explPct: 1, sackPct: -1, pressPct: -1,
+  rushYdsG: 1, ypc: 1, ybcCar: 1, stuffPct: -1, pressPctAllowed: -1, hitPctAllowed: -1 };
+export const DEF_TIER = { epaPlay: -1, epaDb: -1, epaCar: -1, succPct: -1, cmpPct: -1, explPct: -1, sackPct: 1, pressPct: 1, pressuresG: 1, ypc: -1, runSuccPct: -1, runExplPct: -1,
+  rushYdsG: -1, ybcCar: -1, stuffPct: 1, pressPctAllowed: 1, hitPctAllowed: 1, covRating: -1, covYdsTgt: -1, covCmpPct: -1 };
 const dirOf = (side) => (side === "def" ? DEF_TIER : OFF_TIER);
 
 // { n (clubs), lg: { off: {k: mean}, def: {k: mean} }, cuts: { off: {k: {cuts, n}}, def } , text }.

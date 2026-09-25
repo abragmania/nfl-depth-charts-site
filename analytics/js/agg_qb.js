@@ -25,8 +25,19 @@
 // floor of 20; the league line on every tile and chart is the plain mean over that pool, and the colour tiers are
 // that pool's 90/70/40/15th percentiles (agg.js tierCuts; under 8 men, uncoloured). Sack % and Pressure % are cut
 // on the negated value (lower is better). Zone references are POOLED over every QB attempt in the window.
-import { colIndex, clubGames, percentileCuts, tierFromCuts, MIN_POOL } from "./agg.js";
-import { gamesInWindow, playPredicate } from "./filters.js";
+// RE-CUT ADDITIONS (increment 3, PROJECT.md Part 4 B2; new keys only, no existing key changes):
+//   rzDb         = dropbacks from the opponent's 20 or closer (the ledger's redzone flag).
+//   in10Car      = carries (designed runs + scrambles) from the opponent's 10 or closer (yardline_100 <= 10).
+//   snapPct      = the Usage page's rule: the mean of his weekly offensive snap percentages over his club's window games
+//                  the snap table lists him in (blank under a down or quarter filter).
+//   tdPct, intPct = td / att, int / att.
+//   dropPer100   = PFR drops by his receivers (pfr.pass drops) / his play-by-play attempts, over the weeks PFR lists him
+//                  with a drops figure, x 100 (the TPRR precedent; pfrDrops, pfrDropAtt carry the sums); null when none.
+//   fum, fl      = rows where he is the fumbler (the offense fumbled) and those lost, any play type.  flRate = fl / fum.
+//   dk, dkG, dkTdShare = agg_fantasy.js (DraftKings, D194), dkG over this row's g.
+import { colIndex, clubGames, percentileCuts, tierFromCuts, MIN_POOL, pooledRatio, plainMean } from "./agg.js";
+import { gamesInWindow, playPredicate, isSituational } from "./filters.js";
+import { fantasyByPlayer, dkFields } from "./agg_fantasy.js";
 
 const num = (v) => (v === null || v === undefined || v === "" || !Number.isFinite(+v) ? null : +v);
 const truthy = (v) => v === true || v === 1 || v === "1" || v === "true";
@@ -41,7 +52,8 @@ export const qbReferenceText = (n) => `QBs with ${QB_POOL_PER_GAME}+ dropbacks/g
 
 // Colour tiers among QBs. Rushing keys light up only for the runners: weak and low read as uncoloured (grey), so a
 // pocket passer's rushing block sits quiet rather than red (Adam, 2026-09-24).
-export const QB_TIER_KEYS = ["cmpPct", "epaDb", "succPct", "cpoe", "sackPct", "pressPct", "ypa", "rushAttG", "rushYdsG", "scrPct", "rushEpaG", "rushEpa"];
+export const QB_TIER_KEYS = ["cmpPct", "epaDb", "succPct", "cpoe", "sackPct", "pressPct", "ypa", "rushAttG", "rushYdsG", "scrPct", "rushEpaG", "rushEpa", "dkG"];
+export const QB_IN10 = 10;
 export const QB_LOWER_BETTER = new Set(["sackPct", "pressPct"]);
 export const QB_RUSH_KEYS = new Set(["rushAttG", "rushYdsG", "scrPct", "rushEpaG", "rushEpa"]);
 export function qbTierCuts(pool) {
@@ -104,7 +116,8 @@ function newAcc() {
   return { games: new Set(), keyGk: new Map(), db: 0, dbEpa: 0, dbEpaN: 0, dbSucc: 0, dbSuccN: 0, att: 0, cmp: 0, yds: 0, td: 0, int: 0,
     air: 0, airN: 0, cpoe: 0, cpoeN: 0, sacks: 0, pa: 0, paN: 0, bl: 0, blN: 0, scr: 0, scrYds: 0, des: 0, desYds: 0, rushTd: 0,
     rushEpa: 0, rushEpaN: 0, wk: new Map(), zones: Object.fromEntries(ZONE_KEYS.map((k) => [k, emptyCell()])),
-    pfrPress: 0, pfrDb: 0, pfrKeys: new Set(), tttW: 0, ttt: 0, xcW: 0, xc: 0 };
+    pfrPress: 0, pfrDb: 0, pfrKeys: new Set(), tttW: 0, ttt: 0, xcW: 0, xc: 0,
+    rzDb: 0, in10Car: 0, pfrDrops: 0, pfrDropAtt: 0, pfrDropWeeks: 0, snaps: [] };
 }
 const wkAcc = () => ({ db: 0, att: 0, cmp: 0, epa: 0, epaN: 0, cpoe: 0, cpoeN: 0, air: 0, airN: 0, car: 0, ryds: 0 });
 
@@ -129,6 +142,7 @@ export function aggregateQb(blocks, players, st, opts = {}) {
   const A = (id) => { if (!acc.has(id)) acc.set(id, newAcc()); return acc.get(id); };
   const lgZones = Object.fromEntries(ZONE_KEYS.map((k) => [k, emptyCell()]));
   let pfrThrough = null;
+  const fumOf = new Map(); // gsis -> { fum, fl }; apart from acc so a fumbler-only man never adds a row
 
   for (const b of blocks) {
     const C = colIndex(b.cols);
@@ -136,12 +150,17 @@ export function aggregateQb(blocks, players, st, opts = {}) {
     for (const r of b.plays || []) {
       const gk = `${b.key}|${r[C.posteam]}`;
       if (!gameOk(gk) || !pred(r)) continue;
+      const fid = C.fumbler === undefined ? null : r[C.fumbler];
+      if (fid) { const f = fumOf.get(fid) || { fum: 0, fl: 0 }; f.fum++; if (truthy(r[C.fumLost])) f.fl++; fumOf.set(fid, f); }
       const e = qbEvent(r, C);
       if (!e || !isQb(e.id)) continue;
       const a = A(e.id);
       a.games.add(gk); a.keyGk.set(b.key, gk);
       if (!a.wk.has(b.key)) a.wk.set(b.key, wkAcc());
       const w = a.wk.get(b.key);
+      const yl = num(r[C.yardline_100]);
+      if (e.db && truthy(r[C.redzone])) a.rzDb++;
+      if ((e.kind === "scramble" || e.kind === "run") && yl !== null && yl <= QB_IN10) a.in10Car++;
       if (e.db) {
         a.db++; w.db++;
         if (e.epa !== null) { a.dbEpa += e.epa; a.dbEpaN++; w.epa += e.epa; w.epaN++; }
@@ -176,14 +195,25 @@ export function aggregateQb(blocks, players, st, opts = {}) {
   // PFR and NGS: weekly tables, joined to the week and club game he played in the window. pfrThrough is the latest
   // window week whose file carries any PFR passing row (PFR runs about a week behind the games).
   const winKeys = new Set([...inWin].filter(gameOk).map((gk) => gk.split("|")[0]));
+  const situational = isSituational(st);
   for (const b of blocks) {
     if (winKeys.has(b.key) && Object.keys(b.pfr?.pass || {}).length && (!pfrThrough || b.key > pfrThrough)) pfrThrough = b.key;
     for (const [id, p] of Object.entries(b.pfr?.pass || {})) {
       const gk = acc.get(id)?.keyGk.get(b.key);
       if (!gk) continue;
       const a = acc.get(id), db = num(p.dropbacks);
+      // Re-cut: his receivers' drops over his attempts that week (its own condition; the pressure rule below is unchanged).
+      const dr = num(p.drops);
+      if (dr !== null && !situational) { a.pfrDrops += dr; a.pfrDropAtt += a.wk.get(b.key)?.att || 0; a.pfrDropWeeks++; }
       if (db === null || db <= 0) continue;
       a.pfrDb += db; a.pfrPress += num(p.pressures) ?? 0; a.pfrKeys.add(b.key);
+    }
+    // Re-cut snapPct: the snap table, his club's window game that week (the Usage page's rule).
+    if (!situational) for (const [id, s] of Object.entries(b.snaps || {})) {
+      const a = acc.get(id), off = num(s?.off);
+      const team = players?.[id]?.teams?.[b.key];
+      if (!a || !team || off === null || off <= 0 || !gameOk(`${b.key}|${team}`)) continue;
+      a.snaps.push(off / 100);
     }
     for (const [id, n] of Object.entries(b.ngs?.passing || {})) {
       const a = acc.get(id); const w = a?.wk.get(b.key);
@@ -196,6 +226,7 @@ export function aggregateQb(blocks, players, st, opts = {}) {
   const clubWin = new Map();
   for (const gk of inWin) if (gameOk(gk)) { const t = gk.split("|")[1]; clubWin.set(t, (clubWin.get(t) || 0) + 1); }
   const weeks = [...winKeys].sort();
+  const fantasy = fantasyByPlayer(blocks, players, st);
   const rows = [];
   for (const [id, a] of acc) {
     const meta = players?.[id] || {};
@@ -221,19 +252,47 @@ export function aggregateQb(blocks, players, st, opts = {}) {
         return { key, db: w.db, att: w.att, epaDb: ratio(w.epa, w.epaN), cpoe: ratio(w.cpoe, w.cpoeN), adot: ratio(w.air, w.airN), cmpPct: ratio(w.cmp, w.att), car: w.car, ryds: w.ryds };
       }),
       zones: a.zones,
+      ...recutQb(a, fumOf.get(id), situational),
+      ...dkFields(fantasy.get(id), gp, st),
     });
   }
   return { rows, weeks, lgZones, pfrThrough, latestKey: weeks[weeks.length - 1] || null };
 }
 
+// The re-cut's additive QB keys (see the header).
+function recutQb(a, f, situational) {
+  const fum = f?.fum ?? 0, fl = f?.fl ?? 0;
+  const dropsOk = !situational && a.pfrDropWeeks > 0;
+  return {
+    rzDb: a.rzDb, in10Car: a.in10Car,
+    snapPct: !situational && a.snaps.length ? a.snaps.reduce((s, x) => s + x, 0) / a.snaps.length : null,
+    tdPct: ratio(a.td, a.att), intPct: ratio(a.int, a.att),
+    pfrDrops: dropsOk ? a.pfrDrops : null, pfrDropAtt: dropsOk ? a.pfrDropAtt : null,
+    dropPer100: dropsOk && a.pfrDropAtt > 0 ? (100 * a.pfrDrops) / a.pfrDropAtt : null,
+    fum, fl, flRate: ratio(fl, fum),
+  };
+}
+
 // The league reference from rows aggregated with no team or opponent filter: the pool, the plain means over it
-// for every key a tile or chart compares, and the tier cuts.
+// for every key a tile or chart compares, and the tier cuts. `pooled` (re-cut B2, the variance strip): each rate as
+// the pool's summed numerator over its summed denominator, except dkTdShare, the plain pool mean; lg is untouched.
 export const QB_LG_KEYS = ["db", "att", "cmpPct", "yds", "ypa", "td", "int", "adot", "epaDb", "succPct", "cpoe", "sackPct", "pressPct", "paPct",
-  "blitzPct", "ttt", "xcomp", "rushAtt", "rushYds", "rushTd", "rushEpa", "rushAttG", "rushYdsG", "rushEpaG", "scrPct", "scr", "des"];
+  "blitzPct", "ttt", "xcomp", "rushAtt", "rushYds", "rushTd", "rushEpa", "rushAttG", "rushYdsG", "rushEpaG", "scrPct", "scr", "des",
+  // re-cut increment 3 (B2)
+  "rzDb", "in10Car", "snapPct", "tdPct", "intPct", "dropPer100", "fum", "fl", "dk", "dkG", "dkTdShare"];
 export function qbReference(rows) {
   const pool = rows.filter((r) => inQbPool(r.db, r.clubG));
   const lg = Object.fromEntries(QB_LG_KEYS.map((k) => [k, mean(pool.map((r) => r[k]))]));
-  return { pool, n: pool.length, lg, cuts: qbTierCuts(pool), text: qbReferenceText(pool.length) };
+  return { pool, n: pool.length, lg, cuts: qbTierCuts(pool), text: qbReferenceText(pool.length), pooled: qbPooled(pool) };
+}
+export function qbPooled(pool) {
+  return {
+    tdPct: pooledRatio(pool, (r) => r.td, (r) => r.att),
+    intPct: pooledRatio(pool, (r) => r.int, (r) => r.att),
+    dropPer100: pooledRatio(pool, (r) => r.pfrDrops, (r) => r.pfrDropAtt, 100),
+    flRate: pooledRatio(pool, (r) => r.fl, (r) => r.fum),
+    dkTdShare: plainMean(pool.map((r) => r.dkTdShare)),
+  };
 }
 
 // Sort, nulls always last whichever direction; ties by dropbacks.

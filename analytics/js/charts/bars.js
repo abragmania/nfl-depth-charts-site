@@ -10,8 +10,20 @@ const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "
 
 // strips: [{ k, label, scale, fmt(v) -> string, short(v) -> string (bar label), total, totalText, avg, avgText, tier(v) -> "elite"|… }]
 // series: [{ key, opp, home, inWin, [k]: value|null }]
-export function weeklyStrips(series, strips, { season, bw = 40, gap = 10, sh = 58, lw = 150, rw = 86, activeKey = null } = {}) {
+// `fit` (optional; player-page kit, D193 second/third draft): a target total pixel width - "the graph that goes
+// across the page", not a handful of bars stranded in the left fifth of the band. When given, each of the `n`
+// weeks gets an even share of that width; the bar itself widens only up to `maxBw` (so 5 weeks don't turn into 5
+// giant blocks), and whatever's left over in that week's share becomes extra gap, so the columns spread out to
+// use the full width either way - a wide band with few weeks reads as evenly spaced, not bar-then-dead-space.
+// `lw`/`rw` stay put, so the label column keeps its width and the league-line label stays pinned to the row's
+// right edge. Omit `fit` and nothing here changes - every existing caller keeps its exact pixel output.
+export function weeklyStrips(series, strips, { season, bw = 40, gap = 10, sh = 58, lw = 150, rw = 86, activeKey = null, fit = null, maxBw = 90 } = {}) {
   const n = series.length;
+  if (fit && n > 0) {
+    const cell = (fit - lw - rw) / n;
+    bw = Math.max(18, Math.min(maxBw, cell * 0.72));
+    gap = Math.max(gap, cell - bw);
+  }
   const W = lw + n * (bw + gap) + rw, top0 = 22;
   const H = top0 + strips.length * (sh + 16) + 30;
   const x = (i) => lw + i * (bw + gap);

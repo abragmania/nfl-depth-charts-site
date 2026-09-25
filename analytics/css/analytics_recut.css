@@ -1,2 +1,132 @@
-/* D193 the analytics re-cut (page layers, tiles, blocks): empty until the Plan Agent's wider re-cut lands (B3
-   increment 5 freezes it). Linked from index.html after analytics.css. */
+/* D193 the analytics re-cut, player-page kit (B3 increment 5; PROJECT.md "Analytics re-cut and team grid — the
+   plan", section A/B3). Styles views/kit.js's builders: headlineRow, fantasyBand, oppRow, phaseBlock,
+   varianceStrip, maddenFoot. Every class is prefixed an-rc- so it never collides with today's an-* classes;
+   front-block and opportunity count tiles reuse the existing .an-tile look on purpose (analytics.css), so they
+   read exactly like today's tiles. Tier colour rides on the --t custom property analytics.css's .t-elite/
+   .t-strong/.t-avg/.t-weak/.t-flat classes already set (kit.js appends one of those classes to the tile itself).
+   The pass (purple) and rush (gold) tints below are copied byte for byte from analytics.css's .an-qb-pass/
+   .an-qb-rush blocks, D177's original QB page, so the re-cut pages keep the same two colours Adam already knows.
+   Frozen after this increment (D193 B3): a later increment proposes a change here rather than editing on the fly.
+
+   Second draft (Adam, 2026-09-25): headline tiles shrunk to about 60% of the first draft's height (value 22-24px,
+   was 32) now that they also carry a league rank; the Opportunity frame moved inside the new fantasy band; the
+   "More" side columns brightened one step; the variance strip got one more line of vertical air.
+
+   Third draft (Adam, 2026-09-25): "too many fantasy charts" - the band is back to ONE chart (DK points, with up
+   to two participation shares overlaid as thin lines on a right-hand 0-100% scale) plus a compact game log table,
+   not a stack of weekly-strip rows; then, a minute later, "it should not fully dominate the whole page or any
+   page though" - the chart is sized to about today's week-by-week card (~200px including its own margins, not a
+   tall page-spanning graphic) and the table is tight (12px rows, no extra air), so the whole band plus Rushing
+   and Receiving both fit the first screen at 2560x1300.
+
+   Fourth (final) draft (Adam, 2026-09-25): keep the chart and the vertical game log (he prefers rows to weeks-as-
+   columns). Two changes: (1) the opportunity/share columns and DK now take a quiet background tint by tier
+   against a per-column cuts reference, "the same could probably be accomplished through dynamically coloured
+   cells ... especially helpful over multi-week or season-long periods" - low-alpha tier-hue fills only, never
+   coloured text, so a season of rows reads as a heat strip down each tinted column; totals rows are never tinted.
+   (2) "you don't have to fill up all the space" - the chart no longer stretches its columns to the band's full
+   width; each column is capped around 120px, so five weeks stay a compact chart sitting left in the band instead
+   of five 300px-wide bars, and the legend (anchored to the chart's own right edge) moves in with it.
+
+   Laptop and big desktop (D190: the page column is capped at 1760px, laptop's 28px gutter untouched below that):
+   the headline row never wraps even at six tiles (flex-wrap:nowrap, min-width lets tiles shrink first) and each
+   tile's max-width keeps six of them from stretching absurdly wide once the column reaches its 1760px cap. The
+   fantasy chart is kit.js's own SVG (not charts/bars.js's weeklyStrips, which has no overlay-line concept) and
+   sizes its columns, capped, to the width it is given at render time; this stylesheet only paints it. */
+
+/* ---- (1) headline: compact large-type tiles, each with the league figure and his league rank ---- */
+.an-rc-headline { display:flex; flex-wrap:nowrap; gap:12px; margin-bottom:6px; }
+.an-rc-htile { flex:1 1 0; min-width:0; max-width:280px; background:#161b21; border:1px solid #232a31; border-radius:var(--r-card); padding:7px 12px 8px; }
+.an-rc-htile[class*=" t-"] { background:color-mix(in srgb, var(--t) 14%, #161b21); border-color:color-mix(in srgb, var(--t) 46%, #232a31); }
+.an-rc-label { display:block; color:var(--dim); font-size:10.5px; font-weight:700; letter-spacing:.03em; text-transform:uppercase; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.an-rc-val { display:block; font-size:23px; line-height:1.15; font-weight:800; color:var(--t, var(--ink)); font-variant-numeric:tabular-nums; margin-top:1px; white-space:nowrap; }
+.an-rc-lg { display:block; font-style:normal; color:var(--dim); font-size:11px; font-weight:600; margin-top:2px; }
+.an-rc-sub { color:var(--muted); font-size:11px; font-weight:600; margin-top:1px; white-space:nowrap; }
+
+/* ---- fantasy band: one compact chart, a compact game log, the Opportunity tiles - one section among equals ---- */
+.an-rc-fanband { background:var(--panel2); border:1px solid var(--line); border-radius:var(--r-card); padding:11px 14px 12px; margin-bottom:6px; }
+.an-rc-fanhead { display:flex; align-items:baseline; gap:10px; margin-bottom:2px; }
+.an-rc-fanh { color:var(--ink); font-size:13px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; }
+.an-rc-fansub { color:var(--muted); font-size:12px; font-weight:600; }
+.an-rc-fanchart { margin-top:2px; }
+.an-rc-fanchart .an-wb-bar { fill:var(--accent); }
+.an-rc-fanband .an-rc-opp { margin-top:8px; margin-bottom:0; background:#10141a; }
+/* Overlay lines (opportunity/target share, target/air-yards share): two distinct muted hues that don't fight the
+   gold bars, reusing existing band colours rather than inventing new ones. */
+.an-rc-ovline { fill:none; stroke-width:2px; }
+.an-rc-ovdot { stroke:var(--panel2); stroke-width:1px; }
+.an-rc-ov1 { stroke:var(--band-WR); fill:var(--band-WR); }
+.an-rc-ov2 { stroke:var(--band-TE); fill:var(--band-TE); }
+.an-rc-ovaxis { fill:var(--dim); font-size:9px; }
+.an-rc-ovlegend { font-size:10px; font-weight:600; fill:var(--muted); }
+.an-rc-ovlegend tspan { font-weight:800; }
+
+/* ---- the game log table: compact (12px rows, no extra air), one row per game ---- */
+.an-rc-gl { width:100%; border-collapse:collapse; font-size:12px; font-variant-numeric:tabular-nums; margin-top:8px; }
+.an-rc-gl th { text-align:right; color:var(--dim); font-size:10px; font-weight:700; padding:2px 7px; border-bottom:1px solid var(--line); white-space:nowrap; }
+.an-rc-gl th.an-rc-gl-dk { color:var(--accent); } .an-rc-gl th.an-rc-gl-s1 { color:var(--band-WR); } .an-rc-gl th.an-rc-gl-s2 { color:var(--band-TE); }
+.an-rc-gl td { text-align:left; padding:1.5px 7px; border-bottom:1px solid #1a1f25; white-space:nowrap; color:var(--ink); line-height:1.35; }
+.an-rc-gl td.num, .an-rc-gl th.num { text-align:right; }
+.an-rc-gl-dk { color:var(--accent); font-weight:700; }
+.an-rc-gl-s1 { color:var(--band-WR); }
+.an-rc-gl-s2 { color:var(--band-TE); }
+.an-rc-gl-row.dim td { color:var(--dim); font-style:italic; }
+.an-rc-gl-season td { padding-top:7px; color:var(--muted); font-size:10px; font-weight:800; letter-spacing:.1em; text-transform:uppercase; border-bottom:1px solid var(--line); }
+.an-rc-gl-total td { font-weight:800; border-top:1px solid #2a323b; border-bottom:2px solid #2a323b; color:var(--ink); }
+.an-rc-gl-total .an-rc-gl-dk { color:var(--accent); }
+/* Heat tint (fourth draft): a quiet background wash only, riding the same --t custom property the tier classes
+   already set (analytics.css) - text colour is untouched (the cell keeps its DK/share colour or plain ink), so a
+   season of rows reads as a heat strip down the tinted column without shouting. */
+.an-rc-gl td[class*=" t-"] { background:color-mix(in srgb, var(--t) 15%, transparent); }
+
+/* ---- opportunity tiles: count tiles plain, share tiles carry a bar + league tick ---- */
+.an-rc-opp { background:var(--panel2); border:1px solid var(--line); border-radius:var(--r-card); padding:10px 14px 12px; margin-bottom:6px; }
+.an-rc-opph { color:var(--muted); font-size:10.5px; font-weight:800; letter-spacing:.1em; text-transform:uppercase; margin-bottom:8px; }
+.an-rc-opprow { display:flex; flex-wrap:wrap; gap:10px; }
+.an-rc-otile { flex:1 1 120px; max-width:210px; min-width:0; background:#161b21; border:1px solid #232a31; border-radius:var(--r-row); padding:6px 10px 8px; }
+.an-rc-otile[class*=" t-"] { background:color-mix(in srgb, var(--t) 12%, #161b21); border-color:color-mix(in srgb, var(--t) 40%, #232a31); }
+.an-rc-olabel { display:block; color:var(--dim); font-size:10.5px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.an-rc-oval { display:block; font-size:17px; font-weight:700; color:var(--t, var(--ink)); font-variant-numeric:tabular-nums; }
+.an-rc-olg { font-style:normal; color:var(--dim); font-size:11px; font-weight:600; margin-left:2px; }
+.an-rc-osub { color:var(--muted); font-size:10.5px; margin-top:2px; }
+/* The bar is what tells a share tile apart from a plain count at a glance (Adam's ask): a thin track, his fill,
+   a dashed league tick. */
+.an-rc-obar { position:relative; height:8px; margin-top:6px; border-radius:3px; background:#0f1317; border:1px solid #20262d; overflow:hidden; }
+.an-rc-ofill { position:absolute; left:0; top:0; bottom:0; border-radius:2px; background:var(--t, #4a535d); }
+.an-rc-otick { position:absolute; top:-2px; bottom:-2px; width:0; border-left:2px dashed #c9d1da; opacity:.8; }
+
+/* ---- passing (purple) / rushing (gold) phase block: front tiles + a narrow tinted side column ---- */
+/* Tints copied from analytics.css's .an-qb-pass/.an-qb-rush (D177's original QB page). */
+.an-rc-phase { border-radius:var(--r-card); padding:12px 16px 14px; min-width:0; }
+.an-rc-phase-pass { background:rgba(139,109,209,.05); border:1px solid color-mix(in srgb, var(--band-QB) 38%, transparent); }
+.an-rc-phase-rush { background:rgba(202,160,83,.045); border:1px solid color-mix(in srgb, var(--band-BACKFIELD) 36%, transparent); }
+.an-rc-phase-top { display:flex; gap:16px; align-items:flex-start; flex-wrap:wrap; }
+.an-rc-phase-main { flex:1 1 320px; min-width:0; }
+.an-rc-phaseh { font-size:13px; font-weight:800; letter-spacing:.1em; text-transform:uppercase; margin-bottom:8px; }
+.an-rc-phase-pass .an-rc-phaseh { color:var(--band-QB); }
+.an-rc-phase-rush .an-rc-phaseh { color:var(--band-BACKFIELD); }
+.an-rc-fronttiles { display:flex; flex-wrap:wrap; gap:8px; }
+/* Visibly secondary (Adam: the divide must not be stark) but brightened one step from the first draft (Adam: "read
+   a touch dim") - a stronger tint behind the panel, and label text a blend of muted/ink rather than plain muted. */
+.an-rc-phase-side { flex:0 0 172px; display:flex; flex-direction:column; gap:7px; border-radius:var(--r-row); padding:9px 11px; align-self:stretch; }
+.an-rc-phase-pass .an-rc-phase-side { background:color-mix(in srgb, var(--band-QB) 15%, transparent); }
+.an-rc-phase-rush .an-rc-phase-side { background:color-mix(in srgb, var(--band-BACKFIELD) 15%, transparent); }
+.an-rc-sideh { color:var(--dim); font-size:9.5px; font-weight:800; letter-spacing:.1em; text-transform:uppercase; margin-bottom:1px; }
+.an-rc-sideitem { display:flex; align-items:baseline; justify-content:space-between; gap:10px; }
+.an-rc-sideitem span { color:color-mix(in srgb, var(--muted) 55%, var(--ink) 45%); font-size:11px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.an-rc-sideitem b { color:var(--ink); font-size:12.5px; font-weight:700; font-variant-numeric:tabular-nums; white-space:nowrap; }
+.an-rc-sideitem[class*=" t-"] b { color:var(--t); }
+.an-rc-phasebody { margin-top:12px; }
+
+/* ---- variance: his rate vs the league's, neutral above/below marker, never good/bad colour ---- */
+.an-rc-variance { display:flex; flex-wrap:wrap; gap:12px 20px; background:var(--panel2); border:1px solid var(--line); border-radius:var(--r-card); padding:13px 14px; }
+.an-rc-varitem { display:flex; flex-direction:column; gap:2px; min-width:132px; }
+.an-rc-varlabel { color:var(--dim); font-size:10.5px; font-weight:700; }
+.an-rc-varvals { display:flex; align-items:center; gap:5px; font-size:13px; font-variant-numeric:tabular-nums; }
+.an-rc-varvals b { color:var(--ink); font-weight:700; }
+/* Neutral on purpose: both directions are the same muted colour, only the glyph differs. */
+.an-rc-vararrow { font-style:normal; font-size:10px; color:var(--muted); line-height:1; }
+.an-rc-varlg { color:var(--dim); font-size:11px; font-weight:600; }
+
+/* ---- Madden foot ---- */
+.an-rc-maddenfoot { margin-top:4px; }

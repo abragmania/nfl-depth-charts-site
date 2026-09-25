@@ -35,7 +35,21 @@
 // Routes and snaps are weekly tables, so they go blank (null) under a down or quarter filter. A week the
 // routes table does not list a man for (heatradar lists 8+ routes only) is left out of his route figures,
 // never counted as zero.
+// RE-CUT ADDITIONS (increment 3, PROJECT.md Part 4 B2; every one is a new key, no existing key changes):
+//   piTgt        = his pass-interference targets (0 with "excl. PI targets").
+//   catchPct     = rec / (tgt - piTgt) (a PI target is never a catch or an incompletion).
+//   cpoeTgt      = mean play-by-play cpoe over his non-PI targets that carry one (catch % over expected, decision 9);
+//                  cpoeN = how many carried one.
+//   ydsTgt       = yds / tgt.  tgtG = tgt / g.  tdTgt = td / tgt.
+//   rzTd         = TDs on his red-zone targets.  rzCar, rzCarTd = his red-zone carries (rushEvent) and their TDs.
+//   rzOpp        = rz + rzCar.  rzOppTd = rzTd + rzCarTd.  rzTdRate = rzTd / rz.  rzOppTdRate = rzOppTd / rzOpp.
+//   fum, fl      = rows where he is the fumbler (the offense fumbled), and those lost.  flRate = fl / fum.
+//   dropPer100   = PFR receiving drops / his non-PI targets, over the weeks PFR's receiving file lists him, x 100
+//                  (pfrDrops, pfrTgt carry the two sums); null when PFR lists him in none (its file may be empty).
+//   dk, dkG, dkTdShare = agg_fantasy.js (DraftKings, D194), dkG over this row's g.
+// PFR is a weekly table, so dropPer100 goes blank under a down or quarter filter, as routes do.
 import { gamesInWindow, playPredicate, posAllowed, isSituational } from "./filters.js";
+import { fantasyByPlayer, dkFields } from "./agg_fantasy.js";
 
 export const colIndex = (cols) => Object.fromEntries((cols || []).map((c, i) => [c, i]));
 
@@ -86,9 +100,13 @@ export function aggregateUsage(blocks, players, st) {
 
   const teamAtt = new Map(), teamAir = new Map(), teamRuns = new Map();
   const acc = new Map();
+  // Kept apart from acc so a man seen only as a fumbler never changes which rows exist or their order.
+  const fumOf = new Map(); // gsis -> { fum, fl }
+  const pfrRec = new Map(); // gsis -> Map(gk -> PFR drops that week)
   const P = (id) => {
     if (!acc.has(id)) acc.set(id, { tgt: 0, air: 0, adotN: 0, rz: 0, ez: 0, rec: 0, yds: 0, td: 0, epa: 0, epaN: 0,
       car: 0, des: 0, ryds: 0, repa: 0, rtd: 0, wkCar: new Map(),
+      piTgt: 0, cpoe: 0, cpoeN: 0, rzTd: 0, rzCar: 0, rzCarTd: 0, wkNp: new Map(),
       games: new Set(), wk: new Map(), wkAir: new Map(), wkRec: new Map(), snaps: new Map(), routes: new Map(), zones: {} });
     return acc.get(id);
   };
@@ -105,6 +123,8 @@ export function aggregateUsage(blocks, players, st) {
       // Appearance on any play (before the down/quarter filter) makes it one of his games.
       for (const col of ["passer", "target", "rusher"]) if (r[C[col]]) P(r[C[col]]).games.add(gk);
       if (!pred(r)) continue;
+      const fid = C.fumbler === undefined ? null : r[C.fumbler];
+      if (fid) { const f = fumOf.get(fid) || { fum: 0, fl: 0 }; f.fum++; if (truthy(r[C.fumLost])) f.fl++; fumOf.set(fid, f); }
       // Carries (D191 opportunities): the Rushing page's rule, after the same filters.
       if (r[C.type] === "run") add(teamRuns, gk, 1);
       const ev = rushEvent(r, C);
@@ -114,6 +134,7 @@ export function aggregateUsage(blocks, players, st) {
         p.ryds += num(r[C.yards]) ?? 0;
         const e = num(r[C.epa]); if (e !== null) p.repa += e;
         if (truthy(r[C.td])) p.rtd++;
+        if (truthy(r[C.redzone])) { p.rzCar++; if (truthy(r[C.td])) p.rzCarTd++; }
         add(p.wkCar, gk, 1);
       }
       if (r[C.type] !== "pass") continue;
@@ -127,8 +148,10 @@ export function aggregateUsage(blocks, players, st) {
       if (!(pi && air === null)) p.adotN++;
       const band = r[C.band], dir = r[C.dir];
       if (band && dir) p.zones[`${band}${dir}`] = (p.zones[`${band}${dir}`] || 0) + 1;
-      if (truthy(r[C.redzone])) p.rz++;
+      if (truthy(r[C.redzone])) { p.rz++; if (truthy(r[C.td]) && !truthy(r[C.int])) p.rzTd++; }
       if (truthy(r[C.ezTarget])) p.ez++;
+      if (pi) p.piTgt++;
+      else { add(p.wkNp, gk, 1); const cp = num(r[C.cpoe]); if (cp !== null) { p.cpoe += cp; p.cpoeN++; } }
       if (!pi && truthy(r[C.complete])) { p.rec++; const y = num(r[C.yards]) ?? 0; p.yds += y; add(p.wkRec, gk, y); }
       if (truthy(r[C.td]) && !truthy(r[C.int])) p.td++;
       const e = num(r[C.epa]); if (e !== null) { p.epa += e; p.epaN++; }
@@ -152,7 +175,18 @@ export function aggregateUsage(blocks, players, st) {
       if (!gameOk(gk)) continue;
       P(id).routes.set(gk, { n, pct: frac(rt.routePct) });
     }
+    // PFR receiving (re-cut decision 3): his drops that week, joined to his club's game like the routes table.
+    for (const [id, x] of Object.entries(b.pfr?.rec || {})) {
+      const d = num(x?.drops);
+      const team = players?.[id]?.teams?.[b.key];
+      if (!team || d === null) continue;
+      const gk = `${b.key}|${team}`;
+      if (!gameOk(gk)) continue;
+      if (!pfrRec.has(id)) pfrRec.set(id, new Map());
+      pfrRec.get(id).set(gk, d);
+    }
   }
+  const fantasy = fantasyByPlayer(blocks, players, st);
 
   // The club's games in the window (after the filters): the reference pool's per-game rule scales with it.
   const clubWin = new Map();
@@ -206,9 +240,29 @@ export function aggregateUsage(blocks, players, st) {
       recEpa: p.epa, car: p.car, des: p.des, rushYds: p.ryds, rushEpa: p.repa, rushTd: p.rtd, clubAtt: att, clubRuns: runs,
       opp, oppG: ratio(opp, g.length), oppShare: ratio(p.tgt + p.des, att + runs),
       ydsOpp: ratio(p.yds + p.ryds, opp), epaOpp: ratio(p.epa + p.repa, opp), tdOpp: ratio(p.td + p.rtd, opp),
+      ...recutUsage(p, g, fumOf.get(id), pfrRec.get(id), situational),
+      ...dkFields(fantasy.get(id), g.length, st),
     });
   }
   return { rows, weeks };
+}
+
+// The re-cut's additive usage keys (see the header). `g` is his sorted games list.
+function recutUsage(p, g, f, pfr, situational) {
+  const rzOpp = p.rz + p.rzCar, rzOppTd = p.rzTd + p.rzCarTd;
+  const fum = f?.fum ?? 0, fl = f?.fl ?? 0;
+  let pfrDrops = null, pfrTgt = null;
+  if (!situational && pfr) {
+    const mine = new Set(g);
+    for (const [gk, d] of pfr) if (mine.has(gk)) { pfrDrops = (pfrDrops ?? 0) + d; pfrTgt = (pfrTgt ?? 0) + (p.wkNp.get(gk) || 0); }
+  }
+  return {
+    piTgt: p.piTgt, catchPct: ratio(p.rec, p.tgt - p.piTgt), cpoeTgt: ratio(p.cpoe, p.cpoeN), cpoeN: p.cpoeN,
+    ydsTgt: ratio(p.yds, p.tgt), tgtG: ratio(p.tgt, g.length), tdTgt: ratio(p.td, p.tgt),
+    rzTd: p.rzTd, rzCar: p.rzCar, rzCarTd: p.rzCarTd, rzOpp, rzOppTd, rzTdRate: ratio(p.rzTd, p.rz), rzOppTdRate: ratio(rzOppTd, rzOpp),
+    fum, fl, flRate: ratio(fl, fum),
+    pfrDrops, pfrTgt, dropPer100: pfrDrops === null || !(pfrTgt > 0) ? null : (100 * pfrDrops) / pfrTgt,
+  };
 }
 
 // PERSPECTIVE (Adam, 2026-09-24): every rate is shown against the league average for the same window. The
@@ -216,7 +270,9 @@ export function aggregateUsage(blocks, players, st) {
 // position's reference pool with minTgt 0. `weekly[key]` holds the same means for each week, over the players
 // who played that week. Rows come aggregated with no team or opponent filter, so a one-club view still compares
 // with the whole league.
-const AVG_KEYS = ["opp", "oppG", "oppShare", "ydsOpp", "epaOpp", "tdOpp", "tgtShare", "ayShare", "wopr", "adot", "epaTgt", "yprr", "tprr", "routePct", "snapPct"];
+// Re-cut increment 3 appends dkG, dk, tgtG and catchPct (B2).
+const AVG_KEYS = ["opp", "oppG", "oppShare", "ydsOpp", "epaOpp", "tdOpp", "tgtShare", "ayShare", "wopr", "adot", "epaTgt", "yprr", "tprr", "routePct", "snapPct",
+  "dkG", "dk", "tgtG", "catchPct"];
 export function leagueAverages(rows, minTgt = 0) {
   const q = rows.filter((r) => r.tgt >= minTgt);
   const mean = (vals) => { const v = vals.filter((x) => x !== null && x !== undefined); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
@@ -246,7 +302,7 @@ export const referenceText = (pos, n, unit = "targets") => `${pos}s with ${POOL_
 export const TIER_PCTS = [0.9, 0.7, 0.4, 0.15];
 export const TIER_NAMES = ["elite", "strong", "avg", "weak", "flat"];
 export const MIN_POOL = 8;
-export const USAGE_TIER_KEYS = ["opp", "oppG", "oppShare", "tgtShare", "ayShare", "wopr", "routePct", "snapPct", "tprr", "yprr", "epaTgt"];
+export const USAGE_TIER_KEYS = ["opp", "oppG", "oppShare", "tgtShare", "ayShare", "wopr", "routePct", "snapPct", "tprr", "yprr", "epaTgt", "dkG"];
 const finite = (x) => x !== null && x !== undefined && Number.isFinite(+x);
 export function percentileCuts(vals) {
   const v = vals.filter(finite).map(Number).sort((a, b) => a - b);
@@ -280,7 +336,9 @@ export function tierNote(entry, pos) {
 
 // The usage reference for every position from rows aggregated with no team, opponent or position filter (the
 // whole league, the same window): `at(pos)` gives { lg (leagueAverages over his position's pool, with tgt, rz,
-// ez and routes means added), n, cuts, text }. `league` is every pass-catching position's pool together.
+// ez and routes means added), n, cuts, text, pooled }. `league` is every pass-catching position's pool together.
+// `pooled` (re-cut B2, the variance strip): each rate as the position pool's summed numerator over its summed
+// denominator (the zone precedent), except dkTdShare, the plain pool mean. The plain means in lg are untouched.
 export function usageReference(rows) {
   const pool = rows.filter((r) => REF_POS.has(r.pos) && inPool(r.tgt, r.clubG));
   const mean = (vals) => { const v = vals.filter(finite); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
@@ -291,11 +349,32 @@ export function usageReference(rows) {
       const q = pool.filter((r) => r.pos === pos);
       const lg = leagueAverages(q, 0);
       for (const k of ["tgt", "rz", "ez", "routes"]) lg.overall[k] = mean(q.map((r) => r[k]));
-      cache.set(pos, { pos, lg, n: q.length, cuts: tierCuts(q, pool, USAGE_TIER_KEYS), text: referenceText(pos, q.length) });
+      cache.set(pos, { pos, lg, n: q.length, cuts: tierCuts(q, pool, USAGE_TIER_KEYS), text: referenceText(pos, q.length), pooled: usagePooled(q) });
     }
     return cache.get(pos);
   };
   return { at, pool, n: pool.length };
+}
+
+// Σ numerator / Σ denominator over pool rows (rows missing either are left out); null when the denominator sums to 0
+// or less. `scale` multiplies the result (100 for a per-100 rate).
+export function pooledRatio(rows, numer, denom, scale = 1) {
+  let n = 0, d = 0;
+  for (const r of rows) { const x = numer(r), y = denom(r); if (finite(x) && finite(y)) { n += +x; d += +y; } }
+  return d > 0 ? (scale * n) / d : null;
+}
+export const plainMean = (vals) => { const v = vals.filter(finite).map(Number); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
+export function usagePooled(q) {
+  return {
+    tdTgt: pooledRatio(q, (r) => r.td, (r) => r.tgt),
+    rzTdRate: pooledRatio(q, (r) => r.rzTd, (r) => r.rz),
+    rzOppTdRate: pooledRatio(q, (r) => r.rzOppTd, (r) => r.rzOpp),
+    catchPct: pooledRatio(q, (r) => r.rec, (r) => r.tgt - (r.piTgt || 0)),
+    cpoeTgt: pooledRatio(q, (r) => (finite(r.cpoeTgt) ? r.cpoeTgt * r.cpoeN : null), (r) => (finite(r.cpoeTgt) ? r.cpoeN : null)),
+    dropPer100: pooledRatio(q, (r) => r.pfrDrops, (r) => r.pfrTgt, 100),
+    flRate: pooledRatio(q, (r) => r.fl, (r) => r.fum),
+    dkTdShare: plainMean(q.map((r) => r.dkTdShare)),
+  };
 }
 
 // Sort helper shared by the table: nulls always last, whichever direction.
