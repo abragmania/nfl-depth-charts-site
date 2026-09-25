@@ -1,8 +1,8 @@
 // Rushing: the rushing leaderboard (#/rushing). Every man with a carry (backs and fullbacks by default; QBs and
 // receivers on the position chips). D177: efficiency (EPA/carry, success, YPC and over expected) with a league
 // reference beside every rate and a total for anything weekly; rush direction was dropped by Adam. D182: a back
-// leads with opportunity and involvement, so the Volume group opens the table and an Involvement group (snap %,
-// routes, targets, target share) closes it. Every figure comes from agg_rush.js (pure); this file draws, sorts and
+// leads with opportunity and involvement, so the Opportunity group (carries + targets, D191) and its per-opportunity
+// efficiency open the table, Volume follows, and an Involvement group (snap %, routes, targets, target share) closes it. Every figure comes from agg_rush.js (pure); this file draws, sorts and
 // wires clicks. The weekly strips and the team pill are qb.js's, shared.
 import { fromQuery, toQuery, seasonsOf, weekLabel, POSITIONS, DEFAULT_POS } from "../filters.js";
 import { loadFor, loadTeams, displayName } from "../data.js";
@@ -11,7 +11,15 @@ import { aggregateRush, rushReference, rushTier, sortRushRows, rushOpts, rushQue
 import { renderFilterBar } from "../filterbar.js";
 import { esc, NA, isNum, pct, fix, signed, int, teamPill, qbStrips, seasonLabel } from "./qb.js";
 
+// D191 (Adam, 2026-09-24): opportunities (carries + targets) lead the table; raw counts get the bars and tiers, the
+// per-opportunity efficiency figures follow as plain numbers.
 const COLS = [
+  { k: "opp", h: "Opp", t: "Opportunities: carries (a quarterback's scrambles included) + targets (the Usage page's count)", f: int, grp: "o" },
+  { k: "oppG", h: "Opp/g", t: "Opportunities (carries + targets) per game he played", f: (v) => fix(v, 1), grp: "o", bar: 28 },
+  { k: "oppShare", h: "Opp %", t: "Opportunity share: (his designed runs + his targets) / (his club's designed runs + his club's pass attempts) in his games (scrambles are on neither side)", f: (v) => pct(v), grp: "o", bar: 0.5 },
+  { k: "ydsOpp", h: "Yds/opp", t: "(Rushing yards + receiving yards) / opportunities (carries + targets)", f: (v) => fix(v, 1), grp: "x" },
+  { k: "epaOpp", h: "EPA/opp", t: "(EPA summed over his carries + EPA summed over his targets) / opportunities (carries + targets)", f: (v) => signed(v, 2), grp: "x" },
+  { k: "tdOpp", h: "TD/opp", t: "(Rushing touchdowns + receiving touchdowns) / opportunities (carries + targets)", f: (v) => (isNum(v) ? pct(v) + "%" : NA), grp: "x" },
   { k: "car", h: "Car", t: "Carries: designed runs, plus scrambles for a quarterback", f: int, grp: "v" },
   { k: "carG", h: "Car/g", t: "Carries per game he played", f: (v) => fix(v, 1), grp: "v", bar: 22 },
   { k: "rushShare", h: "Rush %", t: "Rush share: his designed runs / his club's designed runs in his games (scrambles are called passes: on neither side)", f: (v) => pct(v), grp: "v", bar: 0.8 },
@@ -31,7 +39,7 @@ const COLS = [
   { k: "tgt", h: "Tgt", t: "Targets (the Usage page's count)", f: int, grp: "i" },
   { k: "tgtShare", h: "Tgt %", t: "Target share: his targets / his club's pass attempts in his games", f: (v) => pct(v), grp: "i", bar: 0.3 },
 ];
-const GROUPS = [["v", "Volume"], ["e", "Efficiency"], ["z", "Scoring zone"], ["b", "Big plays"], ["i", "Involvement"]];
+const GROUPS = [["o", "Opportunity"], ["x", "Efficiency (opp)"], ["v", "Volume"], ["e", "Efficiency"], ["z", "Scoring zone"], ["b", "Big plays"], ["i", "Involvement"]];
 COLS.forEach((c, i) => { c.gs = i === 0 || COLS[i - 1].grp !== c.grp; });
 const TIERED = new Set(RUSH_TIER_KEYS);
 const SORTABLE = new Set([...COLS.map((c) => c.k), "name", "g"]);

@@ -29,6 +29,9 @@ export const median = (vals) => {
 export const CATCHER_POS = new Set(["WR", "TE", "RB", "FB"]);
 export const RUSHER_POS = new Set(["RB", "FB"]);
 export const RUSH_TIER_KEYS = ["ypc", "epaCar", "succPct", "rushShare", "ryoeAtt"];
+// D191: a back's opportunity tiles are coloured against the rushing pool (as on the Rushing table); WR/TE use the usage pool.
+export const OPP_TIER_KEYS = ["opp", "oppG", "oppShare"];
+const OPP_KEYS = ["opp", "oppG", "oppShare", "ydsOpp", "epaOpp", "tdOpp"];
 // Which page a position gets: the pass-catcher page for WR/TE/RB/FB; QBs and everyone else a "coming next" stub.
 export function pageKind(pos) {
   const p = String(pos || "").toUpperCase();
@@ -112,6 +115,7 @@ export function playerView(blocks, players, stIn, gsis) {
   const lgRoute = new Map(), myRoute = new Map();
   let lgZoned = 0, lgRouted = 0;
   const clubRuns = new Map(); // gk -> designed runs
+  const clubAtt = new Map(); // gk -> pass attempts (agg.js's rule: a pass-interference target is not one)
   const myWeek = new Map(); // key -> { car, ryds, gk }
   const my = { ryds: 0, rz: 0, rtd: 0 }; // his window rushing counts the per-player accumulator does not keep
   let has2025Routes = false;
@@ -124,7 +128,10 @@ export function playerView(blocks, players, stIn, gsis) {
       const inW = winSet.has(gk);
       const type = r[C.type];
       if (type === "run") clubRuns.set(gk, (clubRuns.get(gk) || 0) + 1);
-      for (const col of ["passer", "target", "rusher"]) { const id = r[C[col]]; if (inW && tracked(id)) G(id).games.add(gk); }
+      if (type === "pass" && !truthy(r[C.pi])) clubAtt.set(gk, (clubAtt.get(gk) || 0) + 1);
+      // A pass-interference target with "excl. PI targets" is as if the ledger had dropped it: not even a game played.
+      const piOff = truthy(r[C.pi]) && st.pi === false;
+      if (!piOff) for (const col of ["passer", "target", "rusher"]) { const id = r[C[col]]; if (inW && tracked(id)) G(id).games.add(gk); }
       if (type === "pass" && r[C.target]) {
         const pi = truthy(r[C.pi]);
         if (pi && st.pi === false) continue;
@@ -216,12 +223,26 @@ export function playerView(blocks, players, stIn, gsis) {
     const n = ngsFor(id, a);
     return { catchPct: ratio(a.rec, a.tgt - a.pi), yacRec: ratio(a.yac, a.rec), succPct: ratio(a.succ, a.succN), sep: n.sep, cushion: n.cushion, yacOE: n.yacOE };
   };
+  // D191 opportunities for any man: his Usage row's figures (targets + carries, the Rushing page's count), or, with
+  // no Usage row (no targets, no routes), his window carries from this page's rushing count (designed runs) with 0
+  // targets over the same denominators (the club's designed runs + pass attempts in his games). Null when he has
+  // neither.
+  const usageById = new Map(win.rows.map((x) => [x.gsis, x]));
+  const oppFor = (id) => {
+    const u = usageById.get(id);
+    if (u) return Object.fromEntries(OPP_KEYS.map((k) => [k, u[k]]));
+    const a = grp.get(id);
+    if (!a || !a.car) return Object.fromEntries(OPP_KEYS.map((k) => [k, null]));
+    const den = [...a.games].reduce((s, gk) => s + (clubRuns.get(gk) || 0) + (clubAtt.get(gk) || 0), 0);
+    const rtd = id === gsis ? my.rtd : null; // touchdowns are only kept for him (tdOpp is not in any pool)
+    return { opp: a.car, oppG: ratio(a.car, a.games.size), oppShare: ratio(a.car, den), ydsOpp: ratio(a.ryds, a.car), epaOpp: ratio(a.repa, a.car), tdOpp: rtd === null ? null : ratio(rtd, a.car) };
+  };
   const rushFor = (id) => {
     const a = grp.get(id);
     if (!a) return null;
     const runs = [...a.games].reduce((s, gk) => s + (clubRuns.get(gk) || 0), 0);
     return { car: a.car, ypc: ratio(a.ryds, a.car), epaCar: ratio(a.repa, a.repaN), succPct: ratio(a.rsucc, a.rsuccN),
-      rushShare: ratio(a.car, runs), carG: ratio(a.car, a.games.size), ryoeAtt: ngsFor(id, a).ryoeAtt };
+      rushShare: ratio(a.car, runs), carG: ratio(a.car, a.games.size), ryoeAtt: ngsFor(id, a).ryoeAtt, ...oppFor(id) };
   };
 
   // His efficiency and the group's (per-player means over his position's reference pool).
@@ -261,12 +282,18 @@ export function playerView(blocks, players, stIn, gsis) {
     const played = s.v !== null || s.snap !== null || !!w;
     // His club had a game that week (g) but he has no rows in it: a DNP, not a bye.
     return { ...s, opp: g?.opp || null, home: g?.home ?? null, inWin: winKeys.has(s.key), dnp: !!g && !played,
-      car: played ? w?.car || 0 : null, rushShare: played ? ratio(w?.car || 0, runs) : null };
+      car: played ? w?.car || 0 : null, rushShare: played ? ratio(w?.car || 0, runs) : null,
+      // D191 opportunities that week: the Usage row's targets + carries; with no Usage row, 0 targets + his carries.
+      // (named oppN: a series entry's "opp" is the opponent).
+      oppN: played ? s.oppN ?? (s.tgt || 0) + (w?.car || 0) : null };
   });
+
+  // D191 opportunities for the tile row and the Opportunities strip's window total (oppFor above).
+  const opps = oppFor(gsis);
 
   const result = {
     ...out, team: row?.team || frow?.team || lastTeam(meta), row, lg, cuts: ref.cuts, refText: ref.text, weeks: win.weeks, series, zones, zoned: myZoned,
-    eff, lgEff, rush: null, routes: null, has2025Routes,
+    eff, lgEff, rush: null, routes: null, has2025Routes, opps,
   };
 
   if (RUSHER_POS.has(pos)) {
@@ -275,9 +302,9 @@ export function playerView(blocks, players, stIn, gsis) {
     const allR = [...grp.entries()].filter(([, a]) => inPool(a.car, clubGOf(a))).map(([id]) => ({ pos: posOf(id), ...rushFor(id) }));
     const qR = allR.filter((x) => x.pos === pos);
     const lgR = {};
-    for (const k of ["car", "ypc", "epaCar", "succPct", "rushShare", "carG", "ryoeAtt"]) lgR[k] = mean(qR.map((x) => x[k]));
+    for (const k of ["car", "ypc", "epaCar", "succPct", "rushShare", "carG", "ryoeAtt", "opp", "oppG", "oppShare", "ydsOpp", "epaOpp"]) lgR[k] = mean(qR.map((x) => x[k]));
     lgR.rz = null;
-    result.rush = { ...mineR, yds: my.ryds, rz: my.rz, td: my.rtd, lg: lgR, n: qR.length, cuts: tierCuts(qR, allR, RUSH_TIER_KEYS), refText: referenceText(pos, qR.length, "carries") };
+    result.rush = { ...mineR, yds: my.ryds, rz: my.rz, td: my.rtd, lg: lgR, n: qR.length, cuts: tierCuts(qR, allR, [...RUSH_TIER_KEYS, ...OPP_TIER_KEYS]), refText: referenceText(pos, qR.length, "carries") };
   }
 
   if (has2025Routes) {

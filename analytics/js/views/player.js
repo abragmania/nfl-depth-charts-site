@@ -94,6 +94,12 @@ export const RB_WEEKLY_KEYS = ["v", "snap"];
 export const CATCHER_WEEKLY_KEYS = ["v", "ay", "snap"];
 export const weeklyKeysFor = (pos) => (pos === "RB" ? RB_WEEKLY_KEYS : CATCHER_WEEKLY_KEYS);
 
+// D191 (Adam, 2026-09-24): an Opportunity tile row (targets + carries) sits above the usage row on every pass-catcher
+// page: the three raw figures tiered by his position's reference pool, the two per-opportunity figures plain. Backs
+// also get an Opportunities strip beside the Carries strip in the rushing block.
+export const OPP_TILE_ORDER = ["opp", "oppG", "oppShare", "ydsOpp", "epaOpp"];
+export const RB_RUSH_STRIP_KEYS = ["car", "oppN", "rushShare"];
+
 export async function renderPlayer(ctx, params, query) {
   const { root, isCurrent } = ctx;
   const gsis = params.gsis;
@@ -155,6 +161,22 @@ export async function renderPlayer(ctx, params, query) {
     snapPct: tile("Snap %", pct(r.snapPct, 0), { ...tiered("snapPct", r.snapPct, v.cuts, v.pos, "Share of his club's offensive snaps"), lg: pct(L.snapPct, 0) }),
   };
   const usage = usageOrderFor(v.pos).map((k) => usageTiles[k]).join("");
+  // D191: the opportunity figures come from agg_player's `opps` (the Usage row's, or carries with 0 targets when he
+  // has no Usage row), never from the Usage row alone.
+  const O = v.opps || {};
+  // A back's tiles are coloured, and their league figures taken, against the rushing pool (as on the Rushing table);
+  // WR and TE against the usage pool. The hover text names the pool.
+  const OC = v.rush ? v.rush.cuts : v.cuts, OL = v.rush ? v.rush.lg : L;
+  const oppRef = `League figure and colour: ${v.rush ? v.rush.refText : v.refText}`;
+  const ot = (k, title) => { const x = tiered(k, O[k], OC, v.pos, title); return { ...x, title: `${x.title}. ${oppRef}` }; };
+  const oppTiles = {
+    opp: tile("Opp", int(O.opp), { ...ot("opp", `Opportunities: targets + carries (${st.pi === false ? "excludes" : "includes"} pass-interference targets)`), lg: fix(OL.opp, 1) }),
+    oppG: tile("Opp/g", fix(O.oppG, 1), { ...ot("oppG", "Opportunities (targets + carries) per game he played"), lg: fix(OL.oppG, 1) }),
+    oppShare: tile("Opp %", pct(O.oppShare), { ...ot("oppShare", "(His targets + his designed runs) / (his club's pass attempts + his club's designed runs) in his games; scrambles are on neither side"), lg: pct(OL.oppShare) }),
+    ydsOpp: tile("Yds/opp", fix(O.ydsOpp, 1), { lg: fix(OL.ydsOpp, 1), title: `(Receiving yards + rushing yards) / opportunities. ${oppRef}` }),
+    epaOpp: tile("EPA/opp", signed(O.epaOpp, 2), { lg: signed(OL.epaOpp, 2), title: `(EPA summed over his targets + EPA summed over his carries) / opportunities. ${oppRef}` }),
+  };
+  const opps = OPP_TILE_ORDER.map((k) => oppTiles[k]).join("");
 
   // 3. Week by week. RB drops the air-yards-share strip (D182); his carries and rush share already show below.
   const shareStrip = (k, label, totKey, fixedScale) => {
@@ -194,10 +216,13 @@ export async function renderPlayer(ctx, params, query) {
     const rt = (k, val, title) => tiered(k, val, R.cuts, v.pos, title);
     const maxCar = Math.max(1, ...v.series.map((s) => s.car ?? 0));
     const maxSh = Math.max(0.6, ...v.series.map((s) => s.rushShare ?? 0));
-    const strips = [
-      { k: "car", label: "Carries", scale: maxCar * 1.05, fmt: (x) => `${x} carries`, short: (x) => String(x), total: R.car, totalText: `${wn} ${R.car}`, avg: RL.carG, avgText: `lg avg ${isNum(RL.carG) ? RL.carG.toFixed(1) : "–"}/g` },
-      { k: "rushShare", label: "Rush share", scale: maxSh * 1.05, fmt: (x) => `${(x * 100).toFixed(1)}% of club runs`, short: (x) => String(Math.round(x * 100)), total: R.rushShare, totalText: `${wn} ${isNum(R.rushShare) ? (R.rushShare * 100).toFixed(1) + "%" : "–"}`, avg: RL.rushShare, avgText: `lg avg ${isNum(RL.rushShare) ? Math.round(RL.rushShare * 100) + "%" : "–"}` },
-    ];
+    const maxOpp = Math.max(1, ...v.series.map((s) => s.oppN ?? 0));
+    const stripDefs = {
+      oppN: { k: "oppN", label: "Opportunities", scale: maxOpp * 1.05, fmt: (x) => `${x} opportunities (targets + carries)`, short: (x) => String(x), total: O.opp, totalText: `${wn} ${isNum(O.opp) ? O.opp : "–"}`, avg: RL.oppG, avgText: `lg avg ${isNum(RL.oppG) ? RL.oppG.toFixed(1) : "–"}/g` },
+      car: { k: "car", label: "Carries", scale: maxCar * 1.05, fmt: (x) => `${x} carries`, short: (x) => String(x), total: R.car, totalText: `${wn} ${R.car}`, avg: RL.carG, avgText: `lg avg ${isNum(RL.carG) ? RL.carG.toFixed(1) : "–"}/g` },
+      rushShare: { k: "rushShare", label: "Rush share", scale: maxSh * 1.05, fmt: (x) => `${(x * 100).toFixed(1)}% of club runs`, short: (x) => String(Math.round(x * 100)), total: R.rushShare, totalText: `${wn} ${isNum(R.rushShare) ? (R.rushShare * 100).toFixed(1) + "%" : "–"}`, avg: RL.rushShare, avgText: `lg avg ${isNum(RL.rushShare) ? Math.round(RL.rushShare * 100) + "%" : "–"}` },
+    };
+    const strips = RB_RUSH_STRIP_KEYS.map((k) => stripDefs[k]);
     rushHtml = `<div class="an-card an-pl-rush"><div class="an-dh">Rushing <span class="an-dsub">league reference: ${esc(R.refText)}</span></div>
       <div class="an-pl-tiles an-pl-tiles-4">${[
         tile("Carries", int(R.car), { lg: fix(RL.car, 0) }), tile("Yards", int(R.yds)), tile("YPC", fix(R.ypc, 1), { ...rt("ypc", R.ypc, "Yards per carry"), lg: fix(RL.ypc, 1) }),
@@ -223,6 +248,7 @@ export async function renderPlayer(ctx, params, query) {
       <label class="an-switch" title="A defensive pass interference is a no-play in the play-by-play; on, it counts as a target for the receiver (never a pass attempt, catch or yards)"><input type="checkbox" data-pi${st.pi === false ? "" : " checked"}><span>${st.pi === false ? "excl. PI targets" : "PI targets"}</span></label></div>
     <div class="an-sub an-pl-sub">${esc(sub)}</div>
     ${data.missing.length ? `<div class="an-warn">${esc(data.missing.join(", "))} files are not built yet.</div>` : ""}
+    <div class="an-pl-tiles an-pl-usage an-pl-opp">${opps}</div>
     <div class="an-pl-tiles an-pl-usage">${usage}</div>
     <div class="an-pl-row">
       <div class="an-card an-pl-weeks"><div class="an-dh">Week by week <span class="an-dsub">click a week to show it alone; click it again for the whole window</span></div><div class="an-pl-scroll">${weekly}</div></div>

@@ -24,10 +24,19 @@
 //                  more north-south), weighted by his designed runs those weeks.
 //   Snap %       = the mean of his weekly offensive snap percentages (as on the Usage page).
 //   Games        = the club-games in the window where he appears on any play or took an offensive snap.
+// OPPORTUNITIES (D191, Adam 2026-09-24: raw opportunities matter more than yards per opportunity; the counts lead):
+//   Opp          = carries (a QB's scrambles included) + targets (the Usage page's count, so the PI-targets switch
+//                  applies); a man with carries and no Usage row has 0 targets.
+//   Opp/g        = Opp / games.
+//   Opp %        = (designed runs + targets) / (the club's designed runs + the club's pass attempts) in his games. A
+//                  scramble is a called pass but not a pass attempt, so it sits on neither side (as in rush share); a
+//                  pass-interference target is never a club pass attempt (agg.js).
+//   Yds/opp      = (rushing yards + receiving yards) / Opp.  EPA/opp = (EPA summed over his carries + EPA summed over
+//                  his targets, agg.js's EPA/Tgt numerator) / Opp.  TD/opp = (rushing + receiving touchdowns) / Opp.
 // REFERENCE POOL (Adam, 2026-09-24; agg.js's rule with carries): players AT HIS POSITION averaging 2+ carries per
 // game of his club's games in the window, floor 5. The league line is the plain mean over that pool; the colour tiers
 // are its 90/70/40/15th percentiles (agg.js tierCuts; under 8 men, the league-wide pool of every position).
-import { colIndex, clubGames, aggregateUsage, inPool, tierCuts, tierFromCuts, referenceText } from "./agg.js";
+import { colIndex, clubGames, aggregateUsage, inPool, tierCuts, tierFromCuts, referenceText, rushEvent } from "./agg.js";
 import { gamesInWindow, playPredicate, posAllowed, POSITIONS } from "./filters.js";
 
 const num = (v) => (v === null || v === undefined || v === "" || !Number.isFinite(+v) ? null : +v);
@@ -43,18 +52,14 @@ export const BIN_LABELS = ["0 or less", "1–3", "4–9", "10+"];
 const binOf = (y) => (y <= 0 ? 0 : y <= 3 ? 1 : y <= 9 ? 2 : 3);
 
 // Colour tiers by position. Eff is cut on the negated value (lower is better).
-export const RUSH_TIER_KEYS = ["carG", "rushShare", "ypc", "succPct", "epaCar", "ryoeAtt", "eff", "explPct", "snapPct", "tgtShare"];
+export const RUSH_TIER_KEYS = ["opp", "oppG", "oppShare", "carG", "rushShare", "ypc", "succPct", "epaCar", "ryoeAtt", "eff", "explPct", "snapPct", "tgtShare"];
 export const RUSH_LOWER_BETTER = new Set(["eff"]);
-export const RUSH_LG_KEYS = ["car", "carG", "rushShare", "yds", "ypc", "succPct", "epaCar", "ryoeAtt", "eff", "rz", "gl", "td", "long", "explPct", "snapPct", "routes", "tgt", "tgtShare"];
+export const RUSH_LG_KEYS = ["opp", "oppG", "oppShare", "ydsOpp", "epaOpp", "tdOpp", "car", "carG", "rushShare", "yds", "ypc", "succPct", "epaCar", "ryoeAtt", "eff", "rz", "gl", "td", "long", "explPct", "snapPct", "routes", "tgt", "tgtShare"];
 export const rushTier = (k, v, cuts) => (finite(v) ? tierFromCuts(RUSH_LOWER_BETTER.has(k) ? -v : +v, cuts?.[k]?.cuts) : "");
 
-// One play row as a carry, or null: { id, designed }.
-export function rushEvent(r, C) {
-  const type = r[C.type];
-  if (type === "run") return r[C.rusher] ? { id: r[C.rusher], designed: true } : null;
-  if (type === "scramble") { const id = r[C.passer] || r[C.rusher]; return id ? { id, designed: false } : null; }
-  return null;
-}
+// One play row as a carry, or null: { id, designed }. Defined in agg.js (the Usage page's opportunities count carries
+// by the same rule) and re-exported here.
+export { rushEvent };
 
 function gamePasses(st, g) {
   if (!g) return false;
@@ -78,6 +83,7 @@ export function aggregateRush(blocks, players, st) {
   const acc = new Map();
   const A = (id) => { if (!acc.has(id)) acc.set(id, newAcc()); return acc.get(id); };
   const clubRuns = new Map(); // gk -> the club's designed runs
+  const clubAtt = new Map(); // gk -> the club's pass attempts (agg.js's rule: a pass-interference target is not one)
   const add = (m, k, v) => m.set(k, (m.get(k) || 0) + v);
 
   for (const b of blocks) {
@@ -90,6 +96,7 @@ export function aggregateRush(blocks, players, st) {
       if (!(pi && st.pi === false)) for (const col of ["passer", "target", "rusher"]) if (r[C[col]]) A(r[C[col]]).games.add(gk);
       if (!pred(r)) continue;
       if (r[C.type] === "run") add(clubRuns, gk, 1);
+      if (r[C.type] === "pass" && !pi) add(clubAtt, gk, 1);
       const e = rushEvent(r, C);
       if (!e) continue;
       const a = A(e.id);
@@ -159,6 +166,9 @@ export function aggregateRush(blocks, players, st) {
       return gameOk(`${key}|${t}`) ? { key, dnp: true, car: null, share: null } : { key, car: null, share: null };
     });
     const n = ngs.get(id), u = usage.get(id);
+    const att = g.reduce((s, gk) => s + (clubAtt.get(gk) || 0), 0);
+    const tgt = u?.tgt ?? 0;
+    const opp = a.car + tgt;
     rows.push({
       gsis: id, name: meta.name || id, pos, espnId: meta.espnId ?? null, team, g: g.length, clubG: clubWin.get(team) || 0,
       car: a.car, des: a.des, scr: a.scr, carG: ratio(a.car, g.length), rushShare: ratio(a.des, runs), clubRuns: runs,
@@ -166,7 +176,10 @@ export function aggregateRush(blocks, players, st) {
       rz: a.rz, gl: a.gl, td: a.td, long: a.long, explPct: ratio(a.expl, a.car), expl: a.expl, bins: a.bins,
       ryoeAtt: n ? ratio(n.ryoe, n.ryoeCar) : null, eff: n ? ratio(n.eff, n.effCar) : null,
       snapPct: a.snaps.size ? [...a.snaps.values()].reduce((s, x) => s + x, 0) / a.snaps.size : null,
-      routes: u?.routes ?? null, tgt: u?.tgt ?? 0, tgtShare: u?.tgtShare ?? null,
+      routes: u?.routes ?? null, tgt, tgtShare: u?.tgtShare ?? null,
+      clubAtt: att, recYds: u?.yds ?? 0, recEpa: u?.recEpa ?? 0, recTd: u?.td ?? 0,
+      opp, oppG: ratio(opp, g.length), oppShare: ratio(a.des + tgt, runs + att),
+      ydsOpp: ratio(a.yds + (u?.yds ?? 0), opp), epaOpp: ratio(a.epa + (u?.recEpa ?? 0), opp), tdOpp: ratio(a.td + (u?.td ?? 0), opp),
       series,
     });
   }

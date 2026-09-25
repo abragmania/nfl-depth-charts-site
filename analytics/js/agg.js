@@ -22,12 +22,32 @@
 // red-zone targets, EPA per target, TPRR) but it is NOT a pass attempt, so the club's pass attempts (target share's
 // denominator) and club air yards leave it out; it is never a completion and adds no yards. With st.pi false
 // ("excl. PI targets") pi rows are skipped entirely, as if the ledger had dropped them.
+// OPPORTUNITIES (D191, Adam 2026-09-24: raw opportunities matter more than yards per opportunity):
+//   carry           = rushEvent below, the Rushing page's rule to the play: a designed run (he is the rusher) or, for
+//                     a passer, a scramble. So a receiver's jet sweep or end-around is a carry.
+//   Opp             = his targets + his carries (targets follow the PI-targets switch like Tgt does).
+//   Opp/g           = Opp / his games.
+//   Opp %           = (his targets + his DESIGNED runs) / (his club's pass attempts + his club's designed runs) in his
+//                     games. A scramble is a called pass that is not a pass attempt, so it sits on neither side (as
+//                     in the Rushing page's rush share).
+//   Yds/opp         = (receiving yards + rushing yards) / Opp.  EPA/opp = (EPA summed over his targets + EPA summed
+//                     over his carries) / Opp.  TD/opp = (receiving + rushing touchdowns) / Opp.
 // Routes and snaps are weekly tables, so they go blank (null) under a down or quarter filter. A week the
 // routes table does not list a man for (heatradar lists 8+ routes only) is left out of his route figures,
 // never counted as zero.
 import { gamesInWindow, playPredicate, posAllowed, isSituational } from "./filters.js";
 
 export const colIndex = (cols) => Object.fromEntries((cols || []).map((c, i) => [c, i]));
+
+// One play row as a carry, or null: { id, designed }. A designed run (ledger type "run", he is the rusher) or, for a
+// passer, a scramble (type "scramble"). Kneels and spikes never reach the ledger. The Rushing page (agg_rush.js)
+// and the Usage page's opportunities both use this, so the two agree to the play.
+export function rushEvent(r, C) {
+  const type = r[C.type];
+  if (type === "run") return r[C.rusher] ? { id: r[C.rusher], designed: true } : null;
+  if (type === "scramble") { const id = r[C.passer] || r[C.rusher]; return id ? { id, designed: false } : null; }
+  return null;
+}
 const num = (v) => (v === null || v === undefined || v === "" || !Number.isFinite(+v) ? null : +v);
 const truthy = (v) => v === true || v === 1 || v === "1" || v === "true";
 const ratio = (a, b) => (b > 0 ? a / b : null);
@@ -64,10 +84,11 @@ export function aggregateUsage(blocks, players, st) {
   const gameOk = (gk) => inWin.has(gk) && gamePasses(st, gameInfo.get(gk));
   const situational = isSituational(st);
 
-  const teamAtt = new Map(), teamAir = new Map();
+  const teamAtt = new Map(), teamAir = new Map(), teamRuns = new Map();
   const acc = new Map();
   const P = (id) => {
     if (!acc.has(id)) acc.set(id, { tgt: 0, air: 0, adotN: 0, rz: 0, ez: 0, rec: 0, yds: 0, td: 0, epa: 0, epaN: 0,
+      car: 0, des: 0, ryds: 0, repa: 0, rtd: 0, wkCar: new Map(),
       games: new Set(), wk: new Map(), wkAir: new Map(), wkRec: new Map(), snaps: new Map(), routes: new Map(), zones: {} });
     return acc.get(id);
   };
@@ -84,6 +105,17 @@ export function aggregateUsage(blocks, players, st) {
       // Appearance on any play (before the down/quarter filter) makes it one of his games.
       for (const col of ["passer", "target", "rusher"]) if (r[C[col]]) P(r[C[col]]).games.add(gk);
       if (!pred(r)) continue;
+      // Carries (D191 opportunities): the Rushing page's rule, after the same filters.
+      if (r[C.type] === "run") add(teamRuns, gk, 1);
+      const ev = rushEvent(r, C);
+      if (ev) {
+        const p = P(ev.id);
+        p.car++; if (ev.designed) p.des++;
+        p.ryds += num(r[C.yards]) ?? 0;
+        const e = num(r[C.epa]); if (e !== null) p.repa += e;
+        if (truthy(r[C.td])) p.rtd++;
+        add(p.wkCar, gk, 1);
+      }
       if (r[C.type] !== "pass") continue;
       const air = num(r[C.air]);
       // A pass-interference target is not a pass attempt: the club's attempts and air yards leave it out.
@@ -136,7 +168,9 @@ export function aggregateUsage(blocks, players, st) {
     const g = [...p.games].sort();
     const att = g.reduce((s, gk) => s + (teamAtt.get(gk) || 0), 0);
     const teamAy = g.reduce((s, gk) => s + (teamAir.get(gk) || 0), 0);
+    const runs = g.reduce((s, gk) => s + (teamRuns.get(gk) || 0), 0);
     const tgtShare = ratio(p.tgt, att);
+    const opp = p.tgt + p.car;
     const ayShare = ratio(p.air, teamAy);
     const wopr = tgtShare === null || ayShare === null ? null : 1.5 * tgtShare + 0.7 * ayShare;
 
@@ -157,9 +191,10 @@ export function aggregateUsage(blocks, players, st) {
     for (const gk of g) byKey.set(gk.split("|")[0], gk);
     const series = weeks.map((key) => {
       const gk = byKey.get(key);
-      if (!gk) return { key, v: null, ay: null, snap: null, tgt: 0 };
+      if (!gk) return { key, v: null, ay: null, snap: null, tgt: 0, oppN: 0 };
       return { key, v: ratio(p.wk.get(gk) || 0, teamAtt.get(gk) || 0), ay: ratio(p.wkAir.get(gk) || 0, teamAir.get(gk) || 0),
-        snap: situational ? null : p.snaps.get(gk) ?? null, tgt: p.wk.get(gk) || 0 };
+        snap: situational ? null : p.snaps.get(gk) ?? null, tgt: p.wk.get(gk) || 0,
+        oppN: (p.wk.get(gk) || 0) + (p.wkCar.get(gk) || 0) }; // opportunities that week (a series "opp" is an opponent elsewhere)
     });
     const lastGk = g[g.length - 1];
     rows.push({
@@ -168,6 +203,9 @@ export function aggregateUsage(blocks, players, st) {
       tgt: p.tgt, tgtShare, ay: p.air, ayShare, wopr, adot: ratio(p.air, p.adotN),
       rz: p.rz, ez: p.ez, rec: p.rec, yds: p.yds, td: p.td, epaTgt: p.epaN ? p.epa / p.epaN : null,
       routes, routePct, tprr, yprr, snapPct, series, zones: p.zones,
+      recEpa: p.epa, car: p.car, des: p.des, rushYds: p.ryds, rushEpa: p.repa, rushTd: p.rtd, clubAtt: att, clubRuns: runs,
+      opp, oppG: ratio(opp, g.length), oppShare: ratio(p.tgt + p.des, att + runs),
+      ydsOpp: ratio(p.yds + p.ryds, opp), epaOpp: ratio(p.epa + p.repa, opp), tdOpp: ratio(p.td + p.rtd, opp),
     });
   }
   return { rows, weeks };
@@ -178,7 +216,7 @@ export function aggregateUsage(blocks, players, st) {
 // position's reference pool with minTgt 0. `weekly[key]` holds the same means for each week, over the players
 // who played that week. Rows come aggregated with no team or opponent filter, so a one-club view still compares
 // with the whole league.
-const AVG_KEYS = ["tgtShare", "ayShare", "wopr", "adot", "epaTgt", "yprr", "tprr", "routePct", "snapPct"];
+const AVG_KEYS = ["opp", "oppG", "oppShare", "ydsOpp", "epaOpp", "tdOpp", "tgtShare", "ayShare", "wopr", "adot", "epaTgt", "yprr", "tprr", "routePct", "snapPct"];
 export function leagueAverages(rows, minTgt = 0) {
   const q = rows.filter((r) => r.tgt >= minTgt);
   const mean = (vals) => { const v = vals.filter((x) => x !== null && x !== undefined); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
@@ -208,7 +246,7 @@ export const referenceText = (pos, n, unit = "targets") => `${pos}s with ${POOL_
 export const TIER_PCTS = [0.9, 0.7, 0.4, 0.15];
 export const TIER_NAMES = ["elite", "strong", "avg", "weak", "flat"];
 export const MIN_POOL = 8;
-export const USAGE_TIER_KEYS = ["tgtShare", "ayShare", "wopr", "routePct", "snapPct", "tprr", "yprr", "epaTgt"];
+export const USAGE_TIER_KEYS = ["opp", "oppG", "oppShare", "tgtShare", "ayShare", "wopr", "routePct", "snapPct", "tprr", "yprr", "epaTgt"];
 const finite = (x) => x !== null && x !== undefined && Number.isFinite(+x);
 export function percentileCuts(vals) {
   const v = vals.filter(finite).map(Number).sort((a, b) => a - b);

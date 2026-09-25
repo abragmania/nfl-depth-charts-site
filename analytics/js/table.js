@@ -48,7 +48,15 @@ export const tierOf = (key, v, cuts) => tierFromCuts(v, cuts?.[key]?.cuts);
 const TIER_KEYS = new Set(USAGE_TIER_KEYS);
 
 // Columns. `bar` draws a magnitude bar behind the number (the share columns, scaled to `max`).
+// D191 (Adam, 2026-09-24): opportunities (targets + carries, so a receiver's jet sweep counts) lead the table; the
+// raw counts get the bars and tiers, the per-opportunity efficiency figures follow as plain numbers.
 const COLS = [
+  { k: "opp", h: "Opp", t: "Opportunities: targets + carries (designed runs, a jet sweep or end-around included)", f: int, grp: "o" },
+  { k: "oppG", h: "Opp/g", t: "Opportunities (targets + carries) per game he played", f: (v) => fix(v, 1), grp: "o", bar: 28 },
+  { k: "oppShare", h: "Opp %", t: "Opportunity share: (his targets + his designed runs) / (his club's pass attempts + his club's designed runs) in his games (scrambles are on neither side)", f: (v) => pct(v), grp: "o", bar: 0.5 },
+  { k: "ydsOpp", h: "Yds/opp", t: "(Receiving yards + rushing yards) / opportunities (targets + carries)", f: (v) => fix(v, 1), grp: "x" },
+  { k: "epaOpp", h: "EPA/opp", t: "(EPA summed over his targets + EPA summed over his carries) / opportunities (targets + carries)", f: (v) => signed(v, 2), grp: "x" },
+  { k: "tdOpp", h: "TD/opp", t: "(Receiving touchdowns + rushing touchdowns) / opportunities (targets + carries)", f: (v) => (v === null || v === undefined ? DASH : pct(v) + "%"), grp: "x" },
   { k: "tgt", h: "Tgt", t: "Targets", f: int, grp: "t" },
   { k: "tgtShare", h: "Tgt %", t: "Target share: his targets / his club's pass attempts in his games", f: (v) => pct(v), grp: "t", bar: 0.4 },
   { k: "ay", h: "AY", t: "Air yards on his targets", f: int, grp: "t" },
@@ -67,7 +75,7 @@ const COLS = [
   { k: "yprr", h: "YPRR", t: "Receiving yards per route run", f: (v) => fix(v, 2), grp: "r" },
   { k: "snapPct", h: "Snap %", t: "Share of his club's offensive snaps (nflverse snap counts)", f: (v) => pct(v, 0), grp: "s", bar: 1 },
 ];
-const GROUPS = [["t", "Opportunity"], ["p", "Production"], ["r", "Routes · heatradar"], ["s", "Snaps"]];
+const GROUPS = [["o", "Opportunity"], ["x", "Efficiency (opp)"], ["t", "Targets"], ["p", "Production"], ["r", "Routes · heatradar"], ["s", "Snaps"]];
 // First column of each group gets a hairline on its left (class gs).
 COLS.forEach((c, i) => { c.gs = i === 0 || COLS[i - 1].grp !== c.grp; });
 const BAND = (pos) => (pos === "RB" || pos === "FB" ? "BACKFIELD" : pos);
@@ -187,7 +195,7 @@ export function tableHtml(allRows, st, query, view = {}) {
   const th = (k, h, t, cls = "") => `<th class="${cls}${st.sort === k ? " sorted " + st.dir : ""}" data-sort="${k}" title="${esc(t)}">${h}</th>`;
   const groupRow = `<tr class="an-grp"><th colspan="3"></th>${GROUPS.map(([g, l]) => `<th colspan="${cols.filter((c) => c.grp === g).length}" class="g-${g} gs">${l}</th>`).join("")}<th></th></tr>`;
   // The Tgt header says whether pass-interference targets are in the count (the "PI targets" switch below).
-  const colTitle = (c) => (c.k === "tgt" ? `${c.t} (${st.pi === false ? "excludes" : "includes"} pass-interference targets)` : c.t);
+  const colTitle = (c) => (c.k === "tgt" || c.k === "opp" ? `${c.t} (${st.pi === false ? "excludes" : "includes"} pass-interference targets)` : c.t);
   const head = `<tr>${th("rank", "#", "Rank", "c-rank")}${th("name", "Player", "Player, team, position", "c-name")}${th("g", "G", "Games in the window")}${cols.map((c) => th(c.k, c.h, colTitle(c), "g-" + c.grp + (c.gs ? " gs" : ""))).join("")}<th class="c-spark" title="Weekly target share; hover a point for the week">Tgt % by week</th></tr>`;
   const cell = (c, r) => {
     // D182: a mixed table keeps the air-yards columns for perspective, but an RB's own numbers there are not
