@@ -208,7 +208,7 @@ export function rushState(query) {
 export const rushQuery = (st, minCar) => withMore(rushQueryFrom(toQuery(st), st, minCar), st.more);
 
 export async function renderRushing(ctx, query) {
-  const { root, asof, isCurrent } = ctx;
+  const { root, isCurrent } = ctx;
   const { st, minCar } = rushState(query);
   document.title = "Running backs · NFL Analytics";
   const go = (n, mc = minCar) => {
@@ -241,11 +241,6 @@ export async function renderRushing(ctx, query) {
   const windowName = st.window === "last3" ? "Last 3" : st.window === "range" && weeks.length ? `${weekLabel(weeks[0], st.season)}–${weekLabel(weeks[weeks.length - 1], st.season)}` : "Season";
   const clubTeams = [...new Set(clubGames(data.blocks).map((g) => g.team))].sort();
   const teamsByAbbr = new Map(teams.map((t) => [t.abbr, t]));
-  if (asof) {
-    const m = data.manifests.find((x) => x.season === st.season) || data.manifests[0];
-    const last = (m?.weeks || []).reduce((a, b) => (!a || b.week > a.week ? b : a), null);
-    asof.textContent = last ? `Through W${last.week}` : ""; asof.hidden = !last;
-  }
   const shownPos = POSITIONS.filter((p) => agg.rows.some((r) => r.pos === p));
   const refLine = `League reference and colour tiers, by position: players at his position with ${POOL_PER_GAME}+ carries/game (min ${POOL_FLOOR}) in the window (${shownPos.map((p) => `${p}s ${ref.at(p).n}`).join(" · ") || "none"})`;
   const posText = POSITIONS.filter((p) => st.pos[p] === "in").join(" · ") || "All positions";

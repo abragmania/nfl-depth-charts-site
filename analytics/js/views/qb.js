@@ -29,10 +29,24 @@ function luminance(hex) {
   const lin = (c) => { const v = c / 255; return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };
   return 0.2126 * lin((n >> 16) & 255) + 0.7152 * lin((n >> 8) & 255) + 0.0722 * lin(n & 255);
 }
-export function teamPill(abbr, teams, q, cls = "") {
+// `page` ("team", the default, or "defense"): which page the pill opens. The Grid page's own club pill and every
+// other caller keep the team (offense) page; allowed_table.js's "What each defense allows, by position" table
+// passes "defense" so its pills open that club's defense detail (#/defense?open=<ABBR>, the page's query carried
+// alongside, same as the Defense page's own "Offense →" link builds its query).
+export function teamPill(abbr, teams, q, cls = "", page = "team") {
   const t = teams?.get(abbr);
   const style = t ? ` style="--team-bg:${esc(t.colourPrimary)};--team-ink:${(luminance(t.colourPrimary) ?? 0) > 0.40 ? "#14181d" : "#fff"}"` : "";
-  return `<a class="an-teampill${cls ? " " + cls : ""}" href="#/team/${esc(abbr)}${q ? "?" + q : ""}"${style} title="Team page">${esc(abbr)}</a>`;
+  let href, title;
+  if (page === "defense") {
+    const p = new URLSearchParams(String(q || ""));
+    p.set("open", abbr);
+    href = `#/defense?${p.toString()}`;
+    title = "Defense page";
+  } else {
+    href = `#/team/${abbr}${q ? "?" + q : ""}`;
+    title = "Team page";
+  }
+  return `<a class="an-teampill${cls ? " " + cls : ""}" href="${esc(href)}"${style} title="${title}">${esc(abbr)}</a>`;
 }
 
 // ---- weekly strips with a zero line ---------------------------------------------------------------------
@@ -312,7 +326,7 @@ export function pfrNote(pfrThrough, latestKey, season) {
 }
 
 export async function renderQb(ctx, query) {
-  const { root, asof, isCurrent } = ctx;
+  const { root, isCurrent } = ctx;
   const st = fromQuery(query);
   const minDb = minDbOf(query);
   document.title = "Quarterbacks · NFL Analytics";
@@ -340,11 +354,6 @@ export async function renderQb(ctx, query) {
   const windowName = st.window === "last3" ? "Last 3" : st.window === "range" && agg.weeks.length ? `${weekLabel(agg.weeks[0], st.season)}–${weekLabel(agg.weeks[agg.weeks.length - 1], st.season)}` : "Season";
   const clubTeams = [...new Set(clubGames(data.blocks).map((g) => g.team))].sort();
   const teamsByAbbr = new Map(teams.map((t) => [t.abbr, t]));
-  if (asof) {
-    const m = data.manifests.find((x) => x.season === st.season) || data.manifests[0];
-    const last = (m?.weeks || []).reduce((a, b) => (!a || b.week > a.week ? b : a), null);
-    asof.textContent = last ? `Through W${last.week}` : ""; asof.hidden = !last;
-  }
   const pnote = pfrNote(lgAgg.pfrThrough, lgAgg.latestKey, st.season);
   const qs = qbQuery({ ...st, open: "" }, minDb);
   root.innerHTML = `<section class="an-qb">

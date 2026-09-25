@@ -20,7 +20,7 @@
 // GET /api/player/{espnId} (server/api/player.js).
 import { esc, snapHistoryHtml, espnPlacement, espnSchemeOf } from "./cards.js";
 import { renderHistory } from "./history.js";
-import { getPlayer, getHistory, getGameLog } from "./api.js";
+import { getPlayer, getHistory, getGameLog, getJson } from "./api.js";
 
 const dash = "—";
 const STATUS_CLASS = {
@@ -420,6 +420,53 @@ function showStatsTab(asideEl, tab) {
 // the rest of this file already calls.
 const fetchPlayer = (espnId) => getPlayer(espnId);
 
+// --- "Stats ↗" link to the separate analytics app (Job 2) -----------------------------------------------
+// Most of the roster has no analytics data at all, so the link only appears for a man who is a key in that
+// season's players.json ({[gsis]: {name, pos, teams, espnId}} — server/api/analytics.js, GET
+// /api/analytics/{season}/players). Fetched once per season and cached here: opening several panels on the
+// same team's page must not refetch the whole-league file each time. A failed fetch (offline, a season the
+// published snapshot doesn't carry) resolves to null rather than throwing — this decoration shows no link
+// rather than a red error over it.
+const analyticsPlayersCache = new Map();
+function analyticsPlayersFor(season) {
+  const key = String(season ?? "");
+  if (!analyticsPlayersCache.has(key)) {
+    // A failed fetch is not remembered: the next panel tries again rather than losing the link until a reload.
+    analyticsPlayersCache.set(key, getJson(`/api/analytics/${encodeURIComponent(key)}/players`).catch(() => { analyticsPlayersCache.delete(key); return null; }));
+  }
+  return analyticsPlayersCache.get(key);
+}
+
+// The depth-chart playerKey is usually the gsis id already (finding 1's header comment); card.gsisId is the
+// explicit field for the rest. Matched against the gsis id's own shape ("00-0012345") so a name-based
+// fallback key (D74's "name:DEN:liljordan-humphrey" form) is never sent to the analytics lookup as if it
+// were one.
+const GSIS_RE = /^00-\d{7}$/;
+export const ANALYTICS_PAGE_POS = new Set(["QB", "RB", "FB", "WR", "TE"]); // nflverse labels, what players.json carries
+export function analyticsGsisFor(card) {
+  if (card?.gsisId) return String(card.gsisId);
+  if (card?.playerKey && GSIS_RE.test(String(card.playerKey))) return String(card.playerKey);
+  return null;
+}
+
+// Patches the hidden placeholder link in place once the season's players file resolves — same pattern as
+// fillDraftRound/patchGamesChip. `myGen` ties this to the openPanel() call that started it, so a fetch that
+// lands after the aside moved on to a different player never shows the wrong man's link.
+async function patchStatsLink(asideEl, myGen, card, season) {
+  const gsis = analyticsGsisFor(card);
+  if (!gsis) return; // no analytics id on this card at all -> no fetch, placeholder stays hidden
+  const players = await analyticsPlayersFor(season);
+  if (asideEl._panelGen !== myGen) return; // aside moved on to a different player/team while this was in flight
+  if (!players || !(gsis in players)) return; // not in this season's analytics file -> no link
+  // The analytics app has a real page only for quarterbacks, backs and receivers; every other position renders a
+  // "coming next" stub, so a lineman or defender (who is in the file through snaps and PFR rows) gets no link.
+  if (!ANALYTICS_PAGE_POS.has(String(players[gsis]?.pos || "").toUpperCase())) return;
+  const el = asideEl.querySelector("[data-stats-link]");
+  if (!el) return;
+  el.href = `./analytics/#/player/${encodeURIComponent(gsis)}`;
+  el.hidden = false;
+}
+
 // --- D115: season-stats fetch failure classification ----------------------------------------------------
 // "This player has no ESPN stats" is a normal answer, not a bug — the coverage audit already knows ~160
 // players (mostly offensive linemen) have no ESPN stats page at all. It reaches getPlayer()'s throw two
@@ -470,18 +517,29 @@ if (typeof window !== "undefined") {
   });
 }
 
-// D75: a player panel can open in place on the whole-team page OR either side page (offense/defense,
-// since D72 put those on the same field-plus-aside shell as team.js's teamBodyHtml) — closing it must
-// return to WHICHEVER of those three the panel was opened from, not always the whole-team page.
-function isTeamContextHash(hash, abbr) {
-  return hash === `#/team/${abbr}` || hash === `#/team/${abbr}/off` || hash === `#/team/${abbr}/def`;
+// Bug 3 (Adam): the panel can open from ANY page that draws a clickable card — the whole-team page,
+// offense/defense side views (D72/D75's shared field-plus-aside shell), a position-group page, a matchup
+// page (either team's half), even the landing page — and the × / Escape must return to THAT page, not
+// always the whole-team page. A "page" hash is anything that is not itself a /player/ sub-route: two
+// player routes can appear back to back when the panel is already open and the man clicks a DIFFERENT
+// player's card without closing it first (main.js's openPlayerPanel/keepView keeps the same aside alive
+// for that navigation), and that in-between player hash must never overwrite the real origin.
+// Pure and exported so the origin choice is testable without a DOM (tests/panel.test.mjs).
+const PLAYER_ROUTE = /\/player\//;
+export function originFor(lastHash, previousOrigin, abbr) {
+  if (typeof lastHash === "string" && lastHash && !PLAYER_ROUTE.test(lastHash)) return lastHash;
+  return previousOrigin || `#/team/${abbr}`;
 }
 
 function navigateAwayFromPlayer(asideEl) {
   const abbr = asideEl.dataset.teamAbbr || "";
-  // originHash is the page the panel actually opened from (whole-team, offense or defense) when that's
-  // known; a direct link or an unrecognized origin still falls back to the whole-team page, same as before.
+  // originHash is the page the panel actually opened from — set by openPanel below via originFor(); a
+  // direct link or an unrecognized origin still falls back to the whole-team page, same as before.
   const origin = asideEl.dataset.originHash || `#/team/${abbr}`;
+  // history.back() is only correct when the immediately-preceding history entry IS that origin (the
+  // ordinary case: he clicked a card and the panel opened right on top of it) — openPanel sets this flag
+  // by comparing lastOldHash to the chosen origin, so a player-to-player hop in between (where back()
+  // would land on the wrong player, not the origin page) falls through to setting the hash directly.
   if (asideEl.dataset.cameFromTeamRoute === "true" && history.length > 1) history.back();
   else location.hash = origin;
 }
@@ -591,6 +649,7 @@ function panelShellHtml(card, season, teamMeta, teamView = null) {
       <div class="panel-head-main">
         <div class="panel-name">${esc(card.name)} <span class="panel-number">#${esc(card.number ?? dash)}</span></div>
         <div class="panel-label">${esc(card.displayLabel || card.position || "")}</div>
+        <a class="panel-stats-link" data-stats-link href="#" target="_blank" rel="noopener" title="Open this player in NFL Analytics" hidden>Stats ↗</a>
         ${wordmark}
       </div>
     </div>
@@ -629,13 +688,14 @@ export function openPanel(asideEl, card, teamView, teamMeta) {
   wireCloseHandlersOnce(asideEl);
   const abbr = teamMeta?.abbr || teamView?.abbr || "";
   asideEl.dataset.teamAbbr = abbr;
-  const fromTeamContext = isTeamContextHash(lastOldHash, abbr);
-  asideEl.dataset.cameFromTeamRoute = String(fromTeamContext);
-  asideEl.dataset.originHash = fromTeamContext ? lastOldHash : `#/team/${abbr}`;
+  const origin = originFor(lastOldHash, asideEl.dataset.originHash, abbr);
+  asideEl.dataset.originHash = origin;
+  asideEl.dataset.cameFromTeamRoute = String(lastOldHash === origin);
 
   asideEl.hidden = false;
   asideEl.innerHTML = panelShellHtml(card, teamView?.season, teamMeta, teamView);
   { const h = asideEl.querySelector("[data-history]"); if (h) renderHistory(h, card, teamMeta, { abbr: teamView?.abbr ?? teamMeta?.abbr }); }
+  patchStatsLink(asideEl, myGen, card, teamView?.season); // Job 2: shows itself only if this man has analytics data
 
   // D115: independent of the ESPN-bio fetch below (gated on card.espnId) — the games count comes from
   // gsis/pfr/name matching against nflverse history, not from ESPN, so this runs even for the small number

@@ -126,9 +126,21 @@ export function lostCardHtml(list, { season, feedSeason, abbr = "", q = "", feed
     const foot = r.leftEarly ? `<div class="an-tm-lostfoot">left the last one early; that game is not counted</div>` : "";
     return `<div class="an-tm-lostman">${head}${before}${since}${foot}</div>`;
   };
+  // D196 C follow-up (2026-09-25): a names-only man (a lineman, a defender) used to link only to the club's whole
+  // depth chart, never to his own card. agg_absence.js's rows are keyed by gsis (the status feed only ever carries
+  // a man with one, server/compile/statusfeed.js), so every row here already has one and opens his own analytics
+  // page, same link shape as every skill man above; `playerKey` (the depth chart's own id, distinct from gsis) is
+  // never on an absence row today, so that branch is unreached until agg_absence.js is asked to carry one - kept
+  // here rather than dropped, so the fallback the next builder needs to add is a one-line change, not a rewrite.
   const nameLine = (r) => {
     const st = statusBits(r);
-    return `<span class="an-tm-lostline"><span class="an-tm-lostpos">${esc(r.pos)}</span> <a class="an-tm-lostname${st.nameCls ? " " + st.nameCls : ""}" href="../#/team/${encodeURIComponent(abbr)}" target="_blank" rel="noopener" title="on the depth chart">${esc(r.name)}</a> <span class="an-tm-loststat">${st.html}</span>${st.missed ? ` · ${esc(st.missed)}` : ""}</span>`;
+    const cls = `an-tm-lostname${st.nameCls ? " " + st.nameCls : ""}`;
+    const nameLink = r.gsis
+      ? who(r.gsis, r.name, cls)
+      : r.playerKey
+        ? `<a class="${cls}" href="../#/team/${encodeURIComponent(abbr)}/player/${encodeURIComponent(r.playerKey)}" target="_blank" rel="noopener" title="on the depth chart">${esc(r.name)}</a>`
+        : `<a class="${cls}" href="../#/team/${encodeURIComponent(abbr)}" target="_blank" rel="noopener" title="on the depth chart">${esc(r.name)}</a>`;
+    return `<span class="an-tm-lostline"><span class="an-tm-lostpos">${esc(r.pos)}</span> ${nameLink} <span class="an-tm-loststat">${st.html}</span>${st.missed ? ` · ${esc(st.missed)}` : ""}</span>`;
   };
   return `<div class="an-card an-tm-lost"><div class="an-dh" title="${esc(LOST_TIP)}">What's been lost <span class="an-dsub">who is missing, the share of the work he held before, and who has taken it since</span></div>`
     + (skill.length ? `<div class="an-tm-lostmen">${skill.map(man).join("")}</div>` : "")

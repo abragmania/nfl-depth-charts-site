@@ -4,7 +4,7 @@
 // flat files the publish step writes, through the same staticPathFor() the depth charts use (public/js/api.js).
 // This app is served one folder down (/analytics/), so every static path gets a "../" in front.
 import { isStatic, staticPathFor } from "../../js/api.js";
-import { weekKey, splitKey } from "./filters.js";
+import { weekKey, splitKey, weekInScope } from "./filters.js";
 
 // Mirrors the analytics contract's static layout, used only if api.js's staticPathFor() does not (yet) map
 // an analytics URL: /api/analytics/{s}/manifest -> api/analytics/{s}/manifest.json, .../players -> players.json,
@@ -131,10 +131,12 @@ function loadWeek(season, w) {
   return weekFiles.get(k);
 }
 
-// Which week keys a window needs fetched. last3 reads the four most recent weeks (three games plus a bye).
+// Which week keys a window needs fetched. last3 reads the four most recent weeks in scope (three games plus a
+// bye): regular-season weeks only unless the Playoffs chip is on, the same rule gamesInWindow applies, so a
+// completed season's Last 3 reads weeks 15-18 rather than its playoff weeks 19-22 (which the window then drops).
 export function weeksNeeded(allKeys, st) {
   const keys = [...allKeys].sort();
-  if (st.window === "last3") return keys.slice(-4);
+  if (st.window === "last3") return keys.filter((k) => weekInScope(k, st)).slice(-4);
   if (st.window === "range") return keys.filter((k) => (!st.from || k >= st.from) && (!st.to || k <= st.to));
   return keys;
 }

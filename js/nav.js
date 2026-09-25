@@ -28,17 +28,32 @@ function switcherOptionsHtml(teams, abbr) {
 // D174: help, not a page: an outlined control with a "?" disc after the four page pills, so it never reads as a
 // fifth page. It opens the How to read page (public/js/guide.js).
 export const HELP_LINK = `<a class="nav-help" href="#/guide" title="What every number, badge and mark means"><span class="nav-help-q" aria-hidden="true">?</span>How to read</a>`;
+
+// Job 3 (Adam): a control in the nav strip itself — every page it draws (team, offense, matchup, an
+// offensive group too), not just the topbar's own always-there "Analytics ↗" (public/index.html), which
+// always opens the analytics app's own landing page rather than the team or defense view the man was
+// actually looking at. Only the Defense page, and a group page whose band lives on the defensive side, use
+// the analytics app's Defense view (with this club pre-opened); every other page this strip draws uses that
+// team's own analytics page. Exported so it's testable without a DOM (tests/zoom.test.mjs/teams.test.mjs).
+export function analyticsHrefFor(page, unit, abbr) {
+  const A = encodeURIComponent(abbr);
+  const isDefenseContext = page === "def" || (page === "group" && unit === "DEF");
+  return isDefenseContext ? `./analytics/#/defense?open=${A}` : `./analytics/#/team/${A}`;
+}
+
 export function navStripHtml({ teams, abbr, page, unit, bandLabel, bandSlug, opponentAbbr, primary, secondary }) {
   const A = esc(abbr);
   const offLit = page === "off" || (page === "group" && unit === "OFF");
   const defLit = page === "def" || (page === "group" && unit === "DEF");
   const pill = (label, href, lit) => `<a class="zoom-pill nav-pill${lit ? " active" : ""}" href="${href}">${label}</a>`;
+  const analyticsLink = `<a class="nav-help nav-analytics" href="${esc(analyticsHrefFor(page, unit, abbr))}" target="_blank" rel="noopener" title="Open this team in NFL Analytics">Analytics ↗</a>`;
   const pills = `<span class="nav-strip-pills">
     ${pill("Team", `#/team/${A}`, page === "team")}
     ${pill("Offense", `#/team/${A}/off`, offLit)}
     ${pill("Defense", `#/team/${A}/def`, defLit)}
     ${pill("Matchup", `#/matchup/${A}`, page === "matchup")}
     ${HELP_LINK}
+    ${analyticsLink}
   </span>`;
   // A group page's crumb links nowhere (D59 spec) — it names the band you are already looking at.
   const crumb = page === "group" && bandLabel

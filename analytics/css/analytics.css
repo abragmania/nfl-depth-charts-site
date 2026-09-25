@@ -37,6 +37,13 @@ a { color:inherit; }
 .an-tab:hover { color:var(--ink); background:rgba(255,255,255,.06); }
 .an-tab.on { color:#0b0d10; background:var(--ink); }
 .an-asof { margin-left:auto; color:var(--muted); font-size:12.5px; white-space:nowrap; }
+/* The depth-chart app's own link back (public/index.html .topbar-analytics), copied so the pair reads the same in
+   both directions. .an-asof normally carries the margin-left:auto that pushes this end of the bar right; when it
+   is hidden (no badge yet, or an error page - main.js's paintAsof) that auto margin disappears with it, so this
+   link picks it up instead, the same technique .topbar-analytics uses for the search box on the depth-chart side. */
+.an-topbar-depth { margin-left:8px; color:var(--muted); font-size:13px; font-weight:600; text-decoration:none; white-space:nowrap; }
+.an-topbar-depth:hover { color:var(--ink); text-decoration:underline; }
+.an-asof[hidden] + .an-topbar-depth { margin-left:auto; }
 
 .an-main { padding:14px var(--gutter) 28px; }
 /* The leaderboard pages hug their table (the widest thing on them is the filter bar or the table) and sit in the middle

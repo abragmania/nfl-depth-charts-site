@@ -54,6 +54,12 @@
 .panel-name { font-size: 20px; font-weight: 800; line-height: 1.2; }
 .panel-number { color: var(--muted); font-weight: 600; font-variant-numeric: tabular-nums; }
 .panel-label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin-top: 3px; }
+/* Job 2: "Stats ↗" to the separate analytics app — hidden by default (panel.js's panelShellHtml) and shown
+   only once the season's players file confirms this man has analytics data (patchStatsLink). Same muted,
+   underline-on-hover voice as the app bar's own "Analytics ↗" (public/index.html's .topbar-analytics). */
+.panel-stats-link { display: inline-block; margin-top: 4px; font-size: 11px; font-weight: 600; color: var(--muted); text-decoration: none; }
+.panel-stats-link:hover { color: var(--ink); text-decoration: underline; }
+.panel-stats-link[hidden] { display: none; }
 /* The wordmark PNG is the club's own dark colour on a transparent background, so on a dark club (WAS
    burgundy, BAL purple, CHI navy, PIT/LV/NO/JAX) it would nearly vanish against the panel's own dark fill
    (--panel). Same fix as the landing tile's crest backdrop (styles.css's .tile img): an opaque light chip
@@ -117,3 +123,7 @@
 /* D142: "ESPN lists him elsewhere" moved off the cards and into the panel — one muted line in the panel's
    own note voice, sitting under the status block where the rest of this man's placement facts are. */
 .panel-espn-note { margin-top: 8px; font-size: 12px; color: var(--muted); line-height: 1.35; }
+
+/* A player route whose id matches nothing on the chart (main.js openPlayerPanel): the panel's place says so. */
+.panel-notfound { padding:24px 18px; color:var(--muted); font-size:13px; line-height:1.5; }
+.panel-notfound a { color:var(--fg); text-decoration:underline; margin-left:6px; }

@@ -164,7 +164,7 @@ export function hasPfrFigure(rows) {
 }
 
 export async function renderGrid(ctx, query) {
-  const { root, asof, isCurrent } = ctx;
+  const { root, isCurrent } = ctx;
   const { st, sort, dir, mode, al } = gridState(query);
   document.title = "Grid · NFL Analytics";
   const go = (n, s = sort, d = dir, m = mode, a = al) => { const q = gridQuery(n, s, d, m, a); location.hash = `#/grid${q ? "?" + q : ""}`; };
@@ -190,11 +190,6 @@ export async function renderGrid(ctx, query) {
   const allowed = allowedByPosition(data.blocks, data.players, pst);
   const usual = al.vs ? allowedVsUsual(data.blocks, data.players, pst) : null;
   const pnote = hasPfrFigure(rows) ? pfrNote(agg.pfrThrough, agg.latestKey, st.season) : "";
-  if (asof) {
-    const m = data.manifests.find((x) => x.season === st.season) || data.manifests[0];
-    const last = (m?.weeks || []).reduce((a, b) => (!a || b.week > a.week ? b : a), null);
-    asof.textContent = last ? `Through W${last.week}` : ""; asof.hidden = !last;
-  }
   // The club links carry the filters, not the grid's sort (the team page has its own).
   const d0 = defaultState();
   const linkQ = toQuery({ ...st, open: "", sort: d0.sort, dir: d0.dir });

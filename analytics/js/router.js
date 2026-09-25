@@ -39,6 +39,17 @@ export function previousPage() {
   for (let i = trail.length - 2; i >= 0; i--) if (split(trail[i]).path !== here) return trail[i];
   return null;
 }
+// Appends `hash` to the trail unless it is already the last entry (start()'s go() calls this with location.hash;
+// exported, pure list bookkeeping with no window/location of its own, so tests can drive it directly).
+export function recordVisit(hash) {
+  if (trail[trail.length - 1] !== hash) trail.push(hash);
+}
+// A render that throws paints the "Something broke" message (main.js's view wrapper); the reader's Back button
+// must not return to that dead page. main.js calls this from its catch so the trail forgets the hash it just
+// failed to render - previousPage() then falls straight through to the hash before it, the next time it is asked.
+export function forgetCurrent() {
+  if (trail.length) trail.pop();
+}
 // D193 (2026-09-25): Usage became Receivers and Rushing became Running backs, and the app bar's Teams group split
 // into Offense and Defense with Grid added; the old hash segments (usage, rushing, teams, team) still resolve as
 // aliases (main.js), so their labels follow the page's new name rather than the old link text.
@@ -67,7 +78,7 @@ export function backLink(fallbackHref, fallbackName) {
 
 export function start(fallback) {
   const go = () => {
-    if (trail[trail.length - 1] !== location.hash) trail.push(location.hash);
+    recordVisit(location.hash);
     const m = parse(location.hash);
     if (m) m.handler(m.params, m.query, m.path); else fallback();
   };

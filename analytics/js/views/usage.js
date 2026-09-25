@@ -23,17 +23,8 @@ function windowText(st, weeks) {
   return span;
 }
 
-function builtText(manifests) {
-  const m = manifests.find((x) => x.season === Math.max(...manifests.map((y) => y.season))) || manifests[0];
-  const ws = m?.weeks || [];
-  if (!ws.length) return "";
-  const last = ws.reduce((a, b) => (a.week > b.week ? a : b));
-  const t = last.builtAt ? new Date(last.builtAt) : null;
-  return `Through W${last.week}${t && !isNaN(t) ? ` · built ${t.toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}` : ""}`;
-}
-
 export async function renderUsage(ctx, query) {
-  const { root, asof, isCurrent } = ctx;
+  const { root, isCurrent } = ctx;
   const st = { ...fromQuery(query), more: moreFrom(query) };
   document.title = "Receivers · NFL Analytics";
   if (!root.querySelector(".an-usage")) root.innerHTML = `<div class="an-msg">Loading receivers…</div>`;
@@ -62,11 +53,13 @@ export async function renderUsage(ctx, query) {
   const windowName = st.window === "last3" ? "Last 3" : st.window === "range" && weeks.length ? `${weekLabel(weeks[0], st.season)}–${weekLabel(weeks[weeks.length - 1], st.season)}` : "Season";
   const clubTeams = [...new Set(clubGames(data.blocks).map((g) => g.team))].sort();
   const teamsByAbbr = new Map(teams.map((t) => [t.abbr, t]));
-  if (asof) { asof.textContent = builtText(data.manifests); asof.hidden = false; }
 
   const posText = POSITIONS.filter((p) => st.pos[p] === "in").join(" · ") || "All positions";
   const exText = POSITIONS.filter((p) => st.pos[p] === "out");
-  const qs = toQuery(st);
+  // Every row link (team pill, player page, depth chart) is built from this - it must not carry the currently
+  // open row into the address a reader lands on (👁 fix round finding, D193-adjacent): matches qb.js/rushing.js's
+  // own `qs`, which already excludes `open`.
+  const qs = toQuery({ ...st, open: "" });
   root.innerHTML = `<section class="an-usage">
     <div class="an-head">
       <h1>Receivers</h1>

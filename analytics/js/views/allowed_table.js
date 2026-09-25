@@ -134,7 +134,7 @@ export function allowedSectionHtml(cells, view) {
       return `<td class="${cls}${c.tier ? " t-" + c.tier : ""}" title="${esc(title)}"><span>${figNum(c.v, f, vs)}</span>${rk ? `<br><em class="an-rb-m an-dp-rk">${rk}</em>` : ""}</td>`;
     }).join("")).join("");
     return `<tr class="an-dp-row" data-id="${esc(r.team)}">
-      <td class="an-dp-club"><div class="c-name">${teamPill(r.team, view.teams, q)}<span class="an-def-name">${esc(view.teams?.get(r.team)?.nickname || view.teams?.get(r.team)?.name || r.team)}</span></div></td>
+      <td class="an-dp-club"><div class="c-name">${teamPill(r.team, view.teams, q, "", "defense")}<span class="an-def-name">${esc(view.teams?.get(r.team)?.nickname || view.teams?.get(r.team)?.name || r.team)}</span></div></td>
       <td class="num">${r.g || ""}</td>${tds}</tr>`;
   }).join("");
   // vs usual: a short legend in the bar and the full sentence under it.

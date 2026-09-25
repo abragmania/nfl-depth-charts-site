@@ -14,7 +14,7 @@ import { renderTeams, renderTeam } from "./views/team.js";
 import { renderDefense } from "./views/defense.js";
 import { renderGrid } from "./views/grid.js";
 import { loadSeason } from "./data.js";
-import { fromQuery, seasonsOf } from "./filters.js";
+import { fromQuery, seasonsOf, weekKey, weekLabel, CURRENT_SEASON } from "./filters.js";
 
 const root = document.getElementById("app");
 const nav = document.getElementById("an-nav");
@@ -26,12 +26,46 @@ function paintNav(active, query) {
   nav.innerHTML = renderNav(active, query);
 }
 
+// D-badge fix (2026-09-25): every page used to set #an-asof itself, so a team or player page opened cold showed
+// nothing, and a page that never touches it again (any page reached after viewing a past season) left the badge
+// reading the earlier season's week. One source instead: after every successful render, the view wrapper below
+// derives the badge from the season on screen (fromQuery(query).season, the same rule every page's own filter
+// bar uses) and that season's cached manifest (data.js's loadSeason). weekLabel(key, season) already reads "W3"
+// for the season passed as its own `currentSeason` argument (filters.js), so passing st.season both ways gives the
+// bare week token - "WC"/"DIV"/"CONF"/"SB" for weeks 19-22, "W<n>" otherwise - with no season prefix to strip.
+async function paintAsof(query, isCurrent) {
+  if (!asof) return;
+  const st = fromQuery(query);
+  try {
+    const { manifest } = await loadSeason(st.season);
+    if (!isCurrent()) return;
+    const weeks = manifest?.weeks || [];
+    if (!weeks.length) { asof.hidden = true; return; }
+    const last = weeks.reduce((a, b) => (a.week > b.week ? a : b));
+    const label = weekLabel(weekKey(st.season, last.week), st.season);
+    // Usage.js's old "· built <date>" suffix, kept for the current season only - a past season's build time means
+    // nothing to a reader.
+    const t = st.season === CURRENT_SEASON && last.builtAt ? new Date(last.builtAt) : null;
+    const built = t && !isNaN(t) ? ` · built ${t.toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}` : "";
+    asof.textContent = `Through ${label}${built}`;
+    asof.hidden = false;
+  } catch { if (isCurrent()) asof.hidden = true; } // the season's files are not built yet, or could not load: no badge
+}
+
 let seq = 0;
 const view = (section, fn) => async (params, query) => {
   const my = ++seq;
   paintNav(section, query);
-  try { await fn(params, query, { root, asof, isCurrent: () => my === seq }); }
-  catch (e) { if (my === seq) root.innerHTML = `<div class="an-msg an-msg-err">Something broke: ${esc(e.message)}</div>`; }
+  try {
+    await fn(params, query, { root, asof, isCurrent: () => my === seq });
+    if (my === seq) await paintAsof(query, () => my === seq);
+  } catch (e) {
+    if (my === seq) {
+      root.innerHTML = `<div class="an-msg an-msg-err">Something broke: ${esc(e.message)}</div>`;
+      if (asof) asof.hidden = true;
+      router.forgetCurrent(); // the reader's Back button must not return to this dead page
+    }
+  }
 };
 
 router.on("/", view("receivers", (p, q, ctx) => renderUsage(ctx, q)));

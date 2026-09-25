@@ -145,6 +145,12 @@ export function fromQuery(qs) {
 
 // ---- window and predicates -----------------------------------------------------------------------------
 
+// Is a week key inside the app's scope? Regular-season weeks always; weeks 19+ (playoffs) only with the Playoffs
+// chip (st.po). gamesInWindow and data.js's weeksNeeded share this so a fetch never misses what a window counts.
+export function weekInScope(key, st) {
+  return !!st.po || splitKey(key).week <= REG_SEASON_WEEKS;
+}
+
 // Which (week, team) games count. `games` is [{ key, team, gameId }] for every club-game loaded (one entry per
 // club per game). season: every regular-season game; range: from..to inclusive (either end open when null);
 // last3: each club's three most recent games within scope, so a club on a bye still gets three games, not three
@@ -152,7 +158,7 @@ export function fromQuery(qs) {
 // regular season app-wide); the Playoffs chip adds them back for whichever window is chosen.
 // Returns a Set of `${key}|${team}`.
 export function gamesInWindow(games, st) {
-  const inScope = (g) => st.po || splitKey(g.key).week <= REG_SEASON_WEEKS;
+  const inScope = (g) => weekInScope(g.key, st);
   const out = new Set();
   if (st.window === "last3") {
     const byTeam = new Map();

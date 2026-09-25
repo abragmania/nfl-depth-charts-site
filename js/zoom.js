@@ -572,7 +572,11 @@ export async function renderZoomGroup(root, search, abbr, bandParam) {
   const team = teams.find((t) => t.abbr === A);
   if (!team || !unit) {
     document.title = "NFL Depth Charts";
-    root.innerHTML = notFoundHtml(unit ? abbr : `${abbr} / ${bandParam}`);
+    // A real club with a band name nothing matches says so, with the club's own page as the way out; a club
+    // nothing matches gets the same message every other page gives.
+    root.innerHTML = team && !unit
+      ? `<div class="notfound">No position group "${esc(String(bandParam || ""))}" on the ${esc(team.name)} chart. <a class="back" href="#/team/${esc(A)}">${esc(A)} team page</a> · <a class="back" href="#/">All teams</a></div>`
+      : notFoundHtml(abbr);
     return;
   }
   const bandLabel = BAND_LABEL[band] || band;

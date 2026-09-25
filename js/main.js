@@ -73,6 +73,12 @@ async function openPlayerPanel(abbr, playerKey) {
   const aside = root.querySelector(".player-panel");
   const card = cached && cached.abbr === A ? findCard(cached.view, playerKey) : null;
   if (aside && card) openPanel(aside, card, cached.view, cached.teamMeta);
+  else if (aside) {
+    // An id nothing on this chart matches (a stale link, a man cut since): say so in the panel's place instead of
+    // leaving the team page up with a player route in the address bar and no word why.
+    aside.hidden = false;
+    aside.innerHTML = `<div class="panel-notfound">No player "${esc(String(playerKey || ""))}" on the ${esc(A)} chart. <a href="#/team/${esc(A)}">Close</a></div>`;
+  }
 }
 
 router.on("/", guard(() => { document.title = "NFL Depth Charts"; root.classList.add("page-landing"); return renderLanding(root, search); }));
