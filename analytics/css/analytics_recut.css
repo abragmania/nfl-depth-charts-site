@@ -275,3 +275,63 @@
 .an-rc-trsep { color:var(--dim); }
 /* Neutral on purpose (as the variance strip): both arrows the same muted colour, only the glyph differs. */
 .an-rc-trarrow { font-style:normal; font-size:9.5px; color:var(--muted); }
+
+/* ---- D196: Club targets, the club's main pass catchers beside the zone field (player.js clubTargetsHtml) ---- */
+/* About six 22px rows; his own row in the accent colour and bold. Bars: a thin track, the man's fill in a quiet ink,
+   a light league tick on target share and air-yards share. Never stretches: it keeps its own width beside the zones. */
+.an-pl-rc .an-pl-rcclub { flex:0 0 auto; }
+.an-rc-club { border-collapse:collapse; font-size:12px; font-variant-numeric:tabular-nums; margin-top:6px; }
+.an-rc-club th { color:var(--dim); font-size:10px; font-weight:700; text-align:left; padding:0 8px 3px 0; white-space:nowrap; }
+.an-rc-club td { height:22px; padding:0 10px 0 0; white-space:nowrap; border-bottom:1px solid #1a1f25; cursor:default; }
+.an-rc-club td.an-rc-cname { max-width:150px; overflow:hidden; text-overflow:ellipsis; padding-right:8px; }
+.an-rc-club .an-rc-cname a { color:var(--ink); text-decoration:none; font-weight:600; }
+.an-rc-club .an-rc-cname a:hover { text-decoration:underline; }
+.an-rc-club tr.me .an-rc-cname a { color:var(--accent); font-weight:800; }
+.an-rc-club tr.me td b { color:var(--accent); }
+.an-rc-club .an-pospill { font-size:10px; min-width:24px; padding:0 4px; }
+.an-rc-cbar { position:relative; display:inline-block; width:54px; height:6px; margin-right:6px; vertical-align:middle; border-radius:3px; background:#0f1317; border:1px solid #20262d; }
+.an-rc-cfill { position:absolute; left:0; top:0; bottom:0; border-radius:2px; background:color-mix(in srgb, var(--band-QB) 70%, var(--panel2)); }
+.an-rc-club tr.me .an-rc-cfill { background:color-mix(in srgb, var(--accent) 80%, var(--panel2)); }
+.an-rc-ctick { position:absolute; top:-3px; bottom:-3px; width:0; border-left:2px solid #c9d1da; opacity:.75; }
+.an-rc-club td b { display:inline-block; min-width:28px; text-align:right; color:var(--ink); font-weight:700; vertical-align:middle; }
+
+/* ---- D196 C: "What's been lost", the team page's card above the tiles (views/team.js lostCardHtml) ---- */
+.an-tm-lost { margin-bottom:12px; }
+.an-tm-lost > .an-dh { cursor:help; }
+.an-tm-lostmen { display:grid; grid-template-columns:repeat(auto-fill, minmax(400px, 1fr)); gap:10px 26px; }
+/* 👁: on a laptop four men laid out three plus one and the card took a third of the screen; two across balances it. */
+@media (max-width:1900px) { .an-tm-lostmen { grid-template-columns:repeat(2, minmax(0, 1fr)); } }
+.an-tm-lostman { min-width:0; font-size:12.5px; line-height:1.5; color:var(--muted); }
+.an-tm-losthead { display:flex; align-items:baseline; flex-wrap:wrap; gap:4px 8px; margin-bottom:1px; }
+.an-tm-lostname { color:var(--ink); font-weight:700; text-decoration:none; }
+.an-tm-losthead .an-tm-lostname { font-size:13.5px; }
+.an-tm-lostname:hover { color:var(--accent); }
+.an-tm-lostname.an-st-name-out { color:#ef5750; }
+.an-tm-loststat { font-size:11px; }
+.an-tm-lostinj { color:var(--muted); font-size:11.5px; }
+.an-tm-lostmiss { color:var(--dim); font-size:11.5px; }
+.an-tm-lostbefore { color:var(--ink); }
+.an-tm-lostsince a { color:var(--ink); font-weight:600; text-decoration:none; }
+.an-tm-lostsince a:hover { color:var(--accent); }
+.an-tm-lostsince.is-one { opacity:.5; }
+.an-tm-lostfill { margin:0 2px 0 5px; padding:0 4px; border:1px solid var(--line); border-radius:var(--r-chip); color:var(--dim); font-size:9.5px; font-weight:800; letter-spacing:.05em; text-transform:uppercase; vertical-align:1px; }
+.an-tm-lostfoot { color:var(--dim); font-size:11.5px; font-style:italic; }
+.an-tm-lostnames { display:flex; flex-wrap:wrap; gap:3px 20px; margin-top:10px; padding-top:8px; border-top:1px solid var(--line); font-size:12px; color:var(--muted); }
+.an-dh + .an-tm-lostnames { margin-top:0; padding-top:0; border-top:0; }
+.an-tm-lostline { white-space:nowrap; }
+.an-tm-lostpos { color:var(--dim); font-size:10.5px; font-weight:800; }
+.an-tm-lostitem { white-space:nowrap; }
+
+/* ---- D196 D: the Defense page's By position view (views/defense.js posTableHtml) ---- */
+.an-dpos-table em.an-dp-rk { display:block; line-height:1.15; margin-top:1px; }
+.an-dpos-table thead tr.an-grp th.g-QB { color:var(--band-QB); }
+.an-dpos-table thead tr.an-grp th.g-RB { color:var(--band-BACKFIELD); }
+.an-dpos-table thead tr.an-grp th.g-WR { color:var(--band-WR); }
+.an-dpos-table thead tr.an-grp th.g-TE { color:var(--band-TE); }
+.an-dpos-table td.an-dp-club { text-align:left; }
+/* 👁: when Club targets cannot sit beside the zones, it goes under the zone grid in the zones' column, at its own width. */
+.an-pl-rc .an-pl-rczones > .an-pl-rcclub { width:fit-content; max-width:100%; margin-top:14px; }
+/* 👁: the vs-usual explanation must wrap at the table's width, never widen the column; value cells share a width. */
+.an-dpos-note { width:0; min-width:100%; white-space:normal; }
+.an-dpos-table td.an-dp-v { min-width:58px; }
+.an-tm-lostside { color:var(--dim); font-size:10.5px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; margin-right:-10px; }

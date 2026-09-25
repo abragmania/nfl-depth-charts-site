@@ -171,7 +171,7 @@ export function rushTableHtml(allRows, st, query, view = {}, status = {}) {
     const open = st.open === r.gsis;
     const depth = `../#/team/${encodeURIComponent(r.team)}/player/${encodeURIComponent(r.gsis)}`;
     const ps = status[r.gsis];
-    const chip = statusChip(ps), nameCls = statusNameClass(ps);
+    const chip = statusChip(ps, { season: view.statusSeason }), nameCls = statusNameClass(ps);
     return `<tr class="an-row${open ? " open" : ""}" data-id="${esc(r.gsis)}" tabindex="0" aria-expanded="${open}">
       <td class="c-rank an-stick">${i + 1}</td>
       <td class="c-name an-stick"><a class="an-pname${nameCls ? " " + nameCls : ""}" href="#/player/${encodeURIComponent(r.gsis)}${q ? "?" + q : ""}" title="${esc(r.name)}">${esc(r.name)}</a>${teamPill(r.team, view.teams, q)}<span class="an-pospill" data-band="${BAND(r.pos)}">${esc(r.pos)}</span>${chip}<a class="an-dc" href="${depth}" target="_blank" rel="noopener" title="Open his depth-chart card in a new tab" aria-label="Depth chart">↗</a></td>
@@ -267,7 +267,7 @@ export async function renderRushing(ctx, query) {
   const el = root.querySelector(".an-tablewrap");
   // D196: badges are current-season only - statusApplies gates on the feed's own season against the window shown.
   const status = statusApplies(st, statusFeed.season) ? statusFeed.players : {};
-  el.innerHTML = rushTableHtml(agg.rows, st, qs, { ref, windowName, teams: teamsByAbbr, minCar }, status);
+  el.innerHTML = rushTableHtml(agg.rows, st, qs, { ref, windowName, teams: teamsByAbbr, minCar, statusSeason: statusFeed.season }, status);
   fitOpen(el);
   wireMore(el, () => go(toggleMore(COLS, { ...st, sort: SORTABLE.has(st.sort) ? st.sort : "car" }, "car")));
   el.querySelectorAll("th[data-sort]").forEach((h) => h.addEventListener("click", () => {

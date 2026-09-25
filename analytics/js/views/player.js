@@ -12,11 +12,12 @@
 // Interactivity (D177): a weekly bar (the fantasy chart's too) sets the window to that week and back; a zone cell
 // lists the plays behind it; the header has a Back button (router.js backLink: the page he came from, else his
 // position's section, D188) and links to his depth-chart card (new tab) and his team page.
-import { fromQuery, toQuery, seasonsOf, weekLabel, splitKey } from "../filters.js";
+import { fromQuery, toQuery, seasonsOf, weekLabel, splitKey, gamesInWindow } from "../filters.js";
 import { backLink } from "../router.js";
 import { loadFor, loadTeams, displayName, loadStatusFeed } from "../data.js";
 import { isStatic } from "../../../js/api.js";
-import { playerView, maddenBlocking, maddenEdition } from "../agg_player.js";
+import { playerView, maddenBlocking, maddenEdition, pageState } from "../agg_player.js";
+import { aggregateUsage, usageReference, clubGames, colIndex, REF_POS } from "../agg.js";
 import { renderFilterBar } from "../filterbar.js";
 import { tierOf } from "../table.js";
 import { tierNote } from "../agg.js";
@@ -93,7 +94,7 @@ export function backFallback(pos) {
 // pastOpen: the game log's previous-season weeks unfolded (👁 fix round; folded to its totals row by default).
 // layout: the measured fits (fantasy chart width, log beside or under it, the strips' widths), keyed by the page's
 // link and width so a redraw (a zone click, the log toggle) lands right first time.
-const ui = { gsis: null, zoneMode: "tgt", zone: null, pastOpen: false, layout: null };
+const ui = { gsis: null, zoneMode: "tgt", zone: null, pastOpen: false, layout: null, club: null };
 
 // D182 (Adam, 2026-09-24): the RB week-by-week block drops the air-yards-share strip (his carries and rush share
 // show in the rushing block); WR and TE keep all three weekly strips. They now sit in the receiving block's body.
@@ -247,6 +248,76 @@ export function logColumns(kind, cuts) {
   return logColumnsFor(kind).map(([key, label], i) => ({ key, label, align: i < 2 ? "left" : "right", kind: kinds[key], cuts: heat[key] ? cuts?.[heat[key]]?.cuts || null : null }));
 }
 
+// ---- Club targets (D196, Adam): his club's main pass catchers in the window, side by side -----------------------
+// PURE. The club's WR/TE/RB/FB rows from aggregateUsage with the club filter (the page's own window, the same shares
+// the tables show: target share and air-yards share over each man's games, route % from the charted weeks), the top
+// `n` by targets (ties by name), and HIM added at the foot when he is outside them. Red-zone target share: his
+// red-zone targets over his club's red-zone pass attempts (a pass-interference no-play is never an attempt, his
+// target all the same, as agg.js counts both) in the games he played for the club. League ticks: each row's own
+// position reference pool (usageReference over the whole league's rows in the same window). null without a club.
+const truthy = (v) => v === true || v === 1 || v === "1" || v === "true";
+export function clubTargets(blocks, players, st, gsis, team, { n = 6 } = {}) {
+  if (!team) return null;
+  const base = pageState(st);
+  const ref = usageReference(aggregateUsage(blocks, players, base).rows);
+  const rows = aggregateUsage(blocks, players, { ...base, team }).rows
+    .filter((r) => REF_POS.has(r.pos) && (r.tgt > 0 || r.gsis === gsis))
+    .sort((a, b) => b.tgt - a.tgt || String(a.name).localeCompare(String(b.name)));
+  const pick = rows.slice(0, n);
+  const top = pick.length;
+  const me = rows.find((r) => r.gsis === gsis);
+  if (me && !pick.includes(me)) pick.push(me);
+  const inWin = gamesInWindow(clubGames(blocks), base);
+  const rzAtt = new Map();
+  for (const b of blocks) {
+    const C = colIndex(b.cols);
+    const gk = `${b.key}|${team}`;
+    if (!inWin.has(gk)) continue;
+    for (const r of b.plays || []) {
+      if (r[C.posteam] !== team || r[C.type] !== "pass" || truthy(r[C.pi]) || !truthy(r[C.redzone])) continue;
+      rzAtt.set(gk, (rzAtt.get(gk) || 0) + 1);
+    }
+  }
+  return {
+    team, gsis, top,
+    rows: pick.map((r) => {
+      // His games for the club: the series weeks with a target-share figure (a week he did not play reads null).
+      const den = (r.series || []).filter((s) => s.v !== null && s.v !== undefined).reduce((s, x) => s + (rzAtt.get(`${x.key}|${team}`) || 0), 0);
+      const L = ref.at(r.pos).lg?.overall || {};
+      // A back's air-yards share dashes, as on the tables (D182: no AY % for a back), with no league tick.
+      const back = r.pos === "RB" || r.pos === "FB";
+      return { gsis: r.gsis, name: r.name, pos: r.pos, g: r.g, tgt: r.tgt, rz: r.rz, rzAtt: den, tgtShare: r.tgtShare, ayShare: back ? null : r.ayShare, rzShare: ratio(r.rz, den), routePct: r.routePct,
+        lgTgt: isNum(L.tgtShare) ? L.tgtShare : null, lgAy: !back && isNum(L.ayShare) ? L.ayShare : null, me: r.gsis === gsis };
+    }),
+  };
+}
+// The block: one compact row per man, his own in the accent colour and bold; four small bars with the figure (a thin
+// league tick on the target-share and air-yards bars). The shares' bars share one scale per column (the column's
+// largest figure or tick), route % runs 0 to 100. The name links to that man's page; hovering opens nothing.
+export function clubTargetsHtml(ct, { qs = "", wn = "" } = {}) {
+  if (!ct || !ct.rows?.length) return "";
+  const cols = [
+    ["tgtShare", "Tgt %", "lgTgt", "Targets / the club's pass attempts in his games"],
+    ["ayShare", "AY %", "lgAy", "Air yards on his targets / the club's air yards in his games"],
+    ["rzShare", "RZ tgt %", null, "Red-zone targets / the club's red-zone pass attempts in his games"],
+    ["routePct", "Route %", null, "Routes / club dropbacks (heatradar.app, charted weeks)"],
+  ];
+  const scale = (k, lk) => (k === "routePct" ? 1 : Math.max(0.1, ...ct.rows.flatMap((r) => [r[k], lk ? r[lk] : null]).filter(isNum)));
+  const S = Object.fromEntries(cols.map(([k, , lk]) => [k, scale(k, lk)]));
+  const w = (v, s) => Math.round(Math.max(0, Math.min(1, v / s)) * 1000) / 10;
+  const body = ct.rows.map((r) => {
+    const cells = cols.map(([k, label, lk, def]) => {
+      const v = r[k], lg = lk ? r[lk] : null;
+      const extra = k === "tgtShare" ? `; ${r.tgt} targets in ${r.g} games` : k === "rzShare" ? `; ${r.rz} of ${r.rzAtt}` : "";
+      const tip = `${label}: ${def}${isNum(v) ? ` = ${tPct(v, 1)}${extra}` : ": no figure"}${isNum(lg) ? `. League (${r.pos} reference pool): ${tPct(lg, 1)}` : ""}`;
+      return `<td title="${esc(tip)}"><span class="an-rc-cbar">${isNum(v) ? `<i class="an-rc-cfill" style="width:${w(v, S[k])}%"></i>` : ""}${isNum(lg) ? `<i class="an-rc-ctick" style="left:${w(lg, S[k])}%"></i>` : ""}</span><b>${isNum(v) ? Math.round(v * 100) + "%" : DASH}</b></td>`;
+    }).join("");
+    return `<tr${r.me ? ` class="me"` : ""}><td class="an-rc-cname"><a href="#/player/${encodeURIComponent(r.gsis)}${qs ? "?" + qs : ""}">${esc(r.name)}</a></td><td><span class="an-pospill" data-band="${BAND(r.pos)}">${esc(r.pos)}</span></td>${cells}</tr>`;
+  }).join("");
+  return `<div class="an-pl-rcclub"><div class="an-dh">Club targets <span class="an-dsub">${esc(ct.team)} · top ${ct.top} by targets${wn ? ` · ${esc(wn)}` : ""}</span></div>` +
+    `<table class="an-rc-club"><thead><tr><th></th><th></th>${cols.map(([, label]) => `<th>${esc(label)}</th>`).join("")}</tr></thead><tbody>${body}</tbody></table></div>`;
+}
+
 // ---- the page ------------------------------------------------------------------------------------------------
 export async function renderPlayer(ctx, params, query) {
   const { root, isCurrent } = ctx;
@@ -292,6 +363,15 @@ export async function renderPlayer(ctx, params, query) {
   }
 
   const wn = windowName(st, v.weeks);
+  // D196: his club's pass catchers in the window, names in the depth chart's spelling.
+  // Memoised per page link (the game log's fold toggle redraws without re-aggregating the league).
+  const clubKey = `${gsis}|${toQuery({ ...st, open: "" })}|${v.team}`;
+  if (ui.club?.key !== clubKey) {
+    const ct = clubTargets(data.blocks, data.players, st, gsis, v.team);
+    if (ct) for (const r of ct.rows) r.name = displayName(r.gsis, data.players);
+    ui.club = { key: clubKey, ct };
+  }
+  const club = ui.club.ct;
   const activeKey = st.window === "range" && st.from && st.from === st.to ? st.from : null;
   const sub = `${seasonLabel(st)} · ${v.weeks.length ? (v.weeks.length === 1 ? weekLabel(v.weeks[0], st.season) : `${weekLabel(v.weeks[0], st.season)} to ${weekLabel(v.weeks[v.weeks.length - 1], st.season)}`) : "no games"}${st.window === "last3" ? " (his club's last 3 games)" : ""} · league reference: ${v.recut.opportunityRefText}`;
   // The band's chart fits the page column (the kit caps each week's column, so it never stretches): the root's
@@ -301,7 +381,7 @@ export async function renderPlayer(ctx, params, query) {
   const bandW = Math.max(600, Math.min((root.clientWidth || 1400) - gutters, 1760) - 32);
   const layoutKey = `${gsis}|${toQuery({ ...st, open: "" })}|${root.clientWidth}|${ui.pastOpen}`;
   const draw = (lay) => {
-    const bodyHtml = pageBody(v, st, { wn, activeKey, block, bandW, pastOpen: ui.pastOpen, ...lay });
+    const bodyHtml = pageBody(v, st, { wn, activeKey, block, bandW, pastOpen: ui.pastOpen, club, clubQs: qs, ...lay });
     root.innerHTML = `<section class="an-pl an-pl-rc">
     ${head}
     <div class="an-pl-bar"><div class="an-filters"></div>
@@ -346,7 +426,7 @@ const zoneHtml = (v, st, wn) => `<div class="an-pl-zhead"><div class="an-seg" da
 // rushFit, the widths the receiving and rushing week strips spread across (default: their natural width); zoneMin,
 // the zone field plus its plays list's 260px minimum, so the zones wrap under the strips rather than squeeze; pastOpen,
 // the log's previous-season weeks unfolded.
-export function pageBody(v, st, { wn = windowName(st, v.weeks || []), activeKey = null, block = { status: "absent" }, bandW = 1400, chartW = null, stack = false, recFit = null, rushFit = null, zoneMin = null, pastOpen = false } = {}) {
+export function pageBody(v, st, { wn = windowName(st, v.weeks || []), activeKey = null, block = { status: "absent" }, bandW = 1400, chartW = null, stack = false, recFit = null, rushFit = null, zoneMin = null, pastOpen = false, club = null, clubQs = "", clubUnder = false } = {}) {
   const R = v.recut;
   const back = R.kind === "back";
   const pos = v.pos;
@@ -429,10 +509,12 @@ export function pageBody(v, st, { wn = windowName(st, v.weeks || []), activeKey 
   // (a back's rushing figures from playerView's rush block, his receiving figures from his Receivers row and the
   // efficiency set); new ones come from his Running backs row.
   const weekly = weeklyHtml(v, st, wn, activeKey, recFit);
-  const zones = `<div class="an-pl-rczones"${zoneMin ? ` style="min-width:min(100%, ${zoneMin}px)"` : ""}><div class="an-dh">Target zones <span class="an-dsub">${v.zoned} targets with a depth and direction · ${esc(wn)}</span></div><div data-zones>${zoneHtml(v, st, wn)}</div></div>`;
+  const clubHtml = clubTargetsHtml(club, { qs: clubQs, wn });
+  const zones = `<div class="an-pl-rczones"${zoneMin ? ` style="min-width:min(100%, ${zoneMin}px)"` : ""}><div class="an-dh">Target zones <span class="an-dsub">${v.zoned} targets with a depth and direction · ${esc(wn)}</span></div><div data-zones>${zoneHtml(v, st, wn)}</div>${clubUnder ? clubHtml : ""}</div>`;
   const routesHtml = st.with2025 && v.routes && v.routes.length ? `<div class="an-pl-rcroutes" data-band="${BAND(pos)}"><div class="an-dh">Routes · ${st.season - 1} <span class="an-dsub">${v.routes.reduce((s, x) => s + x.n, 0)} targets with a route label (nflverse participation)</span></div>${routeList(v.routes)}</div>` : "";
   // The routes list (Include previous season) rides in the same row, so it sits beside the zones when they fit.
-  const recBody = `<div class="an-pl-row">${weekly}${zones}${routesHtml}</div>`;
+  // D196: the club's pass catchers beside the zone field (the row wraps them under the strips when it must).
+  const recBody = `<div class="an-pl-row">${weekly}${zones}${clubUnder ? "" : clubHtml}${routesHtml}</div>`;
   const usageNote = (k, val) => note(k, val, v.cuts);
   const recItems = {
     rec: { label: "Receptions", value: tInt(r.rec), title: "Catches (nflverse play-by-play)" },
@@ -579,7 +661,7 @@ function rushStripsHtml(v, st, wn, activeKey, fit = null) {
 // body's full width with the zones under them; a back's rushing strips take the rushing body's full width; a width
 // under 44px a week leaves the strips at their natural size (they scroll). weeklyStrips' label and league-label
 // columns are 150 + 86px.
-export function layoutFrom({ bandW, logW, chartWeeks, recBodyW, zoneW, rushBodyW, weeks }) {
+export function layoutFrom({ bandW, logW, chartWeeks, recBodyW, zoneW, rushBodyW, weeks, clubW = 0 }) {
   const out = {};
   if (logW > 0 && chartWeeks > 0) {
     const beside = bandW - logW - 28;
@@ -587,10 +669,15 @@ export function layoutFrom({ bandW, logW, chartWeeks, recBodyW, zoneW, rushBodyW
     else out.stack = true;
   }
   if (recBodyW > 0 && weeks > 0) {
-    const left = recBodyW - (zoneW > 0 ? zoneW + 14 + 260 : 0) - 12;
+    // D196: the Club targets block (clubW, 0 when absent) sits beside the zones when the strips keep their room with
+    // it there too; else the strips and zones keep their old arrangement and the block goes under the zone grid in the
+    // zones' column when it fits that column (👁: not under the strips, which left a hole beside it), clubUnder.
+    const leftOf = (c) => recBodyW - (zoneW > 0 ? zoneW + 14 + 260 : 0) - (c > 0 ? c + 16 : 0) - 12;
     const room = (w) => w >= 236 + weeks * 44;
+    const left = clubW > 0 && room(leftOf(clubW)) ? leftOf(clubW) : leftOf(0);
     if (zoneW > 0 && room(left)) out.recFit = Math.floor(left);
     else if (room(recBodyW)) out.recFit = Math.floor(recBodyW);
+    if (clubW > 0 && zoneW > 0 && left === leftOf(0) && room(left) && zoneW + 14 + 260 >= clubW) out.clubUnder = true;
     if (zoneW > 0) out.zoneMin = Math.ceil(zoneW + 14 + 260);
   }
   if (rushBodyW > 0 && weeks > 0 && rushBodyW >= 236 + weeks * 44) out.rushFit = Math.floor(rushBodyW);
@@ -603,6 +690,7 @@ function measureLayout(root, v, bandW) {
     bandW, logW: w(".an-rc-fanband .an-rc-gl", "offsetWidth"), chartWeeks: band ? band.querySelectorAll(".an-rc-fanchart .an-wb-hit").length : 0,
     recBodyW: w(".an-rc-phase-pass .an-rc-phasebody"), zoneW: w(".an-pl-rczones .an-pl-zbody > :first-child", "offsetWidth"),
     rushBodyW: v.recut?.kind === "back" ? w(".an-rc-phase-rush .an-rc-phasebody") : 0, weeks: (v.series || []).length,
+    clubW: w(".an-pl-rcclub", "offsetWidth"),
   });
 }
 

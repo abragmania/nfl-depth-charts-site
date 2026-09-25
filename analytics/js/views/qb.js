@@ -266,7 +266,7 @@ export function qbTableHtml(allRows, st, query, view = {}, status = {}) {
     const open = st.open === r.gsis;
     const depth = `../#/team/${encodeURIComponent(r.team)}/player/${encodeURIComponent(r.gsis)}`;
     const ps = status[r.gsis];
-    const chip = statusChip(ps), nameCls = statusNameClass(ps);
+    const chip = statusChip(ps, { season: view.statusSeason }), nameCls = statusNameClass(ps);
     return `<tr class="an-row${open ? " open" : ""}" data-id="${esc(r.gsis)}" tabindex="0" aria-expanded="${open}">
       <td class="c-rank">${i + 1}</td>
       <td class="c-name"><a class="an-pname${nameCls ? " " + nameCls : ""}" href="#/player/${encodeURIComponent(r.gsis)}${q ? "?" + q : ""}">${esc(r.name)}</a>${teamPill(r.team, view.teams, q)}${chip}<a class="an-dc" href="${depth}" target="_blank" rel="noopener" title="Open his depth-chart card in a new tab" aria-label="Depth chart">↗</a></td>
@@ -362,7 +362,7 @@ export async function renderQb(ctx, query) {
   const el = root.querySelector(".an-tablewrap");
   // D196: badges are current-season only - statusApplies gates on the feed's own season against the window shown.
   const status = statusApplies(st, statusFeed.season) ? statusFeed.players : {};
-  el.innerHTML = qbTableHtml(agg.rows, st, qs, { ref, windowName, teams: teamsByAbbr, lgZones: lgAgg.lgZones, minDb }, status);
+  el.innerHTML = qbTableHtml(agg.rows, st, qs, { ref, windowName, teams: teamsByAbbr, lgZones: lgAgg.lgZones, minDb, statusSeason: statusFeed.season }, status);
   el.querySelectorAll("th[data-sort]").forEach((h) => h.addEventListener("click", () => {
     const k = h.dataset.sort === "rank" ? DEFAULT_SORT : h.dataset.sort;
     const cur = COLS.some((c) => c.k === st.sort) || ["name", "g"].includes(st.sort) ? st.sort : DEFAULT_SORT;

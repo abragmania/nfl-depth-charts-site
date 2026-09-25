@@ -12,6 +12,7 @@ import { absences, isMissing } from "../agg_absence.js";
 import { renderFilterBar } from "../filterbar.js";
 import { esc, NA, isNum, pct, fix, signed, int, teamPill, qbStrips, qbZoneField, qbZoneName, QB_ZONE_MODES, pfrNote, seasonLabel } from "./qb.js";
 import { windowName } from "./qbplayer.js";
+import { statusChip, statusNameClass } from "./kit.js";
 
 const P = (v, d = 1) => (isNum(v) ? pct(v, d) + "%" : NA);
 const BAND = (pos) => (pos === "RB" || pos === "FB" ? "BACKFIELD" : pos);
@@ -64,35 +65,36 @@ export function distList(items, q, { max = 0.35, lg = null, lgLabel = "" } = {})
 // Skill men first (absences() already orders them), each with his status, games missed, the shares he held over his
 // BEFORE window and, when the club has played since, who has absorbed them (the depth chart's fill-in first) and the
 // club's passes and runs per game before and since. Linemen and defenders are names only, each a link to the club's
-// depth chart. opts: { season (on screen), feedSeason, abbr, q (the page's query, for player links) }.
+// depth chart. opts: { season (on screen), feedSeason, abbr, q (the page's query, for player links), feedPlayers (the
+// feed's players map: the chip and the played-this-season test read each man's full feed entry, so the hover carries
+// ESPN's note as on every other page; absences()'s own copy of the status is the fallback) }.
 export const LOST_TIP = "Before: his last 4 games played for the club, a game he left early skipped, last season's when he has none this season; since: the club's games after his last one; every share is of the club's total in those games, and \"pts\" are percentage points of that share.";
-const STATUS_WORD = { OUT: "OUT", O: "OUT", IR: "IR", D: "DOUBTFUL", Q: "QUESTIONABLE", SUSP: "SUSPENDED", PUP: "PUP", NFI: "NFI" };
-// "OUT (ankle)": the feed's code in words, then the body part from its detail ("Knee - ACL (Leg) - Surgery" -> knee).
-export function lostStatusText(s) {
-  const code = String(s?.code || "").toUpperCase();
-  const word = STATUS_WORD[code] || code || String(s?.label || "").toUpperCase() || "OUT";
-  const part = String(s?.detail || "").split(/\s+\(|\s+-\s+/)[0].trim().toLowerCase();
-  return part ? `${word} (${part})` : word;
+// The injury after the kit's short chip (which prints the code only): the first part of ESPN's detail, lowered
+// ("Knee - ACL (Leg) - Surgery" -> "knee"); the chip's hover carries the whole detail.
+export function lostInjury(detail) {
+  return String(detail || "").split(/\s+\(|\s+-\s+/)[0].trim().toLowerCase();
 }
 const whole = (v) => `${Math.round(v * 100)}%`;
 const perG = (v) => (isNum(v) ? String(Math.round(v)) : "–");
-export function lostCardHtml(list, { season, feedSeason, abbr = "", q = "" } = {}) {
+export function lostCardHtml(list, { season, feedSeason, abbr = "", q = "", feedPlayers = null } = {}) {
   if (feedSeason == null || +feedSeason !== +season || !list?.length) return "";
   const qq = q ? "?" + q : "";
   const who = (id, name, cls = "") => `<a${cls ? ` class="${cls}"` : ""} href="#/player/${encodeURIComponent(id)}${qq}">${esc(name)}</a>`;
   const statusBits = (r) => {
-    const s = r.status || {};
+    const fe = feedPlayers?.[r.gsis] ?? null;
+    const s = fe ?? r.status ?? {};
     const lp = s.lastPlayed;
-    const tip = [s.label, s.detail, s.returnDate ? `return date ${s.returnDate}` : ""].filter(Boolean).join(" · ");
-    const missed = !lp || +lp.season !== +feedSeason ? "hasn't played this season" : isNum(s.missed) && s.missed > 0 ? `missed ${s.missed}` : "";
-    return { text: lostStatusText(s), tip, missed, out: !!s.willNotPlay };
+    const notYet = fe && typeof fe.playedThisSeason === "boolean" ? !fe.playedThisSeason : !lp || +lp.season !== +feedSeason;
+    const missed = notYet ? "hasn't played this season" : isNum(s.missed) && s.missed > 0 ? `missed ${s.missed}` : "";
+    const inj = lostInjury(s.detail);
+    return { html: statusChip(s) + (inj ? ` <span class="an-tm-lostinj">${esc(inj)}</span>` : ""), missed, nameCls: statusNameClass(s) };
   };
   const skill = list.filter((r) => !r.nameOnly), names = list.filter((r) => r.nameOnly);
   const man = (r) => {
     const st = statusBits(r);
-    const head = `<div class="an-tm-losthead">${who(r.gsis, r.name, `an-tm-lostname${st.out ? " is-out" : ""}`)}`
+    const head = `<div class="an-tm-losthead">${who(r.gsis, r.name, `an-tm-lostname${st.nameCls ? " " + st.nameCls : ""}`)}`
       + `<span class="an-pospill" data-band="${esc(BAND(r.pos))}">${esc(r.pos)}</span>`
-      + `<span class="an-tm-loststat"${st.tip ? ` title="${esc(st.tip)}"` : ""}>${esc(st.text)}</span>`
+      + `<span class="an-tm-loststat">${st.html}</span>`
       + (st.missed ? `<span class="an-tm-lostmiss">${esc(st.missed)}</span>` : "") + `</div>`;
     if (r.noData) return `<div class="an-tm-lostman">${head}<div class="an-tm-lostbefore">no data: no games for the club to measure him on</div></div>`;
     const b = r.before || {};
@@ -108,9 +110,11 @@ export function lostCardHtml(list, { season, feedSeason, abbr = "", q = "" } = {
       let lastWord = "";
       const took = rows.map((a) => {
         const k = [["tgtShare", "targets"], ["carShare", "carries"], ["attShare", "attempts"]].find(([key]) => isNum(a[key]?.change) && a[key].change === a.change);
-        const pts = isNum(a.change) ? `${a.change >= 0 ? "+" : "−"}${Math.abs(Math.round(a.change * 100))}` : "";
+        const n = isNum(a.change) ? Math.round(a.change * 100) : null;
+        const pts = n === null ? "" : `${n >= 0 ? "+" : "−"}${Math.abs(n)}`;
         const word = k ? k[1] : "";
-        const unit = pts ? (word && word !== lastWord ? ` pts ${word}` : "") : "";
+        // The unit on every name; the metric word only when it differs from the name before's.
+        const unit = pts ? ` pt${Math.abs(n) === 1 ? "" : "s"}${word && word !== lastWord ? " " + word : ""}` : "";
         if (word) lastWord = word;
         return `<span class="an-tm-lostitem">${who(a.gsis, a.name)}${a.fillIn ? `<span class="an-tm-lostfill" title="the depth chart's fill-in">fill-in</span>` : ""}${pts ? ` ${pts}${unit}` : ""}</span>`;
       });
@@ -124,11 +128,16 @@ export function lostCardHtml(list, { season, feedSeason, abbr = "", q = "" } = {
   };
   const nameLine = (r) => {
     const st = statusBits(r);
-    return `<span class="an-tm-lostline"><span class="an-tm-lostpos">${esc(r.pos)}</span> <a class="an-tm-lostname${st.out ? " is-out" : ""}" href="../#/team/${encodeURIComponent(abbr)}" target="_blank" rel="noopener" title="${esc(st.tip ? st.tip + " · " : "")}on the depth chart">${esc(r.name)}</a> · <span${st.tip ? ` title="${esc(st.tip)}"` : ""}>${esc(st.text)}</span>${st.missed ? ` · ${esc(st.missed)}` : ""}</span>`;
+    return `<span class="an-tm-lostline"><span class="an-tm-lostpos">${esc(r.pos)}</span> <a class="an-tm-lostname${st.nameCls ? " " + st.nameCls : ""}" href="../#/team/${encodeURIComponent(abbr)}" target="_blank" rel="noopener" title="on the depth chart">${esc(r.name)}</a> <span class="an-tm-loststat">${st.html}</span>${st.missed ? ` · ${esc(st.missed)}` : ""}</span>`;
   };
   return `<div class="an-card an-tm-lost"><div class="an-dh" title="${esc(LOST_TIP)}">What's been lost <span class="an-dsub">who is missing, the share of the work he held before, and who has taken it since</span></div>`
     + (skill.length ? `<div class="an-tm-lostmen">${skill.map(man).join("")}</div>` : "")
-    + (names.length ? `<div class="an-tm-lostnames">${names.map(nameLine).join("")}</div>` : "")
+    // Names-only men split by side (absences()'s `side`: "def" for a defender, "off" for everyone else), offense first,
+    // a side with nobody left out.
+    + (names.length ? `<div class="an-tm-lostnames">${[["off", "Offense:"], ["def", "Defense:"]].map(([sd, label]) => {
+      const men = names.filter((r) => (r.side === "def" ? "def" : "off") === sd);
+      return men.length ? `<span class="an-tm-lostside">${label}</span>${men.map(nameLine).join("")}` : "";
+    }).join("")}</div>` : "")
     + `</div>`;
 }
 
@@ -153,7 +162,7 @@ export async function renderTeams(ctx, query) {
 }
 
 // ---- #/team/:abbr: the offense ---------------------------------------------------------------------------------
-const ui = { team: null, zoneMode: "att", zone: null, lost: { key: null, html: "" } };
+const ui = { team: null, zoneMode: "att", zone: null, lost: { key: null, list: null, feed: null } };
 
 export async function renderTeam(ctx, params, query) {
   const { root, isCurrent } = ctx;
@@ -243,7 +252,8 @@ export async function renderTeam(ctx, params, query) {
 
   const sub = `${seasonLabel(st)} · ${win.weeks.length ? (win.weeks.length === 1 ? weekLabel(win.weeks[0], st.season) : `${weekLabel(win.weeks[0], st.season)} to ${weekLabel(win.weeks[win.weeks.length - 1], st.season)}`) : "no games"}${st.window === "last3" ? " (each club's last 3 games)" : ""} · ${row?.g ?? 0} game${row?.g === 1 ? "" : "s"} · league reference: ${ref.text}${pnote ? " · " + pnote : ""}`;
   const pill = t ? teamPill(abbr, teams, qs, "an-pl-pill an-tm-headpill") : "";
-  const lostKey = [abbr, st.season, st.pi, st.po, qs].join("|");
+  const lostKey = [abbr, st.season, st.pi, st.po].join("|");
+  const lostHtml = () => (ui.lost.key === lostKey && ui.lost.feed ? lostCardHtml(ui.lost.list, { season: st.season, feedSeason: ui.lost.feed.season, abbr, q: qs, feedPlayers: ui.lost.feed.players }) : "");
   root.innerHTML = `<section class="an-pl an-tm">
     <div class="an-pl-head">
       ${backLink(`#/teams${qs ? "?" + qs : ""}`, "Teams")}${pill}<h1>${esc(t?.name || abbr)}</h1><span class="an-tm-side">Offense</span>
@@ -253,7 +263,7 @@ export async function renderTeam(ctx, params, query) {
     <div class="an-sub an-pl-sub">${esc(sub)}</div>
     ${data.missing.length ? `<div class="an-warn">${esc(data.missing.join(", "))} files are not built yet.</div>` : ""}
     ${row ? "" : `<div class="an-warn">No plays for ${esc(abbr)} in this window.</div>`}
-    <div data-lost>${ui.lost.key === lostKey ? ui.lost.html : ""}</div>
+    <div data-lost>${lostHtml()}</div>
     <div class="an-pl-tiles an-tm-tiles">${tiles}</div>
     <div class="an-tm-row">
       <div class="an-card an-tm-weeks"><div class="an-dh">Week by week <span class="an-dsub">click a week to show it alone; click it again for the whole window</span></div><div class="an-pl-scroll">${weekly}</div></div>
@@ -278,27 +288,30 @@ export async function renderTeam(ctx, params, query) {
     zbox.querySelector("[data-close]")?.addEventListener("click", () => { ui.zone = null; zbox.innerHTML = zoneHtml(); wireZones(); });
   };
   wireZones();
-  if (ui.lost.key !== lostKey) fillLost(root.querySelector("[data-lost]"), abbr, st, qs, lostKey, isCurrent);
+  if (ui.lost.key !== lostKey) fillLost(root.querySelector("[data-lost]"), abbr, st, lostKey, isCurrent, lostHtml);
 }
 
 // The card needs the injury feed and BOTH seasons' blocks whatever the Include-previous switch says (a man out since
-// week 1 has his BEFORE window last season). The feed is fetched once per page load and the week files are cached, so
-// this runs after the page is drawn and its result is remembered per club, season, switches and query (a filter
-// change redraws the page with the card already in place, no flicker).
-async function fillLost(box, abbr, st, qs, key, isCurrent) {
+// week 1 has his BEFORE window last season). The feed is fetched once per page load and the week files are cached.
+// This runs after the page is drawn; the absences LIST (and the feed) is remembered per club, season and the PI and
+// playoff switches, and every later render rebuilds the card's markup from it with that render's query, so a window
+// or week change never blanks the card. A failed feed (season null) is not remembered, so the next render asks again.
+async function fillLost(box, abbr, st, key, isCurrent, draw) {
   if (!box) return;
-  const feed = await loadStatusFeed();
-  if (!isCurrent()) return;
-  let html = "";
-  if (feed.season != null && +feed.season === +st.season && Object.values(feed.players || {}).some((e) => e?.team === abbr && isMissing(e))) {
-    let d = null;
-    try { d = await loadFor([+feed.season, +feed.season - 1], { window: "season" }); } catch { return; }
-    if (!isCurrent()) return;
-    const list = absences(d.blocks, d.players, { season: +feed.season, pi: st.pi, po: st.po }, abbr, feed.players);
-    html = lostCardHtml(list, { season: st.season, feedSeason: feed.season, abbr, q: qs });
+  try {
+    const feed = await loadStatusFeed();
+    if (!isCurrent() || feed.season == null) return;
+    let list = [];
+    if (+feed.season === +st.season && Object.values(feed.players || {}).some((e) => e?.team === abbr && isMissing(e))) {
+      const d = await loadFor([+feed.season, +feed.season - 1], { window: "season" });
+      if (!isCurrent()) return;
+      list = absences(d.blocks, d.players, { season: +feed.season, pi: st.pi, po: st.po }, abbr, feed.players);
+    }
+    ui.lost = { key, list, feed };
+    if (box.isConnected) box.innerHTML = draw();
+  } catch (e) {
+    console.warn("What's been lost: the card could not be built", e);
   }
-  ui.lost = { key, html };
-  if (box.isConnected) box.innerHTML = html;
 }
 
 export const ordinal = (n) => { const s = n % 100 >= 11 && n % 100 <= 13 ? "th" : ["th", "st", "nd", "rd"][n % 10] || "th"; return `${n}${s}`; };

@@ -81,7 +81,7 @@ export async function renderUsage(ctx, query) {
   renderFilterBar(root.querySelector(".an-filters"), st, { keys: data.keys, teams: clubTeams }, go);
   // D196: badges are current-season only - statusApplies gates on the feed's own season against the window shown.
   const status = statusApplies(st, statusFeed.season) ? statusFeed.players : {};
-  renderTable(root.querySelector(".an-tablewrap"), rows, st, qs, go, { ref, windowName, teams: teamsByAbbr }, status);
+  renderTable(root.querySelector(".an-tablewrap"), rows, st, qs, go, { ref, windowName, teams: teamsByAbbr, statusSeason: statusFeed.season }, status);
   // Keep the clicked row where the reader clicked it rather than letting the re-render jump the page.
   if (anchor.id) {
     const tr = [...root.querySelectorAll("tr.an-row")].find((t) => t.dataset.id === anchor.id);

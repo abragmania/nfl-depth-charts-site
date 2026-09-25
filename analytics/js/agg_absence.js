@@ -154,7 +154,8 @@ function windows(idx, id, side) {
   }
   const since = idx.games.filter((g) => g.season === idx.season && (!last || last.season !== idx.season || g.key > last.key));
   // Footnoted only when the low game is his LAST game played (the one he probably got hurt in).
-  const leftEarly = !!last && leftEarlyGames.includes(last.key);
+  // A prior-season low game (a week 17 or 18 rest game) is still skipped from BEFORE but never footnoted.
+  const leftEarly = !!last && last.season === idx.season && leftEarlyGames.includes(last.key);
   return { before, since, last, priorSeason, leftEarly, leftEarlyGames, noData: before.length === 0 };
 }
 

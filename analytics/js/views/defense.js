@@ -271,7 +271,7 @@ export function posTableHtml(cells, st, query, view) {
   const body = list.map((r) => {
     const open = st.open === r.team, ar = aggBy.get(r.team);
     const tds = POS_GROUPS.map((g) => POS_VIEW_COLS[g].map((k, i) => {
-      const cls = `num g-${g}${i === 0 ? " gs" : ""}`;
+      const cls = `num g-${g}${i === 0 ? " gs" : ""} an-dp-v`; // an-dp-v: one min-width for every value cell (a signed figure must not widen the table)
       if (!r.g) return `<td class="${cls}"></td>`;
       const c = r.cells[g][k], f = FIG[k];
       if (!isNum(c.v)) return `<td class="${cls}">${NA}</td>`;
@@ -298,7 +298,7 @@ export function posTableHtml(cells, st, query, view) {
       <span class="an-legend" title="Colour against the defenses in this window: elite at their 90th percentile or better, then the 70th, 40th and 15th; low below. Fewer allowed is better, except INT, where more is better.">
         ${TIER_NAMES.map((t) => `<i class="t-${t}"></i>`).join("")}<span>${esc(legend)}</span></span>
     </div>${vs ? `
-    <p class="an-note">vs usual: each figure is what the defense allowed minus what the same offenses' men of that position usually get in their other games in the window, averaged over its games where the offense has another game to compare. Below zero = held them under their norm; for INT, above zero is the good side. Yds/opp compares yards per opportunity, not per game.</p>` : ""}
+    <p class="an-note an-dpos-note">vs usual: each figure is what the defense allowed minus what the same offenses' men of that position usually get in their other games in the window, averaged over its games where the offense has another game to compare. Below zero = held them under their norm; for INT, above zero is the good side. Yds/opp compares yards per opportunity, not per game.</p>` : ""}
     <div class="an-tscroll"><table class="an-table an-def-table an-dpos-table${vs ? " vs" : ""}"><thead>${groupRow}${head}</thead><tbody>${nDef ? body : `<tr><td colspan="${nCols}" class="an-empty">No games in this window.</td></tr>`}</tbody></table></div>
     ${un + ot ? `<p class="an-note">Left out of every position: ${[un ? `${men(un)} with no listed position` : "", ot ? `${men(ot)} listed at another position (a lineman's catch, a punter's fake)` : ""].filter(Boolean).join(" and ")}.</p>` : ""}`;
 }

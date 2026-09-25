@@ -341,19 +341,21 @@ export function injuryText(detail) {
 
 // The badge. long: the page header's wording (the feed's label, "Questionable", "Injured Reserve"); short (the
 // default, for tables and lists): the code, as the depth chart prints it. The hover carries the label, the injury,
-// ESPN's short note and ESPN's return date (never on a scratch).
-export function statusChip(status, { long = false } = {}) {
+// ESPN's short note and ESPN's return date (never on a scratch; `season`, the feed's season, adds the year to a date
+// in another year, as statusLine does).
+export function statusChip(status, { long = false, season = null } = {}) {
   if (!status || !status.code) return "";
   const code = String(status.code).toUpperCase();
   const scratch = !!status.scratch;
   const cls = scratch ? "inactive" : ST_CLASS[code] || "out";
   const text = scratch ? (long ? SCRATCH_TEXT : "INACTIVE") : long ? status.label || code : code;
   const tip = [scratch ? SCRATCH_TEXT : status.label || code, scratch ? null : status.detail, status.shortComment,
-    !scratch && status.returnDate ? `ESPN return date: ${shortDate(status.returnDate)}` : null].filter(Boolean).join(" — ");
+    !scratch && status.returnDate ? `ESPN return date: ${shortDate(status.returnDate, season)}` : null].filter(Boolean).join(" — ");
   return `<span class="an-stchip an-st-${cls}${long ? " an-stchip-lg" : ""}" title="${esc(tip)}">${esc(text)}</span>`;
 }
 
-// PURE: the one muted line under the name of a man who will not play or is Doubtful ("" for anyone else), built only
+// PURE: the one muted line under the name of a man who will not play, is Doubtful or is Questionable (👁: Q and D get it
+// too; "" for anyone else), built only
 // from the feed fields that exist:
 //   "Out: knee · last played W2 vs CAR (51% snaps) · missed 2 · ESPN return Oct 5"
 // - the head is the label and ESPN's injury ("Inactive: coach's decision" for a scratch);
@@ -361,12 +363,12 @@ export function statusChip(status, { long = false } = {}) {
 // - "has not played this season" when playedThisSeason is false (and then no missed count);
 // - "missed N" when missed is a number above 0, with " through Wn" when the count stops short of the latest week
 //   on screen (latestWeek, the current season's last loaded week: the snap file runs behind the play-by-play);
-// - "ESPN return <date>" when ESPN gives one, never for a scratch.
+// - "ESPN return <date>" when ESPN gives one and he will not play; never for a scratch, a Q or a D (the next game).
 // season: the feed's season (a last-played week or a return date in another year says so).
 export function statusLine(status, { season = null, latestWeek = null } = {}) {
   if (!status || !status.code) return "";
   const scratch = !!status.scratch;
-  if (!(status.willNotPlay === true || scratch || String(status.code).toUpperCase() === "D")) return "";
+  if (!(status.willNotPlay === true || scratch || ["D", "Q"].includes(String(status.code).toUpperCase()))) return "";
   const parts = [];
   const inj = injuryText(status.detail);
   parts.push(scratch ? "Inactive: coach's decision" : `${status.label || status.code}${inj ? `: ${inj}` : ""}`);
@@ -380,15 +382,17 @@ export function statusLine(status, { season = null, latestWeek = null } = {}) {
     const short = Number.isFinite(status.missedThrough) && Number.isFinite(latestWeek) && status.missedThrough < latestWeek;
     parts.push(`missed ${status.missed}${short ? ` through W${status.missedThrough}` : ""}`);
   }
-  if (!scratch && status.returnDate) parts.push(`ESPN return ${shortDate(status.returnDate, season)}`);
+  // Only for a man who will not play (Adam, D196: on a Q or D line ESPN's date is just the next game).
+  if (!scratch && status.willNotPlay === true && status.returnDate) parts.push(`ESPN return ${shortDate(status.returnDate, season)}`);
   return parts.join(" · ");
 }
 
 // ---- D196 B: the Trend strip - his last 3 games played beside the whole window, one compact line ----------------
 // trend: agg_player.js recut.trend ({ kind, keys, games, last3Games, short, last3Weeks, figures: { [key]: { last3,
 // season, pts, n3, n } } }). Each item reads "Snap % 64 → 70 ▲": the window's figure, then the last 3 games', in whole
-// percent; the arrow compares the printed figures and is neutral (never good or bad colour). "(2 games)" when fewer
-// than three games feed the last-3 figure. Omitted entirely ("") when the window has under 2 games he played.
+// percent; the arrow compares the printed figures and is neutral (never good or bad colour). Omitted entirely ("")
+// unless the window holds more games than the last 3 (🔵: under 4 games it could only read "45 → 45"); the "(n games)"
+// wording for a short last 3 therefore never prints today and stays only as a guard.
 // weekFmt: turns a week key into its label (the page passes filters.js weekLabel); default "W<n>".
 export const TREND_LABELS = { oppShare: "Opp %", snapPct: "Snap %", tgtShare: "Tgt %", ayShare: "AY %", routePct: "Route %", rzShare: "RZ share", rzTgtShare: "RZ tgt %" };
 const TREND_DEFS = {
@@ -401,7 +405,8 @@ const TREND_DEFS = {
   rzTgtShare: "red-zone targets / club red-zone pass attempts",
 };
 export function trendStrip(trend, { weekFmt = null } = {}) {
-  if (!trend || !(trend.games >= 2)) return "";
+  // Omitted when the last 3 are the whole window (it would only read "45 → 45"): under 4 games he played.
+  if (!trend || !(trend.games >= 2) || trend.games <= trend.last3Games) return "";
   const wf = weekFmt || ((k) => `W${+String(k).split("-")[1]}`);
   const pct = (x) => (Number.isFinite(x) ? Math.round(x * 100) : null);
   const items = (trend.keys || []).map((k) => {
@@ -484,7 +489,7 @@ export function playerHead({ lead = "", name = "", espnId = null, colour = null,
   const c = /^#[0-9a-fA-F]{3,8}$/.test(String(colour ?? "").trim()) ? String(colour).trim() : null;
   const url = headshotUrl(espnId);
   const shot = `<span class="an-rc-shot">${url ? `<img src="${esc(url)}" alt="" width="56" height="56" loading="lazy" decoding="async" onerror="this.remove()">` : ""}</span>`;
-  const chip = statusChip(status, { long: true });
+  const chip = statusChip(status, { long: true, season: statusSeason });
   const nameCls = statusNameClass(status);
   const h1 = `<h1${nameCls ? ` class="${nameCls}"` : ""}>${esc(name)}${chip ? ` ${chip}` : ""}</h1>`;
   const line = statusLine(status, { season: statusSeason, latestWeek });
