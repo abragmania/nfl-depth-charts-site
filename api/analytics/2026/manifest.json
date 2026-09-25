@@ -41,15 +41,15 @@
  "weeks": [
   {
    "week": 1,
-   "hash": "ab17aca73ee44aad",
+   "hash": "95d74c0e80485c49",
    "plays": 1924,
-   "builtAt": "2026-09-25T17:36:35.522Z"
+   "builtAt": "2026-09-25T20:21:28.658Z"
   },
   {
    "week": 2,
-   "hash": "75c67aeef982fbe8",
+   "hash": "d625629c5ce0200d",
    "plays": 1936,
-   "builtAt": "2026-09-25T17:36:35.522Z"
+   "builtAt": "2026-09-25T20:21:28.658Z"
   }
  ],
  "sources": {
@@ -69,8 +69,14 @@
    "fetchedAt": "2026-09-24T20:38:00.128Z",
    "sha": "641aa103362fd0e2"
   },
-  "pfrRush": null,
-  "pfrRec": null,
+  "pfrRush": {
+   "fetchedAt": "2026-09-25T20:21:14.178Z",
+   "sha": "c3594cb6011ca2cb1b0db73faffb0ed2f95b6ad82bdb74c34f6c529f6e107ef7"
+  },
+  "pfrRec": {
+   "fetchedAt": "2026-09-25T20:21:14.388Z",
+   "sha": "c388d8b56a29673fce47b431f6674219083e346b703764c27c97cbc1d5eba5fc"
+  },
   "routes": {
    "fetchedAt": "2026-09-24T20:38:03.223Z",
    "sha": "51af93f49c67860acba41686c670a330f9037c1f80532d0a936e8657062d2ab6"

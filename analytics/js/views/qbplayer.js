@@ -20,7 +20,7 @@
 // Quarterbacks) and links to his depth-chart card (new tab) and his team page.
 import { fromQuery, seasonsOf, weekLabel, splitKey, gamesInWindow } from "../filters.js";
 import { backLink } from "../router.js";
-import { loadFor, loadTeams, displayName } from "../data.js";
+import { loadFor, loadTeams, displayName, loadStatusFeed } from "../data.js";
 import { isStatic } from "../../../js/api.js";
 import { clubGames } from "../agg.js";
 import { aggregateQb, qbReference, qbTier, qbZones, qbSplits, SPLITS, QB_MADDEN_ATTRS, inQbPool, qbPoolStat, qbGameCuts } from "../agg_qb.js";
@@ -28,7 +28,7 @@ import { fantasyByPlayer } from "../agg_fantasy.js";
 import { median, ratingTier, maddenEdition, iterationLabel } from "../agg_player.js";
 import { renderFilterBar } from "../filterbar.js";
 import { ratingBars } from "../charts/hbars.js";
-import { headlineRow, fantasyBand, phaseBlock, varianceStrip, maddenFoot, playerHead } from "./kit.js";
+import { headlineRow, fantasyBand, phaseBlock, varianceStrip, maddenFoot, playerHead, currentStatus, latestWeekIn } from "./kit.js";
 import { esc, isNum, signed, teamPill, qbStrips, qbZoneField, qbZoneLegend, qbZoneName, QB_ZONE_MODES, qbQuery, minDbOf, pfrNote } from "./qb.js";
 
 // Madden ratings for a season, from the data builder's madden.json (the same fetch as player.js's loadMadden, which
@@ -329,12 +329,14 @@ export async function renderQbPlayer(ctx, params, query) {
   if (ui.gsis !== gsis) { ui.gsis = gsis; ui.zone = null; ui.pastOpen = false; }
   const go = (n) => { const q = qbQuery({ ...n, open: "" }, minDb); location.hash = `#/player/${encodeURIComponent(gsis)}${q ? "?" + q : ""}`; };
   if (!root.querySelector(".an-qbp")) root.innerHTML = `<div class="an-msg">Loading quarterback…</div>`;
-  let data, teams, madden;
+  let data, teams, madden, feed;
   try {
-    [data, teams, madden] = await Promise.all([
+    // The injury status feed (D196) never fails: an empty feed simply shows no status.
+    [data, teams, madden, feed] = await Promise.all([
       loadFor(seasonsOf(st), { ...st, window: "season" }),
       loadTeams().then((j) => new Map((j.teams || []).map((t) => [t.abbr, t]))).catch(() => new Map()),
       loadMadden(st.season),
+      loadStatusFeed(),
     ]);
   } catch (e) {
     if (!isCurrent()) return;
@@ -436,7 +438,8 @@ export async function renderQbPlayer(ctx, params, query) {
   const draw = () => { root.innerHTML = `<section class="an-pl an-qbp">
     ${playerHead({ lead: backLink(`#/qb${qs ? "?" + qs : ""}`, "Quarterbacks"), name, espnId: meta.espnId, colour: teams.get(team)?.colourPrimary,
       pills: `${team ? teamPill(team, teams, qs, "an-pl-pill") : ""}<span class="an-pospill" data-band="QB">QB</span>${ovr}`,
-      links: `<div class="an-pl-links"><a href="${depth}" target="_blank" rel="noopener">Depth chart ↗</a>${team ? `<a href="#/team/${esc(team)}${qs ? "?" + qs : ""}">Team page →</a>` : ""}</div>` })}
+      links: `<div class="an-pl-links"><a href="${depth}" target="_blank" rel="noopener">Depth chart ↗</a>${team ? `<a href="#/team/${esc(team)}${qs ? "?" + qs : ""}">Team page →</a>` : ""}</div>`,
+      status: currentStatus(feed, gsis, seasonsOf(st)), statusSeason: feed?.season ?? null, latestWeek: latestWeekIn(data.keys, feed?.season) })}
     <div class="an-pl-bar"><div class="an-filters"></div></div>
     <div class="an-sub an-pl-sub">${esc(sub)}</div>
     ${data.missing.length ? `<div class="an-warn">${esc(data.missing.join(", "))} files are not built yet.</div>` : ""}

@@ -6,10 +6,11 @@
 // Every figure comes from agg_qb.js (pure); this file draws, sorts and wires clicks. The chart helpers below
 // (signed weekly strips, the QB zone field, the team pill) are shared with the QB player page (qbplayer.js).
 import { fromQuery, toQuery, seasonsOf, weekLabel, splitKey } from "../filters.js";
-import { loadFor, loadTeams, displayName } from "../data.js";
+import { loadFor, loadTeams, loadStatusFeed, displayName } from "../data.js";
 import { clubGames } from "../agg.js";
 import { aggregateQb, qbReference, qbTier, qbZones, sortQbRows, QB_MIN_DB } from "../agg_qb.js";
 import { renderFilterBar } from "../filterbar.js";
+import { statusChip, statusNameClass, statusApplies } from "../table.js";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 export const NA = `<span class="an-na">–</span>`;
@@ -242,7 +243,9 @@ function detailHtml(r, st, q, ref, wn, lgZones) {
 export const qbAnchor = { id: null, top: null };
 
 // PURE (no DOM): the table's markup. view: { ref (qbReference), windowName, teams, lgZones, minDb, pfrNote }.
-export function qbTableHtml(allRows, st, query, view = {}) {
+// `status`: D196's injury-status map (gsis -> status), already season-gated by the caller (table.js's
+// statusApplies) - pass {} to draw no badges. Never fetched here.
+export function qbTableHtml(allRows, st, query, view = {}, status = {}) {
   const sortKey = COLS.some((c) => c.k === st.sort) || ["name", "g"].includes(st.sort) ? st.sort : DEFAULT_SORT;
   const minDb = view.minDb ?? QB_MIN_DB;
   const rows = sortQbRows(allRows.filter((r) => r.db >= minDb), sortKey, st.dir);
@@ -262,9 +265,11 @@ export function qbTableHtml(allRows, st, query, view = {}) {
   const body = rows.map((r, i) => {
     const open = st.open === r.gsis;
     const depth = `../#/team/${encodeURIComponent(r.team)}/player/${encodeURIComponent(r.gsis)}`;
+    const ps = status[r.gsis];
+    const chip = statusChip(ps), nameCls = statusNameClass(ps);
     return `<tr class="an-row${open ? " open" : ""}" data-id="${esc(r.gsis)}" tabindex="0" aria-expanded="${open}">
       <td class="c-rank">${i + 1}</td>
-      <td class="c-name"><a class="an-pname" href="#/player/${encodeURIComponent(r.gsis)}${q ? "?" + q : ""}">${esc(r.name)}</a>${teamPill(r.team, view.teams, q)}<a class="an-dc" href="${depth}" target="_blank" rel="noopener" title="Open his depth-chart card in a new tab" aria-label="Depth chart">↗</a></td>
+      <td class="c-name"><a class="an-pname${nameCls ? " " + nameCls : ""}" href="#/player/${encodeURIComponent(r.gsis)}${q ? "?" + q : ""}">${esc(r.name)}</a>${teamPill(r.team, view.teams, q)}${chip}<a class="an-dc" href="${depth}" target="_blank" rel="noopener" title="Open his depth-chart card in a new tab" aria-label="Depth chart">↗</a></td>
       <td class="num">${r.g}</td>
       ${COLS.map((c) => cell(c, r)).join("")}
       <td class="c-spark">${epaSpark(r.series, st)}</td></tr>`
@@ -313,9 +318,11 @@ export async function renderQb(ctx, query) {
   document.title = "Quarterbacks · NFL Analytics";
   const go = (n, md = minDb) => { const q = qbQuery(n, md); location.hash = `#/qb${q ? "?" + q : ""}`; };
   if (!root.querySelector(".an-qb")) root.innerHTML = `<div class="an-msg">Loading quarterbacks…</div>`;
-  let data, teams;
+  let data, teams, statusFeed;
   try {
-    [data, teams] = await Promise.all([loadFor(seasonsOf(st), st), loadTeams().then((j) => j.teams || []).catch(() => [])]);
+    // The D196 injury-status feed loads alongside the analytics data; it never throws (loadStatusFeed's own
+    // contract), so a failure there never blocks the leaderboard.
+    [data, teams, statusFeed] = await Promise.all([loadFor(seasonsOf(st), st), loadTeams().then((j) => j.teams || []).catch(() => []), loadStatusFeed()]);
   } catch (e) {
     if (!isCurrent()) return;
     const notBuilt = e.status === 404 || e.status === 503;
@@ -353,7 +360,9 @@ export async function renderQb(ctx, query) {
   </section>`;
   renderFilterBar(root.querySelector(".an-filters"), st, { keys: data.keys, teams: clubTeams }, (n) => go(n));
   const el = root.querySelector(".an-tablewrap");
-  el.innerHTML = qbTableHtml(agg.rows, st, qs, { ref, windowName, teams: teamsByAbbr, lgZones: lgAgg.lgZones, minDb });
+  // D196: badges are current-season only - statusApplies gates on the feed's own season against the window shown.
+  const status = statusApplies(st, statusFeed.season) ? statusFeed.players : {};
+  el.innerHTML = qbTableHtml(agg.rows, st, qs, { ref, windowName, teams: teamsByAbbr, lgZones: lgAgg.lgZones, minDb }, status);
   el.querySelectorAll("th[data-sort]").forEach((h) => h.addEventListener("click", () => {
     const k = h.dataset.sort === "rank" ? DEFAULT_SORT : h.dataset.sort;
     const cur = COLS.some((c) => c.k === st.sort) || ["name", "g"].includes(st.sort) ? st.sort : DEFAULT_SORT;

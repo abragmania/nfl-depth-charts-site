@@ -242,3 +242,36 @@
 .an-usage .an-tscroll.an-over td.an-stick, .an-rush .an-tscroll.an-over td.an-stick { z-index:3; background:var(--panel2); }
 .an-usage .an-tscroll.an-over .c-name.an-stick, .an-rush .an-tscroll.an-over .c-name.an-stick { left:34px; }
 .an-table .an-anc.gs { border-left-color:#2a323b; }
+
+/* ---- D196: injury status on the player pages (kit.js statusChip / statusNameClass / statusLine) ---- */
+/* The badge copies the depth chart's look and colours (public/css/styles.css .badge and .badge-q/-d/-out/-susp/
+   -inactive; cards.js STATUS_CLASS maps the codes): Q yellow, D orange, OUT/IR/PUP/NFI red, SUSP/EXEMPT purple,
+   INACTIVE (and a coach's-decision scratch, whatever its code) grey. Copied, not imported: the analytics app never
+   loads the depth chart's stylesheets. */
+.an-stchip { display:inline-block; font-size:9.5px; font-weight:800; padding:2px 5px; border-radius:var(--r-chip); color:#1a1a1a; line-height:1.3;
+  min-width:22px; text-align:center; letter-spacing:.04em; box-sizing:border-box; white-space:nowrap; vertical-align:middle; cursor:default;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.3), inset 0 -1px 1px rgba(0,0,0,.1); }
+.an-st-q { background:#eab53a; }
+.an-st-d { background:#e2812c; }
+.an-st-out { background:#e2453d; color:#fff; }
+.an-st-susp { background:#8f4bd1; color:#fff; }
+.an-st-inactive { background:#8a94a0; color:#1a1a1a; }
+/* The header's long form ("Questionable", "Injured Reserve", "Inactive · coach's decision") sits after the 24px name. */
+.an-stchip-lg { font-size:11px; padding:2px 7px; margin-left:4px; position:relative; top:-2px; letter-spacing:.02em; }
+/* The red rule: he will not play and it is not a coach's-decision scratch (kit.js isRedName). The depth chart's OUT
+   red, one step lighter so a 24px name reads on the dark header. */
+.an-st-name-out { color:#ef5750; }
+.an-rc-namebox { display:flex; flex-direction:column; gap:1px; min-width:0; }
+.an-rc-stline { color:var(--muted); font-size:12px; font-weight:600; }
+
+/* ---- D196 B: the Trend strip, one compact line under the Opportunity tiles inside the fantasy band ---- */
+.an-rc-fanband > .an-rc-trend { grid-column:1 / -1; }
+.an-rc-trend { margin-top:6px; padding:5px 10px; border-radius:var(--r-row); background:#10141a; border:1px solid var(--line);
+  color:var(--muted); font-size:12px; font-variant-numeric:tabular-nums; line-height:1.5; }
+.an-rc-trhead { color:var(--dim); font-size:10.5px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; margin-right:4px; }
+.an-rc-tritem { white-space:nowrap; cursor:default; }
+.an-rc-trlabel { color:var(--dim); font-weight:700; }
+.an-rc-tritem b { color:var(--ink); font-weight:700; }
+.an-rc-trsep { color:var(--dim); }
+/* Neutral on purpose (as the variance strip): both arrows the same muted colour, only the glyph differs. */
+.an-rc-trarrow { font-style:normal; font-size:9.5px; color:var(--muted); }

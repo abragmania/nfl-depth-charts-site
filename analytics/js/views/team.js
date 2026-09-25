@@ -6,8 +6,9 @@
 // interactivity). Every figure comes from agg_team.js (pure); this file draws and wires clicks.
 import { backLink } from "../router.js";
 import { fromQuery, toQuery, seasonsOf, weekLabel } from "../filters.js";
-import { loadFor, loadTeams, displayName } from "../data.js";
+import { loadFor, loadTeams, loadStatusFeed, displayName } from "../data.js";
 import { aggregateTeams, teamReference, teamTier, teamRank, teamZones, teamTargets, teamCarries } from "../agg_team.js";
+import { absences, isMissing } from "../agg_absence.js";
 import { renderFilterBar } from "../filterbar.js";
 import { esc, NA, isNum, pct, fix, signed, int, teamPill, qbStrips, qbZoneField, qbZoneName, QB_ZONE_MODES, pfrNote, seasonLabel } from "./qb.js";
 import { windowName } from "./qbplayer.js";
@@ -57,6 +58,80 @@ export function distList(items, q, { max = 0.35, lg = null, lgLabel = "" } = {})
     + `<b class="an-tm-v">${x.main}</b><span class="an-tm-sub">${x.sub}</span></div>`).join("")}</div>`;
 }
 
+// ---- "What's been lost" (D196 C) -------------------------------------------------------------------------------
+// PURE: the card above the tiles from absences()'s list (agg_absence.js). Drawn only when the injury feed's season is
+// the season on screen (the statuses are this season's) and the club has at least one listed man; otherwise "".
+// Skill men first (absences() already orders them), each with his status, games missed, the shares he held over his
+// BEFORE window and, when the club has played since, who has absorbed them (the depth chart's fill-in first) and the
+// club's passes and runs per game before and since. Linemen and defenders are names only, each a link to the club's
+// depth chart. opts: { season (on screen), feedSeason, abbr, q (the page's query, for player links) }.
+export const LOST_TIP = "Before: his last 4 games played for the club, a game he left early skipped, last season's when he has none this season; since: the club's games after his last one; every share is of the club's total in those games, and \"pts\" are percentage points of that share.";
+const STATUS_WORD = { OUT: "OUT", O: "OUT", IR: "IR", D: "DOUBTFUL", Q: "QUESTIONABLE", SUSP: "SUSPENDED", PUP: "PUP", NFI: "NFI" };
+// "OUT (ankle)": the feed's code in words, then the body part from its detail ("Knee - ACL (Leg) - Surgery" -> knee).
+export function lostStatusText(s) {
+  const code = String(s?.code || "").toUpperCase();
+  const word = STATUS_WORD[code] || code || String(s?.label || "").toUpperCase() || "OUT";
+  const part = String(s?.detail || "").split(/\s+\(|\s+-\s+/)[0].trim().toLowerCase();
+  return part ? `${word} (${part})` : word;
+}
+const whole = (v) => `${Math.round(v * 100)}%`;
+const perG = (v) => (isNum(v) ? String(Math.round(v)) : "–");
+export function lostCardHtml(list, { season, feedSeason, abbr = "", q = "" } = {}) {
+  if (feedSeason == null || +feedSeason !== +season || !list?.length) return "";
+  const qq = q ? "?" + q : "";
+  const who = (id, name, cls = "") => `<a${cls ? ` class="${cls}"` : ""} href="#/player/${encodeURIComponent(id)}${qq}">${esc(name)}</a>`;
+  const statusBits = (r) => {
+    const s = r.status || {};
+    const lp = s.lastPlayed;
+    const tip = [s.label, s.detail, s.returnDate ? `return date ${s.returnDate}` : ""].filter(Boolean).join(" · ");
+    const missed = !lp || +lp.season !== +feedSeason ? "hasn't played this season" : isNum(s.missed) && s.missed > 0 ? `missed ${s.missed}` : "";
+    return { text: lostStatusText(s), tip, missed, out: !!s.willNotPlay };
+  };
+  const skill = list.filter((r) => !r.nameOnly), names = list.filter((r) => r.nameOnly);
+  const man = (r) => {
+    const st = statusBits(r);
+    const head = `<div class="an-tm-losthead">${who(r.gsis, r.name, `an-tm-lostname${st.out ? " is-out" : ""}`)}`
+      + `<span class="an-pospill" data-band="${esc(BAND(r.pos))}">${esc(r.pos)}</span>`
+      + `<span class="an-tm-loststat"${st.tip ? ` title="${esc(st.tip)}"` : ""}>${esc(st.text)}</span>`
+      + (st.missed ? `<span class="an-tm-lostmiss">${esc(st.missed)}</span>` : "") + `</div>`;
+    if (r.noData) return `<div class="an-tm-lostman">${head}<div class="an-tm-lostbefore">no data: no games for the club to measure him on</div></div>`;
+    const b = r.before || {};
+    const held = [[b.attShare, "attempts"], [b.tgtShare, "targets"], [b.carShare, "carries"], [b.rzShare, "RZ looks"], [b.ayShare, "air yards"], [b.snapShare, "snaps"]]
+      .filter(([v]) => isNum(v) && Math.round(v * 100) > 0).map(([v, w]) => `${whole(v)} ${w}`);
+    const n = b.games || 0;
+    const over = r.priorSeason ? `over last season's last ${n === 1 ? "game" : n}` : n === 1 ? "over his last game" : `over his last ${n}`;
+    const before = `<div class="an-tm-lostbefore">${held.length ? `held ${held.join(", ")} ${over}` : `held no measurable share ${over}`}</div>`;
+    let since = "";
+    if (r.sinceGames > 0) {
+      // The fill-in first whether or not his share rose, then everyone else who rose; each named by his largest rise.
+      const rows = [...(r.fillIn ? [r.fillIn] : []), ...(r.absorbed || []).filter((a) => a.gsis !== r.fillIn?.gsis)].slice(0, 4);
+      let lastWord = "";
+      const took = rows.map((a) => {
+        const k = [["tgtShare", "targets"], ["carShare", "carries"], ["attShare", "attempts"]].find(([key]) => isNum(a[key]?.change) && a[key].change === a.change);
+        const pts = isNum(a.change) ? `${a.change >= 0 ? "+" : "−"}${Math.abs(Math.round(a.change * 100))}` : "";
+        const word = k ? k[1] : "";
+        const unit = pts ? (word && word !== lastWord ? ` pts ${word}` : "") : "";
+        if (word) lastWord = word;
+        return `<span class="an-tm-lostitem">${who(a.gsis, a.name)}${a.fillIn ? `<span class="an-tm-lostfill" title="the depth chart's fill-in">fill-in</span>` : ""}${pts ? ` ${pts}${unit}` : ""}</span>`;
+      });
+      const c = r.club || {};
+      const club = `<span class="an-tm-lostitem">club passes/g ${perG(c.before?.passG)} → ${perG(c.since?.passG)}, runs/g ${perG(c.before?.runG)} → ${perG(c.since?.runG)}</span>`;
+      const one = r.sinceGames === 1;
+      since = `<div class="an-tm-lostsince${one ? " is-one" : ""}"${one ? ` title="One game since: too few to read much into"` : ""}>since (${r.sinceGames} game${one ? "" : "s"}): ${[...took, club].join(" · ")}</div>`;
+    }
+    const foot = r.leftEarly ? `<div class="an-tm-lostfoot">left the last one early; that game is not counted</div>` : "";
+    return `<div class="an-tm-lostman">${head}${before}${since}${foot}</div>`;
+  };
+  const nameLine = (r) => {
+    const st = statusBits(r);
+    return `<span class="an-tm-lostline"><span class="an-tm-lostpos">${esc(r.pos)}</span> <a class="an-tm-lostname${st.out ? " is-out" : ""}" href="../#/team/${encodeURIComponent(abbr)}" target="_blank" rel="noopener" title="${esc(st.tip ? st.tip + " · " : "")}on the depth chart">${esc(r.name)}</a> · <span${st.tip ? ` title="${esc(st.tip)}"` : ""}>${esc(st.text)}</span>${st.missed ? ` · ${esc(st.missed)}` : ""}</span>`;
+  };
+  return `<div class="an-card an-tm-lost"><div class="an-dh" title="${esc(LOST_TIP)}">What's been lost <span class="an-dsub">who is missing, the share of the work he held before, and who has taken it since</span></div>`
+    + (skill.length ? `<div class="an-tm-lostmen">${skill.map(man).join("")}</div>` : "")
+    + (names.length ? `<div class="an-tm-lostnames">${names.map(nameLine).join("")}</div>` : "")
+    + `</div>`;
+}
+
 // ---- #/teams: the picker -------------------------------------------------------------------------------------
 export async function renderTeams(ctx, query) {
   const { root, isCurrent } = ctx;
@@ -78,7 +153,7 @@ export async function renderTeams(ctx, query) {
 }
 
 // ---- #/team/:abbr: the offense ---------------------------------------------------------------------------------
-const ui = { team: null, zoneMode: "att", zone: null };
+const ui = { team: null, zoneMode: "att", zone: null, lost: { key: null, html: "" } };
 
 export async function renderTeam(ctx, params, query) {
   const { root, isCurrent } = ctx;
@@ -168,6 +243,7 @@ export async function renderTeam(ctx, params, query) {
 
   const sub = `${seasonLabel(st)} · ${win.weeks.length ? (win.weeks.length === 1 ? weekLabel(win.weeks[0], st.season) : `${weekLabel(win.weeks[0], st.season)} to ${weekLabel(win.weeks[win.weeks.length - 1], st.season)}`) : "no games"}${st.window === "last3" ? " (each club's last 3 games)" : ""} · ${row?.g ?? 0} game${row?.g === 1 ? "" : "s"} · league reference: ${ref.text}${pnote ? " · " + pnote : ""}`;
   const pill = t ? teamPill(abbr, teams, qs, "an-pl-pill an-tm-headpill") : "";
+  const lostKey = [abbr, st.season, st.pi, st.po, qs].join("|");
   root.innerHTML = `<section class="an-pl an-tm">
     <div class="an-pl-head">
       ${backLink(`#/teams${qs ? "?" + qs : ""}`, "Teams")}${pill}<h1>${esc(t?.name || abbr)}</h1><span class="an-tm-side">Offense</span>
@@ -177,6 +253,7 @@ export async function renderTeam(ctx, params, query) {
     <div class="an-sub an-pl-sub">${esc(sub)}</div>
     ${data.missing.length ? `<div class="an-warn">${esc(data.missing.join(", "))} files are not built yet.</div>` : ""}
     ${row ? "" : `<div class="an-warn">No plays for ${esc(abbr)} in this window.</div>`}
+    <div data-lost>${ui.lost.key === lostKey ? ui.lost.html : ""}</div>
     <div class="an-pl-tiles an-tm-tiles">${tiles}</div>
     <div class="an-tm-row">
       <div class="an-card an-tm-weeks"><div class="an-dh">Week by week <span class="an-dsub">click a week to show it alone; click it again for the whole window</span></div><div class="an-pl-scroll">${weekly}</div></div>
@@ -201,6 +278,27 @@ export async function renderTeam(ctx, params, query) {
     zbox.querySelector("[data-close]")?.addEventListener("click", () => { ui.zone = null; zbox.innerHTML = zoneHtml(); wireZones(); });
   };
   wireZones();
+  if (ui.lost.key !== lostKey) fillLost(root.querySelector("[data-lost]"), abbr, st, qs, lostKey, isCurrent);
+}
+
+// The card needs the injury feed and BOTH seasons' blocks whatever the Include-previous switch says (a man out since
+// week 1 has his BEFORE window last season). The feed is fetched once per page load and the week files are cached, so
+// this runs after the page is drawn and its result is remembered per club, season, switches and query (a filter
+// change redraws the page with the card already in place, no flicker).
+async function fillLost(box, abbr, st, qs, key, isCurrent) {
+  if (!box) return;
+  const feed = await loadStatusFeed();
+  if (!isCurrent()) return;
+  let html = "";
+  if (feed.season != null && +feed.season === +st.season && Object.values(feed.players || {}).some((e) => e?.team === abbr && isMissing(e))) {
+    let d = null;
+    try { d = await loadFor([+feed.season, +feed.season - 1], { window: "season" }); } catch { return; }
+    if (!isCurrent()) return;
+    const list = absences(d.blocks, d.players, { season: +feed.season, pi: st.pi, po: st.po }, abbr, feed.players);
+    html = lostCardHtml(list, { season: st.season, feedSeason: feed.season, abbr, q: qs });
+  }
+  ui.lost = { key, html };
+  if (box.isConnected) box.innerHTML = html;
 }
 
 export const ordinal = (n) => { const s = n % 100 >= 11 && n % 100 <= 13 ? "th" : ["th", "st", "nd", "rd"][n % 10] || "th"; return `${n}${s}`; };

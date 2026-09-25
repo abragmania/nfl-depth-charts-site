@@ -9,10 +9,24 @@
 // 2. TOTALS: anything broken down by week also prints its window total. A share totals by weighting (his
 //    targets / the club attempts over the window), never as a mean of the weekly percentages.
 import { sortRows, tierFromCuts, tierNote, TIER_NAMES, USAGE_TIER_KEYS, MIN_POOL } from "./agg.js";
-import { weekLabel, POSITIONS } from "./filters.js";
+import { weekLabel, POSITIONS, seasonsOf } from "./filters.js";
+// D196: the injury badge and red-name rule, kit.js's own copy (built the same round by the player-page builder,
+// which owns kit.js/analytics_recut.css) - re-exported here so the Receivers/QB/Running backs tables draw the
+// exact same badge, in the exact same CSS (.an-stchip/.an-st-*, already in analytics_recut.css), as the player
+// pages, rather than keeping a second parallel implementation.
+import { statusChip, statusNameClass } from "./views/kit.js";
+export { statusChip, statusNameClass };
 
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const DASH = `<span class="an-na">–</span>`;
+// D196: status is CURRENT-SEASON only - never drawn on a past-season table. `st` is the page's filter state
+// (season, with2025); `feedSeason` is loadStatusFeed()'s own `season` (the season the depth-chart compile most
+// recently built statuses for, or null when the feed could not be had). True when the feed's season is one of
+// the seasons this window actually shows (seasonsOf: the picked season, plus season-1 under "include previous").
+// Callers use this to decide what status MAP to pass into the table (the real map, or {} to draw nothing).
+export function statusApplies(st, feedSeason) {
+  return feedSeason != null && seasonsOf(st).includes(feedSeason);
+}
 
 // Copied two-line rule from public/js/landing.js's isLightWash (relative luminance of the team's primary
 // colour decides light or dark ink for the team pill below): keep the two in step if that threshold ever
@@ -266,7 +280,10 @@ export const anchor = { id: null, top: null };
 // split out so tests can check column visibility and RB dashing without a document. `view`: { ref
 // (agg.usageReference over the league-wide rows: each row's league reference and tier cuts come from
 // ref.at(row.pos)), windowName ("Season", "Last 3", "W1–W2"), teams }.
-export function tableHtml(allRows, st, query, view = {}) {
+// `status`: D196's injury-status players map (gsis -> status), already gated by season by the caller (statusApplies)
+// - pass {} for a window that does not include the current season, or when the feed could not be had. Never
+// fetched here: pure string builders take their data, never reach for it themselves.
+export function tableHtml(allRows, st, query, view = {}, status = {}) {
   const rows = sortRows(allRows.filter((r) => r.tgt >= st.minTgt), st.sort, st.dir);
   const q = query || "";
   const teams = view.teams;
@@ -299,9 +316,11 @@ export function tableHtml(allRows, st, query, view = {}) {
   const body = rows.map((r, i) => {
     const open = st.open === r.gsis;
     const depth = `../#/team/${encodeURIComponent(r.team)}/player/${encodeURIComponent(r.gsis)}`;
+    const ps = status[r.gsis];
+    const chip = statusChip(ps), nameCls = statusNameClass(ps);
     return `<tr class="an-row${open ? " open" : ""}" data-id="${esc(r.gsis)}" tabindex="0" aria-expanded="${open}">
       <td class="c-rank an-stick">${i + 1}</td>
-      <td class="c-name an-stick"><a class="an-pname" href="#/player/${encodeURIComponent(r.gsis)}${q ? "?" + q : ""}" title="${esc(r.name)}">${esc(r.name)}</a>${teamPill(r.team, teams, q)}<span class="an-pospill" data-band="${BAND(r.pos)}">${esc(r.pos)}</span><a class="an-dc" href="${depth}" target="_blank" rel="noopener" title="Open his depth-chart card in a new tab" aria-label="Depth chart">↗</a></td>
+      <td class="c-name an-stick"><a class="an-pname${nameCls ? " " + nameCls : ""}" href="#/player/${encodeURIComponent(r.gsis)}${q ? "?" + q : ""}" title="${esc(r.name)}">${esc(r.name)}</a>${teamPill(r.team, teams, q)}<span class="an-pospill" data-band="${BAND(r.pos)}">${esc(r.pos)}</span>${chip}<a class="an-dc" href="${depth}" target="_blank" rel="noopener" title="Open his depth-chart card in a new tab" aria-label="Depth chart">↗</a></td>
       <td class="num">${r.g}</td>
       ${cols.map((c) => cell(c, r)).join("")}
       <td class="c-spark">${sparkline(r.series, st)}</td></tr>`
@@ -320,8 +339,8 @@ export function tableHtml(allRows, st, query, view = {}) {
 }
 
 // `onState(next)` receives a new filter state (sort, minimum, open row); `query` is the current hash query.
-export function renderTable(el, allRows, st, query, onState, view = {}) {
-  el.innerHTML = tableHtml(allRows, st, query, view);
+export function renderTable(el, allRows, st, query, onState, view = {}, status = {}) {
+  el.innerHTML = tableHtml(allRows, st, query, view, status);
   fitOpen(el);
   wireMore(el, () => onState(toggleMore(COLS, st, DEFAULT_SORT)));
 

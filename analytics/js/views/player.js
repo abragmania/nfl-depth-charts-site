@@ -14,7 +14,7 @@
 // position's section, D188) and links to his depth-chart card (new tab) and his team page.
 import { fromQuery, toQuery, seasonsOf, weekLabel, splitKey } from "../filters.js";
 import { backLink } from "../router.js";
-import { loadFor, loadTeams, displayName } from "../data.js";
+import { loadFor, loadTeams, displayName, loadStatusFeed } from "../data.js";
 import { isStatic } from "../../../js/api.js";
 import { playerView, maddenBlocking, maddenEdition } from "../agg_player.js";
 import { renderFilterBar } from "../filterbar.js";
@@ -24,7 +24,7 @@ import { rushTier } from "../agg_rush.js";
 import { weeklyStrips } from "../charts/bars.js";
 import { zoneField, zoneLegend, ZONE_MODES, zoneName } from "../charts/zonefield.js";
 import { ratingBars, routeList } from "../charts/hbars.js";
-import { headlineRow, fantasyBand, phaseBlock, varianceStrip, maddenFoot, playerHead } from "./kit.js";
+import { headlineRow, fantasyBand, phaseBlock, varianceStrip, maddenFoot, playerHead, currentStatus, latestWeekIn, trendStrip } from "./kit.js";
 
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const NA = `<span class="an-na">–</span>`;
@@ -255,13 +255,15 @@ export async function renderPlayer(ctx, params, query) {
   if (ui.gsis !== gsis) { ui.gsis = gsis; ui.zone = null; ui.pastOpen = false; }
   const go = (n) => { const q = toQuery({ ...n, open: "" }); location.hash = `#/player/${encodeURIComponent(gsis)}${q ? "?" + q : ""}`; };
   if (!root.querySelector(".an-pl")) root.innerHTML = `<div class="an-msg">Loading player…</div>`;
-  let data, teams, madden;
+  let data, teams, madden, feed;
   try {
-    // The page draws the whole timeline, so every week of the season(s) is loaded whatever the window.
-    [data, teams, madden] = await Promise.all([
+    // The page draws the whole timeline, so every week of the season(s) is loaded whatever the window. The injury
+    // status feed (D196) never fails: an empty feed simply shows no status.
+    [data, teams, madden, feed] = await Promise.all([
       loadFor(seasonsOf(st), { ...st, window: "season" }),
       loadTeams().then((j) => new Map((j.teams || []).map((t) => [t.abbr, t]))).catch(() => new Map()),
       loadMadden(st.season),
+      loadStatusFeed(),
     ]);
   } catch (e) {
     if (!isCurrent()) return;
@@ -280,7 +282,7 @@ export async function renderPlayer(ctx, params, query) {
   const name = displayName(gsis, data.players);
   document.title = `${name} · NFL Analytics`;
   const block = maddenBlocking(madden, gsis, v.pos, st.season);
-  const head = headerHtml(v, name, block, teams, qs);
+  const head = headerHtml(v, name, block, teams, qs, { status: currentStatus(feed, gsis, seasonsOf(st)), statusSeason: feed?.season ?? null, latestWeek: latestWeekIn(data.keys, feed?.season) });
   if (v.kind !== "catcher") {
     const fb = backFallback(v.pos);
     const back = `<a href="${fb.href}${qs ? "?" + qs : ""}">Back to ${fb.name}</a>`;
@@ -419,6 +421,8 @@ export function pageBody(v, st, { wn = windowName(st, v.weeks || []), activeKey 
     total: `${wn} ${tFix(dk, 1)}`, avg: isNum(HL.dkG) ? HL.dkG : null, avgText: `lg ${tFix(HL.dkG, 1)}/g`, scale: maxPts, width: chartW || bandW,
     current: st.season, pastOpen, stack,
     tiles: (back ? RB_OPP_ORDER : REC_OPP_ORDER).map((k) => oppTiles[k]),
+    // D196 B: the Trend strip under the Opportunity tiles (omitted under 2 games in the window).
+    foot: trendStrip(R.trend, { weekFmt: (k) => weekLabel(k, st.season) }),
   });
 
   // (3) the RUSHING and RECEIVING blocks. Figures already on the page before the re-cut keep their source and value
@@ -602,7 +606,7 @@ function measureLayout(root, v, bandW) {
   });
 }
 
-function headerHtml(v, name, block, teams, qs) {
+function headerHtml(v, name, block, teams, qs, stat = {}) {
   const ovr = block.status === "ok" && isNum(block.ovr) ? `<span class="an-pl-ovr t-${block.ovr >= 90 ? "elite" : block.ovr >= 80 ? "strong" : block.ovr >= 70 ? "avg" : block.ovr >= 60 ? "weak" : "flat"}" title="${esc(block.title)} overall"><b>${block.ovr}</b><small>OVR</small></span>` : "";
   const depth = `../#/team/${encodeURIComponent(v.team)}/player/${encodeURIComponent(v.gsis)}`;
   const fb = backFallback(v.pos);
@@ -611,6 +615,8 @@ function headerHtml(v, name, block, teams, qs) {
     lead: backLink(`${fb.href}${qs ? "?" + qs : ""}`, fb.name), name, espnId: v.espnId, colour: teams.get(v.team)?.colourPrimary,
     pills: `${v.team ? teamPill(v.team, teams, qs) : ""}<span class="an-pospill" data-band="${BAND(v.pos)}">${esc(v.pos)}</span>${ovr}`,
     links: `<div class="an-pl-links"><a href="${depth}" target="_blank" rel="noopener">Depth chart ↗</a>${v.team ? `<a href="#/team/${esc(v.team)}${qs ? "?" + qs : ""}">Team page →</a>` : ""}</div>`,
+    // D196: his injury badge, red name and status line (already gated to the season on screen).
+    status: stat.status || null, statusSeason: stat.statusSeason ?? null, latestWeek: stat.latestWeek ?? null,
   });
 }
 

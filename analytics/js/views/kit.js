@@ -282,7 +282,9 @@ function glTable(rows, columns, { current = null, pastOpen = false } = {}) {
 // current/pastOpen: see glTable (a past season's weeks folded to its totals row; the chart always draws every week).
 // stack (👁 fix round): the stylesheet puts the game log BESIDE the chart and the band's frame ends at its content;
 // a page whose chart and log will not fit side by side passes stack: true and the log goes under the chart.
-export function fantasyBand({ title = "Fantasy", sub = "", rows = [], columns = [], shareLabels = [], total = "", avg = null, avgText = "", scale = null, width = null, tiles = [], ovScale = null, current = null, pastOpen = false, stack = false } = {}) {
+// foot (D196, additive): ready-made HTML printed under the Opportunity tiles across the band's full width (the
+// Trend strip, trendStrip below) - not escaped, see file header; absent or empty prints nothing.
+export function fantasyBand({ title = "Fantasy", sub = "", rows = [], columns = [], shareLabels = [], total = "", avg = null, avgText = "", scale = null, width = null, tiles = [], ovScale = null, current = null, pastOpen = false, stack = false, foot = "" } = {}) {
   const weekRows = (rows || []).filter((r) => r.type === "week");
   const chart = weekRows.length ? fanChartSvg(weekRows, shareLabels, { fit: width, label: "DK points", totalText: total, avg, avgText, scale, ovScale }) : "";
   return `<div class="an-rc-fanband${stack ? " an-rc-fanstack" : ""}">` +
@@ -290,7 +292,133 @@ export function fantasyBand({ title = "Fantasy", sub = "", rows = [], columns = 
     (chart ? `<div class="an-rc-fanchart">${chart}</div>` : "") +
     glTable(rows, columns, { current, pastOpen }) +
     oppRow(tiles) +
+    (foot || "") +
     `</div>`;
+}
+
+// ---- D196: injury status (the depth chart's badge look, copied here: public/css/styles.css .badge-*, cards.js) ----
+// status: one entry of data.js loadStatusFeed().players ({ code, label, scratch, detail, returnDate, shortComment,
+// willNotPlay, lastPlayed, missed, missedThrough, playedThisSeason, ... }). The colours follow cards.js STATUS_CLASS:
+// Q yellow, D orange, OUT / IR / PUP / NFI red, SUSP / EXEMPT purple, INACTIVE grey; an unknown code reads red (as the
+// depth chart's). A coach's-decision scratch (scratch: true) is grey whatever its code (D60: not an injury).
+const ST_CLASS = { Q: "q", D: "d", OUT: "out", IR: "out", PUP: "out", NFI: "out", SUSP: "susp", EXEMPT: "susp", INACTIVE: "inactive" };
+const SCRATCH_TEXT = "Inactive · coach's decision";
+
+// PURE: his status on the page being viewed, or null. The feed carries the CURRENT season's statuses only, so it
+// shows only when the seasons on screen (seasonsOf(state): the picked season, plus the previous one with Include
+// previous) include the feed's season; a historical page, or a feed that failed to load, shows nothing.
+export function currentStatus(feed, gsis, seasonsOnScreen = []) {
+  const s = feed?.players?.[gsis];
+  if (!s || !s.code || !has(feed?.season)) return null;
+  return (seasonsOnScreen || []).map(Number).includes(Number(feed.season)) ? s : null;
+}
+
+// PURE: the latest week of `season` among the loaded week keys ("2026-02" shape, data.js loadFor's `keys`), or null.
+export function latestWeekIn(keys, season) {
+  const w = (keys || []).map((k) => String(k).split("-")).filter(([s]) => +s === +season).map(([, wk]) => +wk).filter(Number.isFinite);
+  return w.length ? Math.max(...w) : null;
+}
+
+// The red rule (Adam, D196: "have the injury icon and maybe write them in red"): the name is red when he will not
+// play and it is not a coach's-decision scratch. A Questionable or Doubtful man is never red; a scratch is never red.
+export const isRedName = (status) => !!status && status.willNotPlay === true && !status.scratch;
+export const statusNameClass = (status) => (isRedName(status) ? "an-st-name-out" : "");
+
+// "2026-10-04" -> "Oct 4" ("Feb 15, 2027" when the date's year is not `season`); anything unparseable as it came.
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+export function shortDate(iso, season = null) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso ?? ""));
+  if (!m || +m[2] < 1 || +m[2] > 12) return String(iso ?? "");
+  const md = `${MONTHS[+m[2] - 1]} ${+m[3]}`;
+  return has(season) && +m[1] !== +season ? `${md}, ${m[1]}` : md;
+}
+// ESPN's injury detail, "Knee - ACL (Leg) - Surgery" -> "knee, ACL, surgery": the body-region parenthetical dropped,
+// the parts joined, a capitalised ordinary word lowered (an acronym such as ACL or MCL kept).
+export function injuryText(detail) {
+  const parts = String(detail ?? "").replace(/\s*\([^)]*\)/g, "").split(/\s+-\s+/).map((p) => p.trim()).filter(Boolean);
+  return parts.map((p) => p.split(/\s+/).map((w) => (/^[A-Z][a-z'’]+$/.test(w) ? w.toLowerCase() : w)).join(" ")).join(", ");
+}
+
+// The badge. long: the page header's wording (the feed's label, "Questionable", "Injured Reserve"); short (the
+// default, for tables and lists): the code, as the depth chart prints it. The hover carries the label, the injury,
+// ESPN's short note and ESPN's return date (never on a scratch).
+export function statusChip(status, { long = false } = {}) {
+  if (!status || !status.code) return "";
+  const code = String(status.code).toUpperCase();
+  const scratch = !!status.scratch;
+  const cls = scratch ? "inactive" : ST_CLASS[code] || "out";
+  const text = scratch ? (long ? SCRATCH_TEXT : "INACTIVE") : long ? status.label || code : code;
+  const tip = [scratch ? SCRATCH_TEXT : status.label || code, scratch ? null : status.detail, status.shortComment,
+    !scratch && status.returnDate ? `ESPN return date: ${shortDate(status.returnDate)}` : null].filter(Boolean).join(" — ");
+  return `<span class="an-stchip an-st-${cls}${long ? " an-stchip-lg" : ""}" title="${esc(tip)}">${esc(text)}</span>`;
+}
+
+// PURE: the one muted line under the name of a man who will not play or is Doubtful ("" for anyone else), built only
+// from the feed fields that exist:
+//   "Out: knee · last played W2 vs CAR (51% snaps) · missed 2 · ESPN return Oct 5"
+// - the head is the label and ESPN's injury ("Inactive: coach's decision" for a scratch);
+// - "last played" when the feed has his last game (a previous season's week carries its year, "25·W17");
+// - "has not played this season" when playedThisSeason is false (and then no missed count);
+// - "missed N" when missed is a number above 0, with " through Wn" when the count stops short of the latest week
+//   on screen (latestWeek, the current season's last loaded week: the snap file runs behind the play-by-play);
+// - "ESPN return <date>" when ESPN gives one, never for a scratch.
+// season: the feed's season (a last-played week or a return date in another year says so).
+export function statusLine(status, { season = null, latestWeek = null } = {}) {
+  if (!status || !status.code) return "";
+  const scratch = !!status.scratch;
+  if (!(status.willNotPlay === true || scratch || String(status.code).toUpperCase() === "D")) return "";
+  const parts = [];
+  const inj = injuryText(status.detail);
+  parts.push(scratch ? "Inactive: coach's decision" : `${status.label || status.code}${inj ? `: ${inj}` : ""}`);
+  const lp = status.lastPlayed;
+  if (lp && has(lp.week)) {
+    const wk = `${has(season) && has(lp.season) && +lp.season !== +season ? `${String(lp.season).slice(-2)}·` : ""}W${lp.week}`;
+    parts.push(`last played ${wk}${lp.opp ? ` vs ${lp.opp}` : ""}${Number.isFinite(lp.snapPct) ? ` (${Math.round(lp.snapPct)}% snaps)` : ""}`);
+  }
+  if (status.playedThisSeason === false) parts.push("has not played this season");
+  else if (Number.isFinite(status.missed) && status.missed > 0) {
+    const short = Number.isFinite(status.missedThrough) && Number.isFinite(latestWeek) && status.missedThrough < latestWeek;
+    parts.push(`missed ${status.missed}${short ? ` through W${status.missedThrough}` : ""}`);
+  }
+  if (!scratch && status.returnDate) parts.push(`ESPN return ${shortDate(status.returnDate, season)}`);
+  return parts.join(" · ");
+}
+
+// ---- D196 B: the Trend strip - his last 3 games played beside the whole window, one compact line ----------------
+// trend: agg_player.js recut.trend ({ kind, keys, games, last3Games, short, last3Weeks, figures: { [key]: { last3,
+// season, pts, n3, n } } }). Each item reads "Snap % 64 → 70 ▲": the window's figure, then the last 3 games', in whole
+// percent; the arrow compares the printed figures and is neutral (never good or bad colour). "(2 games)" when fewer
+// than three games feed the last-3 figure. Omitted entirely ("") when the window has under 2 games he played.
+// weekFmt: turns a week key into its label (the page passes filters.js weekLabel); default "W<n>".
+export const TREND_LABELS = { oppShare: "Opp %", snapPct: "Snap %", tgtShare: "Tgt %", ayShare: "AY %", routePct: "Route %", rzShare: "RZ share", rzTgtShare: "RZ tgt %" };
+const TREND_DEFS = {
+  oppShare: "(targets + designed runs) / (club pass attempts + club designed runs)",
+  snapPct: "the mean of his weekly offensive snap %",
+  tgtShare: "targets / club pass attempts",
+  ayShare: "air yards on his targets / club air yards",
+  routePct: "routes / club dropbacks (charted weeks)",
+  rzShare: "(red-zone targets + red-zone designed runs) / the club's red-zone pass attempts + designed runs",
+  rzTgtShare: "red-zone targets / club red-zone pass attempts",
+};
+export function trendStrip(trend, { weekFmt = null } = {}) {
+  if (!trend || !(trend.games >= 2)) return "";
+  const wf = weekFmt || ((k) => `W${+String(k).split("-")[1]}`);
+  const pct = (x) => (Number.isFinite(x) ? Math.round(x * 100) : null);
+  const items = (trend.keys || []).map((k) => {
+    const f = trend.figures?.[k];
+    if (!f) return "";
+    const a = pct(f.season), b = pct(f.last3);
+    if (a === null && b === null) return "";
+    const dir = a !== null && b !== null && a !== b ? (b > a ? "up" : "down") : "";
+    const tip = `${TREND_LABELS[k] || k}: ${TREND_DEFS[k] || ""}. Window: ${a === null ? "–" : a + "%"} over ${f.n} game${f.n === 1 ? "" : "s"}; last 3: ${b === null ? "–" : b + "%"} over ${f.n3} game${f.n3 === 1 ? "" : "s"}. Above or below only, never good or bad`;
+    return `<span class="an-rc-tritem" title="${esc(tip)}"><span class="an-rc-trlabel">${esc(TREND_LABELS[k] || k)}</span> ${a === null ? "–" : a} → <b>${b === null ? "–" : b}</b>${dir ? ` <i class="an-rc-trarrow ${dir}">${dir === "up" ? "▲" : "▼"}</i>` : ""}</span>`;
+  }).filter(Boolean);
+  if (!items.length) return "";
+  const n = trend.last3Games;
+  const weeks = (trend.last3Weeks || []).map(wf).join(", ");
+  const head = `Last 3 vs season${trend.short ? ` (${n} game${n === 1 ? "" : "s"})` : ""}`;
+  const tip = `His last ${n} game${n === 1 ? "" : "s"} played in the window (${weeks}) beside all ${trend.games} he played in it; a game his club played without him is left out, never a zero. Each figure: the window's → the last 3's, in percent; ▲ or ▼ is above or below only, never good or bad`;
+  return `<div class="an-rc-trend" title="${esc(tip)}"><span class="an-rc-trhead">${esc(head)}:</span> ${items.join(`<span class="an-rc-trsep"> · </span>`)}</div>`;
 }
 
 // ---- (3) a PASSING (purple) or RUSHING (gold) phase block: front tiles + a narrow tinted side column ----------
@@ -348,11 +476,20 @@ export function headshotUrl(espnId) {
   const id = String(espnId ?? "").trim();
   return /^\d+$/.test(id) ? `https://a.espncdn.com/i/headshots/nfl/players/full/${id}.png` : null;
 }
-export function playerHead({ lead = "", name = "", espnId = null, colour = null, pills = "", links = "" } = {}) {
+// status/statusSeason/latestWeek (D196, additive): his status entry when it applies to this page (currentStatus
+// above has already gated it on the season), the feed's season and the latest week on screen. With a status the name
+// carries the long badge after it and, under it, statusLine's one muted line; the name is red by isRedName. Without
+// one the header is exactly as before.
+export function playerHead({ lead = "", name = "", espnId = null, colour = null, pills = "", links = "", status = null, statusSeason = null, latestWeek = null } = {}) {
   const c = /^#[0-9a-fA-F]{3,8}$/.test(String(colour ?? "").trim()) ? String(colour).trim() : null;
   const url = headshotUrl(espnId);
   const shot = `<span class="an-rc-shot">${url ? `<img src="${esc(url)}" alt="" width="56" height="56" loading="lazy" decoding="async" onerror="this.remove()">` : ""}</span>`;
-  return `<div class="an-pl-head an-rc-head${c ? " club" : ""}"${c ? ` style="--club:${c}"` : ""}>${lead || ""}${shot}<h1>${esc(name)}</h1>${pills || ""}${links || ""}</div>`;
+  const chip = statusChip(status, { long: true });
+  const nameCls = statusNameClass(status);
+  const h1 = `<h1${nameCls ? ` class="${nameCls}"` : ""}>${esc(name)}${chip ? ` ${chip}` : ""}</h1>`;
+  const line = statusLine(status, { season: statusSeason, latestWeek });
+  const nameHtml = line ? `<div class="an-rc-namebox">${h1}<div class="an-rc-stline">${esc(line)}</div></div>` : h1;
+  return `<div class="an-pl-head an-rc-head${c ? " club" : ""}"${c ? ` style="--club:${c}"` : ""}>${lead || ""}${shot}${nameHtml}${pills || ""}${links || ""}</div>`;
 }
 
 // ---- (5) a small wrapper for the Madden ratings at the bottom --------------------------------------------------

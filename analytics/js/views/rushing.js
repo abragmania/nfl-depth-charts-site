@@ -5,12 +5,12 @@
 // COLS note below). Every figure comes from agg_rush.js (pure); this file draws, sorts and wires clicks.
 // The weekly strips and the team pill are qb.js's, shared.
 import { fromQuery, toQuery, seasonsOf, weekLabel, POSITIONS, DEFAULT_POS } from "../filters.js";
-import { loadFor, loadTeams, displayName } from "../data.js";
+import { loadFor, loadTeams, loadStatusFeed, displayName } from "../data.js";
 import { clubGames, tierNote, TIER_NAMES, MIN_POOL, POOL_PER_GAME, POOL_FLOOR } from "../agg.js";
 import { aggregateRush, rushReference, rushTier, sortRushRows, rushOpts, rushQueryFrom, samePos, RUSH_DEFAULT_POS, RUSH_MIN_CAR, RUSH_TIER_KEYS, BIN_LABELS, GOAL_LINE } from "../agg_rush.js";
 import { renderFilterBar } from "../filterbar.js";
 import { esc, NA, isNum, pct, fix, signed, int, teamPill, qbStrips, seasonLabel } from "./qb.js";
-import { DK_TIPS, CATCH_TIP, withGroups, groupCells, moreFrom, withMore, visibleCols, allOpen, toggleMore, moreCell, fitOpen, wireMore } from "../table.js";
+import { DK_TIPS, CATCH_TIP, withGroups, groupCells, moreFrom, withMore, visibleCols, allOpen, toggleMore, moreCell, fitOpen, wireMore, statusChip, statusNameClass, statusApplies } from "../table.js";
 
 // 👁 fix round, finding 4: qb.js's fix()/int() print JS's native ASCII hyphen for a negative value ("-2", "-0.12"),
 // while epaCar/epaTgt/epaOpp/ryoeAtt on this same table already use signed() and print the true minus ("−0.90").
@@ -137,7 +137,9 @@ function detailHtml(r, st, q, P, wn) {
 export const rushAnchor = { id: null, top: null };
 
 // PURE (no DOM): the table's markup. view: { ref (rushReference), windowName, teams, minCar }.
-export function rushTableHtml(allRows, st, query, view = {}) {
+// `status`: D196's injury-status map (gsis -> status), already season-gated by the caller (table.js's
+// statusApplies) - pass {} to draw no badges. Never fetched here.
+export function rushTableHtml(allRows, st, query, view = {}, status = {}) {
   const sortKey = SORTABLE.has(st.sort) ? st.sort : "car";
   const minCar = view.minCar ?? RUSH_MIN_CAR;
   const rows = sortRushRows(allRows.filter((r) => r.car >= minCar), sortKey, st.dir);
@@ -168,9 +170,11 @@ export function rushTableHtml(allRows, st, query, view = {}) {
   const body = rows.map((r, i) => {
     const open = st.open === r.gsis;
     const depth = `../#/team/${encodeURIComponent(r.team)}/player/${encodeURIComponent(r.gsis)}`;
+    const ps = status[r.gsis];
+    const chip = statusChip(ps), nameCls = statusNameClass(ps);
     return `<tr class="an-row${open ? " open" : ""}" data-id="${esc(r.gsis)}" tabindex="0" aria-expanded="${open}">
       <td class="c-rank an-stick">${i + 1}</td>
-      <td class="c-name an-stick"><a class="an-pname" href="#/player/${encodeURIComponent(r.gsis)}${q ? "?" + q : ""}" title="${esc(r.name)}">${esc(r.name)}</a>${teamPill(r.team, view.teams, q)}<span class="an-pospill" data-band="${BAND(r.pos)}">${esc(r.pos)}</span><a class="an-dc" href="${depth}" target="_blank" rel="noopener" title="Open his depth-chart card in a new tab" aria-label="Depth chart">↗</a></td>
+      <td class="c-name an-stick"><a class="an-pname${nameCls ? " " + nameCls : ""}" href="#/player/${encodeURIComponent(r.gsis)}${q ? "?" + q : ""}" title="${esc(r.name)}">${esc(r.name)}</a>${teamPill(r.team, view.teams, q)}<span class="an-pospill" data-band="${BAND(r.pos)}">${esc(r.pos)}</span>${chip}<a class="an-dc" href="${depth}" target="_blank" rel="noopener" title="Open his depth-chart card in a new tab" aria-label="Depth chart">↗</a></td>
       <td class="num">${r.g}</td>
       ${cols.map((c) => cell(c, r)).join("")}
       <td class="c-spark">${carrySpark(r.series, st, ref?.at(r.pos)?.lg?.carG)}</td></tr>`
@@ -215,9 +219,11 @@ export async function renderRushing(ctx, query) {
     const q = rushQuery(n, mc); location.hash = `#/rbs${q ? "?" + q : ""}`;
   };
   if (!root.querySelector(".an-rush")) root.innerHTML = `<div class="an-msg">Loading running backs…</div>`;
-  let data, teams;
+  let data, teams, statusFeed;
   try {
-    [data, teams] = await Promise.all([loadFor(seasonsOf(st), st), loadTeams().then((j) => j.teams || []).catch(() => [])]);
+    // The D196 injury-status feed loads alongside the analytics data; it never throws (loadStatusFeed's own
+    // contract), so a failure there never blocks the leaderboard.
+    [data, teams, statusFeed] = await Promise.all([loadFor(seasonsOf(st), st), loadTeams().then((j) => j.teams || []).catch(() => []), loadStatusFeed()]);
   } catch (e) {
     if (!isCurrent()) return;
     const notBuilt = e.status === 404 || e.status === 503;
@@ -259,7 +265,9 @@ export async function renderRushing(ctx, query) {
   </section>`;
   renderFilterBar(root.querySelector(".an-filters"), st, { keys: data.keys, teams: clubTeams }, (n) => go(n));
   const el = root.querySelector(".an-tablewrap");
-  el.innerHTML = rushTableHtml(agg.rows, st, qs, { ref, windowName, teams: teamsByAbbr, minCar });
+  // D196: badges are current-season only - statusApplies gates on the feed's own season against the window shown.
+  const status = statusApplies(st, statusFeed.season) ? statusFeed.players : {};
+  el.innerHTML = rushTableHtml(agg.rows, st, qs, { ref, windowName, teams: teamsByAbbr, minCar }, status);
   fitOpen(el);
   wireMore(el, () => go(toggleMore(COLS, { ...st, sort: SORTABLE.has(st.sort) ? st.sort : "car" }, "car")));
   el.querySelectorAll("th[data-sort]").forEach((h) => h.addEventListener("click", () => {

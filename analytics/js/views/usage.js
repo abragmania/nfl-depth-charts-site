@@ -2,10 +2,10 @@
 // in mind), WRs and TEs by default, backs on their chip; every filter, the sort, the minimum and the open row live in
 // the hash. The table itself (column order Production, Opportunity, Efficiency, then the ancillary group) is table.js.
 import { fromQuery, toQuery, seasonsOf, weekLabel, POSITIONS } from "../filters.js";
-import { loadFor, loadTeams } from "../data.js";
+import { loadFor, loadTeams, loadStatusFeed } from "../data.js";
 import { aggregateUsage, clubGames, usageReference, REF_POS, POOL_PER_GAME, POOL_FLOOR } from "../agg.js";
 import { renderFilterBar } from "../filterbar.js";
-import { renderTable, anchor, moreFrom, withMore } from "../table.js";
+import { renderTable, anchor, moreFrom, withMore, statusApplies } from "../table.js";
 
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 // The More toggle's state (more=1) rides beside the shared filters (table.js withMore).
@@ -37,11 +37,12 @@ export async function renderUsage(ctx, query) {
   const st = { ...fromQuery(query), more: moreFrom(query) };
   document.title = "Receivers · NFL Analytics";
   if (!root.querySelector(".an-usage")) root.innerHTML = `<div class="an-msg">Loading receivers…</div>`;
-  let data, teams;
+  let data, teams, statusFeed;
   try {
-    // Teams (for the player column's colour pill) load alongside the analytics data; a failure there is
-    // decorative, not fatal, so it falls back to an empty list rather than blocking the leaderboard.
-    [data, teams] = await Promise.all([loadFor(seasonsOf(st), st), loadTeams().then((j) => j.teams || []).catch(() => [])]);
+    // Teams (for the player column's colour pill) and the D196 injury-status feed load alongside the analytics
+    // data; both are decorative on failure (loadTeams already falls back, loadStatusFeed never throws), never
+    // fatal to the leaderboard.
+    [data, teams, statusFeed] = await Promise.all([loadFor(seasonsOf(st), st), loadTeams().then((j) => j.teams || []).catch(() => []), loadStatusFeed()]);
   }
   catch (e) {
     if (!isCurrent()) return;
@@ -78,7 +79,9 @@ export async function renderUsage(ctx, query) {
     <p class="an-foot">Targets, air yards, receptions, EPA and zones: nflverse play-by-play. Routes, route %, TPRR, YPRR: heatradar.app (charted; a week under 8 routes is not listed). Snaps: nflverse snap counts. Target share counts only the games he played. DK: DraftKings Classic points from the same play rows, a lost fumble included (no 2-point conversions or return touchdowns; a fumble lost on a kick or punt return is not in the rows).</p>
   </section>`;
   renderFilterBar(root.querySelector(".an-filters"), st, { keys: data.keys, teams: clubTeams }, go);
-  renderTable(root.querySelector(".an-tablewrap"), rows, st, qs, go, { ref, windowName, teams: teamsByAbbr });
+  // D196: badges are current-season only - statusApplies gates on the feed's own season against the window shown.
+  const status = statusApplies(st, statusFeed.season) ? statusFeed.players : {};
+  renderTable(root.querySelector(".an-tablewrap"), rows, st, qs, go, { ref, windowName, teams: teamsByAbbr }, status);
   // Keep the clicked row where the reader clicked it rather than letting the re-render jump the page.
   if (anchor.id) {
     const tr = [...root.querySelectorAll("tr.an-row")].find((t) => t.dataset.id === anchor.id);
