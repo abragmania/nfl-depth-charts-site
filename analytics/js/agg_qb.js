@@ -35,6 +35,9 @@
 //                  with a drops figure, x 100 (the TPRR precedent; pfrDrops, pfrDropAtt carry the sums); null when none.
 //   fum, fl      = rows where he is the fumbler (the offense fumbled) and those lost, any play type.  flRate = fl / fum.
 //   dk, dkG, dkTdShare = agg_fantasy.js (DraftKings, D194), dkG over this row's g.
+// INCREMENT 6 ADDITIONS (the QB page's game log; new fields only): each series week also carries `sacks` (his sacks
+//   that week, same window and game rules as the row's sacks); qbGameCuts (below) gives the log's heat cuts and
+//   qbPoolStat the headline tiles' league mean, tier and rank for figures the reference has no cuts for.
 import { colIndex, clubGames, percentileCuts, tierFromCuts, MIN_POOL, pooledRatio, plainMean } from "./agg.js";
 import { gamesInWindow, playPredicate, isSituational } from "./filters.js";
 import { fantasyByPlayer, dkFields } from "./agg_fantasy.js";
@@ -119,7 +122,7 @@ function newAcc() {
     pfrPress: 0, pfrDb: 0, pfrKeys: new Set(), tttW: 0, ttt: 0, xcW: 0, xc: 0,
     rzDb: 0, in10Car: 0, pfrDrops: 0, pfrDropAtt: 0, pfrDropWeeks: 0, snaps: [] };
 }
-const wkAcc = () => ({ db: 0, att: 0, cmp: 0, epa: 0, epaN: 0, cpoe: 0, cpoeN: 0, air: 0, airN: 0, car: 0, ryds: 0 });
+const wkAcc = () => ({ db: 0, att: 0, cmp: 0, epa: 0, epaN: 0, cpoe: 0, cpoeN: 0, air: 0, airN: 0, car: 0, ryds: 0, sacks: 0 });
 
 function gamePasses(st, g) {
   if (!g) return false;
@@ -183,7 +186,7 @@ export function aggregateQb(blocks, players, st, opts = {}) {
               target: e.target, result: e.int ? "INT" : e.complete ? (e.td ? "TD" : "Comp") : "Inc", air: e.air, yards: e.complete ? e.yards : 0, epa: e.epa });
           }
         }
-      } else if (e.kind === "sack") a.sacks++;
+      } else if (e.kind === "sack") { a.sacks++; w.sacks++; }
       if (e.kind === "scramble" || e.kind === "run") {
         if (e.kind === "scramble") { a.scr++; a.scrYds += e.yards; } else { a.des++; a.desYds += e.yards; }
         w.car++; w.ryds += e.yards;
@@ -248,8 +251,8 @@ export function aggregateQb(blocks, players, st, opts = {}) {
       rushAttG: ratio(car, gp), rushYdsG: ratio(a.scrYds + a.desYds, gp), rushEpaG: ratio(a.rushEpa, gp),
       series: weeks.map((key) => {
         const w = a.wk.get(key);
-        if (!w || (w.db === 0 && w.car === 0)) return { key, db: 0, att: 0, epaDb: null, cpoe: null, adot: null, cmpPct: null, car: w ? 0 : null, ryds: null };
-        return { key, db: w.db, att: w.att, epaDb: ratio(w.epa, w.epaN), cpoe: ratio(w.cpoe, w.cpoeN), adot: ratio(w.air, w.airN), cmpPct: ratio(w.cmp, w.att), car: w.car, ryds: w.ryds };
+        if (!w || (w.db === 0 && w.car === 0)) return { key, db: 0, att: 0, epaDb: null, cpoe: null, adot: null, cmpPct: null, car: w ? 0 : null, ryds: null, sacks: w ? 0 : null };
+        return { key, db: w.db, att: w.att, epaDb: ratio(w.epa, w.epaN), cpoe: ratio(w.cpoe, w.cpoeN), adot: ratio(w.air, w.airN), cmpPct: ratio(w.cmp, w.att), car: w.car, ryds: w.ryds, sacks: w.sacks };
       }),
       zones: a.zones,
       ...recutQb(a, fumOf.get(id), situational),
@@ -293,6 +296,44 @@ export function qbPooled(pool) {
     flRate: pooledRatio(pool, (r) => r.fl, (r) => r.fum),
     dkTdShare: plainMean(pool.map((r) => r.dkTdShare)),
   };
+}
+
+// The QB page's headline (re-cut increment 6): for any per-row figure `get(row)`, the pool's plain mean (lg), its
+// tier cuts (agg.js percentileCuts, negated when lower is better; null under MIN_POOL values) and a rank function:
+// 1 + the pool men strictly better at the displayed precision (`digits`), so equal displayed values share a rank
+// (1, 2, 2, 4). The page shows the rank only for a man inside the pool.
+export function qbPoolStat(pool, get, { digits = 0, lowerBetter = false } = {}) {
+  const vals = (pool || []).map(get).filter(finite).map(Number);
+  const cuts = vals.length >= MIN_POOL ? percentileCuts(vals.map((v) => (lowerBetter ? -v : v))) : null;
+  const rd = (x) => Math.round(x * 10 ** digits) / 10 ** digits;
+  return {
+    lg: mean(vals), n: vals.length, cuts,
+    tier: (v) => (finite(v) ? tierFromCuts(lowerBetter ? -v : +v, cuts) : ""),
+    rank: (v) => (finite(v) ? 1 + vals.filter((x) => (lowerBetter ? rd(x) < rd(+v) : rd(x) > rd(+v))).length : null),
+  };
+}
+
+// The QB page's game-log heat (re-cut increment 6): tier cuts for ONE game's attempts, passing yards and DraftKings
+// points, from every single game a QB in the reference pool played in the window ("played" = a week of his series
+// with a dropback or a carry). Attempts come from the series; yards and DK from fantasyByPlayer's games for the same
+// state (`fantasy`, its Map), keyed to those played weeks. Same percentiles as every other tier (agg.js
+// percentileCuts); under MIN_POOL games a measure is null (left untinted). Returns { att, yds, dk } (four
+// descending numbers each, or null) and n, the game counts behind each.
+export function qbGameCuts(pool, fantasy) {
+  const vals = { att: [], yds: [], dk: [] };
+  for (const r of pool || []) {
+    const played = new Set((r.series || []).filter((s) => (s.db || 0) > 0 || (s.car || 0) > 0).map((s) => {
+      vals.att.push(s.att);
+      return s.key;
+    }));
+    for (const g of fantasy?.get(r.gsis)?.games || []) {
+      if (!played.has(g.gk.split("|")[0])) continue;
+      vals.yds.push(g.line?.passYds);
+      vals.dk.push(g.pts);
+    }
+  }
+  const cut = (v) => { const f = v.filter(finite); return f.length >= MIN_POOL ? percentileCuts(f) : null; };
+  return { att: cut(vals.att), yds: cut(vals.yds), dk: cut(vals.dk), n: { att: vals.att.filter(finite).length, yds: vals.yds.filter(finite).length, dk: vals.dk.filter(finite).length } };
 }
 
 // Sort, nulls always last whichever direction; ties by dropbacks.

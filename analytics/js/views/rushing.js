@@ -1,48 +1,76 @@
-// Rushing: the rushing leaderboard (#/rushing). Every man with a carry (backs and fullbacks by default; QBs and
-// receivers on the position chips). D177: efficiency (EPA/carry, success, YPC and over expected) with a league
-// reference beside every rate and a total for anything weekly; rush direction was dropped by Adam. D182: a back
-// leads with opportunity and involvement, so the Opportunity group (carries + targets, D191) and its per-opportunity
-// efficiency open the table, Volume follows, and an Involvement group (snap %, routes, targets, target share) closes it. Every figure comes from agg_rush.js (pure); this file draws, sorts and
-// wires clicks. The weekly strips and the team pill are qb.js's, shared.
+// Running backs (#/rbs; the old Rushing page, #/rushing still works, D193): the ball carriers' leaderboard. Every man
+// with a carry (backs and fullbacks by default; QBs and receivers on the position chips). D177: efficiency (EPA/carry,
+// success, YPC and over expected) with a league reference beside every rate and a total for anything weekly; rush
+// direction was dropped by Adam. The columns read Production, Opportunity, Efficiency, then the ancillary groups (the
+// COLS note below). Every figure comes from agg_rush.js (pure); this file draws, sorts and wires clicks.
+// The weekly strips and the team pill are qb.js's, shared.
 import { fromQuery, toQuery, seasonsOf, weekLabel, POSITIONS, DEFAULT_POS } from "../filters.js";
 import { loadFor, loadTeams, displayName } from "../data.js";
 import { clubGames, tierNote, TIER_NAMES, MIN_POOL, POOL_PER_GAME, POOL_FLOOR } from "../agg.js";
 import { aggregateRush, rushReference, rushTier, sortRushRows, rushOpts, rushQueryFrom, samePos, RUSH_DEFAULT_POS, RUSH_MIN_CAR, RUSH_TIER_KEYS, BIN_LABELS, GOAL_LINE } from "../agg_rush.js";
 import { renderFilterBar } from "../filterbar.js";
 import { esc, NA, isNum, pct, fix, signed, int, teamPill, qbStrips, seasonLabel } from "./qb.js";
+import { DK_TIPS, CATCH_TIP, withGroups, groupCells, moreFrom, withMore, visibleCols, allOpen, toggleMore, moreCell, fitOpen, wireMore } from "../table.js";
 
-// D191 (Adam, 2026-09-24): opportunities (carries + targets) lead the table; raw counts get the bars and tiers, the
-// per-opportunity efficiency figures follow as plain numbers.
+// 👁 fix round, finding 4: qb.js's fix()/int() print JS's native ASCII hyphen for a negative value ("-2", "-0.12"),
+// while epaCar/epaTgt/epaOpp/ryoeAtt on this same table already use signed() and print the true minus ("−0.90").
+// Long, Eff and Yds/opp (and, in principle, DK on a fumble-heavy week) can all go negative, so this table read
+// inconsistent. These wrap qb.js's own formatters (shared with the QB and other tables, so left untouched) and
+// swap the leading hyphen for U+2212 whenever the value is negative; agg_rush.js (the aggregation) is untouched.
+const fixM = (v, d) => fix(v, d).replace(/^-/, "−");
+const intM = (v) => int(v).replace(/^-/, "−");
+
+// Re-cut increment 7b (D193, Adam's answer 10: "Production, Opportunity, Efficiency, then the rest; the divide doesn't
+// need to be so stark"): Production, Opportunity and Efficiency lead; two lighter ancillary groups close the table,
+// the rushing detail tinted gold and the receiving detail purple, never tier-coloured and never barred. Every column
+// keeps its key, value, format, tooltip and sort; the old Volume, Scoring zone, Big plays and Involvement headers and
+// D191's "Efficiency (opp)" are gone (D191's Opp/g and Opp % now sit in Opportunity, the rest in the gold group).
+// Lead's call (7b): the raw Opp and Car counts are dropped from the gold group so the open table fits the 1760 column
+// at 2560; Opp/g and Car/g carry them, and sort=opp or sort=car links still sort (the rank header sorts by carries).
 const COLS = [
-  { k: "opp", h: "Opp", t: "Opportunities: carries (a quarterback's scrambles included) + targets (the Usage page's count)", f: int, grp: "o" },
-  { k: "oppG", h: "Opp/g", t: "Opportunities (carries + targets) per game he played", f: (v) => fix(v, 1), grp: "o", bar: 28 },
+  { k: "dkG", h: "DK/g", t: DK_TIPS.dkG, f: (v) => fixM(v, 1), grp: "p" },
+  { k: "dk", h: "DK", t: DK_TIPS.dk, f: (v) => fixM(v, 1), grp: "p" },
+  { k: "yds", h: "Rush yds", t: "Rushing yards", f: intM, grp: "p" },
+  { k: "td", h: "Rush TD", t: "Rushing touchdowns", f: intM, grp: "p" },
+  { k: "rec", h: "Rec", t: "Receptions", f: intM, grp: "p" },
+  { k: "recYds", h: "Rec yds", t: "Receiving yards", f: intM, grp: "p" },
+  { k: "recTd", h: "Rec TD", t: "Receiving touchdowns", f: intM, grp: "p" },
+  { k: "oppG", h: "Opp/g", t: "Opportunities (carries + targets) per game he played", f: (v) => fixM(v, 1), grp: "o", bar: 28 },
   { k: "oppShare", h: "Opp %", t: "Opportunity share: (his designed runs + his targets) / (his club's designed runs + his club's pass attempts) in his games (scrambles are on neither side)", f: (v) => pct(v), grp: "o", bar: 0.5 },
-  { k: "ydsOpp", h: "Yds/opp", t: "(Rushing yards + receiving yards) / opportunities (carries + targets)", f: (v) => fix(v, 1), grp: "x" },
-  { k: "epaOpp", h: "EPA/opp", t: "(EPA summed over his carries + EPA summed over his targets) / opportunities (carries + targets)", f: (v) => signed(v, 2), grp: "x" },
-  { k: "tdOpp", h: "TD/opp", t: "(Rushing touchdowns + receiving touchdowns) / opportunities (carries + targets)", f: (v) => (isNum(v) ? pct(v) + "%" : NA), grp: "x" },
-  { k: "car", h: "Car", t: "Carries: designed runs, plus scrambles for a quarterback", f: int, grp: "v" },
-  { k: "carG", h: "Car/g", t: "Carries per game he played", f: (v) => fix(v, 1), grp: "v", bar: 22 },
-  { k: "rushShare", h: "Rush %", t: "Rush share: his designed runs / his club's designed runs in his games (scrambles are called passes: on neither side)", f: (v) => pct(v), grp: "v", bar: 0.8 },
-  { k: "yds", h: "Yds", t: "Rushing yards", f: int, grp: "v" },
-  { k: "ypc", h: "YPC", t: "Yards per carry", f: (v) => fix(v, 1), grp: "e" },
-  { k: "succPct", h: "Succ %", t: "Share of his carries that were successful plays (nflverse success)", f: (v) => pct(v, 0), grp: "e" },
+  { k: "carG", h: "Car/g", t: "Carries per game he played", f: (v) => fixM(v, 1), grp: "o", bar: 22 },
+  { k: "rushShare", h: "Rush %", t: "Rush share: his designed runs / his club's designed runs in his games (scrambles are called passes: on neither side)", f: (v) => pct(v), grp: "o", bar: 0.8 },
+  { k: "tgt", h: "Tgt", t: "Targets (the Receivers page's count)", f: intM, grp: "o" },
+  { k: "tgtShare", h: "Tgt %", t: "Target share: his targets / his club's pass attempts in his games", f: (v) => pct(v), grp: "o", bar: 0.3 },
+  { k: "rzOpp", h: "RZ opp", t: "Red-zone opportunities: his red-zone carries + his red-zone targets (opponent's 20 or closer)", f: intM, grp: "o" },
+  { k: "snapPct", h: "Snap %", t: "Share of his club's offensive snaps (nflverse snap counts)", f: (v) => pct(v, 0), grp: "o", bar: 1 },
+  { k: "ypc", h: "YPC", t: "Yards per carry", f: (v) => fixM(v, 1), grp: "e" },
   { k: "epaCar", h: "EPA/car", t: "Expected points added per carry", f: (v) => signed(v, 2), grp: "e" },
   { k: "ryoeAtt", h: "RYOE/att", t: "NGS rush yards over expected per carry (the weeks NGS lists him)", f: (v) => signed(v, 2), grp: "e" },
-  { k: "eff", h: "Eff", t: "NGS efficiency: distance run per rushing yard; lower is more north-south (weighted by his carries each week)", f: (v) => fix(v, 2), grp: "e" },
-  { k: "rz", h: "RZ", t: "Red-zone carries (opponent's 20 or closer)", f: int, grp: "z" },
-  { k: "gl", h: "GL", t: `Goal-line carries (opponent's ${GOAL_LINE} or closer)`, f: int, grp: "z" },
-  { k: "td", h: "TD", t: "Rushing touchdowns", f: int, grp: "z" },
-  { k: "long", h: "Long", t: "Longest carry", f: int, grp: "b" },
-  { k: "explPct", h: "Expl %", t: "Explosive rate: carries of 10+ yards / carries", f: (v) => pct(v, 0), grp: "b" },
-  { k: "snapPct", h: "Snap %", t: "Share of his club's offensive snaps (nflverse snap counts)", f: (v) => pct(v, 0), grp: "i", bar: 1 },
-  { k: "routes", h: "Routes", t: "Routes run (heatradar, charted; weeks under 8 routes are not listed)", f: int, grp: "i" },
-  { k: "tgt", h: "Tgt", t: "Targets (the Usage page's count)", f: int, grp: "i" },
-  { k: "tgtShare", h: "Tgt %", t: "Target share: his targets / his club's pass attempts in his games", f: (v) => pct(v), grp: "i", bar: 0.3 },
+  { k: "yprr", h: "YPRR", t: "Receiving yards per route run (heatradar routes, charted)", f: (v) => fixM(v, 2), grp: "e" },
+  { k: "epaTgt", h: "EPA/tgt", t: "Expected points added per target", f: (v) => signed(v, 2), grp: "e" },
+  { k: "succPct", h: "Succ %", t: "Share of his carries that were successful plays (nflverse success)", f: (v) => pct(v, 0), grp: "xr" },
+  { k: "eff", h: "Eff", t: "NGS efficiency: distance run per rushing yard; lower is more north-south (weighted by his carries each week)", f: (v) => fixM(v, 2), grp: "xr" },
+  { k: "long", h: "Long", t: "Longest carry", f: intM, grp: "xr" },
+  { k: "explPct", h: "Expl %", t: "Explosive rate: carries of 10+ yards / carries", f: (v) => pct(v, 0), grp: "xr" },
+  { k: "rz", h: "RZ", t: "Red-zone carries (opponent's 20 or closer)", f: intM, grp: "xr" },
+  { k: "gl", h: "GL", t: `Goal-line carries (opponent's ${GOAL_LINE} or closer)`, f: intM, grp: "xr" },
+  { k: "ydsOpp", h: "Yds/opp", t: "(Rushing yards + receiving yards) / opportunities (carries + targets)", f: (v) => fixM(v, 1), grp: "xr" },
+  { k: "epaOpp", h: "EPA/opp", t: "(EPA summed over his carries + EPA summed over his targets) / opportunities (carries + targets)", f: (v) => signed(v, 2), grp: "xr" },
+  { k: "tdOpp", h: "TD/opp", t: "(Rushing touchdowns + receiving touchdowns) / opportunities (carries + targets)", f: (v) => (isNum(v) ? pct(v) + "%" : NA), grp: "xr" },
+  { k: "routes", h: "Routes", t: "Routes run (heatradar, charted; weeks under 8 routes are not listed)", f: intM, grp: "xp" },
+  { k: "tprr", h: "TPRR", t: "Targets per route run", f: (v) => fixM(v, 2), grp: "xp" },
+  { k: "catchPct", h: "Catch %", t: CATCH_TIP, f: (v) => pct(v), grp: "xp" },
 ];
-const GROUPS = [["o", "Opportunity"], ["x", "Efficiency (opp)"], ["v", "Volume"], ["e", "Efficiency"], ["z", "Scoring zone"], ["b", "Big plays"], ["i", "Involvement"]];
-COLS.forEach((c, i) => { c.gs = i === 0 || COLS[i - 1].grp !== c.grp; });
+// [key, label, ancillary tint or ""]; table.js's withGroups sets each column's classes.
+const GROUPS = [["p", "Production", ""], ["o", "Opportunity", ""], ["e", "Efficiency", ""], ["xr", "Rushing detail", "run"], ["xp", "Receiving detail", "pass"]];
+withGroups(COLS, GROUPS);
+// The column order, grouped, for tests and the lead.
+export const RB_TABLE_ORDER = GROUPS.map(([g, l]) => [l, COLS.filter((c) => c.grp === g).map((c) => c.k)]);
 const TIERED = new Set(RUSH_TIER_KEYS);
-const SORTABLE = new Set([...COLS.map((c) => c.k), "name", "g"]);
+const SORTABLE = new Set([...COLS.map((c) => c.k), "name", "g", "car", "opp"]);
+// The totals that sort but are not columns, and the column that shows them (🔵 on 7b: the default sort is carries).
+export const SHOWN_AS = { car: "carG", opp: "oppG" };
+const SHOWN_AS_TEXT = { car: "total carries", opp: "total opportunities" };
 const BAND = (pos) => (pos === "RB" || pos === "FB" ? "BACKFIELD" : pos);
 
 // Weekly carries: a line with the position's carries-per-game league line dashed behind it.
@@ -94,14 +122,14 @@ function detailHtml(r, st, q, P, wn) {
     <div class="an-dcol an-rush-mid"><div class="an-dh">Carries by gain <span class="an-dsub">vs ${esc(r.pos)} pool</span></div>${binsBar(r.bins, L.bins)}
       <div class="an-rush-zone"><span><b>${r.rz}</b> RZ</span><span><b>${r.gl}</b> GL</span><span><b>${r.td}</b> TD</span><span><b>${isNum(r.long) ? r.long : "–"}</b> long</span></div></div>
     <div class="an-dcol"><div class="an-dh">Efficiency</div><div class="an-dtiles">
-      ${tile("YPC", fix(r.ypc, 1), "ypc", fix(L.ypc, 1))}${tile("EPA/car", signed(r.epaCar, 2), "epaCar", signed(L.epaCar, 2))}
+      ${tile("YPC", fixM(r.ypc, 1), "ypc", fixM(L.ypc, 1))}${tile("EPA/car", signed(r.epaCar, 2), "epaCar", signed(L.epaCar, 2))}
       ${tile("Succ %", pct(r.succPct, 0), "succPct", pct(L.succPct, 0))}${tile("Expl %", pct(r.explPct, 0), "explPct", pct(L.explPct, 0))}
-      ${tile("RYOE/att", signed(r.ryoeAtt, 2), "ryoeAtt", signed(L.ryoeAtt, 2), "NGS rush yards over expected per carry")}${tile("Eff", fix(r.eff, 2), "eff", fix(L.eff, 2), "NGS efficiency: lower is more north-south")}
+      ${tile("RYOE/att", signed(r.ryoeAtt, 2), "ryoeAtt", signed(L.ryoeAtt, 2), "NGS rush yards over expected per carry")}${tile("Eff", fixM(r.eff, 2), "eff", fixM(L.eff, 2), "NGS efficiency: lower is more north-south")}
     </div></div>
     <div class="an-dcol"><div class="an-dh">Involvement</div><div class="an-dtiles">
       ${tile("Snap %", pct(r.snapPct, 0), "snapPct", pct(L.snapPct, 0))}${tile("Rush %", pct(r.rushShare), "rushShare", pct(L.rushShare))}
-      ${tile("Tgt %", pct(r.tgtShare), "tgtShare", pct(L.tgtShare))}${tile("Targets", int(r.tgt), "", fix(L.tgt, 1))}
-      ${tile("Routes", int(r.routes), "", fix(L.routes, 0), "heatradar, charted")}${tile("Car/g", fix(r.carG, 1), "carG", fix(L.carG, 1))}
+      ${tile("Tgt %", pct(r.tgtShare), "tgtShare", pct(L.tgtShare))}${tile("Targets", intM(r.tgt), "", fixM(L.tgt, 1))}
+      ${tile("Routes", intM(r.routes), "", fixM(L.routes, 0), "heatradar, charted")}${tile("Car/g", fixM(r.carG, 1), "carG", fixM(L.carG, 1))}
       <div class="an-dlinks"><a href="#/player/${encodeURIComponent(r.gsis)}${q ? "?" + q : ""}">Player page →</a><a href="${depth}" target="_blank" rel="noopener">Depth chart ↗</a></div>
     </div></div></div>`;
 }
@@ -114,26 +142,37 @@ export function rushTableHtml(allRows, st, query, view = {}) {
   const minCar = view.minCar ?? RUSH_MIN_CAR;
   const rows = sortRushRows(allRows.filter((r) => r.car >= minCar), sortKey, st.dir);
   const q = query || "", ref = view.ref;
-  const nCols = 3 + COLS.length + 1;
-  const th = (k, h, t, cls = "") => `<th class="${cls}${sortKey === k ? " sorted " + st.dir : ""}" data-sort="${k}" title="${esc(t)}">${h}</th>`;
-  const groupRow = `<tr class="an-grp"><th colspan="3"></th>${GROUPS.map(([g, l]) => `<th colspan="${COLS.filter((c) => c.grp === g).length}" class="g-${g} gs">${l}</th>`).join("")}<th></th></tr>`;
-  const head = `<tr>${th("rank", "#", "Rank", "c-rank")}${th("name", "Player", "Player, team, position", "c-name")}${th("g", "G", "Games in the window")}${COLS.map((c) => th(c.k, c.h, c.t, "g-" + c.grp + (c.gs ? " gs" : ""))).join("")}<th class="c-spark" title="Weekly carries; dashed: his position's carries per game; hover a point for the week">Carries by week</th></tr>`;
+  // The More toggle (table.js): the ancillary groups show only when open (or holding the sort column).
+  const cols = visibleCols(COLS, { ...st, sort: sortKey }, "car");
+  const nCols = 3 + cols.length + 1;
+  // A sort on a total that is not a column (carries, opportunities) lights the per-game column that stands for it.
+  const th = (k, h, t, cls = "") => {
+    const stand = sortKey !== k && SHOWN_AS[sortKey] === k;
+    return `<th class="${cls}${sortKey === k || stand ? " sorted " + st.dir : ""}" data-sort="${k}" title="${esc(stand ? `${t} (sorted by ${SHOWN_AS_TEXT[sortKey]})` : t)}">${h}</th>`;
+  };
+  // The toggle (moreCell) leads the row, spanning rank+name; a blank cell fills the G spot, and the trailing
+  // cell over the sparkline is blank in its place (👁 fix round, findings 1, 5).
+  const groupRow = `<tr class="an-grp">${moreCell(allOpen(COLS, { ...st, sort: sortKey }, "car"))}<th></th>${groupCells(cols, GROUPS)}<th class="c-spark"></th></tr>`;
+  // an-stick on rank/name: the lead's CSS pins these two columns left while the frame scrolls (finding 1).
+  const head = `<tr>${th("rank", "#", "Rank", "c-rank an-stick")}${th("name", "Player", "Player, team, position", "c-name an-stick")}${th("g", "G", "Games in the window")}${cols.map((c) => th(c.k, c.h, c.t, c.cls)).join("")}<th class="c-spark" title="Weekly carries; dashed: his position's carries per game; hover a point for the week">Carries by week</th></tr>`;
   const cell = (c, r) => {
     const v = r[c.k], P = ref?.at(r.pos);
-    const tier = TIERED.has(c.k) ? rushTier(c.k, v, P?.cuts) : "";
-    let title = TIERED.has(c.k) && isNum(v) ? tierNote(P?.cuts?.[c.k], r.pos) : "";
-    if (c.k === "car" && r.scr) title = `${r.des} designed runs, ${r.scr} scrambles`;
+    // Ancillary columns are never tier-coloured, whatever the aggregation tiers (Opp, Succ %, Eff, Expl % here).
+    const tiered = TIERED.has(c.k) && !c.anc;
+    const tier = tiered ? rushTier(c.k, v, P?.cuts) : "";
+    let title = tiered && isNum(v) ? tierNote(P?.cuts?.[c.k], r.pos) : "";
+    if (c.k === "carG" && r.scr) title = `${title ? title + ". " : ""}${r.car} carries: ${r.des} designed runs, ${r.scr} scrambles`;
     const bar = c.bar && isNum(v) ? `<i class="an-bar" style="width:${Math.min(100, (v / c.bar) * 100).toFixed(1)}%"></i>` : "";
-    return `<td class="num g-${c.grp}${c.gs ? " gs" : ""}${tier ? " t-" + tier : ""}${bar ? " has-bar" : ""}"${title ? ` title="${esc(title)}"` : ""}>${bar}<span>${c.f(v)}</span></td>`;
+    return `<td class="num ${c.cls}${tier ? " t-" + tier : ""}${bar ? " has-bar" : ""}"${title ? ` title="${esc(title)}"` : ""}>${bar}<span>${c.f(v)}</span></td>`;
   };
   const body = rows.map((r, i) => {
     const open = st.open === r.gsis;
     const depth = `../#/team/${encodeURIComponent(r.team)}/player/${encodeURIComponent(r.gsis)}`;
     return `<tr class="an-row${open ? " open" : ""}" data-id="${esc(r.gsis)}" tabindex="0" aria-expanded="${open}">
-      <td class="c-rank">${i + 1}</td>
-      <td class="c-name"><a class="an-pname" href="#/player/${encodeURIComponent(r.gsis)}${q ? "?" + q : ""}">${esc(r.name)}</a>${teamPill(r.team, view.teams, q)}<span class="an-pospill" data-band="${BAND(r.pos)}">${esc(r.pos)}</span><a class="an-dc" href="${depth}" target="_blank" rel="noopener" title="Open his depth-chart card in a new tab" aria-label="Depth chart">↗</a></td>
+      <td class="c-rank an-stick">${i + 1}</td>
+      <td class="c-name an-stick"><a class="an-pname" href="#/player/${encodeURIComponent(r.gsis)}${q ? "?" + q : ""}" title="${esc(r.name)}">${esc(r.name)}</a>${teamPill(r.team, view.teams, q)}<span class="an-pospill" data-band="${BAND(r.pos)}">${esc(r.pos)}</span><a class="an-dc" href="${depth}" target="_blank" rel="noopener" title="Open his depth-chart card in a new tab" aria-label="Depth chart">↗</a></td>
       <td class="num">${r.g}</td>
-      ${COLS.map((c) => cell(c, r)).join("")}
+      ${cols.map((c) => cell(c, r)).join("")}
       <td class="c-spark">${carrySpark(r.series, st, ref?.at(r.pos)?.lg?.carG)}</td></tr>`
       + (open ? `<tr class="an-detail"><td colspan="${nCols}"><div class="an-detail-wrap">${detailHtml(r, st, q, ref?.at(r.pos), view.windowName || "Window")}</div></td></tr>` : "");
   }).join("");
@@ -159,14 +198,15 @@ export function rushState(query) {
   const st = fromQuery(query), o = rushOpts(query);
   if (!o.hasPos) st.pos = { ...RUSH_DEFAULT_POS };
   st.sort = o.sort;
+  st.more = moreFrom(query);
   return { st, minCar: o.minCar };
 }
-export const rushQuery = (st, minCar) => rushQueryFrom(toQuery(st), st, minCar);
+export const rushQuery = (st, minCar) => withMore(rushQueryFrom(toQuery(st), st, minCar), st.more);
 
 export async function renderRushing(ctx, query) {
   const { root, asof, isCurrent } = ctx;
   const { st, minCar } = rushState(query);
-  document.title = "Rushing · NFL Analytics";
+  document.title = "Running backs · NFL Analytics";
   const go = (n, mc = minCar) => {
     // The filter bar's Reset returns Usage's default positions (WR/TE/RB); a chip click changes one position, so a
     // jump to exactly that set that changes more than one is the Reset: send it to the rushing default instead.
@@ -174,7 +214,7 @@ export async function renderRushing(ctx, query) {
     if (diff > 1 && samePos(n.pos, DEFAULT_POS)) n = { ...n, pos: { ...RUSH_DEFAULT_POS } };
     const q = rushQuery(n, mc); location.hash = `#/rbs${q ? "?" + q : ""}`;
   };
-  if (!root.querySelector(".an-rush")) root.innerHTML = `<div class="an-msg">Loading rushing…</div>`;
+  if (!root.querySelector(".an-rush")) root.innerHTML = `<div class="an-msg">Loading running backs…</div>`;
   let data, teams;
   try {
     [data, teams] = await Promise.all([loadFor(seasonsOf(st), st), loadTeams().then((j) => j.teams || []).catch(() => [])]);
@@ -204,21 +244,24 @@ export async function renderRushing(ctx, query) {
   const refLine = `League reference and colour tiers, by position: players at his position with ${POOL_PER_GAME}+ carries/game (min ${POOL_FLOOR}) in the window (${shownPos.map((p) => `${p}s ${ref.at(p).n}`).join(" · ") || "none"})`;
   const posText = POSITIONS.filter((p) => st.pos[p] === "in").join(" · ") || "All positions";
   const exText = POSITIONS.filter((p) => st.pos[p] === "out");
-  const qs = rushQuery({ ...st, open: "" }, minCar);
+  // Player and team links carry the filters but not the More state, as on the Receivers page.
+  const qs = rushQuery({ ...st, open: "", more: false }, minCar);
   root.innerHTML = `<section class="an-rush">
     <div class="an-head">
-      <h1>Rushing</h1>
+      <h1>Running backs</h1>
       <div class="an-sub">${esc(seasonLabel(st))} · ${esc(windowText(st, weeks))} · ${esc(posText)}${exText.length ? ` · excluding ${esc(exText.join(", "))}` : ""}${st.team ? ` · ${esc(st.team)}` : ""}${st.opp ? ` · vs ${esc(st.opp)}` : ""}</div>
       ${data.missing.length ? `<div class="an-warn">${esc(data.missing.join(", "))} files are not built yet.</div>` : ""}
     </div>
     <div class="an-sub an-ref">${esc(refLine)}</div>
     <div class="an-filters"></div>
     <div class="an-tablewrap"></div>
-    <p class="an-foot">Carries, yards, TD, EPA, success, red-zone and goal-line carries, long and explosive runs, rush share, targets and target share: nflverse play-by-play (a quarterback's carries include scrambles; rush share counts designed runs only). Rush yards over expected and efficiency: Next Gen Stats. Snaps: nflverse snap counts. Routes: heatradar.app (charted). Fumbles are not in the ledger.</p>
+    <p class="an-foot">Carries, yards, TD, EPA, success, red-zone and goal-line carries, long and explosive runs, rush share, targets and target share: nflverse play-by-play (a quarterback's carries include scrambles; rush share counts designed runs only). Rush yards over expected and efficiency: Next Gen Stats. Snaps: nflverse snap counts. Routes, YPRR, TPRR: heatradar.app (charted). Receptions, receiving yards and TDs, EPA per target and catch %: nflverse play-by-play, the Receivers page's figures. Fumbles lost are counted from the play rows (a fumble lost on a kick or punt return is not in them). DK: DraftKings Classic points from the same play rows, a lost fumble included (no 2-point conversions or return touchdowns).</p>
   </section>`;
   renderFilterBar(root.querySelector(".an-filters"), st, { keys: data.keys, teams: clubTeams }, (n) => go(n));
   const el = root.querySelector(".an-tablewrap");
   el.innerHTML = rushTableHtml(agg.rows, st, qs, { ref, windowName, teams: teamsByAbbr, minCar });
+  fitOpen(el);
+  wireMore(el, () => go(toggleMore(COLS, { ...st, sort: SORTABLE.has(st.sort) ? st.sort : "car" }, "car")));
   el.querySelectorAll("th[data-sort]").forEach((h) => h.addEventListener("click", () => {
     const k = h.dataset.sort === "rank" ? "car" : h.dataset.sort;
     const cur = SORTABLE.has(st.sort) ? st.sort : "car";

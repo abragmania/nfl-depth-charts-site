@@ -1,2 +1,65 @@
-/* D195 the team grid page: empty until increment 8 builds views/grid.js for real. Linked from index.html after
-   analytics.css. */
+/* D195 the team grid page (views/grid.js). Linked from index.html after analytics.css. */
+
+/* The page hugs its table and sits in the middle of the column (D190, as the leaderboards do). */
+.an-grid { width:max-content; max-width:100%; margin:0 auto; }
+/* Club-level page: the filter bar's position chips and team/opponent pickers do not apply (as on Defense). */
+.an-grid .an-fgroup:has(.an-poses), .an-grid .an-fgroup:has(select) { display:none; }
+
+/* ---- the Rating / Rank switch and the legend ---- */
+.an-gbar { flex-wrap:wrap; gap:8px 16px; }
+.an-glegend { display:inline-flex; align-items:center; gap:8px; }
+.gl-ramp { display:inline-block; width:92px; height:9px; border-radius:3px; overflow:hidden; }
+.gl-ramp i { display:block; height:100%;
+  /* the stops at the tiles' own strengths over the panel (72, 57, 22, 57, 72 percent; grid.js tileAmt) */
+  background:linear-gradient(90deg, color-mix(in oklab, var(--gp-poor) 72%, var(--panel2)), color-mix(in oklab, var(--gp-weak) 57%, var(--panel2)),
+    color-mix(in oklab, var(--gp-avg) 22%, var(--panel2)), color-mix(in oklab, var(--gp-strong) 57%, var(--panel2)), color-mix(in oklab, var(--gp-elite) 72%, var(--panel2))); }
+.gl-ramp.rank i { background:linear-gradient(90deg, color-mix(in oklab, var(--gr-hue) 64%, var(--panel2)), color-mix(in oklab, var(--gr-hue) 6%, var(--panel2))); }
+.an-gpfr { color:#ffd98a; }
+
+/* ---- the table ---- */
+/* The gradient's anchors are the app's five tier hues (D102), evenly spaced: poor = the low tier's red, then the weak
+   tier's orange, the average tier's gold, the strong tier's green and the elite tier's green (Adam, 2026-09-25: the
+   weak and strong anchors keep the low thirties from reading as muddy brown). The Rank view uses one plain hue. */
+.an-grid { --gp-poor:var(--tier-flat); --gp-weak:var(--tier-weak); --gp-avg:var(--tier-avg); --gp-strong:var(--tier-strong);
+  --gp-elite:var(--tier-elite); --gr-hue:#8fb4dc; }
+.an-grid-table th, .an-grid-table td { padding:0; }
+.an-grid-table thead tr.an-grp th { font-size:10.5px; color:var(--muted); padding:6px 4px 3px; }
+.an-grid-table thead tr.an-grp th.g-off, .an-grid-table thead tr.an-grp th.g-def { border-bottom:2px solid #2a323b; }
+.an-grid-table th.c-gh { width:86px; min-width:86px; max-width:86px; padding:5px 4px 6px; text-align:center; white-space:normal; vertical-align:bottom; line-height:1.15; }
+.an-grid-table th.c-gh .gh-l { display:block; color:var(--ink); font-size:11.5px; font-weight:700; }
+.an-grid-table th.c-gh .gh-f { display:block; margin-top:2px; color:var(--dim); font-size:10px; font-weight:600; }
+.an-grid-table th.c-gh .gh-f em { font-style:normal; color:#c9a560; }
+.an-grid-table th.c-gh:hover .gh-l { color:var(--accent); }
+.an-grid-table th.c-gh.sorted .gh-l { color:var(--accent); }
+.an-grid-table th.c-gh.sorted.desc::after, .an-grid-table th.c-gh.sorted.asc::after { content:none; }
+.an-grid-table th.c-gh.sorted.desc .gh-l::after { content:" ▾"; }
+.an-grid-table th.c-gh.sorted.asc .gh-l::after { content:" ▴"; }
+.an-grid-table th.c-club { text-align:left; padding:5px 10px; vertical-align:bottom; }
+.an-grid-table th.c-club.sorted { color:var(--accent); }
+.an-grid-table th.c-club.sorted.asc::after { content:" ▴"; } .an-grid-table th.c-club.sorted.desc::after { content:" ▾"; }
+.an-grid-table .gs { border-left:1px solid #2f3740; }
+
+.an-grid-table td { border-bottom:0; padding:1px; }
+.an-grid-table td.c-club { display:flex; align-items:center; gap:7px; padding:0 12px 0 10px; height:43px; white-space:nowrap; }
+.gc-name { color:var(--ink); font-weight:700; font-size:13px; }
+.an-grow:hover td.c-club { background:rgba(255,255,255,.04); }
+.an-grow:hover .gc { filter:brightness(1.12); }
+
+/* One cell: a small tile. --g (0 poor .. 1 elite; grid.js gridStop, rating 20 to 80) walks the colour through the five
+   anchors, a quarter of the scale each (four chained, clamped mixes: --s1..--s4 each run 0 to 1 over their quarter,
+   so the path is continuous and a 57 and a 44 differ in shade); the tile is that colour laid over the dark panel at
+   --amt (grid.js tileAmt, inline), stronger the further the club is from average, so the middle of the league reads quiet and the ends stand out. The ink is the app's light ink throughout
+   (the strongest mix stays dark enough for it), with a faint shadow for the brightest greens. */
+.gc { --s1:clamp(0, calc(var(--g) * 4), 1); --s2:clamp(0, calc(var(--g) * 4 - 1), 1);
+  --s3:clamp(0, calc(var(--g) * 4 - 2), 1); --s4:clamp(0, calc(var(--g) * 4 - 3), 1);
+  --hue:color-mix(in oklab, color-mix(in oklab, color-mix(in oklab, color-mix(in oklab, var(--gp-poor), var(--gp-weak) calc(var(--s1) * 100%)),
+    var(--gp-avg) calc(var(--s2) * 100%)), var(--gp-strong) calc(var(--s3) * 100%)), var(--gp-elite) calc(var(--s4) * 100%));
+  display:flex; flex-direction:column; align-items:center; justify-content:center; height:41px; border-radius:5px;
+  background:color-mix(in oklab, var(--hue) var(--amt), var(--panel2)); color:#f4f6f8; text-shadow:0 1px 1px rgba(0,0,0,.35); }
+.gc b { font-size:18px; font-weight:800; line-height:1.05; letter-spacing:.01em; }
+.gc span { font-size:10.5px; font-weight:600; line-height:1.2; color:rgba(244,246,248,.86); white-space:nowrap; }
+.gc b small { font-size:11px; font-weight:700; }
+/* Rank view: one plain hue, 1st brightest to last dimmest (--r: 1 for 1st, 0 for last). */
+.gc.gc-rank { --amt:calc(6% + 58% * var(--r)); background:color-mix(in oklab, var(--gr-hue) var(--amt), var(--panel2)); }
+.gc.gc-null { background:transparent; border:1px dashed #262d35; }
+.gc.gc-null b { font-size:11px; font-weight:600; color:var(--dim); font-style:italic; text-shadow:none; }

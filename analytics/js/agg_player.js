@@ -119,7 +119,9 @@ export function playerView(blocks, players, stIn, gsis) {
   let lgZoned = 0, lgRouted = 0;
   const clubRuns = new Map(); // gk -> designed runs
   const clubAtt = new Map(); // gk -> pass attempts (agg.js's rule: a pass-interference target is not one)
+  const clubAir = new Map(); // gk -> air yards on those attempts (agg.js's teamAir rule)
   const myWeek = new Map(); // key -> { car, ryds, gk }
+  const myRoutes = new Map(); // key -> his charted routes that week
   const my = { ryds: 0, rz: 0, rtd: 0 }; // his window rushing counts the per-player accumulator does not keep
   let has2025Routes = false;
 
@@ -131,7 +133,7 @@ export function playerView(blocks, players, stIn, gsis) {
       const inW = winSet.has(gk);
       const type = r[C.type];
       if (type === "run") clubRuns.set(gk, (clubRuns.get(gk) || 0) + 1);
-      if (type === "pass" && !truthy(r[C.pi])) clubAtt.set(gk, (clubAtt.get(gk) || 0) + 1);
+      if (type === "pass" && !truthy(r[C.pi])) { clubAtt.set(gk, (clubAtt.get(gk) || 0) + 1); clubAir.set(gk, (clubAir.get(gk) || 0) + (num(r[C.air]) ?? 0)); }
       // A pass-interference target with "excl. PI targets" is as if the ledger had dropped it: not even a game played.
       const piOff = truthy(r[C.pi]) && st.pi === false;
       if (!piOff) for (const col of ["passer", "target", "rusher"]) { const id = r[C[col]]; if (inW && tracked(id)) G(id).games.add(gk); }
@@ -198,6 +200,9 @@ export function playerView(blocks, players, stIn, gsis) {
       const gk = `${b.key}|${team}`;
       if (team && winSet.has(gk) && (num(s?.off) ?? 0) > 0) G(id).games.add(gk);
     }
+    // His charted routes that week (increment 7a's game log: the Routes and YPRR columns); absent = not charted.
+    const rt = num(b.routes?.[gsis]?.routes);
+    if (rt !== null) myRoutes.set(b.key, rt);
   }
 
   // ---- NGS (tracking only, D178): weekly values, weighted by his targets (separation, cushion) or catches
@@ -288,7 +293,18 @@ export function playerView(blocks, players, stIn, gsis) {
       car: played ? w?.car || 0 : null, rushShare: played ? ratio(w?.car || 0, runs) : null,
       // D191 opportunities that week: the Usage row's targets + carries; with no Usage row, 0 targets + his carries.
       // (named oppN: a series entry's "opp" is the opponent).
-      oppN: played ? s.oppN ?? (s.tgt || 0) + (w?.car || 0) : null };
+      oppN: played ? s.oppN ?? (s.tgt || 0) + (w?.car || 0) : null,
+      // Increment 7a (the game log and the back's opportunity-share line): his charted routes that week (null when
+      // not charted), and his club's pass attempts (a PI target is not one) and designed runs in that game (null
+      // when his club had no game that week).
+      routes: myRoutes.has(s.key) ? myRoutes.get(s.key) : null,
+      att: g ? clubAtt.get(`${s.key}|${team}`) || 0 : null, runs: g ? runs : null,
+      // and his club's air yards that game (non-PI attempts), so a season's AY % totals as air over air (D181).
+      clubAy: g ? clubAir.get(`${s.key}|${team}`) || 0 : null,
+      // Whether HIS club's game that week is inside the window (null on a bye). `inWin` is the league's window
+      // weeks, which under Last 3 are the union of every club's last three, so another club's bye can put a week
+      // in `inWin` that is outside his own window (increment 7a, from the QB review).
+      inMyWin: g ? winSet.has(`${s.key}|${team}`) : null };
   });
 
   // D191 opportunities for the tile row and the Opportunities strip's window total (oppFor above).
@@ -362,9 +378,9 @@ function recutLayers({ blocks, players, st, gsis, pos, row, uRef, ref, lgEff, ef
     const src = withDerived(rushRow, true) || (row ? { ...row, scrimYds: (row.yds ?? 0) + (row.rushYds ?? 0), totTd: (row.td ?? 0) + (row.rushTd ?? 0) } : null);
     const q = rRef.pool.filter((r) => r.pos === pos).map((r) => withDerived(r, true));
     return {
-      kind: "back", rushRow, fantasy: { ...fantasy, ...pick(src, ["dk", "dkG", "dkTdShare"]) },
+      kind: "back", rushRow, pool: freezePool(q), fantasy: { ...fantasy, ...pick(src, ["dk", "dkG", "dkTdShare"]) },
       headline: pick(src, RB_HEADLINE_KEYS), headlineLg: Object.fromEntries(RB_HEADLINE_KEYS.map((k) => [k, meanOf(q, k)])),
-      opportunity: pick(rushRow || row, RB_OPP_KEYS), opportunityLg: pick(rr.lg, RB_OPP_KEYS), cuts: rr.cuts, opportunityRefText: rr.text,
+      opportunity: pick(rushRow || row, RB_OPP_KEYS), opportunityLg: pick(rr.lg, RB_OPP_KEYS), cuts: withHeadlineCuts(rr.cuts, q, rRef.pool.map((r) => withDerived(r, true)), RB_HEADLINE_KEYS), opportunityRefText: rr.text,
       variance: pick(rushRow, RB_VARIANCE_KEYS), varianceLg: pick(rr.pooled, RB_VARIANCE_KEYS),
       rushRef: { lg: rr.lg, cuts: rr.cuts, n: rr.n, text: rr.text, pooled: rr.pooled },
     };
@@ -372,13 +388,23 @@ function recutLayers({ blocks, players, st, gsis, pos, row, uRef, ref, lgEff, ef
   const src = withDerived(row, false);
   const q = uRef.pool.filter((r) => r.pos === pos).map((r) => withDerived(r, false));
   return {
-    kind: "receiver", rushRow, fantasy: { ...fantasy, ...pick(src, ["dk", "dkG", "dkTdShare"]) },
+    kind: "receiver", rushRow, pool: freezePool(q), fantasy: { ...fantasy, ...pick(src, ["dk", "dkG", "dkTdShare"]) },
     headline: pick(src, REC_HEADLINE_KEYS), headlineLg: Object.fromEntries(REC_HEADLINE_KEYS.map((k) => [k, meanOf(q, k)])),
-    opportunity: pick(row, REC_OPP_KEYS), opportunityLg: Object.fromEntries(REC_OPP_KEYS.map((k) => [k, meanOf(q, k)])), cuts: ref.cuts, opportunityRefText: ref.text,
+    opportunity: pick(row, REC_OPP_KEYS), opportunityLg: Object.fromEntries(REC_OPP_KEYS.map((k) => [k, meanOf(q, k)])), cuts: withHeadlineCuts(ref.cuts, q, uRef.pool.map((r) => withDerived(r, false)), REC_HEADLINE_KEYS), opportunityRefText: ref.text,
     variance: { ...pick(row, REC_VARIANCE_KEYS), yacOE: eff?.yacOE ?? null }, varianceLg: { ...pick(ref.pooled, REC_VARIANCE_KEYS), yacOE: lgEff?.yacOE ?? null },
     rushRef: rushRow ? { lg: rr.lg, cuts: rr.cuts, n: rr.n, text: rr.text, pooled: rr.pooled } : null,
   };
 }
+// `recut.pool` (increment 7a): his position's reference-pool rows (the ones headlineLg averages, derived keys
+// included) so the page can rank him inside the same pool; frozen, rows and list, so a page cannot corrupt them.
+// `recut.cuts` (increment 7a, the lead's ruling): the table's cuts plus cuts for every headline key the table does not
+// tier (scrimmage yards, total TD, Yds/opp, EPA/opp for a back; receptions, yards, TD for a receiver), from the same
+// pool with the same percentiles (agg.js tierCuts). A key the table already cuts keeps its cuts untouched.
+function withHeadlineCuts(cuts, q, league, keys) {
+  const missing = keys.filter((k) => !(k in (cuts || {})));
+  return missing.length ? { ...cuts, ...tierCuts(q, league, missing) } : cuts;
+}
+const freezePool = (q) => Object.freeze(q.map((r) => Object.freeze(r)));
 const meanOf = (rows, k) => mean(rows.map((r) => (r[k] === null || r[k] === undefined ? null : +r[k])));
 
 function lastTeam(meta) {

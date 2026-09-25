@@ -45,7 +45,9 @@ export function tileData({ label = "", value = "", lg = null, rank = null, rankO
 function lgRankEm(cls, d) {
   const parts = [];
   if (has(d.lg)) parts.push(`lg ${esc(d.lg)}`);
-  if (has(d.rank)) parts.push(has(d.rankOf) ? `${esc(d.rank)} of ${esc(d.rankOf)}` : esc(d.rank));
+  // The rank rides in its own span so the stylesheet can print it a notch brighter than the league figure (👁 fix
+  // round: the rank is what Adam asked for).
+  if (has(d.rank)) parts.push(`<span class="an-rc-rank">${has(d.rankOf) ? `${esc(d.rank)} of ${esc(d.rankOf)}` : esc(d.rank)}</span>`);
   return parts.length ? `<em class="${cls}">${parts.join(" · ")}</em>` : "";
 }
 
@@ -98,11 +100,22 @@ function pctOf(v) {
 // the game log table below reads its own `cells` off the same row objects). shareLabels: [label0, label1] - a
 // falsy entry skips that line and its legend entry entirely (a receiver with only one relevant share still works).
 const OV_CLASS = ["an-rc-ov1", "an-rc-ov2"];
-function fanChartSvg(weekRows, shareLabels, { fit = null, label = "DK points", totalText = "", avg = null, avgText = "", scale = null } = {}) {
+// ovScale (increment 6, additive; absent = the 0-100% scale above, as before): { max, top, bottom } puts the
+// overlay lines on a COUNT scale instead - a value v sits at v / max of the plot height (clamped), and the right-hand
+// axis prints `top` and `bottom` (pre-formatted, e.g. "40" and "0") in place of "100%" and "0%". The QB page uses it
+// for pass attempts and carries per week; a share caller simply omits it.
+function fanChartSvg(weekRows, shareLabels, { fit = null, label = "DK points", totalText = "", avg = null, avgText = "", scale = null, ovScale = null } = {}) {
+  const ovMax = ovScale && Number(ovScale.max) > 0 ? Number(ovScale.max) : null;
+  const ovFrac = (v) => (ovMax ? Number(v) / ovMax : v);
   // sh is the plot height alone: about the size of today's week-by-week card (Adam, third draft: the band is one
   // section among equals, not the whole page), plus top0/week-label margins bring the whole SVG to ~200px tall.
   const n = weekRows.length;
-  const lw = 150, rw = 92, top0 = 20, sh = 114;
+  // Two seasons AND a share legend (increment 6 nit): the legend takes its own line at the top and the season names
+  // drop to a second line under it, so neither overprints the other; a one-season chart keeps the old geometry.
+  const multi = n > 0 && weekRows[0].season !== weekRows[n - 1].season;
+  const stack = multi && (shareLabels || []).slice(0, 2).some(Boolean);
+  const lw = 150, rw = 92, top0 = stack ? 34 : 20, sh = 114;
+  const seasonY = stack ? 27 : 11, legendY = 12;
   let bw = 40, gap = 10;
   // Fourth draft (Adam: "you don't have to fill up all the space"): the chart no longer stretches to the band's
   // full width. Each week still gets an even share of `fit`, but that share is capped at maxCell (~120px) so five
@@ -125,8 +138,7 @@ function fanChartSvg(weekRows, shareLabels, { fit = null, label = "DK points", t
   let segStart = 0;
   for (let i = 1; i <= n; i++) {
     if (i === n || weekRows[i].season !== weekRows[i - 1].season) {
-      const multi = n && weekRows[0].season !== weekRows[n - 1].season;
-      if (multi) g += `<text class="an-wb-season" x="${x(segStart)}" y="11">${esc(weekRows[segStart].season)}</text>`;
+      if (multi) g += `<text class="an-wb-season" x="${x(segStart)}" y="${seasonY}">${esc(weekRows[segStart].season)}</text>`;
       if (i < n) { const dx = x(i) - gap / 2; g += `<line class="an-wb-div" x1="${dx}" x2="${dx}" y1="2" y2="${H - 2}"/>`; }
       segStart = i;
     }
@@ -134,14 +146,38 @@ function fanChartSvg(weekRows, shareLabels, { fit = null, label = "DK points", t
   g += `<text class="an-wb-lab" x="0" y="${top0 + sh / 2 - 4}">${esc(label)}</text>` +
     `<text class="an-wb-tot" x="0" y="${top0 + sh / 2 + 13}">${esc(totalText)}</text>` +
     `<line class="an-wb-base" x1="${lw - 5}" x2="${W - rw + 5}" y1="${top0 + sh}" y2="${top0 + sh}"/>`;
+  // The bar value labels are collected and drawn AFTER the overlay lines (increment 6 nit), so a share line never
+  // crosses over a label; the stylesheet gives them a thin dark halo. A halo alone still lets a line show between the
+  // glyphs (👁 fix round: Goff W2 "32.8", Bijan W2 "11.1"), so a label whose text box sits on the league line or on
+  // an overlay line's point at that week is lifted to just above it (repeated, so it clears a second line too).
+  const ovY = (shareLabels || []).slice(0, 2).map((lbl, si) => weekRows.map((w) => {
+    const v = w.shares?.[si];
+    return lbl && has(v) ? top0 + sh - Math.max(0, Math.min(1, ovFrac(v))) * sh : null;
+  }));
+  const avgY = has(avg) ? yFor(avg) : null;
+  const labelY = (i, y0) => {
+    const obs = [];
+    if (avgY !== null) obs.push([avgY, 1.5]);
+    for (const col of ovY) if (col[i] !== null) obs.push([col[i], 4]);
+    let y = y0, first = null;
+    for (let pass = 0; pass < 4; pass++) {
+      const hit = obs.filter(([oy, pad]) => oy > y - 10 - pad && oy < y + 3 + pad).sort((a, b) => a[0] - b[0])[0];
+      if (!hit) break;
+      first = first || hit;
+      y = hit[0] - hit[1] - 4;
+    }
+    // Lifted into the legend and season-name lines above the plot: it goes just under the line instead.
+    return y >= top0 + 5 || !first ? y : first[0] + first[1] + 12;
+  };
+  let vals = "";
   weekRows.forEach((w, i) => {
     const bx = x(i);
     if (w.note === "bye") g += `<text class="an-wb-na" x="${bx + bw / 2}" y="${top0 + sh - 4}">BYE</text>`;
     else if (w.note === "dnp") g += `<text class="an-wb-dnp" x="${bx + bw / 2}" y="${top0 + sh - 4}">DNP</text>`;
     else if (has(w.pts)) {
       const h = Math.max(1.5, top0 + sh - yFor(w.pts));
-      g += `<rect class="an-wb-bar" x="${bx}" y="${(top0 + sh - h).toFixed(1)}" width="${bw}" height="${h.toFixed(1)}" rx="3"/>` +
-        `<text class="an-wb-val" x="${bx + bw / 2}" y="${(top0 + sh - h - 4).toFixed(1)}">${(+w.pts).toFixed(1)}</text>`;
+      g += `<rect class="an-wb-bar" x="${bx}" y="${(top0 + sh - h).toFixed(1)}" width="${bw}" height="${h.toFixed(1)}" rx="3"/>`;
+      vals += `<text class="an-wb-val" x="${bx + bw / 2}" y="${labelY(i, top0 + sh - h - 4).toFixed(1)}">${(+w.pts).toFixed(1)}</text>`;
     }
     g += `<text class="an-wb-wk" x="${bx + bw / 2}" y="${H - 16}">${esc(w.wk)}</text>` +
       `<text class="an-wb-opp" x="${bx + bw / 2}" y="${H - 3}">${esc(w.opp || "")}</text>`;
@@ -155,19 +191,20 @@ function fanChartSvg(weekRows, shareLabels, { fit = null, label = "DK points", t
     if (!lbl) return;
     const pts = weekRows.map((w, i) => {
       const v = w.shares?.[si];
-      return has(v) ? [x(i) + bw / 2, top0 + sh - Math.max(0, Math.min(1, v)) * sh] : null;
+      return has(v) ? [x(i) + bw / 2, top0 + sh - Math.max(0, Math.min(1, ovFrac(v))) * sh] : null;
     }).filter(Boolean);
     if (!pts.length) return;
     g += `<polyline class="an-rc-ovline ${OV_CLASS[si]}" points="${pts.map((p) => p[0].toFixed(1) + "," + p[1].toFixed(1)).join(" ")}"/>`;
     pts.forEach(([px, py]) => { g += `<circle class="an-rc-ovdot ${OV_CLASS[si]}" cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="3"/>`; });
   });
-  g += `<text class="an-rc-ovaxis" x="${W - rw + 9}" y="${top0 + 4}">100%</text>` +
-    `<text class="an-rc-ovaxis" x="${W - rw + 9}" y="${top0 + sh}">0%</text>`;
+  g += vals;
+  g += `<text class="an-rc-ovaxis" x="${W - rw + 9}" y="${top0 + 4}">${ovMax ? esc(ovScale.top ?? "") : "100%"}</text>` +
+    `<text class="an-rc-ovaxis" x="${W - rw + 9}" y="${top0 + sh}">${ovMax ? esc(ovScale.bottom ?? "") : "0%"}</text>`;
   const legend = (shareLabels || []).slice(0, 2).map((lbl, si) => (lbl ? `<tspan class="${OV_CLASS[si]}">— </tspan>${esc(lbl)}` : "")).filter(Boolean);
-  if (legend.length) g += `<text class="an-rc-ovlegend" x="${W - rw}" y="${top0 - 8}" text-anchor="end">${legend.join("   ")}</text>`;
+  if (legend.length) g += `<text class="an-rc-ovlegend" x="${W - rw}" y="${legendY}" text-anchor="end">${legend.join("   ")}</text>`;
   weekRows.forEach((w, i) => {
     const bx = x(i);
-    const tip = [`${w.wk}${w.opp ? (w.note === "bye" ? "" : " vs " + w.opp) : ""}`, w.note === "bye" ? "Bye" : w.note === "dnp" ? "Did not play" : `DK: ${has(w.pts) ? (+w.pts).toFixed(1) : "–"}`].join("\n");
+    const tip = [`${w.wk}${w.opp ? (w.note === "bye" ? "" : String(w.opp).startsWith("@") ? " " + w.opp : " vs " + w.opp) : ""}`, w.note === "bye" ? "Bye" : w.note === "dnp" ? "Did not play" : `DK: ${has(w.pts) ? (+w.pts).toFixed(1) : "–"}`].join("\n");
     g += `<rect class="an-wb-hit" data-key="${esc(w.key)}" x="${bx - gap / 2}" y="${top0 - 6}" width="${bw + gap}" height="${H - top0 - 2}" rx="4"><title>${esc(tip)}</title></rect>`;
   });
   return `<svg class="an-wbars an-wbars-lg an-rc-fansvg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="${esc(label)} by week">${g}</svg>`;
@@ -203,11 +240,24 @@ function glCellClass(col, tier) {
   const cls = base + (tier ? ` t-${tier}` : "");
   return cls ? ` class="${cls}"` : "";
 }
-function glTable(rows, columns) {
+// current/pastOpen (👁 fix round, optional): with `current` (the picked season) given and the rows spanning more than
+// one season, a past season's week rows are left out unless `pastOpen`, so the log shows the current season's rows
+// plus that season's header and totals row; the past season's header carries a small "show 2025 weeks" / "hide 2025
+// weeks" button (data-gl-toggle) the page wires. Without `current` nothing changes.
+function glTable(rows, columns, { current = null, pastOpen = false } = {}) {
   const head = (columns || []).map((c) => `<th${glCellClass(c)}>${esc(c.label)}</th>`).join("");
+  const seasons = (rows || []).filter((r) => r.type === "season").map((r) => String(r.label));
+  const collapsing = has(current) && seasons.length > 1;
+  let section = null;
   const body = (rows || []).map((r) => {
-    if (r.type === "season") return `<tr class="an-rc-gl-season"><td colspan="${columns.length}">${esc(r.label)}</td></tr>`;
+    if (r.type === "season") {
+      section = String(r.label);
+      const past = collapsing && section !== String(current);
+      const btn = past ? ` <button type="button" class="an-rc-gl-tog" data-gl-toggle aria-expanded="${pastOpen ? "true" : "false"}">${pastOpen ? "hide" : "show"} ${esc(section)} weeks</button>` : "";
+      return `<tr class="an-rc-gl-season"><td colspan="${columns.length}">${esc(r.label)}${btn}</td></tr>`;
+    }
     if (r.type === "total") return `<tr class="an-rc-gl-total">${(r.cells || []).map((v, i) => `<td${glCellClass(columns[i] || {})}>${esc(v)}</td>`).join("")}</tr>`;
+    if (collapsing && !pastOpen && section !== null && section !== String(current)) return "";
     // type === "week"
     if (r.note === "bye" || r.note === "dnp") {
       return `<tr class="an-rc-gl-row dim"><td>${esc(r.cells?.[0])}</td><td colspan="${Math.max(1, columns.length - 1)}">${r.note === "bye" ? "BYE" : "DNP"}</td></tr>`;
@@ -228,13 +278,17 @@ function glTable(rows, columns) {
 // width: the band's available content width in px (kit.js has no DOM access, so a DOM-aware caller - a page, or
 // this file's own demo - measures its container and passes the number down; without it the chart falls back to
 // its own default bar width). tiles: fed straight to oppRow, printed under the game log inside this same band.
-export function fantasyBand({ title = "Fantasy", sub = "", rows = [], columns = [], shareLabels = [], total = "", avg = null, avgText = "", scale = null, width = null, tiles = [] } = {}) {
+// ovScale: optional, see fanChartSvg - a count scale for the overlay lines (the QB page); omitted = 0-100%.
+// current/pastOpen: see glTable (a past season's weeks folded to its totals row; the chart always draws every week).
+// stack (👁 fix round): the stylesheet puts the game log BESIDE the chart and the band's frame ends at its content;
+// a page whose chart and log will not fit side by side passes stack: true and the log goes under the chart.
+export function fantasyBand({ title = "Fantasy", sub = "", rows = [], columns = [], shareLabels = [], total = "", avg = null, avgText = "", scale = null, width = null, tiles = [], ovScale = null, current = null, pastOpen = false, stack = false } = {}) {
   const weekRows = (rows || []).filter((r) => r.type === "week");
-  const chart = weekRows.length ? fanChartSvg(weekRows, shareLabels, { fit: width, label: "DK points", totalText: total, avg, avgText, scale }) : "";
-  return `<div class="an-rc-fanband">` +
+  const chart = weekRows.length ? fanChartSvg(weekRows, shareLabels, { fit: width, label: "DK points", totalText: total, avg, avgText, scale, ovScale }) : "";
+  return `<div class="an-rc-fanband${stack ? " an-rc-fanstack" : ""}">` +
     `<div class="an-rc-fanhead"><span class="an-rc-fanh">${esc(title)}</span>${sub ? `<span class="an-rc-fansub">${esc(sub)}</span>` : ""}</div>` +
     (chart ? `<div class="an-rc-fanchart">${chart}</div>` : "") +
-    glTable(rows, columns) +
+    glTable(rows, columns, { current, pastOpen }) +
     oppRow(tiles) +
     `</div>`;
 }
@@ -281,6 +335,24 @@ export function varianceStrip(items = []) {
       `</div>`;
   }).join("");
   return `<div class="an-rc-variance">${html}</div>`;
+}
+
+// ---- the player-page header: headshot, name, a quiet club-colour wash (Adam, 👁 fix round) -----------------------
+// "have a guy's headshot and do some colouring stuff for his team; doesn't need to be an art project". The photo is
+// ESPN's, on the same URL rule the depth-chart cards' headshots carry (server/compile/crosswalk.js stores ESPN's
+// headshot href, which is this pattern on the ESPN id); no id, or a photo that fails to load, leaves the neutral
+// silhouette the stylesheet paints in the same box, never a broken image. colour: the club's primary (a hex from
+// teams.json); anything else is dropped and the header keeps the neutral panel. lead/pills/links: ready-made HTML the
+// page already builds (the Back button; team, position and OVR pills; the links) - not escaped, see file header.
+export function headshotUrl(espnId) {
+  const id = String(espnId ?? "").trim();
+  return /^\d+$/.test(id) ? `https://a.espncdn.com/i/headshots/nfl/players/full/${id}.png` : null;
+}
+export function playerHead({ lead = "", name = "", espnId = null, colour = null, pills = "", links = "" } = {}) {
+  const c = /^#[0-9a-fA-F]{3,8}$/.test(String(colour ?? "").trim()) ? String(colour).trim() : null;
+  const url = headshotUrl(espnId);
+  const shot = `<span class="an-rc-shot">${url ? `<img src="${esc(url)}" alt="" width="56" height="56" loading="lazy" decoding="async" onerror="this.remove()">` : ""}</span>`;
+  return `<div class="an-pl-head an-rc-head${c ? " club" : ""}"${c ? ` style="--club:${c}"` : ""}>${lead || ""}${shot}<h1>${esc(name)}</h1>${pills || ""}${links || ""}</div>`;
 }
 
 // ---- (5) a small wrapper for the Madden ratings at the bottom --------------------------------------------------

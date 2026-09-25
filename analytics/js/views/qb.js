@@ -143,31 +143,43 @@ export function qbZoneLegend(mode) {
 }
 
 // ---- the leaderboard ------------------------------------------------------------------------------------
+// Re-cut (D193, increment 6; Adam's answer 10: "Production, Opportunity, Efficiency, then the rest ... the divide
+// doesn't need to be so stark"): the columns read left to right as the player page reads top to bottom. Production
+// (DK/g, DK, Yds, TD, INT), Opportunity (Db, Att), Efficiency (EPA/db, CPOE, Succ %, Y/A), Rush (gold), then the
+// ancillary passing figures as a lighter purple band with no tier colours. Every pre-existing column keeps its key,
+// value, tooltip and sort; DK/g, DK and Y/A are new. QB_COLUMN_ORDER is the order, exported for the tests.
 const COLS = [
-  { k: "db", h: "Db", t: "Dropbacks: pass attempts + sacks + scrambles", f: int, grp: "v" },
-  { k: "att", h: "Att", t: "Pass attempts", f: int, grp: "v" },
-  { k: "cmpPct", h: "Cmp %", t: "Completions / attempts", f: (v) => pct(v), grp: "p" },
+  { k: "dkG", h: "DK/g", t: "DraftKings points per game he played (DraftKings Classic scoring, no 2-point conversions or return TDs; kneels are not in the play rows); blank under a down or quarter filter (bonuses are whole-game). Source: nflverse play-by-play", f: (v) => fix(v, 1), grp: "p" },
+  { k: "dk", h: "DK", t: "DraftKings points over the window (same scoring as DK/g); blank under a down or quarter filter (bonuses are whole-game). Source: nflverse play-by-play", f: (v) => fix(v, 1), grp: "p" },
   { k: "yds", h: "Yds", t: "Passing yards", f: int, grp: "p" },
   { k: "td", h: "TD", t: "Passing touchdowns", f: int, grp: "p" },
   { k: "int", h: "INT", t: "Interceptions", f: int, grp: "p" },
-  { k: "adot", h: "aDOT", t: "Average depth of target: air yards per attempt", f: (v) => fix(v, 1), grp: "p" },
+  { k: "db", h: "Db", t: "Dropbacks: pass attempts + sacks + scrambles", f: int, grp: "v" },
+  { k: "att", h: "Att", t: "Pass attempts", f: int, grp: "v" },
   { k: "epaDb", h: "EPA/db", t: "Expected points added per dropback (sacks and scrambles included)", f: (v) => signed(v, 2), grp: "e" },
-  { k: "succPct", h: "Succ %", t: "Share of his dropbacks that were successful plays (nflverse success)", f: (v) => pct(v, 0), grp: "e" },
   { k: "cpoe", h: "CPOE", t: "Completion % over expected (play-by-play), mean over his attempts", f: (v) => signed(v, 1), grp: "e" },
-  { k: "sackPct", h: "Sack %", t: "Sacks / dropbacks", f: (v) => pct(v), grp: "x" },
-  { k: "pressPct", h: "Press %", t: "PFR: pressures / dropbacks over the weeks PFR lists him (PFR runs about a week behind)", f: (v) => pct(v, 0), grp: "x" },
-  { k: "paPct", h: "PA %", t: "FTN: share of his dropbacks with play action", f: (v) => pct(v, 0), grp: "x" },
-  { k: "blitzPct", h: "Blitz %", t: "FTN: share of his dropbacks with 1+ blitzers", f: (v) => pct(v, 0), grp: "x" },
-  { k: "ttt", h: "TTT", t: "NGS: average time to throw, seconds (weighted by his dropbacks each week)", f: (v) => fix(v, 2), grp: "n" },
-  { k: "xcomp", h: "xComp %", t: "NGS: expected completion % (weighted by his attempts each week)", f: (v) => pct(v), grp: "n" },
+  { k: "succPct", h: "Succ %", t: "Share of his dropbacks that were successful plays (nflverse success)", f: (v) => pct(v, 0), grp: "e" },
+  { k: "ypa", h: "Y/A", t: "Yards per attempt: passing yards / pass attempts. Source: nflverse play-by-play", f: (v) => fix(v, 1), grp: "e" },
   { k: "rushAttG", h: "Car/g", t: "Carries per game: designed runs + scrambles", f: (v) => fix(v, 1), grp: "r" },
   { k: "rushYdsG", h: "Yds/g", t: "Rushing yards per game (designed runs + scrambles)", f: (v) => fix(v, 1), grp: "r" },
-  { k: "scrPct", h: "Scr %", t: "Scramble rate: scrambles / dropbacks", f: (v) => pct(v), grp: "r" },
   { k: "rushTd", h: "TD", t: "Rushing touchdowns", f: int, grp: "r" },
+  { k: "scrPct", h: "Scr %", t: "Scramble rate: scrambles / dropbacks", f: (v) => pct(v), grp: "r" },
+  { k: "cmpPct", h: "Cmp %", t: "Completions / attempts", f: (v) => pct(v), grp: "b" },
+  { k: "adot", h: "aDOT", t: "Average depth of target: air yards per attempt", f: (v) => fix(v, 1), grp: "b" },
+  { k: "sackPct", h: "Sack %", t: "Sacks / dropbacks", f: (v) => pct(v), grp: "b" },
+  { k: "pressPct", h: "Press %", t: "PFR: pressures / dropbacks over the weeks PFR lists him (PFR runs about a week behind)", f: (v) => pct(v, 0), grp: "b" },
+  { k: "paPct", h: "PA %", t: "FTN: share of his dropbacks with play action", f: (v) => pct(v, 0), grp: "b" },
+  { k: "blitzPct", h: "Blitz %", t: "FTN: share of his dropbacks with 1+ blitzers", f: (v) => pct(v, 0), grp: "b" },
+  { k: "ttt", h: "TTT", t: "NGS: average time to throw, seconds (weighted by his dropbacks each week)", f: (v) => fix(v, 2), grp: "b" },
+  { k: "xcomp", h: "xComp %", t: "NGS: expected completion % (weighted by his attempts each week)", f: (v) => pct(v), grp: "b" },
 ];
-const GROUPS = [["v", "Volume"], ["p", "Passing"], ["e", "Efficiency"], ["x", "Pressure · looks"], ["n", "NGS"], ["r", "Rush"]];
+export const QB_COLUMN_ORDER = Object.freeze(COLS.map((c) => c.k));
+export const QB_COLUMN_GROUPS = Object.freeze([["p", "Production"], ["v", "Opportunity"], ["e", "Efficiency"], ["r", "Rush"], ["b", "Passing detail"]]);
+const GROUPS = QB_COLUMN_GROUPS;
 COLS.forEach((c, i) => { c.gs = i === 0 || COLS[i - 1].grp !== c.grp; });
-const TIERED = new Set(["cmpPct", "epaDb", "succPct", "cpoe", "sackPct", "pressPct", "rushAttG", "rushYdsG", "scrPct"]);
+// The ancillary band (g-b) carries no tier colour (the plan: "no colour tiers there"), so Cmp %, Sack % and Press %
+// no longer colour; DK/g and Y/A are new tiered columns.
+const TIERED = new Set(["dkG", "epaDb", "succPct", "cpoe", "ypa", "rushAttG", "rushYdsG", "scrPct"]);
 const DEFAULT_SORT = "epaDb";
 
 // Weekly EPA/db: a zero line, a point per week (hover for the week's figure and dropbacks).
@@ -261,7 +273,7 @@ export function qbTableHtml(allRows, st, query, view = {}) {
   return `<div class="an-tbar">
       <label class="an-min">Min dropbacks <input type="number" min="0" step="1" value="${minDb}" data-min></label>
       <span class="an-count">${rows.length} quarterback${rows.length === 1 ? "" : "s"}</span>
-      <span class="an-legend" title="The depth charts' rating colours, among QBs: each value against the QB reference pool in this window (elite at its 90th percentile or above, then the 70th, 40th and 15th; low below). Sack % and Press %: lower is better. Rush columns colour only the runners (weak and low stay grey).">
+      <span class="an-legend" title="The depth charts' rating colours, among QBs: each value against the QB reference pool in this window (elite at its 90th percentile or above, then the 70th, 40th and 15th; low below). Rush columns colour only the runners (weak and low stay grey). The purple Passing detail band on the right is not coloured.">
         <i class="t-elite"></i><i class="t-strong"></i><i class="t-avg"></i><i class="t-weak"></i><i class="t-flat"></i><span>elite → low among QBs</span></span>
       <span class="an-hint">Click a row to open it</span>
     </div>

@@ -41,22 +41,36 @@
 .an-rc-label { display:block; color:var(--dim); font-size:10.5px; font-weight:700; letter-spacing:.03em; text-transform:uppercase; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .an-rc-val { display:block; font-size:23px; line-height:1.15; font-weight:800; color:var(--t, var(--ink)); font-variant-numeric:tabular-nums; margin-top:1px; white-space:nowrap; }
 .an-rc-lg { display:block; font-style:normal; color:var(--dim); font-size:11px; font-weight:600; margin-top:2px; }
+/* 👁 fix round: his rank a notch brighter than the league figure beside it (it is what Adam asked for). */
+.an-rc-lg .an-rc-rank, .an-rc-olg .an-rc-rank { color:var(--muted); font-weight:700; }
 .an-rc-sub { color:var(--muted); font-size:11px; font-weight:600; margin-top:1px; white-space:nowrap; }
 
 /* ---- fantasy band: one compact chart, a compact game log, the Opportunity tiles - one section among equals ---- */
 .an-rc-fanband { background:var(--panel2); border:1px solid var(--line); border-radius:var(--r-card); padding:11px 14px 12px; margin-bottom:6px; }
+/* 👁 fix round, every re-cut page: the game log sits BESIDE the chart and the Opportunity tiles run under both; the
+   frame ends where its content ends (fit-content), so it never outlines empty space. A page whose chart and log do
+   not fit side by side passes stack (.an-rc-fanstack): the chart takes the top row and the log sits beside the
+   Opportunity tiles under it. */
+.an-rc-fanband { display:grid; grid-template-columns:auto auto; column-gap:28px; align-items:start; justify-content:start; width:fit-content; max-width:100%; box-sizing:border-box; }
+.an-rc-fanband > .an-rc-fanhead, .an-rc-fanband > .an-rc-opp { grid-column:1 / -1; }
+.an-rc-fanband.an-rc-fanstack { grid-template-columns:auto minmax(0, 1fr); }
+.an-rc-fanstack > .an-rc-fanchart { grid-column:1 / -1; }
+.an-rc-fanstack > .an-rc-opp { grid-column:2; margin-top:6px; }
+.an-rc-fanband > .an-rc-gl { width:auto; margin-top:6px; justify-self:start; }
+.an-rc-fanband .an-rc-otile { max-width:none; }
 .an-rc-fanhead { display:flex; align-items:baseline; gap:10px; margin-bottom:2px; }
 .an-rc-fanh { color:var(--ink); font-size:13px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; }
 .an-rc-fansub { color:var(--muted); font-size:12px; font-weight:600; }
 .an-rc-fanchart { margin-top:2px; }
-.an-rc-fanchart .an-wb-bar { fill:var(--accent); }
+/* 👁 fix round: a muted gold, no longer the loudest fill on the page; the dashed league line stays light over it. */
+.an-rc-fanchart .an-wb-bar { fill:color-mix(in srgb, var(--accent) 70%, var(--panel2)); }
 .an-rc-fanband .an-rc-opp { margin-top:8px; margin-bottom:0; background:#10141a; }
 /* Overlay lines (opportunity/target share, target/air-yards share): two distinct muted hues that don't fight the
    gold bars, reusing existing band colours rather than inventing new ones. */
 .an-rc-ovline { fill:none; stroke-width:2px; }
 .an-rc-ovdot { stroke:var(--panel2); stroke-width:1px; }
 .an-rc-ov1 { stroke:var(--band-WR); fill:var(--band-WR); }
-.an-rc-ov2 { stroke:var(--band-TE); fill:var(--band-TE); }
+.an-rc-ov2 { stroke:var(--band-QB); fill:var(--band-QB); }
 .an-rc-ovaxis { fill:var(--dim); font-size:9px; }
 .an-rc-ovlegend { font-size:10px; font-weight:600; fill:var(--muted); }
 .an-rc-ovlegend tspan { font-weight:800; }
@@ -64,13 +78,16 @@
 /* ---- the game log table: compact (12px rows, no extra air), one row per game ---- */
 .an-rc-gl { width:100%; border-collapse:collapse; font-size:12px; font-variant-numeric:tabular-nums; margin-top:8px; }
 .an-rc-gl th { text-align:right; color:var(--dim); font-size:10px; font-weight:700; padding:2px 7px; border-bottom:1px solid var(--line); white-space:nowrap; }
-.an-rc-gl th.an-rc-gl-dk { color:var(--accent); } .an-rc-gl th.an-rc-gl-s1 { color:var(--band-WR); } .an-rc-gl th.an-rc-gl-s2 { color:var(--band-TE); }
+.an-rc-gl th.an-rc-gl-dk { color:var(--accent); } .an-rc-gl th.an-rc-gl-s1 { color:var(--band-WR); } .an-rc-gl th.an-rc-gl-s2 { color:var(--band-QB); }
 .an-rc-gl td { text-align:left; padding:1.5px 7px; border-bottom:1px solid #1a1f25; white-space:nowrap; color:var(--ink); line-height:1.35; }
 .an-rc-gl td.num, .an-rc-gl th.num { text-align:right; }
 .an-rc-gl-dk { color:var(--accent); font-weight:700; }
-.an-rc-gl-s1 { color:var(--band-WR); }
-.an-rc-gl-s2 { color:var(--band-TE); }
+/* Body cells too (td has its own colour at the same weight, so the cell selector is needed). */
+.an-rc-gl-s1, .an-rc-gl td.an-rc-gl-s1 { color:var(--band-WR); }
+.an-rc-gl-s2, .an-rc-gl td.an-rc-gl-s2 { color:var(--band-QB); }
 .an-rc-gl-row.dim td { color:var(--dim); font-style:italic; }
+.an-rc-gl-tog { font:inherit; font-size:10px; font-weight:700; letter-spacing:.02em; text-transform:none; color:var(--muted); background:#161b21; border:1px solid #2a323b; border-radius:var(--r-chip); padding:0 7px; margin-left:8px; cursor:pointer; }
+.an-rc-gl-tog:hover { color:var(--ink); border-color:var(--accent); }
 .an-rc-gl-season td { padding-top:7px; color:var(--muted); font-size:10px; font-weight:800; letter-spacing:.1em; text-transform:uppercase; border-bottom:1px solid var(--line); }
 .an-rc-gl-total td { font-weight:800; border-top:1px solid #2a323b; border-bottom:2px solid #2a323b; color:var(--ink); }
 .an-rc-gl-total .an-rc-gl-dk { color:var(--accent); }
@@ -108,7 +125,8 @@
 .an-rc-fronttiles { display:flex; flex-wrap:wrap; gap:8px; }
 /* Visibly secondary (Adam: the divide must not be stark) but brightened one step from the first draft (Adam: "read
    a touch dim") - a stronger tint behind the panel, and label text a blend of muted/ink rather than plain muted. */
-.an-rc-phase-side { flex:0 0 172px; display:flex; flex-direction:column; gap:7px; border-radius:var(--r-row); padding:9px 11px; align-self:stretch; }
+/* 👁 fix round, one rule everywhere: the side column is top-aligned at its content height, never a stretched slab. */
+.an-rc-phase-side { flex:0 0 172px; display:flex; flex-direction:column; gap:7px; border-radius:var(--r-row); padding:9px 11px; align-self:start; }
 .an-rc-phase-pass .an-rc-phase-side { background:color-mix(in srgb, var(--band-QB) 15%, transparent); }
 .an-rc-phase-rush .an-rc-phase-side { background:color-mix(in srgb, var(--band-BACKFIELD) 15%, transparent); }
 .an-rc-sideh { color:var(--dim); font-size:9.5px; font-weight:800; letter-spacing:.1em; text-transform:uppercase; margin-bottom:1px; }
@@ -130,3 +148,97 @@
 
 /* ---- Madden foot ---- */
 .an-rc-maddenfoot { margin-top:4px; }
+
+/* ---- increment 7b (D193): the Receivers and Running backs tables ---- */
+/* Tighter cells on these two tables only (7px sides to 5px), so the core groups fit a 1536 laptop. */
+.an-usage .an-table th, .an-usage .an-table td, .an-rush .an-table th, .an-rush .an-table td { padding-left:5px; padding-right:5px; }
+/* Ancillary groups: lighter label, faint pass (purple) / run (gold) tint, no divider wall; a size smaller and tighter. */
+.an-table .an-anc-pass { background:rgba(139,109,209,.045); }
+.an-table .an-anc-run { background:rgba(202,160,83,.04); }
+.an-table th.an-anc-pass { background:color-mix(in srgb, var(--band-QB) 7%, var(--panel)); }
+.an-table th.an-anc-run { background:color-mix(in srgb, var(--band-BACKFIELD) 6%, var(--panel)); }
+.an-table thead tr.an-grp th.an-anc { font-weight:600; border-bottom:1px solid #232a31; }
+.an-table thead tr.an-grp th.an-anc-pass { color:color-mix(in srgb, var(--band-QB) 75%, var(--dim)); }
+.an-table thead tr.an-grp th.an-anc-run { color:color-mix(in srgb, var(--band-BACKFIELD) 75%, var(--dim)); }
+.an-table thead tr:not(.an-grp) th.an-anc { font-size:10.5px; }
+.an-table td.an-anc { color:var(--muted); font-size:11.5px; }
+.an-usage .an-table .an-anc, .an-rush .an-table .an-anc { padding-left:3px; padding-right:3px; }
+/* The name cell is as wide as the longest name in the filter; cap it so a long name cannot push the open table past the
+   column (🔵 on 7b); the link carries the full name in its title. */
+.an-usage .an-table .an-pname, .an-rush .an-table .an-pname { display:inline-block; max-width:170px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; vertical-align:bottom; }
+.an-table .an-anc.gs { border-left-color:#1d232a; }
+/* The More / Less toggle in the group-header row, over the sparkline column. */
+.an-table thead tr.an-grp th.an-more-cell { text-align:right; padding:3px 6px 2px; }
+.an-more { font:inherit; font-size:10.5px; font-weight:700; letter-spacing:.04em; text-transform:none; color:var(--muted); background:#161b21; border:1px solid #2a323b; border-radius:var(--r-chip); padding:1px 8px; cursor:pointer; white-space:nowrap; }
+.an-more:hover { color:var(--ink); border-color:var(--accent); }
+.an-more[aria-expanded="true"] { color:var(--dim); }
+
+/* ---- increment 7a (D193): the running-back and receiver pages on the kit ---- */
+/* 👁 fix round: the phase blocks stack at full width at every size (a back's Rushing above Receiving, a receiver's
+   Receiving above his Rushing), so a short block never leaves a hole beside a tall one; a block with no body (a
+   receiver's Rushing) ends at its content. */
+.an-pl-phases { display:flex; flex-direction:column; gap:12px; }
+.an-pl-phases > .an-rc-phase { min-width:0; }
+.an-pl-phases-rec > .an-rc-phase-rush { align-self:flex-start; max-width:100%; }
+.an-pl-rc .an-rc-phase { display:grid; grid-template-columns:minmax(0, 1fr) auto; column-gap:16px; align-items:start; }
+.an-pl-rc .an-rc-phase-top { display:contents; }
+.an-pl-rc .an-rc-phase-main { grid-column:1; grid-row:1; }
+.an-pl-rc .an-rc-phase-side { grid-column:2; grid-row:1 / span 2; }
+.an-pl-rc .an-rc-phasebody { grid-column:1; grid-row:2; }
+.an-pl-rc .an-rc-gl th:not(.num) { text-align:left; }
+.an-pl-rc .an-pl-rcrush .an-wb-bar { fill:var(--band-BACKFIELD); }
+.an-pl-rc .an-pl-zbody { flex-wrap:wrap; }
+.an-pl-rc .an-rc-phasebody > .an-pl-row > * { min-width:0; max-width:100%; }
+/* The receiving strips are drawn to the width the page measured left of the zones (or the full body); the zones take
+   the rest, their plays list growing into it. */
+.an-pl-rc .an-pl-rcweeks { flex:0 0 auto; width:min-content; }
+.an-pl-rc .an-pl-rczones { flex:1 1 0px; }
+.an-pl-rc .an-pl-rczones .an-pl-plays { flex:1 1 260px; width:auto; min-width:0; }
+.an-pl-rc .an-pl-rcroutes { flex:0 1 auto; }
+/* Kit fix: the chart's share lines were filled as areas because the colour classes' fill beat fill:none. */
+.an-pl-rc .an-rc-fanchart polyline.an-rc-ovline { fill:none; }
+
+/* ---- increment 6 (D193): the quarterback page and table on the kit ---- */
+.an-qbp .an-rc-phase { display:grid; grid-template-columns:minmax(0, 1fr) auto; column-gap:16px; align-items:start; }
+.an-qbp .an-rc-phase-top { display:contents; }
+.an-qbp .an-rc-phase-main { grid-column:1; grid-row:1; }
+.an-qbp .an-rc-phase-side { grid-column:2; grid-row:1 / span 2; }
+.an-qbp .an-rc-phasebody { grid-column:1; grid-row:2; }
+.an-qbp .an-rc-phase-rush .an-rc-fronttiles .an-tile:not([class*=" t-"]) b { color:var(--muted); }
+.an-qbp .an-rc-gl th, .an-qbp .an-rc-gl td { padding-left:11px; padding-right:11px; }
+/* Kit fix on every re-cut page: the dot colour classes also filled the overlay lines. */
+.an-rc-ovline.an-rc-ov1, .an-rc-ovline.an-rc-ov2 { fill:none; }
+.an-qb-table .g-b { background:rgba(139,109,209,.03); }
+.an-qb-table thead tr.an-grp th.g-b { color:color-mix(in srgb, var(--band-QB) 70%, var(--dim)); }
+.an-qb-table td.g-b span { color:color-mix(in srgb, var(--ink) 78%, var(--dim)); }
+/* Only with More open and the table wider than its frame (table.js fitOpen sets .an-over): the frame scrolls sideways,
+   and the header rows go static so they do not sit --bar-h down inside the frame over the first rows. */
+.an-usage .an-tscroll.an-over, .an-rush .an-tscroll.an-over { overflow-x:auto; }
+.an-usage .an-tscroll.an-over .an-table thead th, .an-rush .an-tscroll.an-over .an-table thead th { position:static; }
+/* Kit chart (increment 6 follow-ups): the second line's purple is set in place above; a thin dark halo on the bar value
+   labels so the lines never run through them. */
+.an-rc-fansvg .an-wb-val { paint-order:stroke; stroke:var(--panel2); stroke-width:4px; stroke-linejoin:round; }
+/* 👁 fix round, the quarterback page: Passing above Rushing at full width at every size (the right-hand column left
+   holes in both), the week-by-week card across the passing block (its strips drawn to that width), the zone card
+   taking the row beside the splits with its plays list growing into it, and Madden at the foot at a readable width. */
+.an-qbp .an-qbp-split { grid-template-columns:minmax(0, 1fr); max-width:none; }
+.an-qbp .an-qbp-weeks { flex:1 1 100%; }
+.an-qbp .an-qbp-zones { flex:1 1 auto; }
+.an-qbp .an-qbp-zones .an-pl-plays { flex:1 1 300px; width:auto; min-width:0; }
+.an-qbp .an-qbp-side > .an-rc-maddenfoot { align-self:flex-start; width:640px; max-width:100%; }
+/* The player-page header (Adam, fix round: "have a guy's headshot and do some colouring stuff for his team; doesn't
+   need to be an art project"): his headshot left of the name in a 56px circle with a thin club-colour ring, a quiet
+   wash of the club's primary (16% into the panel, fading to the panel across the header) and a 3px club rule under
+   it; text stays the app's ink. No photo, or one that fails: the neutral silhouette painted here shows instead. */
+.an-rc-head { --club:#2a323b; padding:10px 16px; border-radius:var(--r-card) var(--r-card) 0 0; background:linear-gradient(90deg, color-mix(in srgb, var(--club) 16%, var(--panel2)) 0%, var(--panel2) 75%); border-bottom:3px solid var(--club); }
+.an-rc-shot { width:56px; height:56px; flex:none; border-radius:50%; overflow:hidden; border:2px solid var(--club); box-sizing:border-box;
+  background:#1a2027 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 56 56'%3E%3Ccircle cx='28' cy='21' r='10' fill='%233a434d'/%3E%3Cpath d='M9 56c1-12 9-19 19-19s18 7 19 19z' fill='%233a434d'/%3E%3C/svg%3E") center / 100% no-repeat; }
+.an-rc-shot img { width:100%; height:100%; object-fit:cover; object-position:50% 20%; display:block; }
+.an-rc-shot:has(img) { background-image:none; }
+
+/* ---- tables, 👁 round: sticky rank and name cells while the frame scrolls sideways; a hairline at each detail group ---- */
+.an-usage .an-tscroll.an-over .an-stick, .an-rush .an-tscroll.an-over .an-stick { position:sticky; left:0; }
+.an-usage .an-tscroll.an-over th.an-stick, .an-rush .an-tscroll.an-over th.an-stick { z-index:4; background:var(--panel); }
+.an-usage .an-tscroll.an-over td.an-stick, .an-rush .an-tscroll.an-over td.an-stick { z-index:3; background:var(--panel2); }
+.an-usage .an-tscroll.an-over .c-name.an-stick, .an-rush .an-tscroll.an-over .c-name.an-stick { left:34px; }
+.an-table .an-anc.gs { border-left-color:#2a323b; }

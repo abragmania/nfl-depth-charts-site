@@ -97,9 +97,10 @@ a { color:inherit; }
 /* clip (not auto) so the header rows stay sticky against the page scroll; narrower windows scroll sideways. */
 /* D177: the table sizes to its own content and stops there — a wide monitor doesn't mean a table stretched
    to fill it. width:max-content hugs the columns; max-width caps it at the available page width so it never
-   overflows the .an-main padding, and left-aligns (the block default) inside its page block; on a big screen
-   the whole leaderboard block sits in the middle of the column (D190, the .an-usage rule above). */
-.an-tscroll { overflow-x:clip; border:1px solid var(--line); border-radius:var(--r-card); background:var(--panel2); width:max-content; max-width:100%; }
+   overflows the .an-main padding; on a big screen the whole leaderboard block sits in the middle of the column
+   (D190, the .an-usage rule above), and inside the block the table centres under the filter bar when the bar is
+   the wider of the two (👁 on the re-cut: the Receivers table sat 300px short of its bar's right edge). */
+.an-tscroll { overflow-x:clip; border:1px solid var(--line); border-radius:var(--r-card); background:var(--panel2); width:max-content; max-width:100%; margin:0 auto; }
 @media (max-width:1400px) { .an-tscroll { overflow-x:auto; } }
 .an-table { width:auto; border-collapse:separate; border-spacing:0; font-variant-numeric:tabular-nums; }
 .an-table th { position:sticky; top:0; background:var(--panel); color:var(--muted); font-size:11.5px; font-weight:700; text-align:right; padding:6px 7px; white-space:nowrap; cursor:pointer; user-select:none; border-bottom:1px solid var(--line); }

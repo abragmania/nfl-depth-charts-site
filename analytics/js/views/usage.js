@@ -1,13 +1,15 @@
-// Usage: the pass-game usage leaderboard (D177's first priority, with fantasy in mind). Receivers, tight ends
-// and running backs together by default; every filter, the sort, the minimum and the open row live in the hash.
+// Receivers (#/receivers; the old Usage page, D193): the pass-catchers' leaderboard (D177's first priority, with fantasy
+// in mind), WRs and TEs by default, backs on their chip; every filter, the sort, the minimum and the open row live in
+// the hash. The table itself (column order Production, Opportunity, Efficiency, then the ancillary group) is table.js.
 import { fromQuery, toQuery, seasonsOf, weekLabel, POSITIONS } from "../filters.js";
 import { loadFor, loadTeams } from "../data.js";
 import { aggregateUsage, clubGames, usageReference, REF_POS, POOL_PER_GAME, POOL_FLOOR } from "../agg.js";
 import { renderFilterBar } from "../filterbar.js";
-import { renderTable, anchor } from "../table.js";
+import { renderTable, anchor, moreFrom, withMore } from "../table.js";
 
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-const go = (st) => { const q = toQuery(st); location.hash = `#/receivers${q ? "?" + q : ""}`; };
+// The More toggle's state (more=1) rides beside the shared filters (table.js withMore).
+const go = (st) => { const q = withMore(toQuery(st), st.more); location.hash = `#/receivers${q ? "?" + q : ""}`; };
 
 // Same "picked season[ + previous season]" prefix as player.js's seasonLabel (D184).
 export function seasonLabel(st) {
@@ -32,9 +34,9 @@ function builtText(manifests) {
 
 export async function renderUsage(ctx, query) {
   const { root, asof, isCurrent } = ctx;
-  const st = fromQuery(query);
-  document.title = "Usage · NFL Analytics";
-  if (!root.querySelector(".an-usage")) root.innerHTML = `<div class="an-msg">Loading usage…</div>`;
+  const st = { ...fromQuery(query), more: moreFrom(query) };
+  document.title = "Receivers · NFL Analytics";
+  if (!root.querySelector(".an-usage")) root.innerHTML = `<div class="an-msg">Loading receivers…</div>`;
   let data, teams;
   try {
     // Teams (for the player column's colour pill) load alongside the analytics data; a failure there is
@@ -66,14 +68,14 @@ export async function renderUsage(ctx, query) {
   const qs = toQuery(st);
   root.innerHTML = `<section class="an-usage">
     <div class="an-head">
-      <h1>Pass-game usage</h1>
+      <h1>Receivers</h1>
       <div class="an-sub">${esc(seasonLabel(st))} · ${esc(windowText(st, weeks))} · ${esc(posText)}${exText.length ? ` · excluding ${esc(exText.join(", "))}` : ""}${st.team ? ` · ${esc(st.team)}` : ""}${st.opp ? ` · vs ${esc(st.opp)}` : ""}</div>
       ${data.missing.length ? `<div class="an-warn">${esc(data.missing.join(", "))} files are not built yet; showing ${esc(seasonsOf(st).filter((s) => !data.missing.includes(s)).join(", "))} only.</div>` : ""}
     </div>
     <div class="an-sub an-ref">${esc(refLine)}</div>
     <div class="an-filters"></div>
     <div class="an-tablewrap"></div>
-    <p class="an-foot">Targets, air yards, receptions, EPA and zones: nflverse play-by-play. Routes, route %, TPRR, YPRR: heatradar.app (charted; a week under 8 routes is not listed). Snaps: nflverse snap counts. Target share counts only the games he played.</p>
+    <p class="an-foot">Targets, air yards, receptions, EPA and zones: nflverse play-by-play. Routes, route %, TPRR, YPRR: heatradar.app (charted; a week under 8 routes is not listed). Snaps: nflverse snap counts. Target share counts only the games he played. DK: DraftKings Classic points from the same play rows, a lost fumble included (no 2-point conversions or return touchdowns; a fumble lost on a kick or punt return is not in the rows).</p>
   </section>`;
   renderFilterBar(root.querySelector(".an-filters"), st, { keys: data.keys, teams: clubTeams }, go);
   renderTable(root.querySelector(".an-tablewrap"), rows, st, qs, go, { ref, windowName, teams: teamsByAbbr });

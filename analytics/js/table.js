@@ -1,4 +1,4 @@
-// The usage leaderboard table: sortable columns, a minimum-targets box, the depth charts' five rating-tier
+// The Receivers leaderboard table (the old Usage page, D193): sortable columns, a minimum-targets box, the depth charts' five rating-tier
 // colours on the share and efficiency columns, a weekly target-share sparkline per row, and a row that
 // expands in place (one at a time, its gsis kept in the hash as `open`) into the player's weekly share bars
 // and his target-zone grid. Inline SVG only, no library.
@@ -48,36 +48,118 @@ export const tierOf = (key, v, cuts) => tierFromCuts(v, cuts?.[key]?.cuts);
 const TIER_KEYS = new Set(USAGE_TIER_KEYS);
 
 // Columns. `bar` draws a magnitude bar behind the number (the share columns, scaled to `max`).
-// D191 (Adam, 2026-09-24): opportunities (targets + carries, so a receiver's jet sweep counts) lead the table; the
-// raw counts get the bars and tiers, the per-opportunity efficiency figures follow as plain numbers.
+// Re-cut increment 7b (D193, Adam's answer 10: "Production, Opportunity, Efficiency, then the rest; the divide doesn't
+// need to be so stark"): the table reads left to right as the player page reads top to bottom. Every column keeps its
+// key, value, format, tooltip and sort; the old "Targets" and "Efficiency (opp)" headers are gone. The ancillary group
+// at the right (anc: "pass", purple) is a lighter label and a faint tint, never tier-coloured and never barred.
+// D191's opportunity columns (Opp, Opp/g, Opp %, per-opportunity efficiency) now sit there on this page.
+// DraftKings tooltips, shared with the Running backs table (views/rushing.js).
+const DK_RULE = "DraftKings Classic scoring from the play rows: 1 per catch, 0.1 per rushing or receiving yard, 6 per rushing or receiving TD, +3 at 100 rushing or 100 receiving yards in a game; 0.04 per passing yard, 4 per passing TD, −1 per interception, +3 at 300 passing yards; −1 per fumble lost. No 2-point conversions or return touchdowns. Blank under a down or quarter filter (the bonuses are whole-game).";
+export const DK_TIPS = {
+  dkG: `DraftKings points per game: his points over the window / the games he played in it. ${DK_RULE}`,
+  dk: `DraftKings points over the window, scored game by game (a bonus counts per game, never per window). ${DK_RULE}`,
+};
+export const CATCH_TIP = "Catch %: receptions / targets, pass-interference targets left out (a PI target is never a catch or an incompletion)";
 const COLS = [
-  { k: "opp", h: "Opp", t: "Opportunities: targets + carries (designed runs, a jet sweep or end-around included)", f: int, grp: "o" },
-  { k: "oppG", h: "Opp/g", t: "Opportunities (targets + carries) per game he played", f: (v) => fix(v, 1), grp: "o", bar: 28 },
-  { k: "oppShare", h: "Opp %", t: "Opportunity share: (his targets + his designed runs) / (his club's pass attempts + his club's designed runs) in his games (scrambles are on neither side)", f: (v) => pct(v), grp: "o", bar: 0.5 },
-  { k: "ydsOpp", h: "Yds/opp", t: "(Receiving yards + rushing yards) / opportunities (targets + carries)", f: (v) => fix(v, 1), grp: "x" },
-  { k: "epaOpp", h: "EPA/opp", t: "(EPA summed over his targets + EPA summed over his carries) / opportunities (targets + carries)", f: (v) => signed(v, 2), grp: "x" },
-  { k: "tdOpp", h: "TD/opp", t: "(Receiving touchdowns + rushing touchdowns) / opportunities (targets + carries)", f: (v) => (v === null || v === undefined ? DASH : pct(v) + "%"), grp: "x" },
-  { k: "tgt", h: "Tgt", t: "Targets", f: int, grp: "t" },
-  { k: "tgtShare", h: "Tgt %", t: "Target share: his targets / his club's pass attempts in his games", f: (v) => pct(v), grp: "t", bar: 0.4 },
-  { k: "ay", h: "AY", t: "Air yards on his targets", f: int, grp: "t" },
-  { k: "ayShare", h: "AY %", t: "Air-yards share: his air yards / his club's air yards in his games", f: (v) => pct(v), grp: "t", bar: 0.55 },
-  { k: "wopr", h: "WOPR", t: "Weighted opportunity: 1.5 x target share + 0.7 x air-yards share", f: (v) => fix(v, 2), grp: "t", bar: 0.9 },
-  { k: "adot", h: "aDOT", t: "Average depth of target (air yards per target)", f: (v) => fix(v, 1), grp: "t" },
-  { k: "rz", h: "RZ", t: "Red-zone targets (inside the 20)", f: int, grp: "t" },
-  { k: "ez", h: "EZ", t: "End-zone targets", f: int, grp: "t" },
+  { k: "dkG", h: "DK/g", t: DK_TIPS.dkG, f: (v) => fix(v, 1), grp: "p" },
+  { k: "dk", h: "DK", t: DK_TIPS.dk, f: (v) => fix(v, 1), grp: "p" },
   { k: "rec", h: "Rec", t: "Receptions", f: int, grp: "p" },
   { k: "yds", h: "Yds", t: "Receiving yards", f: int, grp: "p" },
   { k: "td", h: "TD", t: "Receiving touchdowns", f: int, grp: "p" },
-  { k: "epaTgt", h: "EPA/Tgt", t: "Expected points added per target", f: (v) => signed(v, 2), grp: "p" },
-  { k: "routes", h: "Routes", t: "Routes run (heatradar, charted; weeks under 8 routes are not listed)", f: int, grp: "r" },
-  { k: "routePct", h: "Rt %", t: "Route participation: routes / club dropbacks", f: (v) => pct(v, 0), grp: "r", bar: 1 },
-  { k: "tprr", h: "TPRR", t: "Targets per route run", f: (v) => fix(v, 2), grp: "r" },
-  { k: "yprr", h: "YPRR", t: "Receiving yards per route run", f: (v) => fix(v, 2), grp: "r" },
-  { k: "snapPct", h: "Snap %", t: "Share of his club's offensive snaps (nflverse snap counts)", f: (v) => pct(v, 0), grp: "s", bar: 1 },
+  { k: "tgt", h: "Tgt", t: "Targets", f: int, grp: "o" },
+  { k: "tgtShare", h: "Tgt %", t: "Target share: his targets / his club's pass attempts in his games", f: (v) => pct(v), grp: "o", bar: 0.4 },
+  { k: "ayShare", h: "AY %", t: "Air-yards share: his air yards / his club's air yards in his games", f: (v) => pct(v), grp: "o", bar: 0.55 },
+  { k: "wopr", h: "WOPR", t: "Weighted opportunity: 1.5 x target share + 0.7 x air-yards share", f: (v) => fix(v, 2), grp: "o", bar: 0.9 },
+  { k: "rz", h: "RZ", t: "Red-zone targets (inside the 20)", f: int, grp: "o" },
+  { k: "ez", h: "EZ", t: "End-zone targets", f: int, grp: "o" },
+  { k: "routePct", h: "Rt %", t: "Route participation: routes / club dropbacks", f: (v) => pct(v, 0), grp: "o", bar: 1 },
+  { k: "snapPct", h: "Snap %", t: "Share of his club's offensive snaps (nflverse snap counts)", f: (v) => pct(v, 0), grp: "o", bar: 1 },
+  { k: "yprr", h: "YPRR", t: "Receiving yards per route run", f: (v) => fix(v, 2), grp: "e" },
+  { k: "epaTgt", h: "EPA/Tgt", t: "Expected points added per target", f: (v) => signed(v, 2), grp: "e" },
+  { k: "catchPct", h: "Catch %", t: CATCH_TIP, f: (v) => pct(v), grp: "e" },
+  { k: "opp", h: "Opp", t: "Opportunities: targets + carries (designed runs, a jet sweep or end-around included)", f: int, grp: "xp" },
+  { k: "oppG", h: "Opp/g", t: "Opportunities (targets + carries) per game he played", f: (v) => fix(v, 1), grp: "xp" },
+  { k: "oppShare", h: "Opp %", t: "Opportunity share: (his targets + his designed runs) / (his club's pass attempts + his club's designed runs) in his games (scrambles are on neither side)", f: (v) => pct(v), grp: "xp" },
+  { k: "ydsOpp", h: "Yds/opp", t: "(Receiving yards + rushing yards) / opportunities (targets + carries)", f: (v) => fix(v, 1), grp: "xp" },
+  { k: "epaOpp", h: "EPA/opp", t: "(EPA summed over his targets + EPA summed over his carries) / opportunities (targets + carries)", f: (v) => signed(v, 2), grp: "xp" },
+  { k: "tdOpp", h: "TD/opp", t: "(Receiving touchdowns + rushing touchdowns) / opportunities (targets + carries)", f: (v) => (v === null || v === undefined ? DASH : pct(v) + "%"), grp: "xp" },
+  { k: "ay", h: "AY", t: "Air yards on his targets", f: int, grp: "xp" },
+  { k: "adot", h: "aDOT", t: "Average depth of target (air yards per target)", f: (v) => fix(v, 1), grp: "xp" },
+  { k: "routes", h: "Routes", t: "Routes run (heatradar, charted; weeks under 8 routes are not listed)", f: int, grp: "xp" },
+  { k: "tprr", h: "TPRR", t: "Targets per route run", f: (v) => fix(v, 2), grp: "xp" },
 ];
-const GROUPS = [["o", "Opportunity"], ["x", "Efficiency (opp)"], ["t", "Targets"], ["p", "Production"], ["r", "Routes · heatradar"], ["s", "Snaps"]];
-// First column of each group gets a hairline on its left (class gs).
-COLS.forEach((c, i) => { c.gs = i === 0 || COLS[i - 1].grp !== c.grp; });
+// [key, label, ancillary tint or ""]. The ancillary label is lighter (CSS: .an-anc) and tinted pass or run.
+const GROUPS = [["p", "Production", ""], ["o", "Opportunity", ""], ["e", "Efficiency", ""], ["xp", "Receiving detail", "pass"]];
+// The group's cell and header classes: g-<key>, a hairline (gs) on the first column of each group, and for an
+// ancillary group an-anc an-anc-<tint>. Shared with the Running backs table.
+export function withGroups(cols, groups) {
+  const anc = new Map(groups.map(([g, , a]) => [g, a]));
+  cols.forEach((c, i) => {
+    c.gs = i === 0 || cols[i - 1].grp !== c.grp;
+    c.anc = anc.get(c.grp) || "";
+    c.cls = `g-${c.grp}${c.gs ? " gs" : ""}${c.anc ? ` an-anc an-anc-${c.anc}` : ""}`;
+  });
+  return cols;
+}
+withGroups(COLS, GROUPS);
+// The Receivers page's default sort (filters.js defaultState): the rank header sorts by it too.
+const DEFAULT_SORT = "tgt";
+// The group header row's cells for the columns shown (a group with none shown is skipped).
+export const groupCells = (cols, groups) => groups.map(([g, l, a]) => [g, l, a, cols.filter((c) => c.grp === g).length]).filter((x) => x[3] > 0)
+  .map(([g, l, a, n]) => `<th colspan="${n}" class="g-${g} gs${a ? ` an-anc an-anc-${a}` : ""}">${l}</th>`).join("");
+// THE MORE TOGGLE (lead, 7b: no sideways scroll, no clipped columns): the ancillary groups are collapsed by default
+// behind a small "More ▸" in the group-header row; one click shows them all ("◂ Less" hides them). The state travels
+// in the query as more=1 (moreFrom / withMore below), so a link or the Back button keeps it. A sort on a hidden
+// ancillary column (a shared link, say) reveals that column's group, except the page's own default sort key. Hiding
+// the groups while sorted on one of their columns returns the sort to the page's default. Shared with rushing.js.
+export const moreFrom = (query) => new URLSearchParams(String(query || "").replace(/^\?/, "")).get("more") === "1";
+export function withMore(q, more) {
+  const p = new URLSearchParams(String(q || ""));
+  p.delete("more");
+  if (more) p.set("more", "1");
+  return p.toString();
+}
+// The ancillary groups open under this state: every one with more=1, else only the one holding the sort column.
+export function openGroups(cols, st, defaultSort) {
+  if (st.more) return new Set(cols.filter((c) => c.anc).map((c) => c.grp));
+  const s = cols.find((c) => c.anc && c.k === st.sort && st.sort !== defaultSort);
+  return new Set(s ? [s.grp] : []);
+}
+export const visibleCols = (cols, st, defaultSort) => { const open = openGroups(cols, st, defaultSort); return cols.filter((c) => !c.anc || open.has(c.grp)); };
+// All ancillary groups showing: the toggle reads "◂ Less", else "More ▸".
+export const allOpen = (cols, st, defaultSort) => openGroups(cols, st, defaultSort).size === new Set(cols.filter((c) => c.anc).map((c) => c.grp)).size;
+// The state after a toggle click.
+export function toggleMore(cols, st, defaultSort) {
+  if (!allOpen(cols, st, defaultSort)) return { ...st, more: true };
+  const onHidden = cols.some((c) => c.anc && c.k === st.sort);
+  return { ...st, more: false, ...(onHidden ? { sort: defaultSort, dir: "desc" } : {}) };
+}
+// The toggle's header cell (it sits over the sparkline column, the group row's last cell).
+// 👁 fix round (findings 1, 5): the toggle now sits at the LEFT end of the group-header row, over the rank/name
+// columns, instead of the right (where it scrolled off-screen with the frame open, and read as part of whichever
+// group header it happened to sit beside). colspan=2 spans exactly the rank and name columns, matching the
+// an-stick cells below it so the toggle, rank and name line up as one block; the lead's CSS makes that block
+// sticky (position:sticky; left:0) while the frame is in its .an-over scrolling state. This file only marks the
+// an-stick class; the sticky rule itself is the lead's, reported separately (not in this builder's owned files).
+export const moreCell = (open) => `<th colspan="2" class="an-more-cell an-stick"><button type="button" class="an-more" data-more aria-expanded="${open}" title="${open ? "Hide" : "Show"} the detail columns">${open ? "◂ Less" : "More ▸"}</button></th>`;
+
+// TOO WIDE (lead, 7b: the Running backs table with More open at a 1536 laptop, or a long name at 1401-1450px): only
+// when the table is wider than its frame does the frame get .an-over (CSS: overflow-x:auto, header rows static so they
+// do not overlap the body); a table that fits never scrolls and its headers stay sticky. Re-checked on every render and
+// on a window resize. Shared with views/rushing.js.
+const markOver = (sc) => sc.classList.toggle("an-over", sc.scrollWidth > sc.clientWidth + 1);
+export function fitOpen(el) { el?.querySelectorAll?.(".an-tscroll").forEach(markOver); }
+// A More / Less click re-renders the table (through the hash); the next render puts the focus back on the toggle.
+export const moreFocus = { pending: false };
+export function wireMore(el, onClick) {
+  const b = el.querySelector("[data-more]");
+  b?.addEventListener("click", (e) => { e.stopPropagation(); moreFocus.pending = true; onClick(); });
+  if (moreFocus.pending) { moreFocus.pending = false; b?.focus(); }
+}
+if (typeof window !== "undefined") window.addEventListener("resize", () => document.querySelectorAll(".an-usage .an-tscroll, .an-rush .an-tscroll").forEach(markOver));
+
+// The column order, grouped, for tests and the lead (every key the table draws, left to right).
+export const RECEIVERS_ORDER = GROUPS.map(([g, l]) => [l, COLS.filter((c) => c.grp === g).map((c) => c.k)]);
 const BAND = (pos) => (pos === "RB" || pos === "FB" ? "BACKFIELD" : pos);
 
 // D182 (Adam, 2026-09-24): air yards are not relevant for a running back. When the position chips leave only
@@ -189,30 +271,37 @@ export function tableHtml(allRows, st, query, view = {}) {
   const q = query || "";
   const teams = view.teams;
   // D182: RB-only views drop the air-yards columns entirely; a mixed view keeps them.
-  const cols = rbOnlyMode(st.pos) ? COLS.filter((c) => !AY_ONLY_KEYS.has(c.k)) : COLS;
+  // The More toggle: the ancillary groups show only when open (or holding the sort column).
+  const cols = visibleCols(rbOnlyMode(st.pos) ? COLS.filter((c) => !AY_ONLY_KEYS.has(c.k)) : COLS, st, DEFAULT_SORT);
   // Player, team and Pos now share one cell (c-name), so the fixed columns are rank/player/games, not four.
   const nCols = 3 + cols.length + 1;
   const th = (k, h, t, cls = "") => `<th class="${cls}${st.sort === k ? " sorted " + st.dir : ""}" data-sort="${k}" title="${esc(t)}">${h}</th>`;
-  const groupRow = `<tr class="an-grp"><th colspan="3"></th>${GROUPS.map(([g, l]) => `<th colspan="${cols.filter((c) => c.grp === g).length}" class="g-${g} gs">${l}</th>`).join("")}<th></th></tr>`;
+  // The toggle (moreCell) now leads the row, spanning rank+name; a blank cell fills the G spot it used to skip,
+  // and the trailing cell over the sparkline is blank in its place (findings 1, 5).
+  const groupRow = `<tr class="an-grp">${moreCell(allOpen(COLS, st, DEFAULT_SORT))}<th></th>${groupCells(cols, GROUPS)}<th class="c-spark"></th></tr>`;
   // The Tgt header says whether pass-interference targets are in the count (the "PI targets" switch below).
   const colTitle = (c) => (c.k === "tgt" || c.k === "opp" ? `${c.t} (${st.pi === false ? "excludes" : "includes"} pass-interference targets)` : c.t);
-  const head = `<tr>${th("rank", "#", "Rank", "c-rank")}${th("name", "Player", "Player, team, position", "c-name")}${th("g", "G", "Games in the window")}${cols.map((c) => th(c.k, c.h, colTitle(c), "g-" + c.grp + (c.gs ? " gs" : ""))).join("")}<th class="c-spark" title="Weekly target share; hover a point for the week">Tgt % by week</th></tr>`;
+  // an-stick on rank/name (header and body below): the lead's CSS pins these two columns to the left edge while
+  // the frame scrolls (finding 1), matching the moreCell block above them.
+  const head = `<tr>${th("rank", "#", "Rank", "c-rank an-stick")}${th("name", "Player", "Player, team, position", "c-name an-stick")}${th("g", "G", "Games in the window")}${cols.map((c) => th(c.k, c.h, colTitle(c), c.cls)).join("")}<th class="c-spark" title="Weekly target share; hover a point for the week">Tgt % by week</th></tr>`;
   const cell = (c, r) => {
     // D182: a mixed table keeps the air-yards columns for perspective, but an RB's own numbers there are not
     // meaningful, so his cells show a dash instead of the real (but misleading) figure.
     const v = AY_ONLY_KEYS.has(c.k) && r.pos === "RB" ? null : r[c.k];
     const P = view.ref?.at(r.pos);
-    const tier = tierOf(c.k, v, P?.cuts);
-    const note = TIER_KEYS.has(c.k) && v !== null && v !== undefined ? tierNote(P?.cuts?.[c.k], r.pos) : "";
+    // Only the aggregation's tier keys are coloured, and ancillary columns never are, whatever the aggregation tiers
+    // (Opp, Opp/g, Opp %, TPRR here).
+    const tier = c.anc || !TIER_KEYS.has(c.k) ? "" : tierOf(c.k, v, P?.cuts);
+    const note = !c.anc && TIER_KEYS.has(c.k) && v !== null && v !== undefined ? tierNote(P?.cuts?.[c.k], r.pos) : "";
     const bar = c.bar && v !== null && v !== undefined ? `<i class="an-bar" style="width:${Math.min(100, (v / c.bar) * 100).toFixed(1)}%"></i>` : "";
-    return `<td class="num g-${c.grp}${c.gs ? " gs" : ""}${tier ? " t-" + tier : ""}${bar ? " has-bar" : ""}"${note ? ` title="${esc(note)}"` : ""}>${bar}<span>${c.f(v)}</span></td>`;
+    return `<td class="num ${c.cls}${tier ? " t-" + tier : ""}${bar ? " has-bar" : ""}"${note ? ` title="${esc(note)}"` : ""}>${bar}<span>${c.f(v)}</span></td>`;
   };
   const body = rows.map((r, i) => {
     const open = st.open === r.gsis;
     const depth = `../#/team/${encodeURIComponent(r.team)}/player/${encodeURIComponent(r.gsis)}`;
     return `<tr class="an-row${open ? " open" : ""}" data-id="${esc(r.gsis)}" tabindex="0" aria-expanded="${open}">
-      <td class="c-rank">${i + 1}</td>
-      <td class="c-name"><a class="an-pname" href="#/player/${encodeURIComponent(r.gsis)}${q ? "?" + q : ""}">${esc(r.name)}</a>${teamPill(r.team, teams, q)}<span class="an-pospill" data-band="${BAND(r.pos)}">${esc(r.pos)}</span><a class="an-dc" href="${depth}" target="_blank" rel="noopener" title="Open his depth-chart card in a new tab" aria-label="Depth chart">↗</a></td>
+      <td class="c-rank an-stick">${i + 1}</td>
+      <td class="c-name an-stick"><a class="an-pname" href="#/player/${encodeURIComponent(r.gsis)}${q ? "?" + q : ""}" title="${esc(r.name)}">${esc(r.name)}</a>${teamPill(r.team, teams, q)}<span class="an-pospill" data-band="${BAND(r.pos)}">${esc(r.pos)}</span><a class="an-dc" href="${depth}" target="_blank" rel="noopener" title="Open his depth-chart card in a new tab" aria-label="Depth chart">↗</a></td>
       <td class="num">${r.g}</td>
       ${cols.map((c) => cell(c, r)).join("")}
       <td class="c-spark">${sparkline(r.series, st)}</td></tr>`
@@ -233,6 +322,8 @@ export function tableHtml(allRows, st, query, view = {}) {
 // `onState(next)` receives a new filter state (sort, minimum, open row); `query` is the current hash query.
 export function renderTable(el, allRows, st, query, onState, view = {}) {
   el.innerHTML = tableHtml(allRows, st, query, view);
+  fitOpen(el);
+  wireMore(el, () => onState(toggleMore(COLS, st, DEFAULT_SORT)));
 
   el.querySelectorAll("th[data-sort]").forEach((h) => h.addEventListener("click", () => {
     const k = h.dataset.sort === "rank" ? "tgt" : h.dataset.sort;
