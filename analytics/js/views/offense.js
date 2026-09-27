@@ -9,7 +9,7 @@
 // so a rule can address this page alone.
 import { fromQuery, toQuery, seasonsOf, weekLabel } from "../filters.js";
 import { loadFor, loadTeams } from "../data.js";
-import { aggregateTeams, teamReference, teamTier, teamZones, sortTeamRows, OFF_TIER } from "../agg_team.js";
+import { aggregateTeams, teamReference, teamTier, teamZones, sortTeamRows, OFF_TIER, SOFT_KEYS } from "../agg_team.js";
 import { TIER_NAMES } from "../agg.js";
 import { renderFilterBar } from "../filterbar.js";
 import { esc, NA, isNum, pct, fix, signed, teamPill, qbStrips, pfrNote, seasonLabel } from "./qb.js";
@@ -112,9 +112,11 @@ function detailHtml(r, st, q, ref, wn, lgZones, players) {
 
 export const offAnchor = { id: null, top: null };
 
-// PURE (no DOM): the table's markup. view: { ref, teams, windowName, lgZones, players, sort, dir }.
+// PURE (no DOM): the table's markup. view: { ref, teams, windowName, lgZones, players, sort, dir, hl }. `hl`
+// (D208, the Rankings page's hl= query key) is a club abbr whose row gets the "is-hl" class (styled in
+// analytics.css) so a Grid cell or a club tile's Rankings link can point straight at one club's row.
 export function offTableHtml(rows, st, query, view) {
-  const { ref, sort, dir } = view;
+  const { ref, sort, dir, hl } = view;
   const list = sortTeamRows(rows, "off", sort, dir);
   const q = query || "", nCols = 3 + OFF_COLS.length + 1;
   const th = (k, h, t, cls = "") => `<th class="${cls}${sort === k ? " sorted " + dir : ""}" data-sort="${k}" title="${esc(t)}">${h}</th>`;
@@ -137,9 +139,9 @@ export function offTableHtml(rows, st, query, view) {
           bar = `<i class="an-bar" style="width:${Math.min(100, (v / c.bar) * 100).toFixed(1)}%"></i>`;
         }
       }
-      return `<td class="num g-${c.grp}${c.gs ? " gs" : ""}${t ? " t-" + t : ""}${bar ? " has-bar" : ""}${c.signed ? " c-signed" : ""}">${bar}<span>${c.f(v)}</span></td>`;
+      return `<td class="num g-${c.grp}${c.gs ? " gs" : ""}${t ? " t-" + t + (SOFT_KEYS.includes(c.k) ? " t-soft" : "") : ""}${bar ? " has-bar" : ""}${c.signed ? " c-signed" : ""}">${bar}<span>${c.f(v)}</span></td>`;
     }).join("");
-    return `<tr class="an-row${open ? " open" : ""}" data-id="${esc(r.team)}" tabindex="0" aria-expanded="${open}">
+    return `<tr class="an-row${open ? " open" : ""}${r.team === hl ? " is-hl" : ""}" data-id="${esc(r.team)}" tabindex="0" aria-expanded="${open}">
       <td class="c-rank">${i + 1}</td>
       <td class="c-name">${teamPill(r.team, view.teams, q)}<span class="an-def-name">${esc(view.teams?.get(r.team)?.nickname || view.teams?.get(r.team)?.name || r.team)}</span></td>
       <td class="num">${r.g}</td>${cells}<td class="c-spark">${offSpark(r.series.off)}</td></tr>`
@@ -154,8 +156,13 @@ export function offTableHtml(rows, st, query, view) {
     <div class="an-tscroll"><table class="an-table an-def-table"><thead>${groupRow}${head}</thead><tbody>${body || `<tr><td colspan="${nCols}" class="an-empty">No games in this window.</td></tr>`}</tbody></table></div>`;
 }
 
-export async function renderOffense(ctx, query) {
+// `opts.hl` (D208): the club abbr the Rankings page wants highlighted on this side, passed through to
+// offTableHtml's view.hl. Nothing else calls renderOffense with a second table argument (main.js's own /offense
+// route is now an alias, views/rankings.js is the only caller), so this stays a plain optional param rather than
+// something read off the query here too.
+export async function renderOffense(ctx, query, opts = {}) {
   const { root, isCurrent } = ctx;
+  const { hl = "" } = opts;
   const st = fromQuery(query);
   const { sort, dir } = offSort(query, st);
   document.title = "Offense · NFL Analytics";
@@ -195,7 +202,7 @@ export async function renderOffense(ctx, query) {
   </section>`;
   renderFilterBar(root.querySelector(".an-filters"), st, { keys: data.keys, teams: [] }, go);
   const el = root.querySelector(".an-tablewrap");
-  el.innerHTML = offTableHtml(agg.rows, st, qs, { ref, teams, windowName: wn, lgZones: agg.lgZones, players: data.players, sort, dir });
+  el.innerHTML = offTableHtml(agg.rows, st, qs, { ref, teams, windowName: wn, lgZones: agg.lgZones, players: data.players, sort, dir, hl });
   el.querySelectorAll("th[data-sort]").forEach((h) => h.addEventListener("click", () => {
     const k = h.dataset.sort === "rank" ? "epaPlay" : h.dataset.sort;
     const d = sort === k ? (dir === "desc" ? "asc" : "desc") : bestDir(k);

@@ -98,6 +98,16 @@ a { color:inherit; }
 .an-legend span { margin-left:5px; }
 .an-hint { margin-left:auto; color:var(--dim); }
 .t-elite { --t:var(--tier-elite); } .t-strong { --t:var(--tier-strong); } .t-avg { --t:var(--tier-avg); } .t-weak { --t:var(--tier-weak); } .t-flat { --t:var(--tier-flat); }
+/* D203: a "soft" figure (agg_team.js's SOFT_KEYS, e.g. Plays/g) reads as a lean, not a verdict - half the tier's
+   strength, one mechanism rather than five new muted colours. `.t-soft { --t:color-mix(in srgb, var(--t) 50%, ...) }`
+   alone would have --t read its OWN cascaded value (the same custom property on the same element can't reference
+   itself - it computes invalid), so each combined selector below mixes the underlying --tier-* variable directly;
+   paired with the plain .t-elite etc. rule its higher specificity (two classes) wins. */
+.t-soft.t-elite { --t:color-mix(in srgb, var(--tier-elite) 50%, var(--ink)); }
+.t-soft.t-strong { --t:color-mix(in srgb, var(--tier-strong) 50%, var(--ink)); }
+.t-soft.t-avg { --t:color-mix(in srgb, var(--tier-avg) 50%, var(--ink)); }
+.t-soft.t-weak { --t:color-mix(in srgb, var(--tier-weak) 50%, var(--ink)); }
+.t-soft.t-flat { --t:color-mix(in srgb, var(--tier-flat) 50%, var(--ink)); }
 .an-legend i { background:var(--t); }
 
 /* ---- table ---- */
@@ -191,6 +201,15 @@ td[class*=" t-"] > span { color:var(--t); font-weight:700; }
 .an-tile { background:#161b21; border:1px solid #232a31; border-radius:var(--r-row); padding:5px 9px; }
 .an-tile span { display:block; color:var(--dim); font-size:10.5px; font-weight:700; }
 .an-tile b { font-size:17px; color:var(--t, var(--ink)); }
+/* D206: a figure tile that links to the Rankings table sorted by its own column. display:contents drops the <a> out
+   of the box tree so the tile div is still the direct grid/flex item exactly as an unlinked tile would be (an-tm-tiles'
+   grid, an-line-tiles' flex) - wrapping it changes nothing about layout. The link shows only on hover: a cursor, the
+   label underlined, a faint brightness lift (the same "hover slightly brightens" the Grid's own cells already use) -
+   never a colour or border change to the tile's resting look. */
+.an-tile-link { display:contents; }
+.an-tile-link .an-tile { cursor:pointer; }
+.an-tile-link:hover .an-tile { filter:brightness(1.08); }
+.an-tile-link:hover .an-tile span:first-child { text-decoration:underline; text-underline-offset:2px; }
 .an-dlinks { grid-column:1 / -1; display:flex; gap:14px; margin-top:4px; font-size:12.5px; }
 .an-dlinks a { color:var(--accent); text-decoration:none; font-weight:600; }
 .an-dlinks a:hover { text-decoration:underline; }
@@ -448,6 +467,15 @@ td[class*=" t-"] > span { color:var(--t); font-weight:700; }
 .an-tm-v { text-align:right; color:var(--t, var(--ink)); font-size:13.5px; }
 .an-tm-sub { color:var(--muted); font-size:11.5px; white-space:nowrap; }
 .an-tm-epa { font-weight:700; color:var(--t, var(--ink)); }
+/* D205: the club page's own Grid row - the same .gc cell views/grid.js draws (an-line already carries the --gp-*
+   colour variables from analytics_grid.css, so nothing here needs to redefine them), with a short label above each
+   cell, sized to sit in one flowing row rather than a table column. */
+.an-tm-gridrow { margin-bottom:2px; }
+.an-tm-gridcells { display:flex; flex-wrap:wrap; gap:10px; }
+.an-tm-gc { display:flex; flex-direction:column; align-items:center; gap:5px; }
+.an-tm-gc-label { color:var(--muted); font-size:11px; font-weight:700; text-align:center; white-space:nowrap; }
+.an-tm-gc .gc { width:112px; height:48px; }
+.an-tm-gc .gc b { font-size:19px; }
 
 /* ---- defense leaderboard (#/defense) ---- */
 .an-def-name { color:var(--ink); font-weight:700; }
@@ -475,3 +503,9 @@ td[class*=" t-"] > span { color:var(--t); font-weight:700; }
 .an-def-table thead th { z-index:2; }
 /* .c-name is a flex row for the body cells; the header cell must stay a table cell to stick and cover the rows. */
 .an-def-table th.c-name { display:table-cell; }
+
+/* ---- Rankings (#/rankings, D208): the hl= query key highlights one club's row on either side's table. An inset
+   accent stripe rather than a background tint alone, so it still reads next to an expanded (.open) row's own
+   faint tint instead of blending into it. */
+.an-row.is-hl { box-shadow: inset 3px 0 0 var(--accent); }
+.an-row.is-hl td:first-child { padding-left:9px; }

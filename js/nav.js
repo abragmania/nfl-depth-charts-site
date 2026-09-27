@@ -51,8 +51,8 @@ export function navStripHtml({ teams, abbr, page, unit, bandLabel, bandSlug, opp
   const analyticsLink = `<a class="nav-help nav-analytics" href="${esc(analyticsHrefFor(page, unit, abbr))}" target="_blank" rel="noopener" title="Open this team in NFL Analytics">Analytics ↗</a>`;
   const pills = `<span class="nav-strip-pills">
     ${pill("Team", `#/team/${A}`, page === "team")}
-    ${pill("Offense", `#/team/${A}/off`, offLit)}
-    ${pill("Defense", `#/team/${A}/def`, defLit)}
+    ${pill("Offense Depth", `#/team/${A}/off`, offLit)}
+    ${pill("Defense Depth", `#/team/${A}/def`, defLit)}
     ${pill("Matchup", `#/matchup/${A}`, page === "matchup")}
     ${HELP_LINK}
     ${analyticsLink}

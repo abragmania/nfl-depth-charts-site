@@ -7,8 +7,8 @@
 import { backLink } from "../router.js";
 import { fromQuery, toQuery, seasonsOf, weekLabel } from "../filters.js";
 import { loadFor, loadTeams, loadStatusFeed, loadClubCards, displayName } from "../data.js";
-import { aggregateTeams, teamReference, teamTier, teamRank, teamZones, teamTargets, teamCarries } from "../agg_team.js";
-import { gridRows } from "../agg_grid.js";
+import { aggregateTeams, teamReference, teamTier, teamRank, teamZones, teamTargets, teamCarries, OFF_TIER, DEF_TIER, SOFT_KEYS } from "../agg_team.js";
+import { gridRows, GRID_CATEGORIES, displayed } from "../agg_grid.js";
 import { absences, isMissing } from "../agg_absence.js";
 import { renderFilterBar } from "../filterbar.js";
 import { esc, NA, isNum, pct, fix, signed, int, teamPill, qbStrips, qbZoneField, qbZoneName, QB_ZONE_MODES, pfrNote, seasonLabel } from "./qb.js";
@@ -41,6 +41,52 @@ export function teamSideSeg(abbr, qs, active) {
 // grid.js already imports from this file and importing it back here would risk a module cycle).
 const OLINE_PASS_PROXY = "Pressure %, hit % and hurry % allowed: proxy for the line — the quarterback, backs and tight ends share the blame.";
 const OLINE_RUN_PROXY = "Stuffed % and yards before contact: proxy for the line — the back's vision is in it.";
+
+// D206: every figure tile links to the Rankings table sorted by its own column, the club highlighted - but only when
+// the key actually has a column there. These mirror views/offense.js's OFF_COLS and views/defense.js's DEF_COLS key
+// lists (read-only) rather than importing them: both those files already import from this one (teamPageState and
+// friends), so importing them back here would risk a module cycle - the same reason OLINE_PASS_PROXY/OLINE_RUN_PROXY
+// above are copied rather than imported from views/grid.js. Keep these two sets in step with OFF_COLS/DEF_COLS by hand.
+export const RANKINGS_OFF_KEYS = new Set(["epaPlay", "succPct", "explPct", "playsG", "passRate", "epaDb", "cmpPct", "adot", "sackPct", "pressPct", "paPct", "epaCar", "ypc", "rushYdsG", "stuffPct", "ybcCar"]);
+export const RANKINGS_DEF_KEYS = new Set(["epaPlay", "succPct", "explPct", "playsG", "epaDb", "cmpPct", "adot", "sackPct", "pressPct", "pressuresG", "blitzPct", "epaCar", "ypc"]);
+// The direction that puts the best club first for a key (OFF_TIER/DEF_TIER's -1 = lower is better = ascending;
+// everything else, including a neutral key, descending) - the offense/defense tables' own bestDir rule.
+const rankingsBestDir = (side, k) => ((side === "def" ? DEF_TIER : OFF_TIER)[k] === -1 ? "asc" : "desc");
+// The href for one tile's figure: side ("off"/"def"), the key, the club's abbreviation, and the page's current
+// filter query (carried the way every other link on this page already carries it).
+export function rankingsHref(side, k, abbr, qs) {
+  return `#/rankings?side=${side}&sort=${encodeURIComponent(k)}&dir=${rankingsBestDir(side, k)}&hl=${encodeURIComponent(abbr)}${qs ? "&" + qs : ""}`;
+}
+
+// D205: the club page's own Grid row - the same 0-100 ratings, figures and ranks agg_grid.js's gridRows() computes
+// for the Grid page, for the side being shown, in the Grid's own cell markup (views/grid.js's .gc). gridStop/tileAmt/
+// figText below mirror grid.js's own formulas byte for byte rather than importing them, for the same module-cycle
+// reason as OLINE_PASS_PROXY/OLINE_RUN_PROXY (kit.js's lineBlock duplicates the same two formulas for its chips).
+const clubGridStop = (rating) => (Number.isFinite(rating) ? Math.min(1, Math.max(0, (rating - 20) / 60)) : null);
+const clubTileAmt = (g) => 22 + 50 * Math.sqrt(Math.abs(2 * g - 1));
+function clubFigText(v, f) {
+  if (v === null || v === undefined || !Number.isFinite(+v)) return "–";
+  let x = displayed(+v, f);
+  if (Object.is(x, -0)) x = 0;
+  const body = Math.abs(x).toFixed(f.digits);
+  const sign = f.signed ? (x > 0 ? "+" : x < 0 ? "−" : "") : x < 0 ? "−" : "";
+  return `${sign}${body}${f.pct ? "%" : ""}`;
+}
+// gridRow: gridRows()'s row for this club (or undefined - every cell then reads "not yet"); side: "off" or "def".
+export function clubGridRowHtml(gridRow, side) {
+  const cats = GRID_CATEGORIES.filter((c) => c[side]);
+  const cells = cats.map((c) => {
+    const figs = c[side];
+    const lead = figs.find((f) => f.lead) || figs[0];
+    const label = side === "off" ? (c.offLabel || c.label) : (c.defLabel || c.label);
+    const cell = gridRow?.cells?.[c.key]?.[side] || null;
+    const body = !cell || cell.value === null || cell.value === undefined
+      ? `<div class="gc gc-null"><b>not yet</b></div>`
+      : `<div class="gc" style="--g:${clubGridStop(cell.rating).toFixed(3)};--amt:${clubTileAmt(clubGridStop(cell.rating)).toFixed(1)}%"><b>${cell.rating}</b><span>${esc(clubFigText(cell.value, lead))} · ${esc(ordinal(cell.rank))}</span></div>`;
+    return `<div class="an-tm-gc" title="${esc(`${label}: ${c.note}`)}"><span class="an-tm-gc-label">${esc(label)}</span>${body}</div>`;
+  }).join("");
+  return `<div class="an-card an-line an-tm-gridrow"><div class="an-dh">Grid <span class="an-dsub">the same 0-100 ratings the Team grid shows for this club</span></div><div class="an-tm-gridcells">${cells}</div></div>`;
+}
 
 // qbZoneField speaks of one passer ("his", "every QB"); on a club's field the words become the club's and the league's.
 export function clubZoneField(zones, mode, opts, side = "off") {
@@ -96,7 +142,7 @@ export async function renderTeams(ctx, query) {
     divs.get(t.division).push(t);
   }
   root.innerHTML = teams.length ? `<section class="an-teams">
-    <div class="an-head"><h1>Teams</h1><div class="an-sub">Pick a club for its offense page; its defense page sits beside it (Offense | Defense), and the league tables are <a href="#/offense${q ? "?" + q : ""}">Offense</a> and <a href="#/defense${q ? "?" + q : ""}">Defense</a>.</div></div>
+    <div class="an-head"><h1>Teams</h1><div class="an-sub">Pick a club for its offense page; its defense page sits beside it (Offense | Defense), and the league tables are <a href="#/rankings?side=off${q ? "&" + q : ""}">Offense rankings</a> and <a href="#/rankings?side=def${q ? "&" + q : ""}">Defense rankings</a>.</div></div>
     <div class="an-tm-grid">${[...divs].map(([d, list]) => `<div class="an-tm-div"><div class="an-dh">${esc(d)}</div>${list.map((t) =>
       `<div class="an-tm-pick">${teamPill(t.abbr, new Map([[t.abbr, t]]), q, "an-tm-pill")}<a href="#/team/${esc(t.abbr)}${q ? "?" + q : ""}">${esc(t.name)}</a></div>`).join("")}</div>`).join("")}</div>
   </section>` : `<div class="an-msg">The team list could not be loaded.</div>`;
@@ -142,12 +188,19 @@ export async function renderTeam(ctx, params, query) {
   const wn = windowName(st, win.weeks);
   const pnote = pfrNote(win.pfrThrough, win.latestKey, st.season);
   const activeKey = st.window === "range" && st.from && st.from === st.to ? st.from : null;
+  // D198: the O-line block's headline chips are the grid's own passPro/runBlock ratings for this club (agg_grid.js
+  // gridRows on the same window rows the tiles read, so the block always agrees with the Grid page); D205 needs the
+  // same row for the club's own Grid row, above the tiles, so it is computed up here rather than just before olineHtml.
+  const gridRow = gridRows(win).find((r) => r.team === abbr);
 
   const tile = (label, val, k, lg, title = "") => {
     const tr = k ? teamTier("off", k, O[k], ref.cuts) : "";
+    const soft = tr && SOFT_KEYS.includes(k) ? " t-soft" : "";
     const rk = k && isNum(O[k]) ? teamRank(win.rows, "off", k, abbr) : null;
     const tip = [title, rk ? `${ordinal(rk.rank)} of ${rk.of} clubs` : ""].filter(Boolean).join(" · ");
-    return `<div class="an-tile${tr ? " t-" + tr : ""}"${tip ? ` title="${esc(tip)}"` : ""}><span>${label}</span><b>${val}</b>${lg && !String(lg).includes("an-na") ? `<em> · lg ${lg}</em>` : ""}</div>`;
+    const body = `<div class="an-tile${tr ? " t-" + tr : ""}${soft}"${tip ? ` title="${esc(tip)}"` : ""}><span>${label}</span><b>${val}</b>${lg && !String(lg).includes("an-na") ? `<em> · lg ${lg}</em>` : ""}</div>`;
+    // D206: linked only when the key has a Rankings column.
+    return RANKINGS_OFF_KEYS.has(k) ? `<a class="an-tile-link" href="${rankingsHref("off", k, abbr, qs)}">${body}</a>` : body;
   };
   const tiles = [
     tile("Plays/g", fix(O.playsG, 1), "playsG", fix(L.playsG, 1), "Plays per game: pass attempts, sacks, scrambles and designed runs (no penalties, kneels or spikes)"),
@@ -164,10 +217,7 @@ export async function renderTeam(ctx, params, query) {
     tile("Explosive %", P(O.explPct), "explPct", P(L.explPct), "Runs of 10+ yards and completions of 20+ / plays"),
   ].join("");
 
-  // D198: the O-line block, after the tiles and before Week by week. The headline chips are the grid's own passPro/
-  // runBlock ratings for this club (agg_grid.js gridRows on the same window rows the tiles read), so the block always
-  // agrees with the Grid page.
-  const gridRow = gridRows(win).find((r) => r.team === abbr);
+  // D198: the O-line block, after the tiles and before Week by week.
   const passProCell = gridRow?.cells?.passPro?.off || null;
   const runBlockCell = gridRow?.cells?.runBlock?.off || null;
   const olTile = (label, k, sub, digits = null) => {
@@ -177,8 +227,10 @@ export async function renderTeam(ctx, params, query) {
     const fmt = (x) => (digits === null ? P(x) : fix(x, digits));
     // lineBlock's own tileData() normalizes this - no need to call it here too. D199 review: match the headline
     // chips' "12th of 32" wording (no "clubs") rather than the tile's own "22nd of 32 clubs".
+    // D206: linked only when the key has a Rankings column (kit.js's lineBlock wraps a tile in <a> when href is set).
     return { label, value: isNum(v) ? fmt(v) : NA, lg: isNum(lgv) ? fmt(lgv) : null,
-      rank: rk ? ordinal(rk.rank) : null, rankOf: rk ? String(rk.of) : null, sub, tier: tr };
+      rank: rk ? ordinal(rk.rank) : null, rankOf: rk ? String(rk.of) : null, sub, tier: tr,
+      href: RANKINGS_OFF_KEYS.has(k) ? rankingsHref("off", k, abbr, qs) : null };
   };
   const olineHtml = lineBlock({
     title: "O-line",
@@ -237,6 +289,7 @@ export async function renderTeam(ctx, params, query) {
     <div class="an-sub an-pl-sub">${esc(sub)}</div>
     ${data.missing.length ? `<div class="an-warn">${esc(data.missing.join(", "))} files are not built yet.</div>` : ""}
     ${row ? "" : `<div class="an-warn">No plays for ${esc(abbr)} in this window.</div>`}
+    ${clubGridRowHtml(gridRow, "off")}
     <div data-lost>${lostHtml()}</div>
     <div class="an-pl-tiles an-tm-tiles">${tiles}</div>
     ${olineHtml}
