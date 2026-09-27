@@ -1,8 +1,10 @@
 // NFL Analytics (D177): a separate app from the depth charts, opened in its own tab from the depth-chart app
 // bar. D193 (2026-09-25) regrouped the app bar into PLAYERS (Quarterbacks, Running backs, Receivers) and TEAMS
 // (Offense, Defense, Grid); Receivers is today's Usage view and Running backs is today's Rushing view, each
-// keeping its own title and body this increment (only the route, nav and default position chip move). The old
-// links (#/usage, #/rushing, #/teams, #/team) keep working as aliases so nothing already bookmarked breaks.
+// keeping its own title and body this increment (only the route, nav and default position chip move). D198
+// (2026-09-26) split TEAMS into Teams (the club picker), Offense (a new league table), Defense and Grid, and
+// gave every club a defense sub-page beside its offense page. The old links (#/usage, #/rushing, #/teams,
+// #/team) keep working as aliases so nothing already bookmarked breaks.
 import * as router from "./router.js";
 import { renderNav, sectionForPos } from "./nav.js";
 import { renderUsage } from "./views/usage.js";
@@ -11,6 +13,8 @@ import { renderQb } from "./views/qb.js";
 import { renderQbPlayer } from "./views/qbplayer.js";
 import { renderRushing } from "./views/rushing.js";
 import { renderTeams, renderTeam } from "./views/team.js";
+import { renderOffense } from "./views/offense.js";
+import { renderTeamDefense } from "./views/team_def.js";
 import { renderDefense } from "./views/defense.js";
 import { renderGrid } from "./views/grid.js";
 import { loadSeason } from "./data.js";
@@ -94,11 +98,17 @@ router.on("/player/:gsis", view("", async (p, q, ctx) => {
 router.on("/qb", view("qb", (p, q, ctx) => renderQb(ctx, q)));
 router.on("/rbs", view("rbs", (p, q, ctx) => renderRushing(ctx, q)));
 router.on("/rushing", view("rbs", (p, q, ctx) => renderRushing(ctx, q))); // alias, D193
-// #/teams (and a bare #/team) is the club picker, Offense-tab; #/team/:abbr the club's offense; #/defense the
-// defense leaderboard, whose expanded row is the defense page in v1 (D179); #/grid the team grid (stub).
+// D198 (2026-09-26): #/teams (and a bare #/team) is the club picker, its own "Teams" tab; #/offense the new
+// league-wide Offense table; #/team/:abbr the club's offense page (old links hold; /offense is an alias of it);
+// #/team/:abbr/defense the club's new defense page; #/defense stays the defense leaderboard; #/grid the team grid.
+// All three of a club's addresses light the "teams" tab (the picker's own tab), matching router.previousPage's
+// rule that they are one page for the Back button.
 router.on("/teams", view("teams", (p, q, ctx) => renderTeams(ctx, q)));
 router.on("/team", view("teams", (p, q, ctx) => renderTeams(ctx, q)));
+router.on("/offense", view("offense", (p, q, ctx) => renderOffense(ctx, q)));
 router.on("/team/:abbr", view("teams", (p, q, ctx) => renderTeam(ctx, p, q)));
+router.on("/team/:abbr/offense", view("teams", (p, q, ctx) => renderTeam(ctx, p, q))); // alias of the club's offense page
+router.on("/team/:abbr/defense", view("teams", (p, q, ctx) => renderTeamDefense(ctx, p, q)));
 router.on("/defense", view("defense", (p, q, ctx) => renderDefense(ctx, q)));
 router.on("/grid", view("grid", (p, q, ctx) => renderGrid(ctx, q)));
 // "/" is its own route above; any hash that matches nothing (a stale link, a typo) goes to Receivers too, the

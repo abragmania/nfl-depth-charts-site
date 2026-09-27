@@ -6,13 +6,15 @@
 // interactivity). Every figure comes from agg_team.js (pure); this file draws and wires clicks.
 import { backLink } from "../router.js";
 import { fromQuery, toQuery, seasonsOf, weekLabel } from "../filters.js";
-import { loadFor, loadTeams, loadStatusFeed, displayName } from "../data.js";
+import { loadFor, loadTeams, loadStatusFeed, loadClubCards, displayName } from "../data.js";
 import { aggregateTeams, teamReference, teamTier, teamRank, teamZones, teamTargets, teamCarries } from "../agg_team.js";
+import { gridRows } from "../agg_grid.js";
 import { absences, isMissing } from "../agg_absence.js";
 import { renderFilterBar } from "../filterbar.js";
 import { esc, NA, isNum, pct, fix, signed, int, teamPill, qbStrips, qbZoneField, qbZoneName, QB_ZONE_MODES, pfrNote, seasonLabel } from "./qb.js";
 import { windowName } from "./qbplayer.js";
-import { statusChip, statusNameClass } from "./kit.js";
+import { lostCardHtml } from "./lost.js";
+import { lineBlock } from "./kit.js";
 
 const P = (v, d = 1) => (isNum(v) ? pct(v, d) + "%" : NA);
 const BAND = (pos) => (pos === "RB" || pos === "FB" ? "BACKFIELD" : pos);
@@ -21,6 +23,24 @@ const ord = (n) => (n === 1 ? "1st" : n === 2 ? "2nd" : n === 3 ? "3rd" : n === 
 
 // The page ignores the position chips, team and opponent (one club; its reference is every club in the window).
 export const teamPageState = (st) => ({ ...st, team: "", opp: "", ha: "", downs: [], qtrs: [], pos: {} });
+
+// D198: the header's Offense | Defense segment, shared by team.js's offense sub-page and team_def.js's defense
+// sub-page (replaces the old plain "Offense" side label and the "Defense →" link, which pointed at the Defense
+// leaderboard's expanded row before a club had its own defense page). `active` is "off" or "def"; qs carries the
+// page's filters.
+export function teamSideSeg(abbr, qs, active) {
+  const A = encodeURIComponent(abbr), q = qs ? "?" + qs : "";
+  const off = active === "off";
+  return `<div class="an-tm-seg" role="tablist">` +
+    `<a class="an-tm-segbtn${off ? " on" : ""}" href="#/team/${A}${q}" aria-current="${off}">Offense</a>` +
+    `<a class="an-tm-segbtn${off ? "" : " on"}" href="#/team/${A}/defense${q}" aria-current="${!off}">Defense</a>` +
+    `</div>`;
+}
+
+// D198: the O-line block's proxy note (mirrors views/grid.js's PROXY_TEXT wording verbatim; not imported, since
+// grid.js already imports from this file and importing it back here would risk a module cycle).
+const OLINE_PASS_PROXY = "Pressure %, hit % and hurry % allowed: proxy for the line — the quarterback, backs and tight ends share the blame.";
+const OLINE_RUN_PROXY = "Stuffed % and yards before contact: proxy for the line — the back's vision is in it.";
 
 // qbZoneField speaks of one passer ("his", "every QB"); on a club's field the words become the club's and the league's.
 export function clubZoneField(zones, mode, opts, side = "off") {
@@ -59,99 +79,8 @@ export function distList(items, q, { max = 0.35, lg = null, lgLabel = "" } = {})
     + `<b class="an-tm-v">${x.main}</b><span class="an-tm-sub">${x.sub}</span></div>`).join("")}</div>`;
 }
 
-// ---- "What's been lost" (D196 C) -------------------------------------------------------------------------------
-// PURE: the card above the tiles from absences()'s list (agg_absence.js). Drawn only when the injury feed's season is
-// the season on screen (the statuses are this season's) and the club has at least one listed man; otherwise "".
-// Skill men first (absences() already orders them), each with his status, games missed, the shares he held over his
-// BEFORE window and, when the club has played since, who has absorbed them (the depth chart's fill-in first) and the
-// club's passes and runs per game before and since. Linemen and defenders are names only, each a link to the club's
-// depth chart. opts: { season (on screen), feedSeason, abbr, q (the page's query, for player links), feedPlayers (the
-// feed's players map: the chip and the played-this-season test read each man's full feed entry, so the hover carries
-// ESPN's note as on every other page; absences()'s own copy of the status is the fallback) }.
-export const LOST_TIP = "Before: his last 4 games played for the club, a game he left early skipped, last season's when he has none this season; since: the club's games after his last one; every share is of the club's total in those games, and \"pts\" are percentage points of that share.";
-// The injury after the kit's short chip (which prints the code only): the first part of ESPN's detail, lowered
-// ("Knee - ACL (Leg) - Surgery" -> "knee"); the chip's hover carries the whole detail.
-export function lostInjury(detail) {
-  return String(detail || "").split(/\s+\(|\s+-\s+/)[0].trim().toLowerCase();
-}
-const whole = (v) => `${Math.round(v * 100)}%`;
-const perG = (v) => (isNum(v) ? String(Math.round(v)) : "–");
-export function lostCardHtml(list, { season, feedSeason, abbr = "", q = "", feedPlayers = null } = {}) {
-  if (feedSeason == null || +feedSeason !== +season || !list?.length) return "";
-  const qq = q ? "?" + q : "";
-  const who = (id, name, cls = "") => `<a${cls ? ` class="${cls}"` : ""} href="#/player/${encodeURIComponent(id)}${qq}">${esc(name)}</a>`;
-  const statusBits = (r) => {
-    const fe = feedPlayers?.[r.gsis] ?? null;
-    const s = fe ?? r.status ?? {};
-    const lp = s.lastPlayed;
-    const notYet = fe && typeof fe.playedThisSeason === "boolean" ? !fe.playedThisSeason : !lp || +lp.season !== +feedSeason;
-    const missed = notYet ? "hasn't played this season" : isNum(s.missed) && s.missed > 0 ? `missed ${s.missed}` : "";
-    const inj = lostInjury(s.detail);
-    return { html: statusChip(s) + (inj ? ` <span class="an-tm-lostinj">${esc(inj)}</span>` : ""), missed, nameCls: statusNameClass(s) };
-  };
-  const skill = list.filter((r) => !r.nameOnly), names = list.filter((r) => r.nameOnly);
-  const man = (r) => {
-    const st = statusBits(r);
-    const head = `<div class="an-tm-losthead">${who(r.gsis, r.name, `an-tm-lostname${st.nameCls ? " " + st.nameCls : ""}`)}`
-      + `<span class="an-pospill" data-band="${esc(BAND(r.pos))}">${esc(r.pos)}</span>`
-      + `<span class="an-tm-loststat">${st.html}</span>`
-      + (st.missed ? `<span class="an-tm-lostmiss">${esc(st.missed)}</span>` : "") + `</div>`;
-    if (r.noData) return `<div class="an-tm-lostman">${head}<div class="an-tm-lostbefore">no data: no games for the club to measure him on</div></div>`;
-    const b = r.before || {};
-    const held = [[b.attShare, "attempts"], [b.tgtShare, "targets"], [b.carShare, "carries"], [b.rzShare, "RZ looks"], [b.ayShare, "air yards"], [b.snapShare, "snaps"]]
-      .filter(([v]) => isNum(v) && Math.round(v * 100) > 0).map(([v, w]) => `${whole(v)} ${w}`);
-    const n = b.games || 0;
-    const over = r.priorSeason ? `over last season's last ${n === 1 ? "game" : n}` : n === 1 ? "over his last game" : `over his last ${n}`;
-    const before = `<div class="an-tm-lostbefore">${held.length ? `held ${held.join(", ")} ${over}` : `held no measurable share ${over}`}</div>`;
-    let since = "";
-    if (r.sinceGames > 0) {
-      // The fill-in first whether or not his share rose, then everyone else who rose; each named by his largest rise.
-      const rows = [...(r.fillIn ? [r.fillIn] : []), ...(r.absorbed || []).filter((a) => a.gsis !== r.fillIn?.gsis)].slice(0, 4);
-      let lastWord = "";
-      const took = rows.map((a) => {
-        const k = [["tgtShare", "targets"], ["carShare", "carries"], ["attShare", "attempts"]].find(([key]) => isNum(a[key]?.change) && a[key].change === a.change);
-        const n = isNum(a.change) ? Math.round(a.change * 100) : null;
-        const pts = n === null ? "" : `${n >= 0 ? "+" : "−"}${Math.abs(n)}`;
-        const word = k ? k[1] : "";
-        // The unit on every name; the metric word only when it differs from the name before's.
-        const unit = pts ? ` pt${Math.abs(n) === 1 ? "" : "s"}${word && word !== lastWord ? " " + word : ""}` : "";
-        if (word) lastWord = word;
-        return `<span class="an-tm-lostitem">${who(a.gsis, a.name)}${a.fillIn ? `<span class="an-tm-lostfill" title="the depth chart's fill-in">fill-in</span>` : ""}${pts ? ` ${pts}${unit}` : ""}</span>`;
-      });
-      const c = r.club || {};
-      const club = `<span class="an-tm-lostitem">club passes/g ${perG(c.before?.passG)} → ${perG(c.since?.passG)}, runs/g ${perG(c.before?.runG)} → ${perG(c.since?.runG)}</span>`;
-      const one = r.sinceGames === 1;
-      since = `<div class="an-tm-lostsince${one ? " is-one" : ""}"${one ? ` title="One game since: too few to read much into"` : ""}>since (${r.sinceGames} game${one ? "" : "s"}): ${[...took, club].join(" · ")}</div>`;
-    }
-    const foot = r.leftEarly ? `<div class="an-tm-lostfoot">left the last one early; that game is not counted</div>` : "";
-    return `<div class="an-tm-lostman">${head}${before}${since}${foot}</div>`;
-  };
-  // D196 C follow-up (2026-09-25): a names-only man (a lineman, a defender) used to link only to the club's whole
-  // depth chart, never to his own card. agg_absence.js's rows are keyed by gsis (the status feed only ever carries
-  // a man with one, server/compile/statusfeed.js), so every row here already has one and opens his own analytics
-  // page, same link shape as every skill man above; `playerKey` (the depth chart's own id, distinct from gsis) is
-  // never on an absence row today, so that branch is unreached until agg_absence.js is asked to carry one - kept
-  // here rather than dropped, so the fallback the next builder needs to add is a one-line change, not a rewrite.
-  const nameLine = (r) => {
-    const st = statusBits(r);
-    const cls = `an-tm-lostname${st.nameCls ? " " + st.nameCls : ""}`;
-    const nameLink = r.gsis
-      ? who(r.gsis, r.name, cls)
-      : r.playerKey
-        ? `<a class="${cls}" href="../#/team/${encodeURIComponent(abbr)}/player/${encodeURIComponent(r.playerKey)}" target="_blank" rel="noopener" title="on the depth chart">${esc(r.name)}</a>`
-        : `<a class="${cls}" href="../#/team/${encodeURIComponent(abbr)}" target="_blank" rel="noopener" title="on the depth chart">${esc(r.name)}</a>`;
-    return `<span class="an-tm-lostline"><span class="an-tm-lostpos">${esc(r.pos)}</span> ${nameLink} <span class="an-tm-loststat">${st.html}</span>${st.missed ? ` · ${esc(st.missed)}` : ""}</span>`;
-  };
-  return `<div class="an-card an-tm-lost"><div class="an-dh" title="${esc(LOST_TIP)}">What's been lost <span class="an-dsub">who is missing, the share of the work he held before, and who has taken it since</span></div>`
-    + (skill.length ? `<div class="an-tm-lostmen">${skill.map(man).join("")}</div>` : "")
-    // Names-only men split by side (absences()'s `side`: "def" for a defender, "off" for everyone else), offense first,
-    // a side with nobody left out.
-    + (names.length ? `<div class="an-tm-lostnames">${[["off", "Offense:"], ["def", "Defense:"]].map(([sd, label]) => {
-      const men = names.filter((r) => (r.side === "def" ? "def" : "off") === sd);
-      return men.length ? `<span class="an-tm-lostside">${label}</span>${men.map(nameLine).join("")}` : "";
-    }).join("")}</div>` : "")
-    + `</div>`;
-}
+// "What's been lost" (D196 C, D199): the card is drawn by views/lost.js lostCardHtml; this page fetches its inputs
+// (fillLost, below) and places it above the tiles.
 
 // ---- #/teams: the picker -------------------------------------------------------------------------------------
 export async function renderTeams(ctx, query) {
@@ -167,14 +96,14 @@ export async function renderTeams(ctx, query) {
     divs.get(t.division).push(t);
   }
   root.innerHTML = teams.length ? `<section class="an-teams">
-    <div class="an-head"><h1>Teams</h1><div class="an-sub">Pick a club for its offense: tiles against the league, week by week, the pass zone field, and who gets the targets and carries. Its defense is on the <a href="#/defense${q ? "?" + q : ""}">Defense</a> page.</div></div>
+    <div class="an-head"><h1>Teams</h1><div class="an-sub">Pick a club for its offense page; its defense page sits beside it (Offense | Defense), and the league tables are <a href="#/offense${q ? "?" + q : ""}">Offense</a> and <a href="#/defense${q ? "?" + q : ""}">Defense</a>.</div></div>
     <div class="an-tm-grid">${[...divs].map(([d, list]) => `<div class="an-tm-div"><div class="an-dh">${esc(d)}</div>${list.map((t) =>
       `<div class="an-tm-pick">${teamPill(t.abbr, new Map([[t.abbr, t]]), q, "an-tm-pill")}<a href="#/team/${esc(t.abbr)}${q ? "?" + q : ""}">${esc(t.name)}</a></div>`).join("")}</div>`).join("")}</div>
   </section>` : `<div class="an-msg">The team list could not be loaded.</div>`;
 }
 
 // ---- #/team/:abbr: the offense ---------------------------------------------------------------------------------
-const ui = { team: null, zoneMode: "att", zone: null, lost: { key: null, list: null, feed: null } };
+const ui = { team: null, zoneMode: "att", zone: null, lost: { key: null, list: null, feed: null, cards: null } };
 
 export async function renderTeam(ctx, params, query) {
   const { root, isCurrent } = ctx;
@@ -235,6 +164,39 @@ export async function renderTeam(ctx, params, query) {
     tile("Explosive %", P(O.explPct), "explPct", P(L.explPct), "Runs of 10+ yards and completions of 20+ / plays"),
   ].join("");
 
+  // D198: the O-line block, after the tiles and before Week by week. The headline chips are the grid's own passPro/
+  // runBlock ratings for this club (agg_grid.js gridRows on the same window rows the tiles read), so the block always
+  // agrees with the Grid page.
+  const gridRow = gridRows(win).find((r) => r.team === abbr);
+  const passProCell = gridRow?.cells?.passPro?.off || null;
+  const runBlockCell = gridRow?.cells?.runBlock?.off || null;
+  const olTile = (label, k, sub, digits = null) => {
+    const v = O[k], lgv = L[k];
+    const tr = teamTier("off", k, v, ref.cuts);
+    const rk = isNum(v) ? teamRank(win.rows, "off", k, abbr) : null;
+    const fmt = (x) => (digits === null ? P(x) : fix(x, digits));
+    // lineBlock's own tileData() normalizes this - no need to call it here too. D199 review: match the headline
+    // chips' "12th of 32" wording (no "clubs") rather than the tile's own "22nd of 32 clubs".
+    return { label, value: isNum(v) ? fmt(v) : NA, lg: isNum(lgv) ? fmt(lgv) : null,
+      rank: rk ? ordinal(rk.rank) : null, rankOf: rk ? String(rk.of) : null, sub, tier: tr };
+  };
+  const olineHtml = lineBlock({
+    title: "O-line",
+    headline: [
+      { label: "Pass protection", rating: passProCell?.rating ?? null, rank: isNum(passProCell?.rank) ? ordinal(passProCell.rank) : null, of: passProCell ? String(passProCell.n) : null, title: "Ranks on pressure % allowed (PFR); the grid's own rating (50 = league average)" },
+      { label: "Run blocking", rating: runBlockCell?.rating ?? null, rank: isNum(runBlockCell?.rank) ? ordinal(runBlockCell.rank) : null, of: runBlockCell ? String(runBlockCell.n) : null, title: "Ranks on yards before contact per carry (PFR); the grid's own rating (50 = league average)" },
+    ],
+    tiles: [
+      olTile("Pressure % allowed", "pressPctAllowed", `${O.pfrPress ?? 0} pressures`),
+      olTile("Hit % allowed", "hitPctAllowed", `${O.pfrHits ?? 0} hits`),
+      olTile("Hurry % allowed", "hurryPctAllowed", `${O.pfrHurries ?? 0} hurries`),
+      olTile("Sack % allowed", "sackPct", `${O.sacks ?? 0} sacks`),
+      olTile("Stuffed %", "stuffPct", `${O.stuffed ?? 0} stuffed`),
+      olTile("YBC/carry", "ybcCar", `${O.ybcCarries ?? 0} carries`, 2),
+    ],
+    foot: esc([OLINE_PASS_PROXY, OLINE_RUN_PROXY, pnote].filter(Boolean).join(" ")),
+  });
+
   // Week by week over the whole loaded timeline, the window's weeks bright.
   const frow = full.rows.find((r) => r.team === abbr);
   const winKeys = new Set(win.weeks);
@@ -265,11 +227,11 @@ export async function renderTeam(ctx, params, query) {
   const sub = `${seasonLabel(st)} · ${win.weeks.length ? (win.weeks.length === 1 ? weekLabel(win.weeks[0], st.season) : `${weekLabel(win.weeks[0], st.season)} to ${weekLabel(win.weeks[win.weeks.length - 1], st.season)}`) : "no games"}${st.window === "last3" ? " (each club's last 3 games)" : ""} · ${row?.g ?? 0} game${row?.g === 1 ? "" : "s"} · league reference: ${ref.text}${pnote ? " · " + pnote : ""}`;
   const pill = t ? teamPill(abbr, teams, qs, "an-pl-pill an-tm-headpill") : "";
   const lostKey = [abbr, st.season, st.pi, st.po].join("|");
-  const lostHtml = () => (ui.lost.key === lostKey && ui.lost.feed ? lostCardHtml(ui.lost.list, { season: st.season, feedSeason: ui.lost.feed.season, abbr, q: qs, feedPlayers: ui.lost.feed.players }) : "");
+  const lostHtml = () => (ui.lost.key === lostKey && ui.lost.feed ? lostCardHtml(ui.lost.list, { season: st.season, feedSeason: ui.lost.feed.season, abbr, q: qs, feedPlayers: ui.lost.feed.players, cards: ui.lost.cards, side: "off" }) : "");
   root.innerHTML = `<section class="an-pl an-tm">
     <div class="an-pl-head">
-      ${backLink(`#/teams${qs ? "?" + qs : ""}`, "Teams")}${pill}<h1>${esc(t?.name || abbr)}</h1><span class="an-tm-side">Offense</span>
-      <div class="an-pl-links"><a href="../#/team/${encodeURIComponent(abbr)}" target="_blank" rel="noopener">Depth chart ↗</a><a href="#/defense?${new URLSearchParams([...new URLSearchParams(qs), ["open", abbr]]).toString()}">Defense →</a></div>
+      ${backLink(`#/teams${qs ? "?" + qs : ""}`, "Teams")}${pill}<h1>${esc(t?.name || abbr)}</h1>${teamSideSeg(abbr, qs, "off")}
+      <div class="an-pl-links"><a href="../#/team/${encodeURIComponent(abbr)}" target="_blank" rel="noopener">Depth chart ↗</a></div>
     </div>
     <div class="an-pl-bar"><div class="an-filters"></div></div>
     <div class="an-sub an-pl-sub">${esc(sub)}</div>
@@ -277,6 +239,7 @@ export async function renderTeam(ctx, params, query) {
     ${row ? "" : `<div class="an-warn">No plays for ${esc(abbr)} in this window.</div>`}
     <div data-lost>${lostHtml()}</div>
     <div class="an-pl-tiles an-tm-tiles">${tiles}</div>
+    ${olineHtml}
     <div class="an-tm-row">
       <div class="an-card an-tm-weeks"><div class="an-dh">Week by week <span class="an-dsub">click a week to show it alone; click it again for the whole window</span></div><div class="an-pl-scroll">${weekly}</div></div>
       <div class="an-card an-tm-zones"><div class="an-dh">Pass attempts by zone <span class="an-dsub">${zoned} attempts with a depth and direction · each cell vs every attempt in the league</span></div><div data-zones>${zoneHtml()}</div></div>
@@ -313,13 +276,15 @@ async function fillLost(box, abbr, st, key, isCurrent, draw) {
   try {
     const feed = await loadStatusFeed();
     if (!isCurrent() || feed.season == null) return;
-    let list = [];
+    let list = [], cards = null;
     if (+feed.season === +st.season && Object.values(feed.players || {}).some((e) => e?.team === abbr && isMissing(e))) {
-      const d = await loadFor([+feed.season, +feed.season - 1], { window: "season" });
+      // The club's depth-chart cards (slot, Madden overall and rank) for the names list; {} when unreachable.
+      const [d, c] = await Promise.all([loadFor([+feed.season, +feed.season - 1], { window: "season" }), loadClubCards(abbr)]);
       if (!isCurrent()) return;
       list = absences(d.blocks, d.players, { season: +feed.season, pi: st.pi, po: st.po }, abbr, feed.players);
+      cards = c;
     }
-    ui.lost = { key, list, feed };
+    ui.lost = { key, list, feed, cards };
     if (box.isConnected) box.innerHTML = draw();
   } catch (e) {
     console.warn("What's been lost: the card could not be built", e);

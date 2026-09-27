@@ -93,6 +93,58 @@ export function loadStatusFeed() { return statusFeed(); }
 // The players map alone ({} when the feed cannot be had).
 export function loadStatus() { return statusFeed().then((f) => f.players); }
 
+// D199: each charted man's depth-chart card on one club, for the "What's been lost" card's names list, as
+// { [gsis]: { slot, ovr, posRank, posCount, maddenPos, role } } from the depth-chart app's compiled team view
+// (GET /api/team/<ABBR>; the published site's api/team/<ABBR>.json through resolveAnalyticsUrl). Fetched once per
+// club per page load. Never fails: an unreachable view resolves to {} and the next call asks again.
+const clubCardsCache = new Map();
+export function loadClubCards(abbr) {
+  const k = String(abbr || "").toUpperCase();
+  if (!clubCardsCache.has(k)) {
+    clubCardsCache.set(k, getJson(`/api/team/${encodeURIComponent(k)}`).then(clubCards).catch(() => { clubCardsCache.delete(k); return {}; }));
+  }
+  return clubCardsCache.get(k);
+}
+
+// PURE: the cards map from a team view. The slot is named the way the chart prints it: each slot's own label ("WR1",
+// "LT", "SS", "NT", "CB · Nickel", "RB"), numbered in ordinal order only when the same label repeats in the unit
+// ("EDGE" twice reads EDGE1/EDGE2, "ILB" twice ILB1/ILB2, "DE" twice DE1/DE2), with " backup" for a man listed
+// behind the starter. A man on several slots keeps a starting one (STARTER, an out starter, or the ACTIVE fill-in
+// promoted into an out starter's slot); a man only in the unlisted tray has no slot.
+const STARTING = new Set(["STARTER", "STARTER_OUT", "ACTIVE"]);
+export function clubCards(view) {
+  const out = {};
+  const put = (p, slot) => {
+    const g = p?.gsisId ? String(p.gsisId) : null;
+    if (!g) return;
+    const had = out[g];
+    const better = !had || (slot !== null && (had.slot === null || (STARTING.has(p.role) && !STARTING.has(had.role))));
+    if (!better) return;
+    const r = p.rating || {};
+    const n = (v) => (Number.isFinite(+v) && v !== null && v !== "" ? +v : null);
+    out[g] = { slot: slot && p.role === "BACKUP" ? `${slot} backup` : slot, ovr: n(r.current), posRank: n(r.posRank), posCount: n(r.posCount), maddenPos: r.maddenPos ?? null, role: p.role ?? null };
+  };
+  const units = view?.units || {};
+  for (const slots of Array.isArray(units) ? units.map((u) => u?.slots || []) : Object.values(units)) {
+    const list = Array.isArray(slots) ? slots : [];
+    const labelOf = (s) => String(s?.label || s?.band || "");
+    const byLabel = new Map();
+    list.forEach((s, idx) => { const l = labelOf(s); if (!byLabel.has(l)) byLabel.set(l, []); byLabel.get(l).push({ s, idx }); });
+    const numbered = new Map();
+    for (const [l, group] of byLabel) {
+      if (group.length < 2) continue;
+      group.sort((a, b) => ((Number.isFinite(+a.s?.ordinal) ? +a.s.ordinal : a.idx) - (Number.isFinite(+b.s?.ordinal) ? +b.s.ordinal : b.idx)) || a.idx - b.idx);
+      group.forEach((g, i) => numbered.set(g.s, `${l}${i + 1}`));
+    }
+    for (const s of list) {
+      const label = numbered.get(s) ?? labelOf(s);
+      for (const p of s?.players || []) put(p, label || null);
+    }
+  }
+  for (const byBand of Object.values(view?.unlisted || {})) for (const list of Object.values(byBand || {})) for (const p of Array.isArray(list) ? list : []) put(p, null);
+  return out;
+}
+
 // D184: every season the seasons endpoint lists, ascending. Never fails: a missing/unreadable endpoint resolves
 // to null and callers fall back to the current season alone.
 export function loadSeasons() {

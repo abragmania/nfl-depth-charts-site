@@ -31,16 +31,15 @@ function luminance(hex) {
 }
 // `page` ("team", the default, or "defense"): which page the pill opens. The Grid page's own club pill and every
 // other caller keep the team (offense) page; allowed_table.js's "What each defense allows, by position" table
-// passes "defense" so its pills open that club's defense detail (#/defense?open=<ABBR>, the page's query carried
-// alongside, same as the Defense page's own "Offense →" link builds its query).
+// passes "defense" so its pills open that club's own defense page (#/team/<ABBR>/defense, D198 - it used to open
+// the Defense leaderboard's expanded row before the club had its own defense page; the query is carried alongside,
+// same as the Defense page's own "Offense →" link builds its query).
 export function teamPill(abbr, teams, q, cls = "", page = "team") {
   const t = teams?.get(abbr);
   const style = t ? ` style="--team-bg:${esc(t.colourPrimary)};--team-ink:${(luminance(t.colourPrimary) ?? 0) > 0.40 ? "#14181d" : "#fff"}"` : "";
   let href, title;
   if (page === "defense") {
-    const p = new URLSearchParams(String(q || ""));
-    p.set("open", abbr);
-    href = `#/defense?${p.toString()}`;
+    href = `#/team/${abbr}/defense${q ? "?" + q : ""}`;
     title = "Defense page";
   } else {
     href = `#/team/${abbr}${q ? "?" + q : ""}`;

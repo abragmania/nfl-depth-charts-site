@@ -38,7 +38,9 @@ export const HELP_LINK = `<a class="nav-help" href="#/guide" title="What every n
 export function analyticsHrefFor(page, unit, abbr) {
   const A = encodeURIComponent(abbr);
   const isDefenseContext = page === "def" || (page === "group" && unit === "DEF");
-  return isDefenseContext ? `./analytics/#/defense?open=${A}` : `./analytics/#/team/${A}`;
+  // D198 (2026-09-26): the club now has its own defense page (#/team/:abbr/defense) instead of opening its row on
+  // the Defense leaderboard.
+  return isDefenseContext ? `./analytics/#/team/${A}/defense` : `./analytics/#/team/${A}`;
 }
 
 export function navStripHtml({ teams, abbr, page, unit, bandLabel, bandSlug, opponentAbbr, primary, secondary }) {

@@ -45,11 +45,20 @@
 //   YBC/carry (PFR advanced rushing) = Σ yards before contact / Σ PFR carries over the club's rushers' rows (offense)
 //                  or its opponents' rushers' rows (defense), quarterbacks left out (PFR's carries include their
 //                  scrambles and kneels, which are not designed runs); null while the week files' rush block is empty.
+// Line-block additions (D198; additive, no existing figure changes). PFR's pressures = hurries + hits + sacked.
+//   Hurry % allowed (hurryPctAllowed, both sides; pfrHurries the count) = PFR hurries / PFR dropbacks on the same QB
+//                  rows as Pressure % (offense: its own QBs; defense: the opposing QBs).
+//   Hurries/g, Hits/g (defense) = the club's defenders' PFR hurries (hits) summed / games, the Pressures/g rule
+//                  (a week counts only when the defense faced a dropback that week); counts in pfrHurriesDef, pfrHitsDef.
+//   Sacks/g (sacksG, both sides) = play-by-play sacks / games (D178: never PFR's sack columns).
+//   Run stop % (runStopPct, defense) = 1 − Run succ %: designed runs faced that were unsuccessful / designed runs faced
+//                  carrying a success value; null when Run succ % is null.
+//   defTargets / defCarries: the men a defense faced (teamTargets / teamCarries with opp = the defense), see below.
 // LEAGUE REFERENCE (Adam's perspective rule, D177): the plain mean over the clubs in the window (32 in a full week;
 // fewer on a week with byes), and colour tiers at the clubs' 90/70/40/15th percentiles (agg.js; under 8 clubs,
 // uncoloured). Lower-is-better keys are cut on the negated value; neutral keys (pass rate, aDOT, blitz %) are not
 // coloured. Zone references are POOLED over every attempt in the window.
-import { colIndex, clubGames, percentileCuts, tierFromCuts, MIN_POOL, aggregateUsage, usageReference } from "./agg.js";
+import { colIndex, clubGames, percentileCuts, tierFromCuts, MIN_POOL, aggregateUsage, usageReference, rushEvent } from "./agg.js";
 import { gamesInWindow } from "./filters.js";
 import { ZONE_KEYS, qbZones } from "./agg_qb.js";
 import { aggregateRush, rushReference, rushTier } from "./agg_rush.js";
@@ -101,7 +110,10 @@ const newSide = () => ({ games: new Set(), plays: 0, epa: 0, epaN: 0, succ: 0, s
   // Grid additions (D195): stuffed designed runs; PFR QB hits on the same QB rows as pressure; PFR coverage
   // charting (defense); PFR yards before contact.
   runStuff: 0, pfrHits: 0, qbHits: 0,
-  covTgt: 0, covCmp: 0, covYds: 0, covTd: 0, covInt: 0, covWeeks: new Set(), ybc: 0, ybcCar: 0, ybcWeeks: new Set() });
+  covTgt: 0, covCmp: 0, covYds: 0, covTd: 0, covInt: 0, covWeeks: new Set(), ybc: 0, ybcCar: 0, ybcWeeks: new Set(),
+  // Line-block additions (D198): PFR hurries on the QB rows (offense own, defense the opposing QBs'), and the
+  // defenders' own hurries and hits summed (the pressuresG rule).
+  pfrHurries: 0, qbHurries: 0, defHurries: 0, defHits: 0 });
 
 function addPlay(a, key, e, playRec) {
   a.plays++;
@@ -147,6 +159,8 @@ function sideRates(a, g) {
     rushYds: a.runYds, rushYdsG: ratio(a.runYds, g), stuffed: a.runStuff, stuffPct: ratio(a.runStuff, a.runs),
     pressPctAllowed: ratio(a.pfrPress, a.pfrDb), hitPctAllowed: ratio(a.pfrHits, a.pfrDb), pfrHits: a.pfrHits,
     ybc: a.ybc, ybcCarries: a.ybcCar, ybcCar: ratio(a.ybc, a.ybcCar), ybcWeeks: a.ybcWeeks.size,
+    // Line-block additions (D198), additive. sacksG is play-by-play (D178), never PFR's sack columns.
+    sacksG: ratio(a.sacks, g), hurryPctAllowed: ratio(a.pfrHurries, a.pfrDb), pfrHurries: a.pfrHurries,
   };
 }
 
@@ -189,19 +203,22 @@ export function aggregateTeams(blocks, players, st, opts = {}) {
       const team = players?.[id]?.teams?.[b.key], db = num(p?.dropbacks);
       if (!team || db === null || db <= 0 || !inWin.has(`${b.key}|${team}`)) continue;
       const a = S(off, team); a.pfrPress += num(p.pressures) ?? 0; a.pfrDb += db; a.pfrWeeks.add(b.key); any = true;
-      a.pfrHits += num(p.hits) ?? 0;
+      a.pfrHits += num(p.hits) ?? 0; a.pfrHurries += num(p.hurries) ?? 0;
       const opp = info.get(`${b.key}|${team}`)?.opp;
       if (opp && inWin.has(`${b.key}|${opp}`)) {
         const d = S(def, opp); d.qbPress += num(p.pressures) ?? 0; d.qbDb += db; d.qbWeeks.add(b.key);
-        d.qbHits += num(p.hits) ?? 0;
+        d.qbHits += num(p.hits) ?? 0; d.qbHurries += num(p.hurries) ?? 0;
       }
     }
     const defKeys = new Map(); // team -> pressures this week
+    const defHH = new Map(); // team -> { hu, hi } the defenders' hurries and hits this week (D198; the same rule)
     for (const [id, p] of Object.entries(b.pfr?.def || {})) {
       const team = players?.[id]?.teams?.[b.key];
       if (!team) { unmapped.push({ key: b.key, gsis: id }); continue; }
       if (!inWin.has(`${b.key}|${team}`)) continue;
       defKeys.set(team, (defKeys.get(team) || 0) + (num(p?.pressures) ?? 0));
+      const hh = defHH.get(team) || { hu: 0, hi: 0 };
+      hh.hu += num(p?.hurries) ?? 0; hh.hi += num(p?.hits) ?? 0; defHH.set(team, hh);
       // Coverage (D195): the club's CBs and safeties only, by players.json position; a row with no targets adds nothing.
       const tgt = num(p?.covTgt);
       if (COVER_POS.has(String(players?.[id]?.pos || "").toUpperCase()) && tgt !== null && tgt > 0) {
@@ -225,6 +242,7 @@ export function aggregateTeams(blocks, players, st, opts = {}) {
       const d = S(def, team), faced = d.wk.get(b.key)?.db || 0;
       if (!faced) continue;
       d.pfrPress += pr; d.pfrDb += faced; d.pfrWeeks.add(b.key); any = true;
+      const hh = defHH.get(team); d.defHurries += hh?.hu ?? 0; d.defHits += hh?.hi ?? 0;
     }
     const inWinKey = [...inWin].some((gk) => gk.startsWith(b.key + "|"));
     if (any && inWinKey && (!pfrThrough || b.key > pfrThrough)) pfrThrough = b.key;
@@ -248,6 +266,12 @@ export function aggregateTeams(blocks, players, st, opts = {}) {
       pressPctAllowed: ratio(d.qbPress, d.qbDb), hitPctAllowed: ratio(d.qbHits, d.qbDb), pfrHits: d.qbHits,
       covTgt: d.covTgt, covCmp: d.covCmp, covYds: d.covYds, covTd: d.covTd, covInt: d.covInt, covWeeks: d.covWeeks.size,
       covYdsTgt: ratio(d.covYds, d.covTgt), covCmpPct: ratio(d.covCmp, d.covTgt), covRating: passerRating(d.covCmp, d.covTgt, d.covYds, d.covTd, d.covInt) };
+    // Line-block additions (D198): hurries on the opposing QBs' rows (the Press % rule); the defenders' hurries and
+    // hits per game (the pressuresG rule); run stop % = designed runs faced that failed / those carrying a success value.
+    const rsp = ratio(d.runSucc, d.runSuccN);
+    Object.assign(dr, { hurryPctAllowed: ratio(d.qbHurries, d.qbDb), pfrHurries: d.qbHurries,
+      hurriesG: ratio(d.defHurries, g), hitsG: ratio(d.defHits, g), pfrHurriesDef: d.defHurries, pfrHitsDef: d.defHits,
+      runStopPct: rsp === null ? null : 1 - rsp });
     return { team, g, off: sideRates(o, g), def: dr, series: { off: series(o, "off"), def: series(d, "def") } };
   });
   return { rows, weeks, lgZones, pfrThrough, latestKey: weeks[weeks.length - 1] || null, unmapped };
@@ -255,15 +279,20 @@ export function aggregateTeams(blocks, players, st, opts = {}) {
 
 // ---- the league reference among clubs ------------------------------------------------------------------------
 export const TEAM_LG_KEYS = ["plays", "playsG", "dbG", "runsG", "passRate", "epaPlay", "epaDb", "epaCar", "succPct", "adot", "cmpPct", "sackPct", "pressPct", "pressuresG", "paPct", "blitzPct", "explPct", "ypc", "runSuccPct", "runExplPct",
-  "rushYdsG", "stuffPct", "pressPctAllowed", "hitPctAllowed", "ybcCar", "covYdsTgt", "covCmpPct", "covRating"];
+  "rushYdsG", "stuffPct", "pressPctAllowed", "hitPctAllowed", "ybcCar", "covYdsTgt", "covCmpPct", "covRating",
+  "hurryPctAllowed", "hurriesG", "hitsG", "sacksG", "runStopPct"];
 // Direction: 1 = higher is better, -1 = lower is better. The grid additions (D195): on offense more rushing yards,
 // YPC and yards before contact are better, and fewer stuffed runs, pressures and hits allowed; on defense the
 // reverse for the run figures, more stuffed runs forced and more pressure and hits forced, and a lower passer
 // rating and fewer yards per target allowed in coverage.
 export const OFF_TIER = { epaPlay: 1, epaDb: 1, epaCar: 1, succPct: 1, cmpPct: 1, explPct: 1, sackPct: -1, pressPct: -1,
-  rushYdsG: 1, ypc: 1, ybcCar: 1, stuffPct: -1, pressPctAllowed: -1, hitPctAllowed: -1 };
+  rushYdsG: 1, ypc: 1, ybcCar: 1, stuffPct: -1, pressPctAllowed: -1, hitPctAllowed: -1,
+  // D198: the O-line block and the Offense table's rushing tiles.
+  hurryPctAllowed: -1, runSuccPct: 1, runExplPct: 1, sacksG: -1 };
 export const DEF_TIER = { epaPlay: -1, epaDb: -1, epaCar: -1, succPct: -1, cmpPct: -1, explPct: -1, sackPct: 1, pressPct: 1, pressuresG: 1, ypc: -1, runSuccPct: -1, runExplPct: -1,
-  rushYdsG: -1, ybcCar: -1, stuffPct: 1, pressPctAllowed: 1, hitPctAllowed: 1, covRating: -1, covYdsTgt: -1, covCmpPct: -1 };
+  rushYdsG: -1, ybcCar: -1, stuffPct: 1, pressPctAllowed: 1, hitPctAllowed: 1, covRating: -1, covYdsTgt: -1, covCmpPct: -1,
+  // D198: the D-line block.
+  hurryPctAllowed: 1, hurriesG: 1, hitsG: 1, sacksG: 1, runStopPct: 1 };
 const dirOf = (side) => (side === "def" ? DEF_TIER : OFF_TIER);
 
 // { n (clubs), lg: { off: {k: mean}, def: {k: mean} }, cuts: { off: {k: {cuts, n}}, def } , text }.
@@ -317,6 +346,77 @@ export function teamCarries(blocks, players, st, team) {
   const total = rows.reduce((s, r) => s + r.car, 0);
   return rows.map((r) => { const P = ref.at(r.pos); return { ...r, clubShare: ratio(r.car, total), tier: rushTier("rushShare", r.rushShare, P.cuts), epaTier: rushTier("epaCar", r.epaCar, P.cuts), lgShare: P.lg?.rushShare ?? null }; })
     .sort((a, b) => b.car - a.car || String(a.name).localeCompare(String(b.name)));
+}
+
+// ---- the defense page's distributions (D198) ----------------------------------------------------------------------
+// The men a DEFENSE faced: teamTargets / teamCarries with team "" and opp = the defense. Each row is agg.js's (agg_rush.js's)
+// row for that man over his games against this defense, with the same tier and lgShare as the team page's rows, and
+// clubShare = his targets (carries) / every target (carry) the defense faced in the window. Sorted by volume.
+// The returned array also carries (as properties):
+//   byPos   = { WR: 0.55, TE: 0.25, RB: 0.2, ... } this defense's share of the targets (carries) it faced, by the man's
+//             players-file position ("?" when the file has none), largest first; {} when it faced none;
+//   lgByPos = the same per position, the plain mean over every defense that faced one in the window (a defense that
+//             faced no man at a position counts 0 there), largest first; lgN = how many defenses that is.
+// Window: season and range windows are week ranges, the same for every club. Under "last 3" (each club's own last
+// three games) the offenses' windows would not line up with the defense's, so the defense's own last three games
+// are used: the state becomes the week range from its third-last game to its last (one game a week, so that range
+// holds exactly those games). The league line reads every defense over its own last three, the aggregateTeams rule.
+function defWindowState(blocks, st, team) {
+  if (st.window !== "last3") return st;
+  const keys = [...gamesInWindow(clubGames(blocks), st)].filter((gk) => gk.endsWith("|" + team)).map((gk) => gk.split("|")[0]).sort();
+  return keys.length ? { ...st, window: "range", from: keys[0], to: keys[keys.length - 1] } : null;
+}
+const posKey = (players, id) => String(players?.[id]?.pos || "").toUpperCase() || "?";
+// { byDef: Map(defteam -> Map(pos -> n)) } over every defense's own window: targets (kind "tgt", the pass-interference
+// switch as agg.js) or carries (kind "car", agg.js's rushEvent: designed runs and scrambles).
+function facedByPos(blocks, players, st, kind) {
+  const inWin = gamesInWindow(clubGames(blocks), st);
+  const byDef = new Map();
+  for (const b of blocks) {
+    const C = colIndex(b.cols);
+    for (const r of b.plays || []) {
+      const dt = r[C.defteam];
+      if (!dt || !r[C.posteam] || !inWin.has(`${b.key}|${dt}`)) continue;
+      let id = null;
+      if (kind === "tgt") { if (r[C.type] === "pass" && r[C.target] && !(truthy(r[C.pi]) && st.pi === false)) id = r[C.target]; }
+      else id = rushEvent(r, C)?.id ?? null;
+      if (!id) continue;
+      if (!byDef.has(dt)) byDef.set(dt, new Map());
+      const m = byDef.get(dt), p = posKey(players, id);
+      m.set(p, (m.get(p) || 0) + 1);
+    }
+  }
+  return byDef;
+}
+const sharesOf = (m) => {
+  const tot = [...(m?.values() || [])].reduce((s, n) => s + n, 0);
+  return tot > 0 ? Object.fromEntries([...m].map(([p, n]) => [p, n / tot]).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))) : {};
+};
+function posSummary(byDef, team) {
+  const per = [...byDef.values()].map(sharesOf).filter((s) => Object.keys(s).length);
+  const pos = [...new Set(per.flatMap((s) => Object.keys(s)))];
+  const lgByPos = Object.fromEntries(pos.map((p) => [p, per.reduce((s, x) => s + (x[p] || 0), 0) / per.length]).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])));
+  return { byPos: sharesOf(byDef.get(team)), lgByPos, lgN: per.length };
+}
+export function defTargets(blocks, players, st, team) {
+  const base = { ...st, opp: "", ha: "", downs: [], qtrs: [], pos: {} };
+  const ws = defWindowState(blocks, base, team);
+  const rows = ws ? aggregateUsage(blocks, players, { ...ws, team: "", opp: team }).rows.filter((r) => r.tgt > 0) : [];
+  const ref = usageReference(aggregateUsage(blocks, players, { ...base, team: "" }).rows);
+  const total = rows.reduce((s, r) => s + r.tgt, 0);
+  const out = rows.map((r) => ({ ...r, clubShare: ratio(r.tgt, total), tier: tierFromCuts(r.tgtShare, ref.at(r.pos).cuts?.tgtShare?.cuts), lgShare: ref.at(r.pos).lg?.overall?.tgtShare ?? null }))
+    .sort((a, b) => b.tgt - a.tgt || String(a.name).localeCompare(String(b.name)));
+  return Object.assign(out, posSummary(facedByPos(blocks, players, base, "tgt"), team));
+}
+export function defCarries(blocks, players, st, team) {
+  const base = { ...st, opp: "", ha: "", downs: [], qtrs: [], pos: {} };
+  const ws = defWindowState(blocks, base, team);
+  const rows = ws ? aggregateRush(blocks, players, { ...ws, team: "", opp: team }).rows.filter((r) => r.car > 0) : [];
+  const ref = rushReference(aggregateRush(blocks, players, { ...base, team: "" }).rows);
+  const total = rows.reduce((s, r) => s + r.car, 0);
+  const out = rows.map((r) => { const P = ref.at(r.pos); return { ...r, clubShare: ratio(r.car, total), tier: rushTier("rushShare", r.rushShare, P.cuts), epaTier: rushTier("epaCar", r.epaCar, P.cuts), lgShare: P.lg?.rushShare ?? null }; })
+    .sort((a, b) => b.car - a.car || String(a.name).localeCompare(String(b.name)));
+  return Object.assign(out, posSummary(facedByPos(blocks, players, base, "car"), team));
 }
 
 // Sort the defense rows on one side's key; nulls last whichever direction; ties by team.

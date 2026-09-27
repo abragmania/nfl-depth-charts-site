@@ -416,13 +416,26 @@ td[class*=" t-"] > span { color:var(--t); font-weight:700; }
 .an-tm-pill { min-width:40px; text-align:center; font-size:12px; padding:2px 7px; }
 .an-teams .an-sub a { color:var(--accent); }
 .an-tm-headpill { font-size:15px; padding:3px 10px; }
-.an-tm-side { color:var(--muted); font-size:12px; font-weight:800; letter-spacing:.12em; text-transform:uppercase; }
+/* D198: the header's Offense | Defense segment (team.js/team_def.js teamSideSeg), in place of the old plain side
+   label - the same look as the filter bar's an-seg buttons, but as two links rather than a button pair. */
+.an-tm-seg { display:inline-flex; background:#0f1317; border:1px solid #2a323b; border-radius:var(--r-chip); padding:2px; gap:2px; }
+.an-tm-segbtn { font-size:12px; font-weight:700; color:var(--muted); text-decoration:none; border-radius:4px; padding:3px 11px; }
+.an-tm-segbtn:hover { color:var(--ink); }
+.an-tm-segbtn.on { background:#2a323b; color:var(--ink); }
 .an-tm-tiles { grid-template-columns:repeat(12, minmax(0, 1fr)); max-width:1860px; }
 @media (max-width:1760px) { .an-tm-tiles { grid-template-columns:repeat(6, minmax(0, 1fr)); max-width:1100px; } }
 .an-tm-row { display:flex; flex-wrap:wrap; gap:12px; align-items:flex-start; }
 .an-tm-weeks { flex:0 1 auto; max-width:100%; }
 .an-tm-zones { flex:0 0 auto; }
 .an-tm .an-pl-plays { width:470px; }
+/* D199 fix: the defense sub-page's coverage card - a 2x2 tile grid directly beside the zone field, in a column sized
+   to the SAME width budget as the offense zone card's plays list (field 386px + 14px gap + 470px column = 870px
+   content, 900px card), so Coverage is no wider than the offense page's zone card and sits beside "Week by week" at
+   1536px instead of wrapping under it. The throws list (zonePlaysHtml), when a zone is clicked, drops into the same
+   column under the tiles rather than a separate far-edge column. */
+.an-tm-covwrap { display:flex; flex-direction:column; gap:8px; width:470px; }
+.an-tm-covtiles { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:6px; }
+.an-tm-covwrap .an-pl-plays { width:auto; }
 .an-tm-distc { flex:0 1 560px; min-width:420px; }
 /* Distribution bars: one line per man, name + position, a bar of his share in his tier colour, the figure, then the detail. */
 .an-tm-dist { display:flex; flex-direction:column; gap:5px; }

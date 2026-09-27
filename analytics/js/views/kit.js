@@ -48,7 +48,8 @@ function lgRankEm(cls, d) {
   // The rank rides in its own span so the stylesheet can print it a notch brighter than the league figure (👁 fix
   // round: the rank is what Adam asked for).
   if (has(d.rank)) parts.push(`<span class="an-rc-rank">${has(d.rankOf) ? `${esc(d.rank)} of ${esc(d.rankOf)}` : esc(d.rank)}</span>`);
-  return parts.length ? `<em class="${cls}">${parts.join(" · ")}</em>` : "";
+  // The separator is its own span so a block that prints the rank on a second line (the line blocks) can hide it.
+  return parts.length ? `<em class="${cls}">${parts.join(`<span class="an-rc-sep"> · </span>`)}</em>` : "";
 }
 
 // ---- (1) HEADLINE: compact large-type tiles, each with the league figure and his league rank -------------------
@@ -468,6 +469,41 @@ export function varianceStrip(items = []) {
       `</div>`;
   }).join("");
   return `<div class="an-rc-variance">${html}</div>`;
+}
+
+// ---- D198: the O-line / D-line block (team.js's offense sub-page, team_def.js's defense sub-page) --------------
+// Two grid-look rating chips (Pass protection/Run blocking on offense, Pass rush/Run stuff on defense) over a row
+// of tier tiles carrying counts and a rank. headline: [{ label, rating (0-100, the grid's z-rating; null/NaN reads
+// "not yet"), rank, of (pre-formatted strings, e.g. "12th"/"32 clubs"), title }]. tiles: the tileData shape (value,
+// tier, lg, rank, rankOf, sub - the counts line); rendered with the same .an-tile look every team/offense/defense
+// page tile already uses. foot: ready-made HTML (the proxy note, the PFR-lag caption) - not escaped, see file
+// header. lbStop/lbAmt mirror views/grid.js's own gridStop/tileAmt formulas byte for byte rather than importing
+// them: grid.js already imports from views/team.js, so importing grid.js back into kit.js (which team.js and
+// team_def.js both pull lineBlock from) would risk a module cycle. Duplicated on purpose; keep the two in step.
+const lbStop = (rating) => (Number.isFinite(rating) ? Math.min(1, Math.max(0, (rating - 20) / 60)) : null);
+const lbAmt = (g) => 22 + 50 * Math.sqrt(Math.abs(2 * g - 1));
+export function lineBlock({ title = "", headline = [], tiles = [], foot = "" } = {}) {
+  const chips = (headline || []).map((h) => {
+    const g = Number.isFinite(h?.rating) ? lbStop(h.rating) : null;
+    const rank = has(h?.rank) ? (has(h.of) ? `${esc(h.rank)} of ${esc(h.of)}` : esc(h.rank)) : "";
+    const body = g === null
+      ? `<div class="gc gc-null"><b>not yet</b></div>`
+      : `<div class="gc" style="--g:${g.toFixed(3)};--amt:${lbAmt(g).toFixed(1)}%"><b>${Math.round(h.rating)}</b>${rank ? `<span>${rank}</span>` : ""}</div>`;
+    return `<div class="an-lc"${titleAttr(h?.title)}><span class="an-lc-label">${esc(h?.label)}</span>${body}</div>`;
+  }).join("");
+  const tileHtml = (tiles || []).map((t) => {
+    const d = tileData(t);
+    return `<div class="an-tile${tierClass(d.tier)}"${titleAttr(d.title)}>` +
+      `<span>${esc(d.label)}</span><b>${esc(d.value)}</b>` +
+      lgRankEm("an-rc-lg", d) +
+      (d.sub ? `<div class="an-rc-sub">${esc(d.sub)}</div>` : "") +
+      `</div>`;
+  }).join("");
+  return `<div class="an-card an-line"><div class="an-dh">${esc(title)}</div>` +
+    `<div class="an-line-head">${chips}</div>` +
+    `<div class="an-line-tiles">${tileHtml}</div>` +
+    (foot ? `<div class="an-line-foot">${foot}</div>` : "") +
+    `</div>`;
 }
 
 // ---- the player-page header: headshot, name, a quiet club-colour wash (Adam, 👁 fix round) -----------------------

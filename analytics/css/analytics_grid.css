@@ -20,7 +20,7 @@
 /* The gradient's anchors are the app's five tier hues (D102), evenly spaced: poor = the low tier's red, then the weak
    tier's orange, the average tier's gold, the strong tier's green and the elite tier's green (Adam, 2026-09-25: the
    weak and strong anchors keep the low thirties from reading as muddy brown). The Rank view uses one plain hue. */
-.an-grid { --gp-poor:var(--tier-flat); --gp-weak:var(--tier-weak); --gp-avg:var(--tier-avg); --gp-strong:var(--tier-strong);
+.an-grid, .an-line { --gp-poor:var(--tier-flat); --gp-weak:var(--tier-weak); --gp-avg:var(--tier-avg); --gp-strong:var(--tier-strong);
   --gp-elite:var(--tier-elite); --gr-hue:#8fb4dc; }
 .an-grid-table th, .an-grid-table td { padding:0; }
 .an-grid-table thead tr.an-grp th { font-size:10.5px; color:var(--muted); padding:6px 4px 3px; }

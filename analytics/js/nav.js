@@ -6,7 +6,11 @@ export const SECTIONS = [
   { group: "PLAYERS", path: "qb", label: "Quarterbacks" },
   { group: "PLAYERS", path: "rbs", label: "Running backs" },
   { group: "PLAYERS", path: "receivers", label: "Receivers" },
-  { group: "TEAMS", path: "teams", label: "Offense" },
+  // D198 (Adam, 2026-09-26): "Teams should load that big teams list, Offense should load something that looks
+  // like the defense grid" - the "teams" path used to carry the "Offense" label (it opened the club picker); it
+  // now says what it does (the picker) and a real Offense league table gets its own tab and route.
+  { group: "TEAMS", path: "teams", label: "Teams" },
+  { group: "TEAMS", path: "offense", label: "Offense" },
   { group: "TEAMS", path: "defense", label: "Defense" },
   { group: "TEAMS", path: "grid", label: "Grid" },
 ];

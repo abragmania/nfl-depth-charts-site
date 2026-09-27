@@ -21,6 +21,7 @@
 import { esc, snapHistoryHtml, espnPlacement, espnSchemeOf } from "./cards.js";
 import { renderHistory } from "./history.js";
 import { getPlayer, getHistory, getGameLog, getJson } from "./api.js";
+import { dkGamePoints } from "../analytics/js/agg_fantasy.js";
 
 const dash = "—";
 const STATUS_CLASS = {
@@ -325,13 +326,29 @@ export function seasonsTableHtml(family, seasons, collegeFallback, games = null)
 // nflverse's tackle counts (solo, with an assist, assists); AVG is the game's rushing yards over its carries.
 const col = (c) => (s) => s[c] ?? 0;
 const TKL = ["TKL", (s) => (s.def_tackles_solo ?? 0) + (s.def_tackles_with_assist ?? 0) + (s.def_tackle_assists ?? 0)];
+// D200: DraftKings points for a fantasy-eligible family (QB, RB/FB, WR_TE), from the game log's own nflverse
+// weekly fields mapped onto agg_fantasy.js's dkGamePoints line shape (D194's scoring, shared with the analytics
+// app so the two can never disagree). A field the log doesn't carry for this line is 0, same as every other
+// game-log column. gameLogTotalsRowHtml special-cases this column (see below): the 300/100-yard bonuses are
+// per game, so the total sums each game's own DK figure rather than recomputing off summed season stats.
+const dkLine = (s) => ({
+  passYds: s.passing_yards ?? 0, passTd: s.passing_tds ?? 0, int: s.passing_interceptions ?? 0,
+  rushYds: s.rushing_yards ?? 0, rushTd: s.rushing_tds ?? 0,
+  rec: s.receptions ?? 0, recYds: s.receiving_yards ?? 0, recTd: s.receiving_tds ?? 0,
+  fl: s.fumbles_lost_total ?? 0,
+});
+const DK_COL = ["DK", (s) => dkGamePoints(dkLine(s)).toFixed(1)];
 export const GAMELOG_FAMILIES = {
+  // A quarterback's catches are rare enough that nflverse's weekly file carries none of note for this family
+  // today and no other column already shows receiving here, so D200's "add REC only if the family already
+  // shows it" leaves QB's columns as they were, DK appended last.
   QB: [["CMP", col("completions")], ["ATT", col("attempts")], ["YDS", col("passing_yards")], ["TD", col("passing_tds")], ["INT", col("passing_interceptions")],
-       ["CAR", col("carries")], ["R YDS", col("rushing_yards")], ["R TD", col("rushing_tds")], ["FL", col("fumbles_lost_total")]], // D169 rushing, D170 FL
+       ["CAR", col("carries")], ["R YDS", col("rushing_yards")], ["R TD", col("rushing_tds")], ["FL", col("fumbles_lost_total")], DK_COL], // D169 rushing, D170 FL, D200 DK
   RB: [["ATT", col("carries")], ["YDS", col("rushing_yards")],
        ["AVG", (s) => (s.carries ? (Math.round(((s.rushing_yards ?? 0) / s.carries) * 10) / 10).toFixed(1) : dash)],
-       ["TD", col("rushing_tds")], ["REC", col("receptions")], ["REC YDS", col("receiving_yards")], ["FL", col("fumbles_lost_total")]],
-  WR_TE: [["TGT", col("targets")], ["REC", col("receptions")], ["YDS", col("receiving_yards")], ["TD", col("receiving_tds")], ["FL", col("fumbles_lost_total")]],
+       ["TD", col("rushing_tds")], ["REC", col("receptions")], ["REC YDS", col("receiving_yards")], ["REC TD", col("receiving_tds")], ["FL", col("fumbles_lost_total")], DK_COL], // D200: REC TD (RB can score there), DK
+  WR_TE: [["TGT", col("targets")], ["REC", col("receptions")], ["YDS", col("receiving_yards")], ["TD", col("receiving_tds")],
+          ["CAR", col("carries")], ["R YDS", col("rushing_yards")], ["R TD", col("rushing_tds")], ["FL", col("fumbles_lost_total")], DK_COL], // D200: a WR/TE's occasional carries score too, DK
   DL_EDGE: [TKL, ["SACK", col("def_sacks")], ["TFL", col("def_tackles_for_loss")], ["QB HITS", col("def_qb_hits")]],
   LB: [TKL, ["SACK", col("def_sacks")], ["INT", col("def_interceptions")], ["PD", col("def_pass_defended")]],
   DB: [TKL, ["INT", col("def_interceptions")], ["PD", col("def_pass_defended")], ["FF", col("def_fumbles_forced")]],
@@ -362,7 +379,17 @@ function gameLogTotalsRowHtml(cols, playedRows, snapShare) {
     if (!g.stats) continue;
     for (const [k, v] of Object.entries(g.stats)) sum[k] = (sum[k] ?? 0) + (Number(v) || 0);
   }
-  const cells = cols.map(([, get]) => `<td>${esc(get(sum))}</td>`).join("");
+  // D200: DK's 300/100-yard bonuses are per game (agg_fantasy.js), so the total is the sum of each played
+  // game's own DK figure, never a recompute of the formula against the season's summed stats (which could
+  // trip a bonus off a total no single game reached, or hide one a single big game earned).
+  const cells = cols.map(([h, get]) => {
+    if (h === "DK") {
+      // Summed unrounded (the column prints each game to one decimal; summing the printed figures drifts).
+      const total = playedRows.reduce((s, g) => s + (g.stats ? dkGamePoints(dkLine(g.stats)) || 0 : 0), 0);
+      return `<td class="panel-gamelog-dk">${esc(total.toFixed(1))}</td>`;
+    }
+    return `<td>${esc(get(sum))}</td>`;
+  }).join("");
   const snapCell = snapShare == null ? dash : esc(snapShare);
   return `<tfoot><tr class="panel-gamelog-total"><td>Total</td><td>${playedRows.length} G</td><td>${snapCell}</td>${cells}</tr></tfoot>`;
 }
@@ -381,7 +408,7 @@ export function gameLogTableHtml(family, entries, season = null, club = null, sn
     const lead = `<td>${esc(g.week)}</td><td>${esc(opp)}</td>`;
     if (g.played === false) return `${move}<tr class="panel-gamelog-dnp">${lead}<td colspan="${1 + cols.length}">did not play</td></tr>`;
     const snap = `<td>${g.snapPct == null ? dash : esc(g.snapPct)}</td>`;
-    const cells = cols.map(([, get]) => `<td>${g.stats ? esc(get(g.stats)) : dash}</td>`).join("");
+    const cells = cols.map(([h, get]) => `<td${h === "DK" ? ' class="panel-gamelog-dk"' : ""}>${g.stats ? esc(get(g.stats)) : dash}</td>`).join("");
     return `${move}<tr>${lead}${snap}${cells}</tr>`;
   }).join("");
   const totals = gameLogTotalsRowHtml(cols, rows.filter((g) => g.played !== false), snapShare);

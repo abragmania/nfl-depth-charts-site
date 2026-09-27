@@ -295,7 +295,25 @@
 .an-rc-ctick { position:absolute; top:-3px; bottom:-3px; width:0; border-left:2px solid #c9d1da; opacity:.75; }
 .an-rc-club td b { display:inline-block; min-width:28px; text-align:right; color:var(--ink); font-weight:700; vertical-align:middle; }
 
-/* ---- D196 C: "What's been lost", the team page's card above the tiles (views/team.js lostCardHtml) ---- */
+/* ---- D198: the O-line / D-line block (kit.js lineBlock; team.js's offense sub-page, team_def.js's defense sub-
+   page). Reads as one unit - two rating chips over a row of tier tiles - and stops at its own content width; it
+   never stretches to fill the column just because the column is wide (D190). */
+.an-line { width:fit-content; max-width:100%; }
+.an-line-head { display:flex; gap:16px; margin-bottom:10px; }
+.an-lc { display:flex; flex-direction:column; align-items:center; gap:5px; }
+.an-lc-label { color:var(--muted); font-size:11px; font-weight:700; text-align:center; white-space:nowrap; }
+.an-lc .gc { width:108px; height:52px; }
+.an-lc .gc b { font-size:22px; }
+.an-line-tiles { display:flex; flex-wrap:wrap; gap:8px; }
+.an-line-tiles .an-tile { flex:0 0 auto; min-width:134px; }
+/* D199 fix: the "lg 23.7% · 2nd of 32" line was wrapping mid-phrase, stranding the middle dot alone at the end of
+   the first line while the rank fell to a second. The rank now has its own rule (overriding the nowrap it inherits
+   from .an-pl .an-tile em) and sits on a clean line of its own below the league figure. */
+.an-line-tiles .an-rc-rank { display:block; white-space:nowrap; }
+.an-line-tiles .an-rc-sep { display:none; }
+.an-line-foot { margin-top:8px; color:var(--dim); font-size:11.5px; max-width:900px; }
+
+/* ---- D196 C, D199: "What's been lost", the team page's card above the tiles (views/lost.js lostCardHtml) ---- */
 .an-tm-lost { margin-bottom:12px; }
 .an-tm-lost > .an-dh { cursor:help; }
 .an-tm-lostmen { display:grid; grid-template-columns:repeat(auto-fill, minmax(400px, 1fr)); gap:10px 26px; }
@@ -314,12 +332,18 @@
 .an-tm-lostsince a { color:var(--ink); font-weight:600; text-decoration:none; }
 .an-tm-lostsince a:hover { color:var(--accent); }
 .an-tm-lostsince.is-one { opacity:.5; }
-.an-tm-lostfill { margin:0 2px 0 5px; padding:0 4px; border:1px solid var(--line); border-radius:var(--r-chip); color:var(--dim); font-size:9.5px; font-weight:800; letter-spacing:.05em; text-transform:uppercase; vertical-align:1px; }
+.an-tm-lostfill { color:var(--dim); font-size:11.5px; }
+/* D199: his depth-chart slot and Madden rank, and when he is back (the return line carries its source on hover). */
+.an-tm-lostcard { color:var(--muted); font-size:11.5px; font-variant-numeric:tabular-nums; }
+.an-tm-lostret { color:var(--ink); font-size:11.5px; }
+.an-tm-lostret[title] { cursor:help; }
 .an-tm-lostfoot { color:var(--dim); font-size:11.5px; font-style:italic; }
-.an-tm-lostnames { display:flex; flex-wrap:wrap; gap:3px 20px; margin-top:10px; padding-top:8px; border-top:1px solid var(--line); font-size:12px; color:var(--muted); }
+.an-tm-lostnames { display:flex; flex-direction:column; gap:4px; margin-top:10px; padding-top:8px; border-top:1px solid var(--line); font-size:12px; color:var(--muted); }
 .an-dh + .an-tm-lostnames { margin-top:0; padding-top:0; border-top:0; }
+.an-tm-lostgroup { display:flex; flex-wrap:wrap; align-items:baseline; gap:3px 20px; }
 .an-tm-lostline { white-space:nowrap; }
-.an-tm-lostpos { color:var(--dim); font-size:10.5px; font-weight:800; }
+.an-tm-lostline .an-pospill { font-size:10px; min-width:24px; padding:0 4px; }
+.an-tm-lost [data-band="OTHER"] { --band-color:var(--muted); }
 .an-tm-lostitem { white-space:nowrap; }
 
 /* 👁: when Club targets cannot sit beside the zones, it goes under the zone grid in the zones' column, at its own width. */

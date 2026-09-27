@@ -34,9 +34,17 @@ export function parse(hash) {
 // player page he came from, with the filters he had there. Null on a cold open (the app opens in a new tab from
 // the depth charts, so a player page can be the first thing seen); the caller then links to its own section.
 const trail = [];
+// D198: a club's three addresses (its offense page #/team/:abbr, the #/team/:abbr/offense alias, and the new
+// #/team/:abbr/defense sub-page) count as ONE page for this purpose - switching between them must never itself
+// become the Back target. pageKey folds all three to the same key; every other path keeps its own.
+function pageKey(path) {
+  const segs = path.split("/").filter(Boolean);
+  if (segs[0] === "team" && segs[1]) return `team/${segs[1].toUpperCase()}`;
+  return path;
+}
 export function previousPage() {
-  const here = split(trail[trail.length - 1] ?? location.hash).path;
-  for (let i = trail.length - 2; i >= 0; i--) if (split(trail[i]).path !== here) return trail[i];
+  const here = pageKey(split(trail[trail.length - 1] ?? location.hash).path);
+  for (let i = trail.length - 2; i >= 0; i--) if (pageKey(split(trail[i]).path) !== here) return trail[i];
   return null;
 }
 // Appends `hash` to the trail unless it is already the last entry (start()'s go() calls this with location.hash;
@@ -53,18 +61,23 @@ export function forgetCurrent() {
 // D193 (2026-09-25): Usage became Receivers and Rushing became Running backs, and the app bar's Teams group split
 // into Offense and Defense with Grid added; the old hash segments (usage, rushing, teams, team) still resolve as
 // aliases (main.js), so their labels follow the page's new name rather than the old link text.
+// D198 (2026-09-26): "teams"/"team" now name the club PICKER (its own "Teams" tab); the league-wide Offense table
+// gets its own "offense" segment.
 const SECTION_NAMES = {
   usage: "Receivers", receivers: "Receivers",
   rushing: "Running backs", rbs: "Running backs",
   qb: "Quarterbacks",
-  teams: "Offense", team: "Offense",
+  teams: "Teams", team: "Teams",
+  offense: "Offense",
   defense: "Defense",
   grid: "Grid",
   player: "Player",
 };
+// D198: a club's page now has three addresses (#/team/:abbr, its /offense alias, and the new /defense sub-page);
+// pageName tells the offense and defense sub-pages apart ("KC" vs "KC defense") for the Back button's label.
 export function pageName(hash) {
   const segs = split(hash).path.split("/").filter(Boolean);
-  if (segs[0] === "team" && segs[1]) return segs[1].toUpperCase();
+  if (segs[0] === "team" && segs[1]) return segs[2] === "defense" ? `${segs[1].toUpperCase()} defense` : segs[1].toUpperCase();
   return SECTION_NAMES[segs[0] || "usage"] ?? "Back";
 }
 const escAttr = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));

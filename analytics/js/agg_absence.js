@@ -21,6 +21,15 @@
 // (the page links them to the depth chart) and are listed on the 25 percent snap bar alone, measured on their own
 // side: defensive snaps for a defender, offensive snaps for everyone else (lead's ruling, 2026-09-25).
 //
+// WHO GETS THE FULL BLOCK (D199, Adam 2026-09-26: only men who held a real share): `full` is true for a skill man
+// the depth chart charts as an out starter with a fill-in (status.fillIn set, the same `charted` rule that keeps him
+// listed), or whose BEFORE window is in the CURRENT season and who was in the top three on the club over those games
+// by targets or by designed runs (a quarterback: first by pass attempts). A man ranks top three when fewer than three
+// teammates had more than him over the same games and he had at least one. A prior-season BEFORE never earns it on
+// its own. `fullWhy` names the reason ("charted", "targets", "carries", "attempts"; null when not full). Everyone
+// else listed (every nameOnly man, and a skill man below the bar) is drawn in the names-only list; his row keeps the
+// full record so nothing downstream breaks.
+//
 // A GAME HE PLAYED for the club (club-games are the club's offensive games in the blocks, regular season unless
 // st.po): he appears on one of its plays (passer, target, rusher) or took a snap for it on his side (the snap row's
 // club is his club that week in the players file).
@@ -62,8 +71,8 @@ import { clubGames, colIndex, rushEvent } from "./agg.js";
 import { gamesInWindow, splitKey } from "./filters.js";
 
 export const SKILL_POS = new Set(["QB", "RB", "FB", "WR", "TE"]);
-export const DEF_POS = new Set(["DE", "DT", "NT", "DL", "EDGE", "LB", "ILB", "OLB", "MLB", "CB", "NB", "DB", "S", "FS", "SS", "SAF"]);
-export const SHARE_MIN = 0.05, SNAP_MIN = 0.25, ABSORB_MIN = 0.03, BEFORE_N = 4;
+export const DEF_POS = new Set(["DE", "DT", "NT", "DL", "EDGE", "ED", "LB", "ILB", "OLB", "MLB", "CB", "NB", "DB", "S", "FS", "SS", "SAF"]);
+export const SHARE_MIN = 0.05, SNAP_MIN = 0.25, ABSORB_MIN = 0.03, BEFORE_N = 4, FULL_TOP = 3;
 const EPS = 1e-9;
 
 const num = (v) => (v === null || v === undefined || v === "" || !Number.isFinite(+v) ? null : +v);
@@ -206,6 +215,26 @@ function fillInId(idx, players, f) {
   return null;
 }
 
+// Is he in the top `n` on the club over `games` by the per-man count `key` (att, tgt or des)? Fewer than n teammates
+// with more than him, and at least one himself.
+function topIn(idx, id, games, key, n) {
+  const tot = new Map();
+  for (const g of games) for (const [m, c] of idx.per.get(g.gk).men) tot.set(m, (tot.get(m) || 0) + (c[key] || 0));
+  const mine = tot.get(id) || 0;
+  if (mine <= 0) return false;
+  let above = 0;
+  for (const [m, v] of tot) if (m !== id && v > mine) above++;
+  return above < n;
+}
+function fullWhy(idx, id, pos, w, charted) {
+  if (charted) return "charted";
+  if (w.noData || w.priorSeason || !w.before.length) return null;
+  if (pos === "QB") return topIn(idx, id, w.before, "att", 1) ? "attempts" : null;
+  if (topIn(idx, id, w.before, "tgt", FULL_TOP)) return "targets";
+  if (topIn(idx, id, w.before, "des", FULL_TOP)) return "carries";
+  return null;
+}
+
 const isCoachScratch = (e) => !!e.scratch || COACH.test(String(e.label || "")) || COACH.test(String(e.detail || ""));
 export const isMissing = (e) => !!e && !isCoachScratch(e) && (!!e.willNotPlay || String(e.code || "").toUpperCase() === "D");
 
@@ -233,9 +262,12 @@ export function absences(blocks, players, st, team, status) {
     else if (w.noData) { if (!lastPlayedCounts(e, idx.season)) continue; }
     else if (nameOnly ? !(before.snapShare >= SNAP_MIN - EPS)
       : !([before.tgtShare, before.carShare, before.rzShare].some((x) => x !== null && x >= SHARE_MIN - EPS) || before.snapShare >= SNAP_MIN - EPS)) continue;
+    const why = nameOnly ? null : fullWhy(idx, id, pos, w, charted);
     const base = {
-      gsis: id, name: players?.[id]?.name || e.name || id, pos, nameOnly, side,
+      gsis: id, name: players?.[id]?.name || e.name || id, pos, nameOnly, side, full: !!why, fullWhy: why,
+      // returnWeek and the four after it: the curated return line the status feed merges in (data/static/absence_returns.json).
       status: { code: e.code ?? null, label: e.label ?? null, detail: e.detail ?? null, returnDate: e.returnDate ?? null,
+        returnWeek: e.returnWeek ?? null, returnKind: e.returnKind ?? null, returnGames: e.returnGames ?? null, returnNote: e.returnNote ?? null, returnSource: e.returnSource ?? null,
         willNotPlay: !!e.willNotPlay, lastPlayed: e.lastPlayed ? { ...e.lastPlayed } : null, missed: e.missed && typeof e.missed === "object" ? structuredClone(e.missed) : e.missed ?? null },
       priorSeason: w.priorSeason, noData: w.noData, leftEarly: w.leftEarly, leftEarlyGames: w.leftEarlyGames,
       lastGame: w.last ? w.last.key : null, beforeGames: w.before.map((g) => g.key), sinceKeys: w.since.map((g) => g.key),
@@ -257,9 +289,10 @@ export function absences(blocks, players, st, team, status) {
     out.push({ ...base, before: nul(before), club: { before: clubRates(idx, w.before), since: clubRates(idx, w.since) },
       fillInId: fid, fillIn, absorbed });
   }
-  // Skill men first, by their BEFORE opportunity share; then no-data men; then names-only men by snap share.
-  const rank = (r) => (r.nameOnly ? 2 : r.noData ? 1 : 0);
-  const val = (r) => (r.nameOnly ? r.snapShare : r.before?.oppShare) ?? -1;
+  // Full-block men first, by their BEFORE opportunity share; then full-block no-data men; then everyone drawn in the
+  // names-only list, by snap share (the page re-sorts that list by Madden rating when it has the depth chart's cards).
+  const rank = (r) => (!r.full ? 2 : r.noData ? 1 : 0);
+  const val = (r) => (!r.full ? (r.nameOnly ? r.snapShare : r.before?.snapShare) : r.before?.oppShare) ?? -1;
   out.sort((a, b) => rank(a) - rank(b) || val(b) - val(a) || a.name.localeCompare(b.name));
   return deepFreeze(out);
 }

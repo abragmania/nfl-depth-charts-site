@@ -101,6 +101,9 @@
 .panel-stats-table tr.panel-gamelog-trade td { text-align: center; font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--ink); background: rgba(255,255,255,.04); }
 /* D181: the totals row reads as a total, not another game — bold, a top border, a muted fill, same font size. */
 .panel-stats-table tr.panel-gamelog-total td { font-weight: 700; border-top: 2px solid var(--muted); background: rgba(255,255,255,.04); }
+/* D200: the game log's DK column is the one figure that folds every stat into a single number, so it stands out
+   bold in the team's accent even on a normal row; the totals row's own bold rule (above) already covers it there. */
+.panel-gamelog-dk { font-weight: 700; color: var(--team-secondary, #9fd3ff); }
 .panel-stats-heading { font-size: 11.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-bottom: 6px; }
 .panel-loading, .panel-error, .panel-stats-empty { padding: 14px 4px; text-align: center; color: var(--muted); font-size: 12.5px; }
 .panel-error { color: #ff9a90; }
