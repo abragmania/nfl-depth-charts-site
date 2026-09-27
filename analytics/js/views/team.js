@@ -58,6 +58,15 @@ export function rankingsHref(side, k, abbr, qs) {
   return `#/rankings?side=${side}&sort=${encodeURIComponent(k)}&dir=${rankingsBestDir(side, k)}&hl=${encodeURIComponent(abbr)}${qs ? "&" + qs : ""}`;
 }
 
+// D206 fix round (👁: 12 tiles linked nowhere because their key has no Rankings column - O-line pressure/hit/hurry %
+// allowed; D-line hit %, hurry %, stuffed % forced, run-stop %, YBC/carry allowed; the four coverage tiles). A
+// Rankings link stays a Rankings link; a tile whose key has no Rankings column instead links to the Grid page,
+// sorted by that key's own category column, best first (every Grid column's rating already bakes in its direction,
+// so "desc" is always best-first there - see views/grid.js's own click handler), carrying the same filter query.
+export function gridTileHref(col, qs) {
+  return `#/grid?sort=${encodeURIComponent(col)}&dir=desc${qs ? "&" + qs : ""}`;
+}
+
 // D205: the club page's own Grid row - the same 0-100 ratings, figures and ranks agg_grid.js's gridRows() computes
 // for the Grid page, for the side being shown, in the Grid's own cell markup (views/grid.js's .gc). gridStop/tileAmt/
 // figText below mirror grid.js's own formulas byte for byte rather than importing them, for the same module-cycle
@@ -191,7 +200,15 @@ export async function renderTeam(ctx, params, query) {
   // D198: the O-line block's headline chips are the grid's own passPro/runBlock ratings for this club (agg_grid.js
   // gridRows on the same window rows the tiles read, so the block always agrees with the Grid page); D205 needs the
   // same row for the club's own Grid row, above the tiles, so it is computed up here rather than just before olineHtml.
-  const gridRow = gridRows(win).find((r) => r.team === abbr);
+  // 🔵 fix round: `win` is built from this page's own whole-season load (below, for the week-by-week bars and zone
+  // field), not the Grid page's own weeksNeeded()-gated week set (data.js loadFor(seasonsOf(st), st), what
+  // views/grid.js itself calls) - with Last 3 and the Playoffs chip both on, those two week sets can differ, so
+  // gridRow must come from the Grid's own load, never this page's wider one, or the two disagree. loadFor's own
+  // caches (loadSeason's manifest/players, loadWeek's per-file cache) mean this costs no extra network round trip
+  // when this page's own load already fetched the whole season, as it does.
+  const gridLoad = await loadFor(seasonsOf(st), st);
+  if (!isCurrent()) return;
+  const gridRow = gridRows(aggregateTeams(gridLoad.blocks, gridLoad.players, pst)).find((r) => r.team === abbr);
 
   const tile = (label, val, k, lg, title = "") => {
     const tr = k ? teamTier("off", k, O[k], ref.cuts) : "";
@@ -220,6 +237,9 @@ export async function renderTeam(ctx, params, query) {
   // D198: the O-line block, after the tiles and before Week by week.
   const passProCell = gridRow?.cells?.passPro?.off || null;
   const runBlockCell = gridRow?.cells?.runBlock?.off || null;
+  // D206 fix round: pressure/hit/hurry % allowed have no Offense table column (they are O-line-only figures), so
+  // they link to the Grid's own Pass protection column instead - never a dead end.
+  const OL_GRID_LINK = { pressPctAllowed: "passProOff", hitPctAllowed: "passProOff", hurryPctAllowed: "passProOff" };
   const olTile = (label, k, sub, digits = null) => {
     const v = O[k], lgv = L[k];
     const tr = teamTier("off", k, v, ref.cuts);
@@ -227,10 +247,11 @@ export async function renderTeam(ctx, params, query) {
     const fmt = (x) => (digits === null ? P(x) : fix(x, digits));
     // lineBlock's own tileData() normalizes this - no need to call it here too. D199 review: match the headline
     // chips' "12th of 32" wording (no "clubs") rather than the tile's own "22nd of 32 clubs".
-    // D206: linked only when the key has a Rankings column (kit.js's lineBlock wraps a tile in <a> when href is set).
+    // D206: linked to Rankings when the key has a column there, else to the Grid's own category column - never a
+    // dead end (kit.js's lineBlock wraps a tile in <a> when href is set).
     return { label, value: isNum(v) ? fmt(v) : NA, lg: isNum(lgv) ? fmt(lgv) : null,
       rank: rk ? ordinal(rk.rank) : null, rankOf: rk ? String(rk.of) : null, sub, tier: tr,
-      href: RANKINGS_OFF_KEYS.has(k) ? rankingsHref("off", k, abbr, qs) : null };
+      href: RANKINGS_OFF_KEYS.has(k) ? rankingsHref("off", k, abbr, qs) : OL_GRID_LINK[k] ? gridTileHref(OL_GRID_LINK[k], qs) : null };
   };
   const olineHtml = lineBlock({
     title: "O-line",

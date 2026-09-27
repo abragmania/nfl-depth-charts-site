@@ -149,11 +149,22 @@ export function offTableHtml(rows, st, query, view) {
   }).join("");
   return `<div class="an-tbar">
       <span class="an-count">${list.length} offense${list.length === 1 ? "" : "s"}</span>
-      <span class="an-legend" title="Each value against every club's in this window: elite at the clubs' 90th percentile or better, then the 70th, 40th and 15th; low below. Higher is better for EPA, success, completion %, explosive plays, YPC, rushing yards and yards before contact; lower is better for sack %, pressure % and stuffed %. Plays/g, pass %, aDOT and PA % are not coloured.">
+      <span class="an-legend" title="Each value against every club's in this window: elite at the clubs' 90th percentile or better, then the 70th, 40th and 15th; low below. Higher is better for EPA, success, completion %, explosive plays, YPC, rushing yards and yards before contact; lower is better for sack %, pressure % and stuffed %. Plays/g is coloured muted (a lean, not a verdict); pass %, aDOT and PA % are not coloured.">
         ${TIER_NAMES.map((t) => `<i class="t-${t}"></i>`).join("")}<span>elite → low among the clubs</span></span>
       <span class="an-hint">Click a row to open the offense</span>
     </div>
     <div class="an-tscroll"><table class="an-table an-def-table"><thead>${groupRow}${head}</thead><tbody>${body || `<tr><td colspan="${nCols}" class="an-empty">No games in this window.</td></tr>`}</tbody></table></div>`;
+}
+
+// PURE: the #/offense address for state n, `hl` (D208's highlighted club, or "") carried along - fix round: every
+// OTHER call this page's go() used to make (a sort, a row open, a filter change) wrote toQuery(n) alone, which has
+// no notion of hl, so the first click after arriving from a Grid cell or a Rankings link dropped the highlight. go()
+// is DOM-bound (it sets location.hash), so the address-building line lives here where a test can reach it directly.
+export function offHref(n, hl) {
+  const params = new URLSearchParams(toQuery(n));
+  if (hl) params.set("hl", hl);
+  const q = params.toString();
+  return `#/offense${q ? "?" + q : ""}`;
 }
 
 // `opts.hl` (D208): the club abbr the Rankings page wants highlighted on this side, passed through to
@@ -166,7 +177,7 @@ export async function renderOffense(ctx, query, opts = {}) {
   const st = fromQuery(query);
   const { sort, dir } = offSort(query, st);
   document.title = "Offense · NFL Analytics";
-  const go = (n) => { const q = toQuery(n); location.hash = `#/offense${q ? "?" + q : ""}`; };
+  const go = (n) => { location.hash = offHref(n, hl); };
   if (!root.querySelector(".an-off")) root.innerHTML = `<div class="an-msg">Loading offenses…</div>`;
   let data, teams;
   try {
@@ -192,7 +203,7 @@ export async function renderOffense(ctx, query, opts = {}) {
   const span = agg.weeks.length ? (agg.weeks.length === 1 ? weekLabel(agg.weeks[0], st.season) : `${weekLabel(agg.weeks[0], st.season)} to ${weekLabel(agg.weeks[agg.weeks.length - 1], st.season)}`) : "no games";
   root.innerHTML = `<section class="an-def an-pl an-off">
     <div class="an-head">
-      <h1>Offense</h1>
+      <h1>Rankings</h1>
       <div class="an-sub">${esc(seasonLabel(st))} · ${esc(span)}${st.window === "last3" ? " (each club's last 3 games)" : ""} · league reference: ${esc(ref.text)}${pnote ? " · " + esc(pnote) : ""}</div>
       ${data.missing.length ? `<div class="an-warn">${esc(data.missing.join(", "))} files are not built yet.</div>` : ""}
     </div>

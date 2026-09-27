@@ -16,7 +16,7 @@ import { esc, NA, isNum, pct, fix, signed, int, teamPill, qbStrips, pfrNote, sea
 import { windowName } from "./qbplayer.js";
 import { lostCardHtml } from "./lost.js";
 import { lineBlock } from "./kit.js";
-import { teamPageState, teamSideSeg, clubZoneField, clubZoneLegend, zonePlaysHtml, TEAM_ZONE_MODES, distList, ordinal, clubGridRowHtml, RANKINGS_DEF_KEYS, rankingsHref } from "./team.js";
+import { teamPageState, teamSideSeg, clubZoneField, clubZoneLegend, zonePlaysHtml, TEAM_ZONE_MODES, distList, ordinal, clubGridRowHtml, RANKINGS_DEF_KEYS, rankingsHref, gridTileHref } from "./team.js";
 
 const P = (v, d = 1) => (isNum(v) ? pct(v, d) + "%" : NA);
 
@@ -118,7 +118,15 @@ export async function renderTeamDefense(ctx, params, query) {
   const activeKey = st.window === "range" && st.from && st.from === st.to ? st.from : null;
   // D205: this club's own Grid row (above the tiles) and the D-line block's headline chips both read the same
   // gridRows() row, so it is computed once, up here.
-  const gridRow = gridRows(win).find((r) => r.team === abbr);
+  // 🔵 fix round: `win` is built from this page's own whole-season load (below, for the week-by-week bars and zone
+  // field), not the Grid page's own weeksNeeded()-gated week set (data.js loadFor(seasonsOf(st), st), what
+  // views/grid.js itself calls) - with Last 3 and the Playoffs chip both on, those two week sets can differ, so
+  // gridRow must come from the Grid's own load, never this page's wider one, or the two disagree. loadFor's own
+  // caches (loadSeason's manifest/players, loadWeek's per-file cache) mean this costs no extra network round trip
+  // when this page's own load already fetched the whole season, as it does.
+  const gridLoad = await loadFor(seasonsOf(st), st);
+  if (!isCurrent()) return;
+  const gridRow = gridRows(aggregateTeams(gridLoad.blocks, gridLoad.players, pst)).find((r) => r.team === abbr);
 
   const tiles = defTilesHtml(D, L, ref, win, abbr, qs);
 
@@ -126,16 +134,20 @@ export async function renderTeamDefense(ctx, params, query) {
   // and sacks are counted directly, so there is no proxy caveat - only the PFR-lag caption when PFR lags the window.
   const passRushCell = gridRow?.cells?.passPro?.def || null;
   const runStuffCell = gridRow?.cells?.runBlock?.def || null;
+  // D206 fix round: hit/hurry % have no Defense table column (D-line-only figures) - Grid's own Pass rush column
+  // instead; stuffed % forced, run-stop % and YBC/carry allowed have no column either - Grid's own Run stuff column.
+  const DL_GRID_LINK = { hitPctAllowed: "passProDef", hurryPctAllowed: "passProDef", stuffPct: "runBlockDef", runStopPct: "runBlockDef", ybcCar: "runBlockDef" };
   const dlTile = (label, k, sub, digits = null) => {
     const v = D[k], lgv = L[k];
     const tr = teamTier("def", k, v, ref.cuts);
     const rk = isNum(v) ? teamRank(win.rows, "def", k, abbr) : null;
     const fmt = (x) => (digits === null ? P(x) : fix(x, digits));
     // D199 review: match the headline chips' "12th of 32" wording (no "clubs") rather than the tile's own "22nd of
-    // 32 clubs". D206: linked only when the key has a Rankings column.
+    // 32 clubs". D206: linked to Rankings when the key has a column there, else to the Grid's own category column -
+    // never a dead end.
     return { label, value: isNum(v) ? fmt(v) : NA, lg: isNum(lgv) ? fmt(lgv) : null,
       rank: rk ? ordinal(rk.rank) : null, rankOf: rk ? String(rk.of) : null, sub, tier: tr,
-      href: RANKINGS_DEF_KEYS.has(k) ? rankingsHref("def", k, abbr, qs) : null };
+      href: RANKINGS_DEF_KEYS.has(k) ? rankingsHref("def", k, abbr, qs) : DL_GRID_LINK[k] ? gridTileHref(DL_GRID_LINK[k], qs) : null };
   };
   const dlineHtml = lineBlock({
     title: "D-line",
@@ -178,8 +190,9 @@ export async function renderTeamDefense(ctx, params, query) {
   const covTile = (label, val, k, lg, title = "") => {
     const tr = k ? teamTier("def", k, D[k], ref.cuts) : "";
     const body = `<div class="an-tile${tr ? " t-" + tr : ""}"${title ? ` title="${esc(title)}"` : ""}><span>${label}</span><b>${val}</b>${lg && !String(lg).includes("an-na") ? `<em> · lg ${lg}</em>` : ""}</div>`;
-    // D206: none of the coverage figures have a Rankings column today, but the same rule applies as every other tile.
-    return RANKINGS_DEF_KEYS.has(k) ? `<a class="an-tile-link" href="${rankingsHref("def", k, abbr, qs)}">${body}</a>` : body;
+    // D206 fix round: none of the coverage figures has a Rankings column, so every coverage tile - including
+    // Targets covered, a count rather than a rate - links to the Grid's own Coverage column instead. Never a dead end.
+    return `<a class="an-tile-link" href="${gridTileHref("coverageDef", qs)}">${body}</a>`;
   };
   // The coverage tiles sit beside the zone field, inside the same card (Adam's D198 ask: "beside"), as a 2x2 grid
   // (D199 review: the old far-edge column made the card wider than the offense page's zone card and pushed it out

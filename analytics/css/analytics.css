@@ -470,12 +470,13 @@ td[class*=" t-"] > span { color:var(--t); font-weight:700; }
 /* D205: the club page's own Grid row - the same .gc cell views/grid.js draws (an-line already carries the --gp-*
    colour variables from analytics_grid.css, so nothing here needs to redefine them), with a short label above each
    cell, sized to sit in one flowing row rather than a table column. */
-.an-tm-gridrow { margin-bottom:2px; }
+.an-card.an-line.an-tm-gridrow { margin-bottom:2px; width:100%; max-width:1860px; } /* 👁 2026-09-27: unlike the O-line block (an-line hugs its content), the Grid row spans the tile band below it (three classes: analytics_recut.css's .an-line width:fit-content loads later and would win otherwise) */
 .an-tm-gridcells { display:flex; flex-wrap:wrap; gap:10px; }
-.an-tm-gc { display:flex; flex-direction:column; align-items:center; gap:5px; }
+.an-tm-gc { display:flex; flex-direction:column; align-items:center; gap:5px; flex:1 1 112px; max-width:260px; }
 .an-tm-gc-label { color:var(--muted); font-size:11px; font-weight:700; text-align:center; white-space:nowrap; }
-.an-tm-gc .gc { width:112px; height:48px; }
+.an-tm-gc .gc { width:100%; min-width:112px; height:48px; }
 .an-tm-gc .gc b { font-size:19px; }
+@media (max-width:1760px) { .an-card.an-line.an-tm-gridrow { max-width:1100px; } } /* after the base rule, so it wins at the narrower band */
 
 /* ---- defense leaderboard (#/defense) ---- */
 .an-def-name { color:var(--ink); font-weight:700; }
@@ -508,4 +509,5 @@ td[class*=" t-"] > span { color:var(--t); font-weight:700; }
    accent stripe rather than a background tint alone, so it still reads next to an expanded (.open) row's own
    faint tint instead of blending into it. */
 .an-row.is-hl { box-shadow: inset 3px 0 0 var(--accent); }
+.an-row.is-hl td { background: color-mix(in srgb, var(--accent) 8%, transparent); } /* 👁 2026-09-27: a faint wash across the row, the stripe alone was too easy to miss */
 .an-row.is-hl td:first-child { padding-left:9px; }
