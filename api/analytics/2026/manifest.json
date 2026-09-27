@@ -41,15 +41,15 @@
  "weeks": [
   {
    "week": 1,
-   "hash": "3cab0a206e26a261",
+   "hash": "51b74f0b5d77c3a7",
    "plays": 1924,
-   "builtAt": "2026-09-27T00:00:55.326Z"
+   "builtAt": "2026-09-27T14:17:53.357Z"
   },
   {
    "week": 2,
-   "hash": "8042e3b3f14c1a6b",
+   "hash": "d0a1a66d81275b38",
    "plays": 1936,
-   "builtAt": "2026-09-27T00:00:55.326Z"
+   "builtAt": "2026-09-27T14:17:53.357Z"
   }
  ],
  "throughWeek": 2,
@@ -57,36 +57,36 @@
  "heldUntil": "2026-09-29T09:00:00.000Z",
  "sources": {
   "pbp": {
-   "fetchedAt": "2026-09-27T02:50:12.852Z",
+   "fetchedAt": "2026-09-27T14:17:44.903Z",
    "sha": "3c712ca152374dcc23848792b0183985afc65fb2a1ef7a4c7758ef2bf7800ddd"
   },
   "ftn": {
-   "fetchedAt": "2026-09-27T02:50:12.939Z",
+   "fetchedAt": "2026-09-27T14:17:45.107Z",
    "sha": "0c55b7038ae9d82ab35b128a736d626b189d0cb6b1e022f1d23a0355a9377cf1"
   },
   "ngs": {
-   "fetchedAt": "2026-09-27T02:50:13.702Z",
-   "sha": "77befafca12f7120"
+   "fetchedAt": "2026-09-27T14:17:45.758Z",
+   "sha": "4b9e9f628dc0af4a"
   },
   "pfr": {
-   "fetchedAt": "2026-09-27T02:50:14.249Z",
-   "sha": "641aa103362fd0e2"
+   "fetchedAt": "2026-09-27T14:17:46.285Z",
+   "sha": "7d72af8acfbd9478"
   },
   "pfrRush": {
-   "fetchedAt": "2026-09-27T02:50:14.516Z",
-   "sha": "c3594cb6011ca2cb1b0db73faffb0ed2f95b6ad82bdb74c34f6c529f6e107ef7"
+   "fetchedAt": "2026-09-27T14:17:46.534Z",
+   "sha": "9d383330e0f498e35fed3932b0254faa6b5820322c3b5b7d01fb188d01e5477f"
   },
   "pfrRec": {
-   "fetchedAt": "2026-09-27T02:50:14.753Z",
-   "sha": "c388d8b56a29673fce47b431f6674219083e346b703764c27c97cbc1d5eba5fc"
+   "fetchedAt": "2026-09-27T14:17:46.787Z",
+   "sha": "0d5c2bb2929420dea770dd11f99f8ce78591565bea177d6c1a6b8c40fe2fa4ba"
   },
   "routes": {
-   "fetchedAt": "2026-09-27T02:50:15.020Z",
+   "fetchedAt": "2026-09-27T14:17:47.042Z",
    "sha": "51af93f49c67860acba41686c670a330f9037c1f80532d0a936e8657062d2ab6"
   },
   "participation": null,
   "snaps": {
-   "fetchedAt": "2026-09-27T02:44:49.806Z",
+   "fetchedAt": "2026-09-27T14:13:26.482Z",
    "sha": "62419bd0b011368e04dcf494966dc82b3adf1af21b65ea15405eb7b078d2f39e"
   }
  }
