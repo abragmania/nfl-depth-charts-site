@@ -6,13 +6,6 @@
 // copy (D67) reads the pre-rendered file instead. This block's own styles live in this file, injected once
 // under the .hist- prefix; styles.css carries none of them.
 import { getHistory, getTeams } from "./api.js";
-import { assetUrl } from "./cards.js";
-
-// D209 (2026-09-28): a crest path from /api/teams is bare and site-root-relative ("img/logos/KC.png",
-// server/api/teams.js's own contract). cards.js's assetUrl anchors it to the site root from its own module
-// address, so the same call is right on the depth-chart app (at the root) and on the analytics player page
-// (one folder down), which draws this history block since D209.
-const crestUrl = (u) => assetUrl(u);
 
 const CSS = `
 .hist { margin-top: 14px; font-size: 13px; }
@@ -160,7 +153,7 @@ function rowHtml(r, teams, isCurrentSeason = false) {
   const old = stints.length === 1 && r.teamRaw && r.teamRaw !== stints[0].abbr ? `<span class="hist-oldcode">${esc(r.teamRaw)}</span>` : "";
   const logos = stints.map((s) => {
     const t = teams.find((x) => x.abbr === s.abbr);
-    return `<span class="hist-teamleg">${t?.logo ? `<img src="${esc(crestUrl(t.logo))}" alt="${esc(s.abbr)}">` : ""}${esc(s.abbr)}</span>`;
+    return `<span class="hist-teamleg">${t?.logo ? `<img src="${esc(t.logo)}" alt="${esc(s.abbr)}">` : ""}${esc(s.abbr)}</span>`;
   }).join(`<span class="hist-teamsep">/</span>`);
   const teamHtml = stints.length ? `<span class="hist-team">${logos}${old}</span>` : dash;
   const star = r.ovr != null && r.matchConfidence !== "id" ? `<span class="hist-star" title="matched by ${esc(r.matchMethod)}, not by player id">*</span>` : "";

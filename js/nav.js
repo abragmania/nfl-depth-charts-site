@@ -30,12 +30,11 @@ function switcherOptionsHtml(teams, abbr) {
 export const HELP_LINK = `<a class="nav-help" href="#/guide" title="What every number, badge and mark means"><span class="nav-help-q" aria-hidden="true">?</span>How to read</a>`;
 
 // Job 3 (Adam): a control in the nav strip itself — every page it draws (team, offense, matchup, an
-// offensive group too) — that opens the team or defense view the man was actually looking at, not just the
-// site strip's own always-there Analytics tab (public/js/sitebar.js), which always opens the analytics app's
-// plain landing page. Only the Defense page, and a group page whose band lives on the defensive side, use
+// offensive group too), not just the topbar's own always-there "Analytics ↗" (public/index.html), which
+// always opens the analytics app's own landing page rather than the team or defense view the man was
+// actually looking at. Only the Defense page, and a group page whose band lives on the defensive side, use
 // the analytics app's Defense view (with this club pre-opened); every other page this strip draws uses that
-// team's own analytics page. D209 part (1): opens in the same tab now, alongside the rest of the site.
-// Exported so it's testable without a DOM (tests/zoom.test.mjs/teams.test.mjs).
+// team's own analytics page. Exported so it's testable without a DOM (tests/zoom.test.mjs/teams.test.mjs).
 export function analyticsHrefFor(page, unit, abbr) {
   const A = encodeURIComponent(abbr);
   const isDefenseContext = page === "def" || (page === "group" && unit === "DEF");
@@ -49,11 +48,11 @@ export function navStripHtml({ teams, abbr, page, unit, bandLabel, bandSlug, opp
   const offLit = page === "off" || (page === "group" && unit === "OFF");
   const defLit = page === "def" || (page === "group" && unit === "DEF");
   const pill = (label, href, lit) => `<a class="zoom-pill nav-pill${lit ? " active" : ""}" href="${href}">${label}</a>`;
-  const analyticsLink = `<a class="nav-help nav-analytics" href="${esc(analyticsHrefFor(page, unit, abbr))}" title="Open this team in NFL Analytics">Analytics</a>`;
+  const analyticsLink = `<a class="nav-help nav-analytics" href="${esc(analyticsHrefFor(page, unit, abbr))}" target="_blank" rel="noopener" title="Open this team in NFL Analytics">Analytics ↗</a>`;
   const pills = `<span class="nav-strip-pills">
     ${pill("Team", `#/team/${A}`, page === "team")}
-    ${pill("Offense Depth", `#/team/${A}/off`, offLit)}
-    ${pill("Defense Depth", `#/team/${A}/def`, defLit)}
+    ${pill("Offense", `#/team/${A}/off`, offLit)}
+    ${pill("Defense", `#/team/${A}/def`, defLit)}
     ${pill("Matchup", `#/matchup/${A}`, page === "matchup")}
     ${HELP_LINK}
     ${analyticsLink}

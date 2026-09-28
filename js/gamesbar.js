@@ -2,7 +2,6 @@
 // Matchup page so the two draw the same chips from the same /api/teams `games` list. Pure string builders, no
 // DOM, so they are testable in Node (tests/landing.test.mjs, tests/gamesbar.test.mjs).
 import { icon, weatherIconKey, espnIconKey } from "./icons.js";
-import { assetUrl } from "./cards.js";
 
 const ESC = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ESC[c]);
@@ -42,9 +41,11 @@ export function gameChipData(g) {
 // defense, and either club may be the home side.)
 const isPair = (g, a, b) => !!g && ((g.away === a && g.home === b) || (g.away === b && g.home === a));
 
-// Dark crest first, plain logo second, resolved against the page (cards.js assetUrl: a root-relative path broke
-// every logo on the public site, which lives under a sub-path).
-const logoUrl = (t) => assetUrl(t?.logoDark || t?.logo || "");
+function logoUrl(t) {
+  let u = t?.logoDark || t?.logo || "";
+  if (u && !/^https?:\/\//.test(u) && !u.startsWith("/")) u = "/" + u;
+  return u;
+}
 
 function gameChipHtml(g, teamsByAbbr, active) {
   const d = gameChipData(g);

@@ -30,10 +30,6 @@ import { renderFilterBar } from "../filterbar.js";
 import { ratingBars } from "../charts/hbars.js";
 import { headlineRow, fantasyBand, phaseBlock, varianceStrip, maddenFoot, playerHead, currentStatus, latestWeekIn } from "./kit.js";
 import { esc, isNum, signed, teamPill, qbStrips, qbZoneField, qbZoneLegend, qbZoneName, QB_ZONE_MODES, qbQuery, minDbOf, pfrNote } from "./qb.js";
-// D209 part (2): the depth-chart card block every player page opens with — shared with player.js (the same
-// pass-catcher file) rather than duplicated, since both live in this app and the card logic itself only
-// exists once, in public/js/panel.js.
-import { loadCard, cardBlockHtml, mountCard } from "./player.js";
 
 // Madden ratings for a season, from the data builder's madden.json (the same fetch as player.js's loadMadden, which
 // is private to that page). Never fails: absent or unreadable resolves to null and the block says so.
@@ -366,10 +362,6 @@ export async function renderQbPlayer(ctx, params, query) {
   const frow = full.rows.find((x) => x.gsis === gsis) || null;
   const lastKey = Object.keys(meta.teams || {}).sort().pop();
   const team = r?.team || frow?.team || (lastKey ? meta.teams[lastKey] : "");
-  // D209 part (2): his depth-chart card opens the page, same as the pass-catcher page (player.js).
-  const cardInfo = await loadCard({ team, gsis }, teams);
-  if (!isCurrent()) return;
-  const cardHtml = cardBlockHtml(cardInfo, { team, gsis });
   const mq = maddenQb(madden, gsis, st.season);
   const wn = windowName(st, win.weeks);
   const activeKey = st.window === "range" && st.from && st.from === st.to ? st.from : null;
@@ -446,9 +438,8 @@ export async function renderQbPlayer(ctx, params, query) {
   const draw = () => { root.innerHTML = `<section class="an-pl an-qbp">
     ${playerHead({ lead: backLink(`#/qb${qs ? "?" + qs : ""}`, "Quarterbacks"), name, espnId: meta.espnId, colour: teams.get(team)?.colourPrimary,
       pills: `${team ? teamPill(team, teams, qs, "an-pl-pill") : ""}<span class="an-pospill" data-band="QB">QB</span>${ovr}`,
-      links: `<div class="an-pl-links"><a href="${depth}">Depth chart →</a>${team ? `<a href="#/team/${esc(team)}${qs ? "?" + qs : ""}">Team page →</a>` : ""}</div>`,
+      links: `<div class="an-pl-links"><a href="${depth}" target="_blank" rel="noopener">Depth chart ↗</a>${team ? `<a href="#/team/${esc(team)}${qs ? "?" + qs : ""}">Team page →</a>` : ""}</div>`,
       status: currentStatus(feed, gsis, seasonsOf(st)), statusSeason: feed?.season ?? null, latestWeek: latestWeekIn(data.keys, feed?.season) })}
-    ${cardHtml}
     <div class="an-pl-bar"><div class="an-filters"></div></div>
     <div class="an-sub an-pl-sub">${esc(sub)}</div>
     ${data.missing.length ? `<div class="an-warn">${esc(data.missing.join(", "))} files are not built yet.</div>` : ""}
@@ -464,7 +455,6 @@ export async function renderQbPlayer(ctx, params, query) {
     weeksW: q(".an-qbp-weeks .an-pl-scroll"), rushW: q(".an-qbp-rush") });
   if (JSON.stringify(measured) !== JSON.stringify(lay)) { lay = measured; draw(); }
   ui.layout = { key: layoutKey, lay };
-  mountCard(root, cardInfo); // after the final draw(), so it targets the DOM actually on screen
   root.querySelector("[data-gl-toggle]")?.addEventListener("click", () => { ui.pastOpen = !ui.pastOpen; renderQbPlayer(ctx, params, query); });
   renderFilterBar(root.querySelector(".an-filters"), st, { keys: data.keys, teams: [] }, go);
   root.querySelectorAll(".an-wb-hit[data-key]").forEach((h) => h.addEventListener("click", () => {

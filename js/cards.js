@@ -17,22 +17,6 @@ export { OUT_STATUS_CODES, isFullyOut, isScratch };
 const ESC = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ESC[c]);
 
-// A logo or crest path as the page can actually load it. The API hands back a bare "img/logos/GB-dark.png".
-// A leading "/" (what the three callers used to add) looks at the DOMAIN root, which is wrong on the public
-// site: it lives under /nfl-depth-charts-site/, so every crest and games-strip logo 404'd there (Adam,
-// 2026-09-27: "it's the public site where there's no logos"), while the same code worked locally because the
-// local server serves at the root. A bare relative path is not safe either: inside a CSS custom property it can
-// resolve against styles.css's own /css/ folder. So the path is made absolute against the SITE ROOT, found from
-// this module's own address (js/cards.js sits one folder below it), which is right from any page depth: the
-// analytics app lives one folder down and draws the depth-chart card since D209. An http(s) URL passes through;
-// under node (the tests) the module address is a file: URL and the path is returned as given.
-const SITE_ROOT = /^https?:/.test(import.meta.url) ? new URL("../", import.meta.url).href : "";
-export function assetUrl(u) {
-  if (!u || /^https?:\/\//.test(u)) return u || "";
-  if (!SITE_ROOT) return u;
-  return SITE_ROOT + u.replace(/^\/+/, "");
-}
-
 // D70: single source of truth for band display names — a band's internal CODE ("NB", "BACKFIELD") is not
 // what a reader sees ("CB · Nickel", "Backfield"). Anything that shows a band to a human reads this table
 // (renderTray below, zoom.js's group title and nav crumb). An unknown code falls back to itself, not a blank.
