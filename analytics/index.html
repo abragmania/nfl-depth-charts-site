@@ -13,12 +13,16 @@
 <link rel="stylesheet" href="css/analytics_recut.css">
 <link rel="stylesheet" href="css/analytics_grid.css">
 <!-- D209 part (2): the depth-chart card block (public/js/panel.js's cardBodyHtml, drawn at the top of every
-     player page) is styled by the depth-chart app's own stylesheet, loaded here too. No class-name or
-     :root token collisions with this app's own CSS (checked by hand, 2026-09-28): the two files' :root
-     tokens (--bg/--panel/--ink/--muted/--team-primary/--team-secondary/--tier-*) already carry identical
-     values by design, and every card class is prefixed "panel-"/"hist-", which this app's own CSS never
-     uses (it is all "an-*"). -->
+     player page) is styled by the depth-chart app's own two stylesheets: styles.css for the shared :root
+     tokens and badge colours the card's classes read, panel.css for the ".panel-*" component rules
+     themselves (the card's actual look lives there, not in styles.css). Checked by hand, 2026-09-28: no
+     harmful class-name collisions with this app's own CSS — every card/history class is prefixed
+     "panel-"/"hist-", which this app's CSS never uses (it is all "an-*"); the one shared family, ".badge"/
+     ".badge-q"/"-d"/"-out"/"-susp" etc., is already a DELIBERATE copy (analytics_recut.css's own comment:
+     "copies the depth chart's look and colours"), so loading both is redundant, not conflicting. zoom.css,
+     matchup.css, phone.css and guide.css style other depth-chart pages and are left out. -->
 <link rel="stylesheet" href="../css/styles.css">
+<link rel="stylesheet" href="../css/panel.css">
 </head>
 <body>
 <!-- D209 part (1): the shared site strip (../js/sitebar.js), painted into #sitebar by js/main.js's side-effect

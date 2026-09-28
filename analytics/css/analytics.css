@@ -246,6 +246,25 @@ td[class*=" t-"] > span { color:var(--t); font-weight:700; }
 .an-pl-card { max-width:480px; }
 .an-pl-cardslot { display:inline-block; margin-bottom:8px; font-size:12.5px; font-weight:700; color:var(--ink); text-decoration:none; padding:3px 10px; border-radius:999px; background:rgba(255,255,255,.06); border:1px solid color-mix(in srgb, var(--team-secondary,#777) 45%, #3a424b 55%); }
 .an-pl-cardslot:hover { background:rgba(255,255,255,.1); }
+/* Adam, 2026-09-28: at a real window the single-column card left the rest of the row empty (the "don't cram
+   content into a small portion of the window" rule) — three columns instead, same panel.js markup, CSS-only
+   (the depth-chart panel's own aside is untouched: none of this reaches outside .an-pl-card). Column 1 is
+   identity (the slot pill, headshot/grade/name, bio row, snap share, status, ESPN note) at its own natural
+   width; column 2 is the rating-history block (the position line plus season rows); column 3, which gets the
+   most room, is the Season stats / Game log tabs. Placement is by explicit grid-row so it does not depend on
+   which of the optional pieces (snap share, the ESPN note) are actually present. Under ~1100px there isn't
+   room for three columns, so it drops back to the single stacked column above. */
+@media (min-width:1101px) {
+  .an-pl-card { max-width:none; display:grid; grid-template-columns:minmax(260px,340px) minmax(280px,360px) minmax(320px,1fr); column-gap:20px; align-items:start; }
+  .an-pl-card > .an-pl-cardslot { grid-column:1; grid-row:1; margin-bottom:0; }
+  .an-pl-card > .panel-head { grid-column:1; grid-row:2; }
+  .an-pl-card > .panel-bio-row { grid-column:1; grid-row:3; }
+  .an-pl-card > .panel-snaps { grid-column:1; grid-row:4; }
+  .an-pl-card > .panel-status { grid-column:1; grid-row:5; }
+  .an-pl-card > .panel-espn-note { grid-column:1; grid-row:6; }
+  .an-pl-card > .panel-position-line { grid-column:2; grid-row:1 / span 6; }
+  .an-pl-card > .panel-stats-box { grid-column:3; grid-row:1 / span 6; }
+}
 .an-pl-bar { display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
 /* Team, opponent and the position chips do not apply to one man: hidden on this page only. */
 .an-pl .an-fgroup:has(.an-poses), .an-pl .an-fgroup:has(select) { display:none; }

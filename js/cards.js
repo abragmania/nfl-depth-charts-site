@@ -22,13 +22,15 @@ export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ESC[c]);
 // site: it lives under /nfl-depth-charts-site/, so every crest and games-strip logo 404'd there (Adam,
 // 2026-09-27: "it's the public site where there's no logos"), while the same code worked locally because the
 // local server serves at the root. A bare relative path is not safe either: inside a CSS custom property it can
-// resolve against styles.css's own /css/ folder. So the path is made absolute against the PAGE's URL (the hash
-// route never changes the base). An http(s) URL passes through; under node (the tests) there is no document,
-// and the path is returned as given.
+// resolve against styles.css's own /css/ folder. So the path is made absolute against the SITE ROOT, found from
+// this module's own address (js/cards.js sits one folder below it), which is right from any page depth: the
+// analytics app lives one folder down and draws the depth-chart card since D209. An http(s) URL passes through;
+// under node (the tests) the module address is a file: URL and the path is returned as given.
+const SITE_ROOT = /^https?:/.test(import.meta.url) ? new URL("../", import.meta.url).href : "";
 export function assetUrl(u) {
   if (!u || /^https?:\/\//.test(u)) return u || "";
-  if (typeof document === "undefined") return u;
-  return new URL(u.replace(/^\/+/, ""), document.baseURI).href;
+  if (!SITE_ROOT) return u;
+  return SITE_ROOT + u.replace(/^\/+/, "");
 }
 
 // D70: single source of truth for band display names — a band's internal CODE ("NB", "BACKFIELD") is not

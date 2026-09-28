@@ -91,7 +91,7 @@ export function cardBlockHtml(info, v) {
   const line = chartSlotLine(slot);
   const depth = `../#/team/${encodeURIComponent(v.team)}/player/${encodeURIComponent(v.gsis)}`;
   return `<div class="panel-inner an-pl-card" style="--team-primary:${esc(info.teamMeta?.colourPrimary || "#333")};--team-secondary:${esc(info.teamMeta?.colourSecondary || "#777")}">
-    ${line ? `<a class="an-pl-cardslot" href="${esc(depth)}" target="_blank" rel="noopener">${esc(line)}</a>` : ""}
+    ${line ? `<a class="an-pl-cardslot" href="${esc(depth)}">${esc(line)}</a>` : ""}
     ${cardBodyHtml(info.card, info.teamView?.season, info.teamMeta, info.teamView)}
   </div>`;
 }

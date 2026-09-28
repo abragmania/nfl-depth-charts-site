@@ -697,7 +697,7 @@ export function cardBodyHtml(card, season, teamMeta, teamView = null) {
       <div class="panel-head-main">
         <div class="panel-name">${esc(card.name)} <span class="panel-number">#${esc(card.number ?? dash)}</span></div>
         <div class="panel-label">${esc(card.displayLabel || card.position || "")}</div>
-        <a class="panel-stats-link" data-stats-link href="#" target="_blank" rel="noopener" title="Open this player in NFL Analytics" hidden>Stats ↗</a>
+        <a class="panel-stats-link" data-stats-link href="#" title="Open this player in NFL Analytics" hidden>Stats →</a>
         ${wordmark}
       </div>
     </div>
