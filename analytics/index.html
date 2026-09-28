@@ -28,14 +28,13 @@
 <!-- D209 part (1): the shared site strip (../js/sitebar.js), painted into #sitebar by js/main.js's side-effect
      import of it. Replaces the old .an-brand "NFL ANALYTICS" brand and the .an-topbar-depth "Depth chart ↗"
      new-tab link back to the depth-chart app; those two are gone. -->
+<!-- Adam, 2026-09-28 ("this seems like a waste of a line"): the app's own PLAYERS / TEAMS nav sits ON the strip
+     line, right after the Analytics tab, with the stamp at the right end; the strip wraps the nav under itself
+     only when the window is too narrow for the whole line. The nav keeps its own wiring in js/nav.js. -->
 <header class="an-top">
   <div id="sitebar" data-section="analytics"></div>
-  <span id="an-asof" class="an-asof" hidden></span>
-</header>
-<!-- The app's own second row, unchanged (D209 part 1 only moves the brand/cross-app link into the shared
-     strip above; this PLAYERS/TEAMS nav keeps its own wiring in js/nav.js). -->
-<header class="an-subbar">
   <nav id="an-nav" class="an-nav" aria-label="Sections"></nav>
+  <span id="an-asof" class="an-asof" hidden></span>
 </header>
 <main id="app" class="an-main" aria-live="polite"></main>
 <script type="module" src="js/main.js"></script>

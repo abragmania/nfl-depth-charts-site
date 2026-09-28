@@ -26,7 +26,7 @@ a { color:inherit; }
    only once the window is wider than the column, so a 1536-wide laptop is untouched and a 2560 screen gets the same
    layout parked in the middle. The app bar's contents share the padding so the brand and tabs line up with the page. */
 :root { --col:1760px; --gutter:max(28px, calc((100% - var(--col)) / 2)); }
-.an-top { display:flex; align-items:center; gap:28px; padding:10px 28px; /* 👁 D209: a fixed 28px gutter like the depth-chart topbar, so the strip sits in the same place in both apps (the PLAYERS/TEAMS row below keeps the centred gutter) */ background:var(--panel); border-bottom:1px solid var(--line); position:sticky; top:0; z-index:5; }
+.an-top { display:flex; flex-wrap:wrap; align-items:center; gap:8px 28px; padding:10px 28px; /* 👁 D209: a fixed 28px gutter like the depth-chart topbar, so the strip sits in the same place in both apps (the PLAYERS/TEAMS row below keeps the centred gutter) */ background:var(--panel); border-bottom:1px solid var(--line); position:sticky; top:0; z-index:5; }
 /* D209 part (1): the shared site strip (public/js/sitebar.js), painted into #sitebar, the .an-top's first
    child. These two rules are copied from public/css/styles.css's .sitebar-brand/.sitebar-tabs so the strip
    reads identically on both apps (that app's older, settled topbar look is the one the strip uses) — same
@@ -39,10 +39,10 @@ a { color:inherit; }
 .sitebar-tab:hover { color:var(--ink); background:rgba(255,255,255,.06); }
 .sitebar-tab.on { color:#0b0d10; background:var(--ink); }
 .an-asof { margin-left:auto; color:var(--muted); font-size:12.5px; white-space:nowrap; }
-/* The app's own second row (D209 part 1: the shared strip above is the only thing the two apps now share;
-   this PLAYERS/TEAMS nav keeps its own markup and wiring in js/nav.js, just moved out of .an-top into its own
-   row beneath it). Same horizontal rhythm as .an-top (gutter, gap) so the two rows line up. */
-.an-subbar { display:flex; align-items:center; padding:8px var(--gutter); background:var(--panel); border-bottom:1px solid var(--line); }
+/* Adam, 2026-09-28: the PLAYERS / TEAMS nav sits on the strip line after the Analytics tab (a thin divider before
+   it), and the stamp keeps the right end; .an-top wraps, so on a window too narrow for the whole line the nav
+   drops under the strip on its own. */
+.an-top > .an-nav { padding-left:24px; border-left:1px solid var(--line); }
 /* D193 (2026-09-25): two labelled, always-visible groups - PLAYERS (Quarterbacks, Running backs, Receivers) and
    TEAMS (Offense, Defense, Grid) - in place of the old flat tab row; nav.js builds the HTML, this only styles it. */
 .an-nav { display:flex; align-items:center; gap:18px; min-width:0; }
