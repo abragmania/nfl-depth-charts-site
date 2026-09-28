@@ -15,7 +15,7 @@ import { mountScaledField, disposeCurrentView, MIN_READABLE_SCALE } from "./view
 import { navStripHtml, wireNav } from "./nav.js";
 import { isLightWash } from "./landing.js";
 // D173: this week's games strip (shared with the landing page) and the game line for the game being viewed.
-import { gamesBarHtml, gameLineHtml, findGame } from "./gamesbar.js";
+import { gamesBarHtml, gameLineHtml, findGame, wireGamesToggle } from "./gamesbar.js";
 // D111: one legend, drawn on both pages (see matchupLegendHtml). D134: one reduced-depth option object too.
 import { legendHtml, REDUCED_DEPTH_OPTS } from "./team.js";
 
@@ -282,6 +282,7 @@ function wireByePicker(root, A) {
 // ---- entry point ----
 
 export async function renderMatchup(root, search, aAbbr, bAbbr) {
+  wireGamesToggle(root); // the games strip's fold/unfold (gamesbar.js), wired once per root
   search.hidden = true;
   disposeCurrentView(); // the outgoing view's observers must not outlive its DOM
   const A = (aAbbr || "").toUpperCase();
