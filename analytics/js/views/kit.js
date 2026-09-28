@@ -37,8 +37,8 @@ const has = (v) => v !== null && v !== undefined && v !== "";
 // in the blanks so a page can pass only the fields it has. Never computes anything, never touches HTML.
 // rank/rankOf: his league rank beside the league figure ("lg 812 · 4th of 68 RBs") - both pre-formatted strings
 // the caller already worked out ("4th", "68 RBs"); kit.js only ever joins and escapes them.
-export function tileData({ label = "", value = "", lg = null, rank = null, rankOf = null, sub = null, tier = null, title = null, share = false, bar = null, lgBar = null, href = null } = {}) {
-  return { label, value, lg, rank, rankOf, sub, tier, title, share, bar, lgBar, href };
+export function tileData({ label = "", value = "", lg = null, rank = null, rankOf = null, sub = null, tier = null, title = null, share = false, bar = null, lgBar = null } = {}) {
+  return { label, value, lg, rank, rankOf, sub, tier, title, share, bar, lgBar };
 }
 
 // The "lg 812 · 4th of 68 RBs" line shared by headlineRow and oppRow: lg alone, rank alone, or both joined by " · ".
@@ -493,14 +493,11 @@ export function lineBlock({ title = "", headline = [], tiles = [], foot = "" } =
   }).join("");
   const tileHtml = (tiles || []).map((t) => {
     const d = tileData(t);
-    const body = `<div class="an-tile${tierClass(d.tier)}"${titleAttr(d.title)}>` +
+    return `<div class="an-tile${tierClass(d.tier)}"${titleAttr(d.title)}>` +
       `<span>${esc(d.label)}</span><b>${esc(d.value)}</b>` +
       lgRankEm("an-rc-lg", d) +
       (d.sub ? `<div class="an-rc-sub">${esc(d.sub)}</div>` : "") +
       `</div>`;
-    // D206: a tile links to Rankings sorted by its own column only when the calling page set an href (a key with no
-    // Rankings column passes none) - the same .an-tile-link wrapper every other figure tile on the club page uses.
-    return d.href ? `<a class="an-tile-link" href="${esc(d.href)}">${body}</a>` : body;
   }).join("");
   return `<div class="an-card an-line"><div class="an-dh">${esc(title)}</div>` +
     `<div class="an-line-head">${chips}</div>` +

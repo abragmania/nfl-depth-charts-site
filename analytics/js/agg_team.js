@@ -288,21 +288,12 @@ export const TEAM_LG_KEYS = ["plays", "playsG", "dbG", "runsG", "passRate", "epa
 export const OFF_TIER = { epaPlay: 1, epaDb: 1, epaCar: 1, succPct: 1, cmpPct: 1, explPct: 1, sackPct: -1, pressPct: -1,
   rushYdsG: 1, ypc: 1, ybcCar: 1, stuffPct: -1, pressPctAllowed: -1, hitPctAllowed: -1,
   // D198: the O-line block and the Offense table's rushing tiles.
-  hurryPctAllowed: -1, runSuccPct: 1, runExplPct: 1, sacksG: -1,
-  // D203: more plays per game is better on offense (muted, see SOFT_KEYS below).
-  playsG: 1 };
+  hurryPctAllowed: -1, runSuccPct: 1, runExplPct: 1, sacksG: -1 };
 export const DEF_TIER = { epaPlay: -1, epaDb: -1, epaCar: -1, succPct: -1, cmpPct: -1, explPct: -1, sackPct: 1, pressPct: 1, pressuresG: 1, ypc: -1, runSuccPct: -1, runExplPct: -1,
   rushYdsG: -1, ybcCar: -1, stuffPct: 1, pressPctAllowed: 1, hitPctAllowed: 1, covRating: -1, covYdsTgt: -1, covCmpPct: -1,
   // D198: the D-line block.
-  hurryPctAllowed: 1, hurriesG: 1, hitsG: 1, sacksG: 1, runStopPct: 1,
-  // D203: more plays FACED per game is worse on defense (muted, see SOFT_KEYS below).
-  playsG: -1 };
+  hurryPctAllowed: 1, hurriesG: 1, hitsG: 1, sacksG: 1, runStopPct: 1 };
 const dirOf = (side) => (side === "def" ? DEF_TIER : OFF_TIER);
-// D203 (Adam, 2026-09-27): keys that ARE tiered (a real lean exists) but should read as a lean, not a verdict - the
-// UI (a tile or table cell) adds a `t-soft` class alongside its `t-<tier>` class; analytics.css's `.t-soft.t-<tier>`
-// rule then halves the colour's strength by mixing it toward the ink colour. One mechanism, so a new soft figure
-// never needs a new set of muted colours - just add its key here.
-export const SOFT_KEYS = ["playsG"];
 
 // { n (clubs), lg: { off: {k: mean}, def: {k: mean} }, cuts: { off: {k: {cuts, n}}, def } , text }.
 export function teamReference(rows) {
