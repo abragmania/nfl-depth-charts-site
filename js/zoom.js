@@ -346,7 +346,9 @@ export async function renderZoomSide(root, search, abbr, unit) {
     return;
   }
   const unitLabel = unit === "OFF" ? "Offense" : "Defense";
-  document.title = `${team.name} ${unitLabel} — NFL Depth Charts`;
+  // D207: the PAGE is titled "Offense/Defense Depth" so it stops colliding with the analytics app's Offense
+  // and Defense pages; unitLabel itself stays plain (it also captions the no-slots placeholder below).
+  document.title = `${team.name} ${unitLabel} Depth — NFL Depth Charts`;
 
   let view, fromFixture;
   try {

@@ -97,13 +97,83 @@ export function loadStatus() { return statusFeed().then((f) => f.players); }
 // { [gsis]: { slot, ovr, posRank, posCount, maddenPos, role } } from the depth-chart app's compiled team view
 // (GET /api/team/<ABBR>; the published site's api/team/<ABBR>.json through resolveAnalyticsUrl). Fetched once per
 // club per page load. Never fails: an unreachable view resolves to {} and the next call asks again.
+// D209 part (2): the raw TeamView (server/compile's own shape) a club's compiled chart response carries —
+// what the depth-chart app's panel.js draws a player CARD from. Cached separately from clubCards() below so
+// the two share one fetch instead of two: clubCards() now reads through this cache rather than fetching on
+// its own, and a page that also wants the full view for one man's card (the analytics player page) gets it
+// without a second request.
+const teamViewCache = new Map();
+export function loadTeamView(abbr) {
+  const k = String(abbr || "").toUpperCase();
+  if (!teamViewCache.has(k)) {
+    teamViewCache.set(k, getJson(`/api/team/${encodeURIComponent(k)}`).catch((e) => { teamViewCache.delete(k); throw e; }));
+  }
+  return teamViewCache.get(k);
+}
+
 const clubCardsCache = new Map();
 export function loadClubCards(abbr) {
   const k = String(abbr || "").toUpperCase();
   if (!clubCardsCache.has(k)) {
-    clubCardsCache.set(k, getJson(`/api/team/${encodeURIComponent(k)}`).then(clubCards).catch(() => { clubCardsCache.delete(k); return {}; }));
+    clubCardsCache.set(k, loadTeamView(abbr).then(clubCards).catch(() => { clubCardsCache.delete(k); return {}; }));
   }
   return clubCardsCache.get(k);
+}
+
+// D209 part (2): the full PlayerCard for one man inside an already-fetched TeamView — the same traversal
+// public/js/main.js's own (unexported) findCard() uses to reopen the depth-chart panel without a page
+// render, duplicated here rather than reached into: this app's own rule (see public/js/panel.js's file
+// header) is that a small pure helper is copied per file instead of importing another builder's private
+// code. Matches on gsisId first (the reliable id), falling back to playerKey for the rare card whose gsisId
+// is unset but whose depth-chart key IS itself the gsis id (panel.js's GSIS_RE case). PURE.
+export function findCardByGsis(view, gsis) {
+  const hit = (p) => p?.gsisId === gsis || p?.playerKey === gsis;
+  for (const unit of ["OFF", "DEF"]) {
+    for (const slot of view?.units?.[unit] || []) {
+      for (const p of slot.players || []) if (hit(p)) return p;
+    }
+    const byBand = view?.unlisted?.[unit] || {};
+    for (const band of Object.keys(byBand)) for (const p of byBand[band] || []) if (hit(p)) return p;
+  }
+  return null;
+}
+
+// D209 part (2): the depth-chart card's own network calls, mirrored from public/js/api.js/history.js but
+// routed through resolveAnalyticsUrl instead of that file's own resolveUrl. Reason: api.js's static-mode
+// paths are relative to the SITE ROOT ("api/player/X.json"), correct for the depth-chart app which lives
+// there; this app lives one folder down at /analytics/ and needs the "../" prefix resolveAnalyticsUrl
+// already adds for every other analytics fetch (D183's convention). Live mode is untouched either way —
+// resolveUrl/resolveAnalyticsUrl both leave an absolute "/api/..." path alone.
+// Same contract as api.js's getPlayer(): throws on failure, with the same "not part of this published
+// snapshot" wording for a missing pre-rendered file on the static site.
+export async function loadPlayerStats(espnId) {
+  try { return await getJson(`/api/player/${encodeURIComponent(espnId)}`); }
+  catch (e) {
+    if (isStatic() && e.status === 404) throw new Error("season stats are not part of this published snapshot");
+    throw e;
+  }
+}
+
+// Same contract as api.js's getHistory(): returns {ok, status, body} rather than throwing, because a
+// deliberate 404 no_history ("no prior NFL seasons on record") is a normal answer, not an error.
+export async function loadPlayerHistory(abbr, playerKey, params = {}) {
+  const q = new URLSearchParams(params).toString();
+  const url = `/api/history/${encodeURIComponent(abbr)}/${encodeURIComponent(playerKey)}${q ? `?${q}` : ""}`;
+  let r;
+  try { r = await fetch(resolveAnalyticsUrl(url), { headers: { accept: "application/json" } }); }
+  catch (e) { throw new Error(e.message || "network error"); }
+  let body = null;
+  try { body = await r.json(); } catch { /* non-JSON body (a Pages 404 page, say) */ }
+  const status = body?.httpStatus ?? r.status;
+  return { ok: r.ok && !body?.error, status, body };
+}
+
+// Same contract as api.js's getGameLog(): one file per club, cached per page load, throws on failure.
+const playerGameLogCache = new Map();
+export function loadPlayerGameLog(abbr) {
+  const A = String(abbr || "").toUpperCase();
+  if (!playerGameLogCache.has(A)) playerGameLogCache.set(A, getJson(`/api/gamelog/${encodeURIComponent(A)}`).catch((e) => { playerGameLogCache.delete(A); throw e; }));
+  return playerGameLogCache.get(A);
 }
 
 // PURE: the cards map from a team view. The slot is named the way the chart prints it: each slot's own label ("WR1",

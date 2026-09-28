@@ -80,3 +80,7 @@
 /* 👁: the vs-usual explanation must wrap at the table's width, never widen the column; value cells share a width. */
 .an-dpos-note { width:0; min-width:100%; white-space:normal; }
 .an-dpos-table td.an-dp-v { min-width:58px; }
+
+/* D204 (2026-09-27): every Grid rating cell is a link to the club's page for that side; pointer and a faint lift on hover, nothing else changes. */
+.gc-cell { display:block; text-decoration:none; color:inherit; cursor:pointer; }
+.gc-cell:hover .gc { transform:translateY(-1px); }
