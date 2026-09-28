@@ -26,7 +26,8 @@ const intM = (v) => int(v).replace(/^-/, "−");
 // keeps its key, value, format, tooltip and sort; the old Volume, Scoring zone, Big plays and Involvement headers and
 // D191's "Efficiency (opp)" are gone (D191's Opp/g and Opp % now sit in Opportunity, the rest in the gold group).
 // Lead's call (7b): the raw Opp and Car counts are dropped from the gold group so the open table fits the 1760 column
-// at 2560; Opp/g and Car/g carry them, and sort=opp or sort=car links still sort (the rank header sorts by carries).
+// at 2560; Opp/g carries Opp, and sort=opp links still sort (the rank header sorts by carries). Car came back as a
+// column on 2026-09-27 (Adam).
 const COLS = [
   { k: "dkG", h: "DK/g", t: DK_TIPS.dkG, f: (v) => fixM(v, 1), grp: "p" },
   { k: "dk", h: "DK", t: DK_TIPS.dk, f: (v) => fixM(v, 1), grp: "p" },
@@ -37,6 +38,9 @@ const COLS = [
   { k: "recTd", h: "Rec TD", t: "Receiving touchdowns", f: intM, grp: "p" },
   { k: "oppG", h: "Opp/g", t: "Opportunities (carries + targets) per game he played", f: (v) => fixM(v, 1), grp: "o", bar: 28 },
   { k: "oppShare", h: "Opp %", t: "Opportunity share: (his designed runs + his targets) / (his club's designed runs + his club's pass attempts) in his games (scrambles are on neither side)", f: (v) => pct(v), grp: "o", bar: 0.5 },
+  // Adam, 2026-09-27: "carries should be a sortable stat, obviously" - the raw count is a column again (7b had
+  // dropped it for width; sort=car had kept working through the rank header, but nothing on screen said so).
+  { k: "car", h: "Car", t: "Carries in the window (designed runs plus scrambles)", f: intM, grp: "o" },
   { k: "carG", h: "Car/g", t: "Carries per game he played", f: (v) => fixM(v, 1), grp: "o", bar: 22 },
   { k: "rushShare", h: "Rush %", t: "Rush share: his designed runs / his club's designed runs in his games (scrambles are called passes: on neither side)", f: (v) => pct(v), grp: "o", bar: 0.8 },
   { k: "tgt", h: "Tgt", t: "Targets (the Receivers page's count)", f: intM, grp: "o" },
@@ -69,8 +73,8 @@ export const RB_TABLE_ORDER = GROUPS.map(([g, l]) => [l, COLS.filter((c) => c.gr
 const TIERED = new Set(RUSH_TIER_KEYS);
 const SORTABLE = new Set([...COLS.map((c) => c.k), "name", "g", "car", "opp"]);
 // The totals that sort but are not columns, and the column that shows them (🔵 on 7b: the default sort is carries).
-export const SHOWN_AS = { car: "carG", opp: "oppG" };
-const SHOWN_AS_TEXT = { car: "total carries", opp: "total opportunities" };
+export const SHOWN_AS = { opp: "oppG" }; // car is its own column now (2026-09-27)
+const SHOWN_AS_TEXT = { opp: "total opportunities" };
 const BAND = (pos) => (pos === "RB" || pos === "FB" ? "BACKFIELD" : pos);
 
 // Weekly carries: a line with the position's carries-per-game league line dashed behind it.
