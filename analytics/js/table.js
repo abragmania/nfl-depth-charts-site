@@ -268,7 +268,7 @@ function detailHtml(row, st, q, P, windowName) {
       ${tile("Tgt %", pct(row.tgtShare), t("tgtShare", row.tgtShare), pct(L.tgtShare))}${tile("AY %", pct(row.ayShare), t("ayShare", row.ayShare), pct(L.ayShare))}
       ${tile("WOPR", fix(row.wopr, 2), t("wopr", row.wopr), fix(L.wopr, 2))}${tile("aDOT", fix(row.adot, 1), "", fix(L.adot, 1))}
       ${tile("EPA/Tgt", signed(row.epaTgt, 2), t("epaTgt", row.epaTgt), signed(L.epaTgt, 2))}${tile("YPRR", fix(row.yprr, 2), t("yprr", row.yprr), fix(L.yprr, 2))}
-      <div class="an-dlinks"><a href="#/player/${encodeURIComponent(row.gsis)}${q ? "?" + q : ""}">Player page →</a><a href="${depth}">Depth chart →</a></div>
+      <div class="an-dlinks"><a href="#/player/${encodeURIComponent(row.gsis)}${q ? "?" + q : ""}">Player page →</a><a href="${depth}" target="_blank" rel="noopener">Depth chart ↗</a></div>
     </div></div>`;
 }
 
@@ -320,7 +320,7 @@ export function tableHtml(allRows, st, query, view = {}, status = {}) {
     const chip = statusChip(ps, { season: view.statusSeason }), nameCls = statusNameClass(ps);
     return `<tr class="an-row${open ? " open" : ""}" data-id="${esc(r.gsis)}" tabindex="0" aria-expanded="${open}">
       <td class="c-rank an-stick">${i + 1}</td>
-      <td class="c-name an-stick"><a class="an-pname${nameCls ? " " + nameCls : ""}" href="#/player/${encodeURIComponent(r.gsis)}${q ? "?" + q : ""}" title="${esc(r.name)}">${esc(r.name)}</a>${teamPill(r.team, teams, q)}<span class="an-pospill" data-band="${BAND(r.pos)}">${esc(r.pos)}</span>${chip}<a class="an-dc" href="${depth}" title="Open his depth-chart card" aria-label="Depth chart">→</a></td>
+      <td class="c-name an-stick"><a class="an-pname${nameCls ? " " + nameCls : ""}" href="#/player/${encodeURIComponent(r.gsis)}${q ? "?" + q : ""}" title="${esc(r.name)}">${esc(r.name)}</a>${teamPill(r.team, teams, q)}<span class="an-pospill" data-band="${BAND(r.pos)}">${esc(r.pos)}</span>${chip}<a class="an-dc" href="${depth}" target="_blank" rel="noopener" title="Open his depth-chart card in a new tab" aria-label="Depth chart">↗</a></td>
       <td class="num">${r.g}</td>
       ${cols.map((c) => cell(c, r)).join("")}
       <td class="c-spark">${sparkline(r.series, st)}</td></tr>`
