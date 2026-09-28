@@ -249,7 +249,7 @@ function detailHtml(r, st, q, ref, wn, lgZones) {
       <div class="an-qb-blockh">Rushing <span class="an-dsub">${r.rushAtt} carries · ${r.rushYds} yds · ${r.rushTd} TD</span></div>
       ${rushHeadline(r, ref)}
       <div class="an-note">${r.des} designed run${r.des === 1 ? "" : "s"} (${r.desYds} yds) · ${r.scr} scramble${r.scr === 1 ? "" : "s"} (${r.scrYds} yds) · EPA/carry ${isNum(r.rushEpa) ? signed(r.rushEpa, 2) : "–"}</div>
-      <div class="an-dlinks"><a href="#/player/${encodeURIComponent(r.gsis)}${q ? "?" + q : ""}">Player page →</a><a href="${depth}" target="_blank" rel="noopener">Depth chart ↗</a></div>
+      <div class="an-dlinks"><a href="#/player/${encodeURIComponent(r.gsis)}${q ? "?" + q : ""}">Player page →</a><a href="${depth}">Depth chart →</a></div>
     </div></div>`;
 }
 
@@ -282,7 +282,7 @@ export function qbTableHtml(allRows, st, query, view = {}, status = {}) {
     const chip = statusChip(ps, { season: view.statusSeason }), nameCls = statusNameClass(ps);
     return `<tr class="an-row${open ? " open" : ""}" data-id="${esc(r.gsis)}" tabindex="0" aria-expanded="${open}">
       <td class="c-rank">${i + 1}</td>
-      <td class="c-name"><a class="an-pname${nameCls ? " " + nameCls : ""}" href="#/player/${encodeURIComponent(r.gsis)}${q ? "?" + q : ""}">${esc(r.name)}</a>${teamPill(r.team, view.teams, q)}${chip}<a class="an-dc" href="${depth}" target="_blank" rel="noopener" title="Open his depth-chart card in a new tab" aria-label="Depth chart">↗</a></td>
+      <td class="c-name"><a class="an-pname${nameCls ? " " + nameCls : ""}" href="#/player/${encodeURIComponent(r.gsis)}${q ? "?" + q : ""}">${esc(r.name)}</a>${teamPill(r.team, view.teams, q)}${chip}<a class="an-dc" href="${depth}" title="Open his depth-chart card" aria-label="Depth chart">→</a></td>
       <td class="num">${r.g}</td>
       ${COLS.map((c) => cell(c, r)).join("")}
       <td class="c-spark">${epaSpark(r.series, st)}</td></tr>`

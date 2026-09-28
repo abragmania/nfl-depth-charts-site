@@ -41,15 +41,15 @@
  "weeks": [
   {
    "week": 1,
-   "hash": "6d32efd126aaa572",
+   "hash": "51b74f0b5d77c3a7",
    "plays": 1924,
-   "builtAt": "2026-09-28T16:00:21.890Z"
+   "builtAt": "2026-09-27T21:56:34.715Z"
   },
   {
    "week": 2,
-   "hash": "e5e39ebd691ad4d1",
+   "hash": "d0a1a66d81275b38",
    "plays": 1936,
-   "builtAt": "2026-09-28T16:00:21.890Z"
+   "builtAt": "2026-09-27T21:56:34.715Z"
   }
  ],
  "throughWeek": 2,
@@ -57,36 +57,36 @@
  "heldUntil": "2026-09-29T09:00:00.000Z",
  "sources": {
   "pbp": {
-   "fetchedAt": "2026-09-28T16:00:08.382Z",
-   "sha": "8c6ab47250b152666d79507ae39360443ea8d9c895a0381c75e72bcfc1a2923d"
+   "fetchedAt": "2026-09-27T21:56:00.057Z",
+   "sha": "b317b6854907e152745432f2bcf887d81acb0d6ac9e7e2aad7c0f5e7d381ac44"
   },
   "ftn": {
-   "fetchedAt": "2026-09-28T16:00:08.959Z",
-   "sha": "033a076b8e8cfb0121f503d8500b078f08117c3d5cf2e76b9ac58df6585a9d17"
+   "fetchedAt": "2026-09-27T21:56:00.459Z",
+   "sha": "9a3b89d5b371ea1421aacf1a701814b7a2886c8c920a5a221a72623dc8d7e90e"
   },
   "ngs": {
-   "fetchedAt": "2026-09-28T16:00:09.729Z",
-   "sha": "04bc6ddd61cee788"
+   "fetchedAt": "2026-09-27T21:56:01.211Z",
+   "sha": "4b9e9f628dc0af4a"
   },
   "pfr": {
-   "fetchedAt": "2026-09-27T14:17:46.285Z",
+   "fetchedAt": "2026-09-27T21:56:01.621Z",
    "sha": "7d72af8acfbd9478"
   },
   "pfrRush": {
-   "fetchedAt": "2026-09-27T14:17:46.534Z",
+   "fetchedAt": "2026-09-27T21:56:01.888Z",
    "sha": "9d383330e0f498e35fed3932b0254faa6b5820322c3b5b7d01fb188d01e5477f"
   },
   "pfrRec": {
-   "fetchedAt": "2026-09-27T14:17:46.787Z",
+   "fetchedAt": "2026-09-27T21:56:02.106Z",
    "sha": "0d5c2bb2929420dea770dd11f99f8ce78591565bea177d6c1a6b8c40fe2fa4ba"
   },
   "routes": {
-   "fetchedAt": "2026-09-27T14:17:47.042Z",
+   "fetchedAt": "2026-09-27T21:56:25.835Z",
    "sha": "51af93f49c67860acba41686c670a330f9037c1f80532d0a936e8657062d2ab6"
   },
   "participation": null,
   "snaps": {
-   "fetchedAt": "2026-09-27T14:13:26.482Z",
+   "fetchedAt": "2026-09-27T21:50:21.049Z",
    "sha": "62419bd0b011368e04dcf494966dc82b3adf1af21b65ea15405eb7b078d2f39e"
   }
  }
