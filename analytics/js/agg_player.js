@@ -505,7 +505,9 @@ function trendFigures(blocks, players, st, gsis, back) {
 }
 const routeFrac = (p) => { const x = num(p); if (x === null || x <= 0) return null; return x > 1.5 ? x / 100 : x; };
 
-function lastTeam(meta) {
+// D209 🔵 fix round: exported so the player pages' loadCard (views/player.js) can look a man up on his
+// CURRENT club rather than whatever club the page's own filter window happens to show him on.
+export function lastTeam(meta) {
   const ks = Object.keys(meta?.teams || {}).sort();
   return ks.length ? meta.teams[ks[ks.length - 1]] : "";
 }
