@@ -741,15 +741,42 @@ export function regroupSlotReceivers(wrSlots) {
   // then column rank, then slot snaps, then printed row) — but split so a BACKUP never sits above a
   // STARTER (D90): a second qualifying starter joins right under the source column's line-one block, ahead
   // of the backups that column carried in.
-  const individuals = qualified.filter((p) => !inGroup.has(p) && !(p.playerKey != null && groupKeys.has(p.playerKey)));
+  const candidates = qualified.filter((p) => !inGroup.has(p) && !(p.playerKey != null && groupKeys.has(p.playerKey)));
   // A starter is a man his club lists on line one or two (tier 0/1) or whom the server marks as leading a
   // column (D12/D44's listed-OUT starter + ACTIVE fill-in, or a co-starter) — the same test starterLed uses.
   const isStarter = (p) => tierOf(p) <= 1 || STARTER_LED_ROLES.has(p.role) || p?.coStarter === true;
+  // D213 (Adam, 2026-09-28, "where is Darius Cooper on the Eagles depth chart"): the Slot column may not strip
+  // a club column of its LAST healthy backup. Cooper, at 35.6 percent against a 35 bar, was lifted out of the
+  // Wicks column into the Slot column, where he sat fourth behind "+2 more", and the Wicks column was left
+  // showing an IR man as its only backup — which read as "Cooper is not on the chart". A qualifying BACKUP
+  // stays in his printed column when nobody else who can play would be left behind its line-one block
+  // (a fellow qualifier does not count: he may be leaving too); a qualifying STARTER still moves (D93).
+  // Per club column (never the source, which moves whole): when every healthy man behind the line-one block
+  // is a candidate, ONE stays — the first healthy backup the club printed; an out man is not the answer to
+  // "who plays" and may move. A column with a healthy non-candidate behind its starter lets all its
+  // candidates go, as before.
+  const samePlayer = (a, b) => a === b || (a?.playerKey != null && a.playerKey === b?.playerKey);
+  const isCandidate = (q) => candidates.some((c) => samePlayer(c, q));
+  const stays = [];
+  for (const s of wrSlots) {
+    if (s === source) continue;
+    const block = lineOneBlock(s);
+    // 🔵 review: a column whose own line-one block is leaving (the losing starter of a two-starter tie, or a
+    // backup-led column whose leader qualifies) has no starter left to protect; it empties as D93 always had it.
+    if ((s.players || []).slice(0, block).every(isCandidate)) continue;
+    const behind = (s.players || []).slice(block);
+    if (behind.some((q) => !isFullyOut(q) && !isCandidate(q))) continue;
+    const keep = behind.find((q) => !isFullyOut(q) && !isStarter(q) && isCandidate(q));
+    if (keep) stays.push(keep);
+  }
+  const individuals = candidates.filter((p) => !stays.some((k) => samePlayer(k, p)));
   const head = group.slice(0, lineOneBlock(source));
   const carried = group.slice(head.length);
   const men = source
     ? [...head, ...individuals.filter(isStarter), ...carried, ...individuals.filter((p) => !isStarter(p))]
     : [...individuals];
+  // 🔵 review: with no starter column and every qualifier kept home by D213, there is no Slot column to draw.
+  if (!men.length) return null;
 
   const moved = new Set(men);
   const movedKeys = new Set(men.map((p) => p.playerKey).filter((k) => k != null));

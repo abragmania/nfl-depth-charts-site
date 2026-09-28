@@ -8,7 +8,7 @@
 import { backLink } from "../router.js";
 import { fromQuery, toQuery, seasonsOf, weekLabel } from "../filters.js";
 import { loadFor, loadTeams, loadStatusFeed, loadClubCards, displayName } from "../data.js";
-import { aggregateTeams, teamReference, teamTier, teamRank, teamZones, defTargets, defCarries } from "../agg_team.js";
+import { aggregateTeams, teamReference, teamTier, teamRank, teamZones, defTargets, defCarries, SOFT_KEYS } from "../agg_team.js";
 import { gridRows } from "../agg_grid.js";
 import { absences, isMissing } from "../agg_absence.js";
 import { renderFilterBar } from "../filterbar.js";
@@ -16,7 +16,7 @@ import { esc, NA, isNum, pct, fix, signed, int, teamPill, qbStrips, pfrNote, sea
 import { windowName } from "./qbplayer.js";
 import { lostCardHtml } from "./lost.js";
 import { lineBlock } from "./kit.js";
-import { teamPageState, teamSideSeg, clubZoneField, clubZoneLegend, zonePlaysHtml, TEAM_ZONE_MODES, distList, ordinal } from "./team.js";
+import { teamPageState, teamSideSeg, clubZoneField, clubZoneLegend, zonePlaysHtml, TEAM_ZONE_MODES, distList, ordinal, clubGridRowHtml, RANKINGS_DEF_KEYS, rankingsHref, gridTileHref } from "./team.js";
 
 const P = (v, d = 1) => (isNum(v) ? pct(v, d) + "%" : NA);
 
@@ -37,13 +37,18 @@ export function byPosLine(byPos, lgByPos) {
 
 // PURE: the twelve headline tiles (all "allowed"), tier-coloured against the league (DEF_TIER, via teamTier/
 // teamRank). D/L: the club's and the league's def-side figures (row.def, ref.lg.def); ref: teamReference(); win:
-// aggregateTeams()'s window result (teamRank ranks among win.rows); abbr: the club whose rank is looked up.
-export function defTilesHtml(D, L, ref, win, abbr) {
-  const tile = (label, val, k, lg, title = "") => {
+// aggregateTeams()'s window result (teamRank ranks among win.rows); abbr: the club whose rank is looked up; qs: the
+// page's current filter query (D206 - a tile links to Rankings sorted by its own column, carrying it).
+export function defTilesHtml(D, L, ref, win, abbr, qs = "") {
+  // linkKey (D206, defaults to k): aDOT and Blitz % pass k="" to stay uncoloured/unranked (neutral figures), but
+  // both still have a Rankings column, so their link needs the real key even though their tier lookup does not.
+  const tile = (label, val, k, lg, title = "", linkKey = k) => {
     const tr = k ? teamTier("def", k, D[k], ref.cuts) : "";
+    const soft = tr && SOFT_KEYS.includes(k) ? " t-soft" : "";
     const rk = k && isNum(D[k]) ? teamRank(win.rows, "def", k, abbr) : null;
     const tip = [title, rk ? `${ordinal(rk.rank)} of ${rk.of} clubs` : ""].filter(Boolean).join(" · ");
-    return `<div class="an-tile${tr ? " t-" + tr : ""}"${tip ? ` title="${esc(tip)}"` : ""}><span>${label}</span><b>${val}</b>${lg && !String(lg).includes("an-na") ? `<em> · lg ${lg}</em>` : ""}</div>`;
+    const body = `<div class="an-tile${tr ? " t-" + tr : ""}${soft}"${tip ? ` title="${esc(tip)}"` : ""}><span>${label}</span><b>${val}</b>${lg && !String(lg).includes("an-na") ? `<em> · lg ${lg}</em>` : ""}</div>`;
+    return RANKINGS_DEF_KEYS.has(linkKey) ? `<a class="an-tile-link" href="${rankingsHref("def", linkKey, abbr, qs)}">${body}</a>` : body;
   };
   return [
     tile("Plays/g", fix(D.playsG, 1), "playsG", fix(L.playsG, 1), "Plays faced per game: pass attempts, sacks, scrambles and designed runs"),
@@ -53,22 +58,23 @@ export function defTilesHtml(D, L, ref, win, abbr) {
     tile("Success %", P(D.succPct, 1), "succPct", P(L.succPct, 1), "Share of plays faced that were successful for the offense (lower is better)"),
     tile("Explosive %", P(D.explPct, 1), "explPct", P(L.explPct, 1), "Runs of 10+ yards and completions of 20+ allowed / plays faced"),
     tile("Comp %", P(D.cmpPct), "cmpPct", P(L.cmpPct), "Completions allowed / attempts"),
-    tile("aDOT", fix(D.adot, 1), "", fix(L.adot, 1), "Air yards per attempt faced (neutral: not coloured)"),
+    tile("aDOT", fix(D.adot, 1), "", fix(L.adot, 1), "Air yards per attempt faced (neutral: not coloured)", "adot"),
     tile("Sack %", P(D.sackPct), "sackPct", P(L.sackPct), "Sacks / dropbacks faced"),
     tile("Press %", P(D.pressPct), "pressPct", P(L.pressPct), `PFR: the opposing quarterbacks' pressured dropbacks / their dropbacks against this defense${D.pfrWeeks ? ` over ${D.pfrWeeks} week${D.pfrWeeks === 1 ? "" : "s"}` : ""}`),
-    tile("Blitz %", P(D.blitzPct, 0), "", P(L.blitzPct, 0), "FTN: dropbacks faced with 1+ blitzers / dropbacks charted"),
+    tile("Blitz %", P(D.blitzPct, 0), "", P(L.blitzPct, 0), "FTN: dropbacks faced with 1+ blitzers / dropbacks charted", "blitzPct"),
     tile("YPC", fix(D.ypc, 1), "ypc", fix(L.ypc, 1), "Yards per designed run allowed"),
   ].join("");
 }
 
-// PURE: the foot links row - the club's Offense page, its row on the Defense leaderboard table, the Grid, and the
-// depth chart's own defense-context route (main app: #/team/:abbr/def, public/js/nav.js's isDefenseContext).
+// PURE: the foot links row - the club's Offense page, its row on the Defense rankings table (#/rankings?side=def,
+// the old #/defense leaderboard's successor), the Grid, and the depth chart's own defense-context route (main app:
+// #/team/:abbr/def, public/js/nav.js's isDefenseContext).
 export function defLinksHtml(abbr, qs) {
   const A = encodeURIComponent(abbr), q = qs ? "?" + qs : "";
   return `<div class="an-dlinks"><a href="#/team/${A}${q}">Offense page →</a>` +
-    `<a href="#/defense?${new URLSearchParams([...new URLSearchParams(qs), ["open", abbr]]).toString()}">Defense table →</a>` +
+    `<a href="#/rankings?${new URLSearchParams([["side", "def"], ...new URLSearchParams(qs), ["open", abbr]]).toString()}">Defense rankings →</a>` +
     `<a href="#/grid${q}">Grid →</a>` +
-    `<a href="../#/team/${A}/def" target="_blank" rel="noopener">Depth chart ↗</a></div>`;
+    `<a href="../#/team/${A}/def">Depth chart →</a></div>`;
 }
 
 const ui = { team: null, zoneMode: "cmpPct", zone: null, lost: { key: null, list: null, feed: null, cards: null } };
@@ -110,23 +116,38 @@ export async function renderTeamDefense(ctx, params, query) {
   const wn = windowName(st, win.weeks);
   const pnote = pfrNote(win.pfrThrough, win.latestKey, st.season);
   const activeKey = st.window === "range" && st.from && st.from === st.to ? st.from : null;
+  // D205: this club's own Grid row (above the tiles) and the D-line block's headline chips both read the same
+  // gridRows() row, so it is computed once, up here.
+  // 🔵 fix round: `win` is built from this page's own whole-season load (below, for the week-by-week bars and zone
+  // field), not the Grid page's own weeksNeeded()-gated week set (data.js loadFor(seasonsOf(st), st), what
+  // views/grid.js itself calls) - with Last 3 and the Playoffs chip both on, those two week sets can differ, so
+  // gridRow must come from the Grid's own load, never this page's wider one, or the two disagree. loadFor's own
+  // caches (loadSeason's manifest/players, loadWeek's per-file cache) mean this costs no extra network round trip
+  // when this page's own load already fetched the whole season, as it does.
+  const gridLoad = await loadFor(seasonsOf(st), st);
+  if (!isCurrent()) return;
+  const gridRow = gridRows(aggregateTeams(gridLoad.blocks, gridLoad.players, pst)).find((r) => r.team === abbr);
 
-  const tiles = defTilesHtml(D, L, ref, win, abbr);
+  const tiles = defTilesHtml(D, L, ref, win, abbr, qs);
 
   // D198: the D-line block. Unlike the O-line block's proxy figures, every defender's own pressures, hits, hurries
   // and sacks are counted directly, so there is no proxy caveat - only the PFR-lag caption when PFR lags the window.
-  const gridRow = gridRows(win).find((r) => r.team === abbr);
   const passRushCell = gridRow?.cells?.passPro?.def || null;
   const runStuffCell = gridRow?.cells?.runBlock?.def || null;
+  // D206 fix round: hit/hurry % have no Defense table column (D-line-only figures) - Grid's own Pass rush column
+  // instead; stuffed % forced, run-stop % and YBC/carry allowed have no column either - Grid's own Run stuff column.
+  const DL_GRID_LINK = { hitPctAllowed: "passProDef", hurryPctAllowed: "passProDef", stuffPct: "runBlockDef", runStopPct: "runBlockDef", ybcCar: "runBlockDef" };
   const dlTile = (label, k, sub, digits = null) => {
     const v = D[k], lgv = L[k];
     const tr = teamTier("def", k, v, ref.cuts);
     const rk = isNum(v) ? teamRank(win.rows, "def", k, abbr) : null;
     const fmt = (x) => (digits === null ? P(x) : fix(x, digits));
     // D199 review: match the headline chips' "12th of 32" wording (no "clubs") rather than the tile's own "22nd of
-    // 32 clubs".
+    // 32 clubs". D206: linked to Rankings when the key has a column there, else to the Grid's own category column -
+    // never a dead end.
     return { label, value: isNum(v) ? fmt(v) : NA, lg: isNum(lgv) ? fmt(lgv) : null,
-      rank: rk ? ordinal(rk.rank) : null, rankOf: rk ? String(rk.of) : null, sub, tier: tr };
+      rank: rk ? ordinal(rk.rank) : null, rankOf: rk ? String(rk.of) : null, sub, tier: tr,
+      href: RANKINGS_DEF_KEYS.has(k) ? rankingsHref("def", k, abbr, qs) : DL_GRID_LINK[k] ? gridTileHref(DL_GRID_LINK[k], qs) : null };
   };
   const dlineHtml = lineBlock({
     title: "D-line",
@@ -168,7 +189,10 @@ export async function renderTeamDefense(ctx, params, query) {
   const zoned = Object.values(zones).reduce((s, c) => s + c.n, 0);
   const covTile = (label, val, k, lg, title = "") => {
     const tr = k ? teamTier("def", k, D[k], ref.cuts) : "";
-    return `<div class="an-tile${tr ? " t-" + tr : ""}"${title ? ` title="${esc(title)}"` : ""}><span>${label}</span><b>${val}</b>${lg && !String(lg).includes("an-na") ? `<em> · lg ${lg}</em>` : ""}</div>`;
+    const body = `<div class="an-tile${tr ? " t-" + tr : ""}"${title ? ` title="${esc(title)}"` : ""}><span>${label}</span><b>${val}</b>${lg && !String(lg).includes("an-na") ? `<em> · lg ${lg}</em>` : ""}</div>`;
+    // D206 fix round: none of the coverage figures has a Rankings column, so every coverage tile - including
+    // Targets covered, a count rather than a rate - links to the Grid's own Coverage column instead. Never a dead end.
+    return `<a class="an-tile-link" href="${gridTileHref("coverageDef", qs)}">${body}</a>`;
   };
   // The coverage tiles sit beside the zone field, inside the same card (Adam's D198 ask: "beside"), as a 2x2 grid
   // (D199 review: the old far-edge column made the card wider than the offense page's zone card and pushed it out
@@ -205,12 +229,13 @@ export async function renderTeamDefense(ctx, params, query) {
   root.innerHTML = `<section class="an-pl an-tm">
     <div class="an-pl-head">
       ${backLink(`#/teams${qs ? "?" + qs : ""}`, "Teams")}${pill}<h1>${esc(t?.name || abbr)}</h1>${teamSideSeg(abbr, qs, "def")}
-      <div class="an-pl-links"><a href="../#/team/${encodeURIComponent(abbr)}/def" target="_blank" rel="noopener">Depth chart ↗</a></div>
+      <div class="an-pl-links"><a href="../#/team/${encodeURIComponent(abbr)}/def">Depth chart →</a></div>
     </div>
     <div class="an-pl-bar"><div class="an-filters"></div></div>
     <div class="an-sub an-pl-sub">${esc(sub)}</div>
     ${data.missing.length ? `<div class="an-warn">${esc(data.missing.join(", "))} files are not built yet.</div>` : ""}
     ${row ? "" : `<div class="an-warn">No plays faced by ${esc(abbr)} in this window.</div>`}
+    ${clubGridRowHtml(gridRow, "def")}
     <div data-lost>${lostHtml()}</div>
     <div class="an-pl-tiles an-tm-tiles">${tiles}</div>
     ${dlineHtml}
