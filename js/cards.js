@@ -9,7 +9,7 @@
 // rating-tier surface colours all survive the shrink. The SIDE, GROUP and MATCHUP views keep their big
 // headshot cards and their own renderers (zoom.js's fullCard, matchup.js's matchupCard) — they come
 // through renderSlotBody below, which is deliberately untouched by this ruling.
-import { lineOneCount, lineOneHeight, visibleDepthRows, displayOrder, outFillInDemotion, OUT_STATUS_CODES, isFullyOut, isScratch, fillingIn } from "./field.js";
+import { lineOneCount, lineOneHeight, visibleDepthRows, displayOrder, outFillInDemotion, OUT_STATUS_CODES, isFullyOut, isScratch, fillingIn, depthVisibilityRank } from "./field.js";
 // Re-exported so zoom.js and matchup.js share this single definition rather than keeping their own
 // copies. D60's isScratch rides the same route.
 export { OUT_STATUS_CODES, isFullyOut, isScratch };
@@ -696,11 +696,16 @@ function heatTitle(injury) {
 // handed in by renderColumn) is filled before any other out row, and only then the rest of the chart's own
 // order. field.js's shownOutRows does the same "how many places are left once the tail has taken one"
 // arithmetic when it reserves the column's height, so the box and this selection stay in step.
+// D214 (Adam, 2026-09-29, "just don't hide him"): the places go to D104's demoted rails first (the injury story),
+// then to healthy men who have been PLAYING, then to healthy men who have not, then to out men — the reverse of
+// the D61-era preference above, which put an IR backup on show and collapsed the playing man behind "+N more"
+// (Darius Cooper, 2026-09-28). Inside each rank the chart's own printed order holds.
 function keepOutRowsVisible(depth, n, mustKeep = []) {
   if (n <= 0) return [];
   const keep = new Set(mustKeep.slice(0, n));
-  for (const p of depth) { if (keep.size >= n) break; if (isFullyOut(p)) keep.add(p); }
-  for (const p of depth) { if (keep.size >= n) break; keep.add(p); }
+  for (const rank of [0, 1, 2]) {
+    for (const p of depth) { if (keep.size >= n) break; if (depthVisibilityRank(p) === rank) keep.add(p); }
+  }
   return depth.filter((p) => keep.has(p));
 }
 
@@ -795,12 +800,12 @@ export function renderColumn(col, teamAbbr, opts = {}) {
     // (the rail rides behind the cap, the fill-in and co-starters are line-one rows, D104/D56).
     const cap = style.maxDepthRows ?? 1;
     const ordinary = depth.filter((p) => !railed.has(p));
-    // The one visible backup is the first man who can actually PLAY this week, not merely the first man
-    // listed — an OUT/INACTIVE/SUSP row there answers "who is behind him" with a man who is not.
-    // Order is otherwise untouched, so the hidden men stay behind the chip in the chart's printed order,
-    // and the COUNT is unchanged (field.js's depthPlan reserves the same box either way).
-    const lead = ordinary.findIndex((p) => !isFullyOut(p));
-    const ranked = lead > 0 ? [ordinary[lead], ...ordinary.filter((_, i) => i !== lead)] : ordinary;
+    // D214 (2026-09-29, refining D134): the visible backup is a healthy man who has been PLAYING (snaps in the
+    // club's last three games), then a healthy man who has not, then an out man — never an OUT/INACTIVE/SUSP row
+    // ahead of a man who plays. A stable sort by that rank keeps the chart's printed order inside each rank, so
+    // the hidden men behind the chip read in club order too; the COUNT is unchanged (field.js's depthPlan
+    // reserves the same box either way).
+    const ranked = ordinary.map((p, i) => ({ p, i })).sort((a, b) => depthVisibilityRank(a.p) - depthVisibilityRank(b.p) || a.i - b.i).map((x) => x.p);
     shownRest = ranked.slice(0, cap);
     shownOut = outRows;
     const hidden = ranked.slice(cap);

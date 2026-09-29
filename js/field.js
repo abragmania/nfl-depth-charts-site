@@ -403,6 +403,18 @@ function placeOuterInner(count, outerMin, outerMax, innerMin, innerMax) {
 // there, and it must match server/compile/status.js's willNotPlay exactly. Do not fork a second copy: four
 // separate copies once drifted apart and all four were missing INACTIVE and EXEMPT.
 export const OUT_STATUS_CODES = new Set(["OUT", "IR", "PUP", "NFI", "SUSP", "INACTIVE", "EXEMPT"]);
+// D214 (Adam, 2026-09-29): "I just want to see everyone on the depth chart and not hidden, especially if they've
+// been playing or are going to play." A man has been playing when any of his recent games (the card's
+// snapHistory, the club's last three) shows snaps. Shared by cards.js's visible-row choice on both fit states.
+export function hasPlayed(p) {
+  return Array.isArray(p?.snapHistory) && p.snapHistory.some((h) => h && !h.absent && Number(h.pct) > 0);
+}
+// The order the visible depth rows are handed out in (lower first): a healthy man who has been playing, then a
+// healthy man who has not, then a man who is out. Demoted OUT starters (D104's rails) are handled before this.
+export function depthVisibilityRank(p) {
+  if (isFullyOut(p)) return 2;
+  return hasPlayed(p) ? 0 : 1;
+}
 export function isFullyOut(p) {
   return p.role === "STARTER_OUT" || OUT_STATUS_CODES.has(p.status?.code);
 }
