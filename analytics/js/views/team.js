@@ -15,6 +15,7 @@ import { esc, NA, isNum, pct, fix, signed, int, teamPill, qbStrips, qbZoneField,
 import { windowName } from "./qbplayer.js";
 import { lostCardHtml } from "./lost.js";
 import { lineBlock } from "./kit.js";
+import { RZ_I5_FLOOR } from "../agg_player.js";
 
 const P = (v, d = 1) => (isNum(v) ? pct(v, d) + "%" : NA);
 const BAND = (pos) => (pos === "RB" || pos === "FB" ? "BACKFIELD" : pos);
@@ -105,7 +106,7 @@ export function clubGridRowHtml(gridRow, side) {
 const PROE_TILES = [
   ["PROE", "proe", "on every play"],
   ["PROE early downs", "proeEarly", "on 1st and 2nd down"],
-  ["PROE neutral", "proeNeutral", "in neutral script (score within 7, quarters 1-3)"],
+  ["Neutral PROE", "proeNeutral", "in neutral script (score within 7, quarters 1-3)"],
   ["PROE red zone", "proeRz", "in the red zone (the opponent's 20 or closer)"],
   ["PROE inside 5", "proeI5", "inside the opponent's 5"],
 ];
@@ -117,7 +118,7 @@ export function playCallingHtml({ O = {}, L = {}, rows = [], abbr = "", qs = "",
   const tiles = PROE_TILES.map(([label, k, where]) => {
     const rk = rankOf(k), n = O[k + "N"] ?? 0;
     return { label, value: pts(O[k]) ?? NA, lg: pts(L[k]), rank: rk ? ordinal(rk.rank) : null, rankOf: rk ? String(rk.of) : null,
-      sub: `${plays(n)} with an expectation`, href: href(k),
+      sub: plays(n), href: href(k),
       title: `Pass rate over expectation ${where}: the dropback rate minus the expected pass rate (nflverse xpass) on the same plays, in percentage points, over ${plays(n)} with an expectation. Style, not quality: not coloured. 1st = most pass-happy over expectation.` };
   });
   const nrk = rankOf("neutralPassRate");
@@ -127,7 +128,7 @@ export function playCallingHtml({ O = {}, L = {}, rows = [], abbr = "", qs = "",
   return lineBlock({
     title: "Play calling",
     tiles,
-    foot: esc("Expected pass rate: nflverse xpass, the play-by-play model's chance an average offense drops back given the down, distance, field position, score and clock. A dropback is a pass attempt, sack or scramble. Penalty no-plays are not in the rows. Pass rate over expectation is style, not quality, so it is not coloured."),
+    foot: esc("Expected pass rate: nflverse xpass, the play-by-play model's chance an average offense drops back given the down, distance, field position, score and clock. A dropback is a pass attempt, sack or scramble. Penalty no-plays are not in the rows and the model is a fixed baseline, so the average club sits at the league figure shown, not at zero. Pass rate over expectation is style, not quality, so it is not coloured."),
   });
 }
 
@@ -324,11 +325,23 @@ export async function renderTeam(ctx, params, query) {
   // Distributions.
   const tgts = teamTargets(data.blocks, data.players, pst, abbr).slice(0, 12);
   const cars = teamCarries(data.blocks, data.players, pst, abbr).slice(0, 8);
+  // D219 figure 5: a second figure under each row's sub line, red-zone target share (targets rows) or inside-the-5
+  // carry share (carries rows), with its own tooltip; "RZ –" / "I5 –" under the club's 3-play floor in his games.
+  const shareFig = (tag, share, his, club, def) => {
+    const t = isNum(share)
+      ? `${def} = ${his} of ${club} (${(share * 100).toFixed(1)}%)`
+      : `${def}: not shown, the club had ${club} such play${club === 1 ? "" : "s"} in his games (fewer than ${RZ_I5_FLOOR}); he had ${his}`;
+    return `<br><span class="an-tm-rz" title="${esc(t)}">${tag} ${isNum(share) ? `${Math.round(share * 100)}% (${his} of ${club})` : "–"}</span>`;
+  };
+  const rzFig = (r) => shareFig("RZ", r.rzTgtShare, r.rzTgtN, r.rzAttN,
+    `Red-zone target share: his targets inside the opponent's 20 / the club's pass attempts there in his games (a pass-interference target is his target, never a club attempt${pst.pi === false ? "; excluded here" : ""})`);
+  const i5Fig = (r) => shareFig("I5", r.i5Share, r.i5Des, r.i5Runs,
+    "Inside-the-5 carry share: his designed runs from the opponent's 5 or closer / the club's designed runs there in his games (scrambles on neither side)");
   const tgtItems = tgts.map((r) => ({ gsis: r.gsis, pos: r.pos, name: displayName(r.gsis, data.players), share: r.tgtShare, tier: r.tier,
-    main: P(r.tgtShare), sub: `${r.tgt} tgt${isNum(r.routes) ? ` · ${r.routes} rts` : ""}${isNum(r.snapPct) ? ` · ${Math.round(r.snapPct * 100)}% snaps` : ""}`,
-    title: `${displayName(r.gsis, data.players)}: ${r.tgt} targets in ${r.g} game${r.g === 1 ? "" : "s"}, ${isNum(r.tgtShare) ? (r.tgtShare * 100).toFixed(1) + "%" : "–"} of the club's attempts in his games (${isNum(r.clubShare) ? Math.round(r.clubShare * 100) + "%" : "–"} of every club target in the window)${isNum(r.lgShare) ? `; ${r.pos} league average ${(r.lgShare * 100).toFixed(1)}%` : ""}${isNum(r.routes) ? `; ${r.routes} routes (heatradar)` : ""}${isNum(r.snapPct) ? `; ${Math.round(r.snapPct * 100)}% of snaps` : ""}` }));
+    main: P(r.tgtShare), sub: `${r.tgt} tgt${isNum(r.routes) ? ` · ${Math.round(r.routes)} rts` : ""}${isNum(r.snapPct) ? ` · ${Math.round(r.snapPct * 100)}% snaps` : ""}${rzFig(r)}`,
+    title: `${displayName(r.gsis, data.players)}: ${r.tgt} targets in ${r.g} game${r.g === 1 ? "" : "s"}, ${isNum(r.tgtShare) ? (r.tgtShare * 100).toFixed(1) + "%" : "–"} of the club's attempts in his games (${isNum(r.clubShare) ? Math.round(r.clubShare * 100) + "%" : "–"} of every club target in the window)${isNum(r.lgShare) ? `; ${r.pos} league average ${(r.lgShare * 100).toFixed(1)}%` : ""}${isNum(r.routes) ? `; ${Math.round(r.routes)} routes (heatradar)` : ""}${isNum(r.snapPct) ? `; ${Math.round(r.snapPct * 100)}% of snaps` : ""}` }));
   const carItems = cars.map((r) => ({ gsis: r.gsis, pos: r.pos, name: displayName(r.gsis, data.players), share: r.rushShare, tier: r.tier,
-    main: P(r.rushShare), sub: `${r.car} car · ${fix(r.ypc, 1)} ypc · <span class="${r.epaTier ? "t-" + r.epaTier : ""} an-tm-epa">${signed(r.epaCar, 2)}</span> EPA`,
+    main: P(r.rushShare), sub: `${r.car} car · ${fix(r.ypc, 1)} ypc · <span class="${r.epaTier ? "t-" + r.epaTier : ""} an-tm-epa">${signed(r.epaCar, 2)}</span> EPA${i5Fig(r)}`,
     title: `${displayName(r.gsis, data.players)}: ${r.car} carries${r.scr ? ` (${r.scr} scrambles)` : ""}, ${r.yds} yards; ${isNum(r.rushShare) ? (r.rushShare * 100).toFixed(1) + "%" : "–"} of the club's designed runs in his games${isNum(r.lgShare) ? `; ${r.pos} league average ${(r.lgShare * 100).toFixed(1)}%` : ""}` }));
 
   const sub = `${seasonLabel(st)} · ${win.weeks.length ? (win.weeks.length === 1 ? weekLabel(win.weeks[0], st.season) : `${weekLabel(win.weeks[0], st.season)} to ${weekLabel(win.weeks[win.weeks.length - 1], st.season)}`) : "no games"}${st.window === "last3" ? " (each club's last 3 games)" : ""} · ${row?.g ?? 0} game${row?.g === 1 ? "" : "s"} · league reference: ${ref.text}${pnote ? " · " + pnote : ""}`;

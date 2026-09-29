@@ -16,7 +16,7 @@ import { fromQuery, toQuery, seasonsOf, weekLabel, splitKey, gamesInWindow } fro
 import { backLink } from "../router.js";
 import { loadFor, loadTeams, displayName, loadStatusFeed, loadTeamView, findCardByGsis, loadPlayerStats, loadPlayerHistory, loadPlayerGameLog, clubCards } from "../data.js";
 import { isStatic } from "../../../js/api.js";
-import { playerView, maddenBlocking, maddenEdition, pageState, lastTeam } from "../agg_player.js";
+import { playerView, maddenBlocking, maddenEdition, pageState, lastTeam, RZ_I5_FLOOR } from "../agg_player.js";
 import { aggregateUsage, usageReference, clubGames, colIndex, REF_POS } from "../agg.js";
 import { renderFilterBar } from "../filterbar.js";
 import { tierOf } from "../table.js";
@@ -191,7 +191,7 @@ export const RB_RUSH_STRIP_KEYS = ["car", "oppN", "rushShare"];
 // carry no AY %, WOPR or aDOT.
 export const RB_HEADLINE_ORDER = ["scrimYds", "totTd", "ydsOpp", "epaOpp", "ypc"];
 export const REC_HEADLINE_ORDER = ["rec", "yds", "td", "yprr", "epaTgt"];
-export const RB_OPP_ORDER = ["oppG", "oppShare", "car", "tgt", "rzOpp", "snapPct"];
+export const RB_OPP_ORDER = ["oppG", "oppShare", "car", "tgt", "rzOpp", "i5Share", "snapPct"];
 export const REC_OPP_ORDER = ["tgtG", "tgtShare", "ayShare", "wopr", "rz", "routePct"];
 // The game log (one row per game, D193 fourth draft). The back's opponent column reads "vs" so it never shares a
 // header with Opp (opportunities, D191's name for targets + carries on every table).
@@ -582,6 +582,14 @@ export function pageBody(v, st, { wn = windowName(st, v.weeks || []), activeKey 
     car: ot("car", "Carries", tInt(O.car), tFix(OL.car, 0), "Carries (nflverse play-by-play); rush share under it: his carries / his club's designed runs in his games", { plain: true, sub: `rush share ${tPct(O.rushShare)}`, subLg: tPct(OL.rushShare) }),
     tgt: ot("tgt", "Targets", tInt(O.tgt), tFix(OL.tgt, 0), `Targets (${st.pi === false ? "excludes" : "includes"} pass-interference targets); target share under it: his targets / his club's pass attempts in his games`, { plain: true, sub: `target share ${tPct(O.tgtShare)}`, subLg: tPct(OL.tgtShare) }),
     rzOpp: ot("rzOpp", "RZ opp", tInt(O.rzOpp), tFix(OL.rzOpp, 1), "Red-zone opportunities: carries + targets inside the opponent's 20; goal-line carries (inside the 5) under it; nflverse play-by-play", { plain: true, sub: `${tInt(O.gl)} goal-line carries`, subLg: tFix(OL.gl, 1) }),
+    // D219 figure 5: the club Offense page's Carry distribution figure (agg_player.js rzI5Shares), hidden under the
+    // club's 3-play floor in his games.
+    i5Share: (() => {
+      const x = R.i5 || { i5Des: 0, i5Runs: 0, i5Share: null };
+      const def = "Inside-the-5 carry share: his designed runs from the opponent's 5 or closer / his club's designed runs there in his games (scrambles on neither side); nflverse play-by-play";
+      const t = ot("i5Share", "I5 carry %", tPct(x.i5Share), tPct(R.i5Lg), isNum(x.i5Share) ? def : `${def}. Not shown: his club ran ${x.i5Runs} such runs in his games (fewer than ${RZ_I5_FLOOR})`, { plain: true, sub: `${x.i5Des} of ${x.i5Runs}` });
+      return t;
+    })(),
     snapPct: ot("snapPct", "Snap %", tPct(O.snapPct, 0), tPct(OL.snapPct, 0), "Share of his club's offensive snaps, mean of his games (nflverse snap counts); route % under it: routes / club dropbacks (heatradar.app)", { share: true, sub: `route % ${tPct(O.routePct, 0)}`, subLg: tPct(OL.routePct, 0) }),
   } : {
     tgtG: ot("tgtG", "Targets / g", tFix(O.tgtG, 1), tFix(OL.tgtG, 1), `Targets per game he played (${st.pi === false ? "excludes" : "includes"} pass-interference targets)`, { plain: true, sub: `${tInt(r.tgt)} in all`, subLg: tFix(L.tgt, 1) }),

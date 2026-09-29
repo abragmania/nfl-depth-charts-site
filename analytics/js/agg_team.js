@@ -75,6 +75,7 @@ import { colIndex, clubGames, percentileCuts, tierFromCuts, MIN_POOL, aggregateU
 import { gamesInWindow } from "./filters.js";
 import { ZONE_KEYS, qbZones } from "./agg_qb.js";
 import { aggregateRush, rushReference, rushTier } from "./agg_rush.js";
+import { rzI5Shares } from "./agg_player.js";
 
 const num = (v) => (v === null || v === undefined || v === "" || !Number.isFinite(+v) ? null : +v);
 const truthy = (v) => v === true || v === 1 || v === "1" || v === "true";
@@ -373,12 +374,17 @@ export const teamZones = (side, lgZones) => qbZones(side?.zones, lgZones);
 // target share at his position (agg.js's reference pool and cuts over the whole league, the same window) and his
 // share of the club's targets in the window (`clubShare`: targets / every target the club threw, pi included when
 // the switch counts them). Sorted by targets.
+const rzPick = (x, kind) => (kind === "rz"
+  ? { rzTgtN: x?.rzTgtN ?? 0, rzAttN: x?.rzAttN ?? 0, rzTgtShare: x?.rzTgtShare ?? null }
+  : { i5Des: x?.i5Des ?? 0, i5Runs: x?.i5Runs ?? 0, i5Share: x?.i5Share ?? null });
 export function teamTargets(blocks, players, st, team) {
   const base = { ...st, opp: "", ha: "", downs: [], qtrs: [], pos: {} };
   const rows = aggregateUsage(blocks, players, { ...base, team }).rows.filter((r) => r.tgt > 0);
   const ref = usageReference(aggregateUsage(blocks, players, { ...base, team: "" }).rows);
   const total = rows.reduce((s, r) => s + r.tgt, 0);
-  return rows.map((r) => ({ ...r, clubShare: ratio(r.tgt, total), tier: tierFromCuts(r.tgtShare, ref.at(r.pos).cuts?.tgtShare?.cuts), lgShare: ref.at(r.pos).lg?.overall?.tgtShare ?? null }))
+  // D219 figure 5: rzTgtN, rzAttN, rzTgtShare (null under agg_player.js's 3-play floor) over his games for this club.
+  const rz = rzI5Shares(blocks, players, base, team);
+  return rows.map((r) => ({ ...r, ...rzPick(rz.get(r.gsis), "rz"), clubShare: ratio(r.tgt, total), tier: tierFromCuts(r.tgtShare, ref.at(r.pos).cuts?.tgtShare?.cuts), lgShare: ref.at(r.pos).lg?.overall?.tgtShare ?? null }))
     .sort((a, b) => b.tgt - a.tgt || String(a.name).localeCompare(String(b.name)));
 }
 // Ball carriers: agg_rush.js's rows for the club, tier on rush share at his position; `clubShare` = his carries /
@@ -388,7 +394,9 @@ export function teamCarries(blocks, players, st, team) {
   const rows = aggregateRush(blocks, players, { ...base, team }).rows.filter((r) => r.car > 0);
   const ref = rushReference(aggregateRush(blocks, players, { ...base, team: "" }).rows);
   const total = rows.reduce((s, r) => s + r.car, 0);
-  return rows.map((r) => { const P = ref.at(r.pos); return { ...r, clubShare: ratio(r.car, total), tier: rushTier("rushShare", r.rushShare, P.cuts), epaTier: rushTier("epaCar", r.epaCar, P.cuts), lgShare: P.lg?.rushShare ?? null }; })
+  // D219 figure 5: i5Des, i5Runs, i5Share (null under the 3-play floor) over his games for this club.
+  const rz = rzI5Shares(blocks, players, base, team);
+  return rows.map((r) => { const P = ref.at(r.pos); return { ...r, ...rzPick(rz.get(r.gsis), "i5"), clubShare: ratio(r.car, total), tier: rushTier("rushShare", r.rushShare, P.cuts), epaTier: rushTier("epaCar", r.epaCar, P.cuts), lgShare: P.lg?.rushShare ?? null }; })
     .sort((a, b) => b.car - a.car || String(a.name).localeCompare(String(b.name)));
 }
 
