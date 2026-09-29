@@ -50,25 +50,8 @@
 html,body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.4 "Segoe UI", system-ui, sans-serif; }
 .topbar { display:flex; align-items:center; gap:24px; padding:10px 28px; background:var(--panel); border-bottom:1px solid #22282f; position:sticky; top:0; z-index:5; }
 .brand { color:var(--ink); text-decoration:none; font-weight:800; letter-spacing:.12em; font-size:18px; }
-/* D209 part (1): the shared site strip (public/js/sitebar.js) — the site brand plus Depth Charts/Analytics
-   tabs — painted into #sitebar, the topbar's first child. .sitebar-brand matches .brand's look exactly (this
-   app's settled topbar look is the one the shared strip uses on both apps); the same two rules are duplicated
-   in public/analytics/css/analytics.css's .an-top block, the same convention that file already uses for the
-   tokens copied from this file's :root. */
-.sitebar-brand { color:var(--ink); text-decoration:none; font-weight:800; letter-spacing:.12em; font-size:18px; white-space:nowrap; }
-#sitebar { display:flex; align-items:center; gap:18px; } /* 👁 D209: brand and tabs on ONE line (the tabs nav is itself flex and dropped under the brand) */
-.sitebar-tabs { display:flex; align-items:center; gap:4px; margin-left:6px; }
-.sitebar-tab { color:var(--muted); text-decoration:none; font-weight:600; font-size:13.5px; padding:6px 12px; border-radius:999px; white-space:nowrap; }
-.sitebar-tab:hover { color:var(--ink); background:rgba(255,255,255,.06); }
-.sitebar-tab.on { color:#0b0d10; background:var(--ink); }
 .search { margin-left:auto; width:260px; padding:8px 12px; border-radius:6px; border:1px solid #2a323b; background:#0f1317; color:var(--ink); }
 .asof { color:var(--muted); font-size:13px; min-width:110px; text-align:right; }
-/* The trailing stamps (search box, How to read, as-of) sit at the strip's right end (D209 part 1: with the
-   old "Analytics ↗" link gone, one of these three now has to carry the auto margin that used to push it, and
-   search/guide-link/asof are always shown or hidden together in the two pairs this app has (landing: all
-   three; every other page: as-of alone) so #asof getting its own auto margin, cancelled whenever search is
-   showing, covers both. */
-.search[hidden] ~ #asof { margin-left:auto; }
 /* Ruling E: the team pages have to fit 1700x900 with no scrolling, so the page chrome is trimmed to the
    minimum that still looks deliberate. The landing grid keeps its old roomier padding (.page-landing). */
 main { padding:8px 14px 8px; width:100%; }

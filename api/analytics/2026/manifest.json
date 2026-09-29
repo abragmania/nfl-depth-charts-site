@@ -41,21 +41,21 @@
  "weeks": [
   {
    "week": 1,
-   "hash": "d2fb5e4f06a6be71",
+   "hash": "6c62d8d5ab587321",
    "plays": 1924,
-   "builtAt": "2026-09-29T15:55:48.881Z"
+   "builtAt": "2026-09-29T16:00:47.212Z"
   },
   {
    "week": 2,
-   "hash": "604ce4cd5a7557cd",
+   "hash": "ab466167e80b3665",
    "plays": 1936,
-   "builtAt": "2026-09-29T15:55:48.881Z"
+   "builtAt": "2026-09-29T16:00:47.212Z"
   },
   {
    "week": 3,
-   "hash": "39299922a1301e64",
+   "hash": "545eeb993608f9bd",
    "plays": 2000,
-   "builtAt": "2026-09-29T15:55:48.881Z"
+   "builtAt": "2026-09-29T16:00:47.212Z"
   }
  ],
  "throughWeek": 3,
@@ -63,37 +63,37 @@
  "heldUntil": "2026-10-06T09:00:00.000Z",
  "sources": {
   "pbp": {
-   "fetchedAt": "2026-09-29T15:55:33.446Z",
+   "fetchedAt": "2026-09-29T16:00:30.058Z",
    "sha": "b930b30ca3535f172d1cb1a6db199370290f23f28d3517e76441f51306a39576"
   },
   "ftn": {
-   "fetchedAt": "2026-09-29T15:55:33.902Z",
+   "fetchedAt": "2026-09-29T16:00:30.237Z",
    "sha": "a1a0d8d10cd876f131be10246a25a0056a63b065630952c7268ebff52d03e799"
   },
   "ngs": {
-   "fetchedAt": "2026-09-29T15:55:34.579Z",
+   "fetchedAt": "2026-09-29T16:00:30.962Z",
    "sha": "95a85e8c3315411f"
   },
   "pfr": {
-   "fetchedAt": "2026-09-29T15:55:35.119Z",
+   "fetchedAt": "2026-09-29T10:05:40.453Z",
    "sha": "7d72af8acfbd9478"
   },
   "pfrRush": {
-   "fetchedAt": "2026-09-29T15:55:35.328Z",
+   "fetchedAt": "2026-09-29T10:05:40.645Z",
    "sha": "9d383330e0f498e35fed3932b0254faa6b5820322c3b5b7d01fb188d01e5477f"
   },
   "pfrRec": {
-   "fetchedAt": "2026-09-29T15:55:35.628Z",
+   "fetchedAt": "2026-09-29T10:05:40.931Z",
    "sha": "0d5c2bb2929420dea770dd11f99f8ce78591565bea177d6c1a6b8c40fe2fa4ba"
   },
   "routes": {
-   "fetchedAt": "2026-09-29T15:55:35.849Z",
-   "sha": "5b13aa0e252af99e2001c6e1e9030c5fc12bd080b7dbc5bff2d88ae63ab0a83a"
+   "fetchedAt": "2026-09-29T10:05:41.201Z",
+   "sha": "5b81aaf94f0d542bc3c19494b029f5d2394f5570ff3fb91c3808ce43b42cf798"
   },
   "participation": null,
   "snaps": {
-   "fetchedAt": "2026-09-29T15:50:38.558Z",
-   "sha": "c5868527b1052ae572b2d8f34a7bb777675a5e762ceaeb25f72f10d1c59846d5"
+   "fetchedAt": "2026-09-29T10:00:38.640Z",
+   "sha": "19e3c597c937765f6635c47d21fb1b98d834bf84f4cede9ff79d4ae00e30a686"
   }
  }
 }
