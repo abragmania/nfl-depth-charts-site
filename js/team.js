@@ -1,6 +1,6 @@
 import { getTeams, getTeam, invalidateTeam } from "./api.js";
 import { computeLayout, renderFieldSvg, renderLevelLabels, FIELD_VARIANT, REDUCED_DEPTH_ROWS } from "./field.js";
-import { renderColumn, renderTray, esc, fitNames, wireDepthToggles, espnSchemeOf, unitTagsHtml } from "./cards.js";
+import { renderColumn, renderTray, esc, fitNames, wireDepthToggles, espnSchemeOf, unitTagsHtml, assetUrl } from "./cards.js";
 import { mountScaledField, disposeCurrentView, MIN_READABLE_SCALE, decideViewMode, HEADER_FOLD_WIDTH } from "./viewfit.js";
 import { navStripHtml, wireNav } from "./nav.js";
 import { renderPhoneList } from "./phonelist.js";
@@ -151,11 +151,10 @@ function fieldHtml(view, team, layoutOpts = {}) {
   // them, so it lives in the CSS background (z-index 0, no pointer events) rather than as a real <img>
   // element. The URL goes through the --wm-url custom property (not a direct background-image) so styles.
   // css's own light-plate layer can sit behind the crest in the same background-image stack (D95).
-  // Root-relative: a relative url() inside a custom property resolves against the STYLESHEET's own URL
-  // (styles.css lives at /css/), not the document's, so the plain "img/logos/WAS-dark.png" the API returns
-  // would 404 at /css/img/logos/WAS-dark.png and the watermark would silently vanish.
-  let watermarkUrl = team.logoDark || team.logo || "";
-  if (watermarkUrl && !/^https?:\/\//.test(watermarkUrl) && !watermarkUrl.startsWith("/")) watermarkUrl = "/" + watermarkUrl;
+  // Absolute against the page (cards.js assetUrl): a relative url() inside a custom property can resolve
+  // against the STYLESHEET's own /css/ folder, and the old root-relative "/img/logos/..." form 404'd on the
+  // public site, which lives under a sub-path - either way the watermark silently vanished.
+  const watermarkUrl = assetUrl(team.logoDark || team.logo || "");
   // The field-variant's "B" wash lightens the surface around the real line of scrimmage, so it needs the
   // same --los-pct a matchup page already carries; a single-unit side page has no losY (D72), so it falls
   // back to the vertical middle rather than lighting up a spot that means nothing on that page.

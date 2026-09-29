@@ -37,9 +37,15 @@ const trail = [];
 // D198: a club's three addresses (its offense page #/team/:abbr, the #/team/:abbr/offense alias, and the new
 // #/team/:abbr/defense sub-page) count as ONE page for this purpose - switching between them must never itself
 // become the Back target. pageKey folds all three to the same key; every other path keeps its own.
+// D208: #/rankings's own Offense | Defense switch never needs folding here - "side" lives in the query, which
+// split() already strips before pageKey ever sees the path, so both sides are "rankings" already. The old bare
+// #/offense and #/defense addresses fold into "rankings" too, so a stale link to either (main.js redirects it
+// straight on, but the hash is still recorded on the way through - see main.js's legacyHash) is never itself a
+// Back stop, the same reasoning as the club fold above.
 function pageKey(path) {
   const segs = path.split("/").filter(Boolean);
   if (segs[0] === "team" && segs[1]) return `team/${segs[1].toUpperCase()}`;
+  if (segs[0] === "offense" || segs[0] === "defense") return "rankings";
   return path;
 }
 export function previousPage() {
@@ -63,13 +69,14 @@ export function forgetCurrent() {
 // aliases (main.js), so their labels follow the page's new name rather than the old link text.
 // D198 (2026-09-26): "teams"/"team" now name the club PICKER (its own "Teams" tab); the league-wide Offense table
 // gets its own "offense" segment.
+// D208: the Offense and Defense league tables became the two sides of one Rankings page; the old bare hash
+// segments (kept working as aliases, main.js) read as "Rankings" now, same as the "rankings" segment itself.
 const SECTION_NAMES = {
   usage: "Receivers", receivers: "Receivers",
   rushing: "Running backs", rbs: "Running backs",
   qb: "Quarterbacks",
-  teams: "Teams", team: "Teams",
-  offense: "Offense",
-  defense: "Defense",
+  teams: "Clubs", team: "Clubs", // D208: the tab reads Clubs, so the Back button does too
+  rankings: "Rankings", offense: "Rankings", defense: "Rankings",
   grid: "Grid",
   player: "Player",
 };
