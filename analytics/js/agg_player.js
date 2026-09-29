@@ -428,7 +428,7 @@ const meanOf = (rows, k) => mean(rows.map((r) => (r[k] === null || r[k] === unde
 //                 charted week has no route %                                                       (both)
 //   rzShare     = (red-zone targets + red-zone designed runs) / (club red-zone pass attempts + club red-zone
 //                 designed runs)                                                                    (back)
-//   rzTgtShare  = red-zone targets / club red-zone pass attempts                                    (receiver)
+//   rzTgtShare  = red-zone targets / club red-zone pass attempts; null under 3 club attempts (RZ_I5_FLOOR) (receiver)
 // A pass-interference target is his target but never a club attempt (agg.js); with "excl. PI targets" the row is
 // skipped outright. Snap and route shares are null under a down or quarter filter, as on the row.
 // Shape (frozen): { kind: "back" | "receiver", keys, games, last3Games, short, last3Weeks: [week keys],
@@ -492,7 +492,8 @@ function trendFigures(blocks, players, st, gsis, back) {
       snapPct: situational ? [null, 0] : [ratio(s.snap, s.snapN), s.snapN],
       routePct: situational ? [null, 0] : [s.pctOk ? ratio(s.routes, s.drop) : null, s.routeN],
       rzShare: [ratio(s.rzTgt + s.rzDes, s.rzAtt + s.rzRuns), gks.length],
-      rzTgtShare: [ratio(s.rzTgt, s.rzAtt), gks.length],
+      // D219 figure 5 (🔵): the same 3-play floor as the club page's Target distribution (rzI5Shares below).
+      rzTgtShare: [s.rzAtt >= RZ_I5_FLOOR ? ratio(s.rzTgt, s.rzAtt) : null, gks.length],
     };
   };
   const keys = back ? RB_TREND_KEYS : REC_TREND_KEYS;

@@ -586,8 +586,8 @@ export function pageBody(v, st, { wn = windowName(st, v.weeks || []), activeKey 
     // club's 3-play floor in his games.
     i5Share: (() => {
       const x = R.i5 || { i5Des: 0, i5Runs: 0, i5Share: null };
-      const def = "Inside-the-5 carry share: his designed runs from the opponent's 5 or closer / his club's designed runs there in his games (scrambles on neither side); nflverse play-by-play";
-      const t = ot("i5Share", "I5 carry %", tPct(x.i5Share), tPct(R.i5Lg), isNum(x.i5Share) ? def : `${def}. Not shown: his club ran ${x.i5Runs} such runs in his games (fewer than ${RZ_I5_FLOOR})`, { plain: true, sub: `${x.i5Des} of ${x.i5Runs}` });
+      const def = "Inside-the-5 carry share: his designed runs from the opponent's 5 or closer / his clubs' designed runs there in his games (every club he played for in the window; scrambles on neither side); nflverse play-by-play";
+      const t = ot("i5Share", "I5 carry %", tPct(x.i5Share), tPct(R.i5Lg), isNum(x.i5Share) ? def : `${def}. Not shown: his clubs ran ${x.i5Runs} such run${x.i5Runs === 1 ? "" : "s"} in his games (fewer than ${RZ_I5_FLOOR})`, { plain: true, sub: `${x.i5Des} of ${x.i5Runs}` });
       return t;
     })(),
     snapPct: ot("snapPct", "Snap %", tPct(O.snapPct, 0), tPct(OL.snapPct, 0), "Share of his club's offensive snaps, mean of his games (nflverse snap counts); route % under it: routes / club dropbacks (heatradar.app)", { share: true, sub: `route % ${tPct(O.routePct, 0)}`, subLg: tPct(OL.routePct, 0) }),

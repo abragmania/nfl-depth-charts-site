@@ -48,7 +48,7 @@ const OLINE_RUN_PROXY = "Stuffed % and yards before contact: proxy for the line 
 // lists (read-only) rather than importing them: both those files already import from this one (teamPageState and
 // friends), so importing them back here would risk a module cycle - the same reason OLINE_PASS_PROXY/OLINE_RUN_PROXY
 // above are copied rather than imported from views/grid.js. Keep these two sets in step with OFF_COLS/DEF_COLS by hand.
-export const RANKINGS_OFF_KEYS = new Set(["epaPlay", "succPct", "explPct", "playsG", "passRate", "epaDb", "cmpPct", "adot", "sackPct", "pressPct", "paPct", "proe", "proeNeutral", "epaCar", "ypc", "rushYdsG", "stuffPct", "ybcCar"]);
+export const RANKINGS_OFF_KEYS = new Set(["epaPlay", "succPct", "explPct", "playsG", "passRate", "epaDb", "cmpPct", "adot", "sackPct", "pressPct", "paPct", "proe", "proeNeutral", "epaCar", "ypc", "rushYdsG", "stuffPct", "ybcCar", "ptsDrive", "rzTdPct", "thirdPct"]);
 export const RANKINGS_DEF_KEYS = new Set(["epaPlay", "succPct", "explPct", "playsG", "epaDb", "cmpPct", "adot", "sackPct", "pressPct", "pressuresG", "blitzPct", "epaCar", "ypc"]);
 // The direction that puts the best club first for a key (OFF_TIER/DEF_TIER's -1 = lower is better = ascending;
 // everything else, including a neutral key, descending) - the offense/defense tables' own bestDir rule.
@@ -129,6 +129,47 @@ export function playCallingHtml({ O = {}, L = {}, rows = [], abbr = "", qs = "",
     title: "Play calling",
     tiles,
     foot: esc("Expected pass rate: nflverse xpass, the play-by-play model's chance an average offense drops back given the down, distance, field position, score and clock. A dropback is a pass attempt, sack or scramble. Penalty no-plays are not in the rows and the model is a fixed baseline, so the average club sits at the league figure shown, not at zero. Pass rate over expectation is style, not quality, so it is not coloured."),
+  });
+}
+
+// D219 figure 7: the club page's "Drives" block (kit.js lineBlock, no headline chips), right after Play calling.
+// Points per drive, red-zone TD % and 3rd-down % are tiered (OFF_TIER/DEF_TIER: higher is better on offense, lower
+// on defense); drives per game and red-zone trips per game are volume, uncoloured. Each tile carries the league
+// mean, the club's rank and its denominator. A window whose week files carry no drives block (a season compiled
+// before D219) reads "–" with a sub line saying so, never NaN. PURE, the playCallingHtml signature; side "def" gives
+// what the defense faced (built, not drawn yet). Values are plain text: kit.js escapes them, so never the NA markup.
+export function drivesHtml({ O = {}, L = {}, rows = [], abbr = "", qs = "", side = "off", cuts = null } = {}) {
+  const DASH = "–";
+  const rankOf = (k) => (isNum(O[k]) ? teamRank(rows, side, k, abbr) : null);
+  const href = (k) => (side === "off" && RANKINGS_OFF_KEYS.has(k) ? rankingsHref("off", k, abbr, qs) : null);
+  const n = (x, one, many) => `${x ?? 0} ${x === 1 ? one : many}`;
+  const noDrives = !(O.driveG > 0), noThird = !(O.third > 0);
+  const faced = side === "def" ? " faced" : "";
+  const tile = (label, k, fmt, sub, title) => {
+    const rk = rankOf(k);
+    return { label, value: isNum(O[k]) ? fmt(O[k]) : DASH, lg: isNum(L[k]) ? fmt(L[k]) : null,
+      rank: rk ? ordinal(rk.rank) : null, rankOf: rk ? String(rk.of) : null, sub, href: href(k),
+      tier: teamTier(side, k, O[k], cuts), title };
+  };
+  const f2 = (v) => (+v).toFixed(2), f1 = (v) => (+v).toFixed(1), pc = (v) => `${(v * 100).toFixed(1)}%`;
+  const NO_DRIVES = "no drive data in this window's files", NO_THIRD = "no third-down data in this window's files";
+  const dSub = (s) => (noDrives ? NO_DRIVES : s);
+  const tiles = [
+    tile("Points/drive", "ptsDrive", f2, dSub(n(O.drives, "drive", "drives")),
+      `Points per drive${faced}: the points the offense actually scored on its own snaps (a touchdown 6 plus the try, a field goal 3, a defensive score against it 0) / its drives, over ${n(O.drives, "drive", "drives")}. Kneel-only drives are left out.`),
+    tile("Drives/g", "drivesG", f1, dSub(`${n(O.drives, "drive", "drives")} in ${n(O.driveG, "game", "games")}`),
+      `Drives per game${faced}: offensive drives / games, kneel-only drives left out. Volume, not quality: not coloured. 1st = the most drives.`),
+    tile("Red-zone trips/g", "rzTripsG", f1, dSub(n(O.rzTrips, "trip", "trips")),
+      `Red-zone trips per game${faced}: drives that ran a play from the opponent's 20 or closer / games. Volume, not quality: not coloured. 1st = the most trips.`),
+    tile("Red-zone TD %", "rzTdPct", pc, dSub(`${O.rzTd ?? 0} TD of ${n(O.rzTrips, "trip", "trips")}`),
+      `Red-zone touchdown rate${faced}: red-zone drives that ended in a touchdown / red-zone drives (a field goal is a trip, not a touchdown), over ${n(O.rzTrips, "trip", "trips")}.`),
+    tile("3rd-down %", "thirdPct", pc, noThird ? NO_THIRD : `${O.thirdConv ?? 0} of ${n(O.third, "3rd down", "3rd downs")}`,
+      `Third-down conversion${faced}: third-down plays that gained a first down or scored / third-down plays, over ${n(O.third, "play", "plays")}. Defensive pass-interference plays are left out on both sides; a first down a foul gave the offense counts.`),
+  ];
+  return lineBlock({
+    title: "Drives",
+    tiles,
+    foot: esc("Drives and their points: nflverse play-by-play drives, the points the offense actually scored on its own snaps (defensive and return scores are not drive points). A red-zone trip is a drive that ran a play from the opponent's 20 or closer. 3rd-down % reads a little under NFL.com's because penalty no-plays are not in the rows; a first down a foul gave the offense on a real play counts as a conversion."),
   });
 }
 
@@ -361,6 +402,7 @@ export async function renderTeam(ctx, params, query) {
     <div data-lost>${lostHtml()}</div>
     <div class="an-pl-tiles an-tm-tiles">${tiles}</div>
     ${playCallingHtml({ O, L, rows: win.rows, abbr, qs })}
+    ${drivesHtml({ O, L, rows: win.rows, abbr, qs, cuts: ref.cuts })}
     ${olineHtml}
     <div class="an-tm-row">
       <div class="an-card an-tm-weeks"><div class="an-dh">Week by week <span class="an-dsub">click a week to show it alone; click it again for the whole window</span></div><div class="an-pl-scroll">${weekly}</div></div>
