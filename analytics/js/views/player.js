@@ -148,21 +148,6 @@ export function reusesCard(held, gsis) {
   return !!(held && held.el && held.gsis === gsis);
 }
 
-// Team pill in the club's colours: the same rule as table.js's teamPill (copied: that one is private to the table).
-function luminance(hex) {
-  const raw = String(hex || "").trim().replace(/^#/, "");
-  const full = raw.length === 3 ? raw.split("").map((c) => c + c).join("") : raw;
-  if (!/^[0-9a-f]{6}$/i.test(full)) return null;
-  const n = parseInt(full, 16);
-  const lin = (c) => { const v = c / 255; return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };
-  return 0.2126 * lin((n >> 16) & 255) + 0.7152 * lin((n >> 8) & 255) + 0.0722 * lin(n & 255);
-}
-function teamPill(abbr, teams, q) {
-  const t = teams.get(abbr);
-  const style = t ? ` style="--team-bg:${esc(t.colourPrimary)};--team-ink:${(luminance(t.colourPrimary) ?? 0) > 0.40 ? "#14181d" : "#fff"}"` : "";
-  return `<a class="an-teampill an-pl-pill" href="#/team/${esc(abbr)}${q ? "?" + q : ""}"${style} title="Team page">${esc(abbr)}</a>`;
-}
-
 export function windowName(st, weeks) {
   if (st.window === "last3") return "Last 3";
   if (st.window === "range" && weeks.length) return weeks.length === 1 ? weekLabel(weeks[0], st.season) : `${weekLabel(weeks[0], st.season)}–${weekLabel(weeks[weeks.length - 1], st.season)}`;
@@ -450,7 +435,7 @@ export async function renderPlayer(ctx, params, query) {
   const name = displayName(gsis, data.players);
   document.title = `${name} · NFL Analytics`;
   const block = maddenBlocking(madden, gsis, v.pos, st.season);
-  const head = headerHtml(v, name, block, teams, qs, { status: currentStatus(feed, gsis, seasonsOf(st)), statusSeason: feed?.season ?? null, latestWeek: latestWeekIn(data.keys, feed?.season) });
+  const head = headerHtml(v, name, teams, qs, { status: currentStatus(feed, gsis, seasonsOf(st)), statusSeason: feed?.season ?? null, latestWeek: latestWeekIn(data.keys, feed?.season) });
   // D209 part (2): his depth-chart card opens every player page, catcher or not — only the analytics
   // sections below it differ by kind (the no-jumble rule: the card is the one shared thing besides the
   // header strip, everything else stays each app's own).
@@ -811,14 +796,14 @@ function measureLayout(root, v, bandW) {
   });
 }
 
-function headerHtml(v, name, block, teams, qs, stat = {}) {
-  const ovr = block.status === "ok" && isNum(block.ovr) ? `<span class="an-pl-ovr t-${block.ovr >= 90 ? "elite" : block.ovr >= 80 ? "strong" : block.ovr >= 70 ? "avg" : block.ovr >= 60 ? "weak" : "flat"}" title="${esc(block.title)} overall"><b>${block.ovr}</b><small>OVR</small></span>` : "";
+// D217: the header is Back, the man's name (with his status badge) and the links; his headshot, team and position chips
+// and OVR pill are the depth-chart card block's job right below it (D209), so they are not repeated here. The club
+// wash and rule stay. Exported for the test.
+export function headerHtml(v, name, teams, qs, stat = {}) {
   const depth = `../#/team/${encodeURIComponent(v.team)}/player/${encodeURIComponent(v.gsis)}`;
   const fb = backFallback(v.pos);
-  // The kit's header: his headshot left of the name, a quiet wash and a rule in his club's colour.
   return playerHead({
-    lead: backLink(`${fb.href}${qs ? "?" + qs : ""}`, fb.name), name, espnId: v.espnId, colour: teams.get(v.team)?.colourPrimary,
-    pills: `${v.team ? teamPill(v.team, teams, qs) : ""}<span class="an-pospill" data-band="${BAND(v.pos)}">${esc(v.pos)}</span>${ovr}`,
+    lead: backLink(`${fb.href}${qs ? "?" + qs : ""}`, fb.name), name, shot: false, colour: teams.get(v.team)?.colourPrimary,
     links: `<div class="an-pl-links"><a href="${depth}">Depth chart →</a>${v.team ? `<a href="#/team/${esc(v.team)}${qs ? "?" + qs : ""}">Team page →</a>` : ""}</div>`,
     // D196: his injury badge, red name and status line (already gated to the season on screen).
     status: stat.status || null, statusSeason: stat.statusSeason ?? null, latestWeek: stat.latestWeek ?? null,

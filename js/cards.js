@@ -613,21 +613,26 @@ export const ROW_SPACING = ["normal", "tight", "tighter"];
 // failed, the short "F. Surname" form, which then starts again from the top (D146 (3): a shortened name gets
 // its gutter and its signal glyphs back, so it is never printed in a squeezed row with 30-65px of the row
 // still idle). Spacing is spent before the name, and every rung is re-measured rather than guessed.
-// D215's Slot tag, in order: it compacts (above), then the name shortens, and then and only then, when the short
-// name (or a name with no short form) would still be cut at the tightest spacing, the tag is dropped (`dropTag`).
-// With the tag gone the FULL name is tried again first and the short name only after it, so a man who loses his
-// tag gets his first name back whenever the room it freed is enough. A row with no tag never reaches these rungs'
-// effect on the tag, and the full name there was already tried, so they cost it no extra measurement to speak of.
+// The Slot tag, in order (D215, D216): "Slot (58%)", then compact "Slot 58%", then the name shortens, then the
+// TINY tag "S 58%" (`tiny`, at the tightest spacing: first with the full name, which the freed room may bring
+// back, then with the short one), and only when even that would still cut the name is the tag dropped
+// (`dropTag`, the ladder's last rungs; no real row reaches them). With the tag gone the FULL name is tried again
+// first and the short name only after it, so a man who loses his tag gets his first name back whenever the
+// room it freed is enough. A row with no tag never reaches these rungs' effect on the tag, and the full name
+// there was already tried, so they cost it no extra measurement to speak of.
 export function nameLadder({ giveUps = ROW_GIVE_UPS, hasShort = false } = {}) {
+  const names = hasShort ? ["full", "short"] : ["full"];
   const rungs = [];
-  for (const name of hasShort ? ["full", "short"] : ["full"]) {
-    rungs.push({ name, spacing: "normal", gave: 0, compact: false, dropTag: false });
-    for (let gave = 0; gave <= giveUps.length; gave++) rungs.push({ name, spacing: "tight", gave, compact: false, dropTag: false });
-    rungs.push({ name, spacing: "tight", gave: giveUps.length, compact: true, dropTag: false });
-    rungs.push({ name, spacing: "tighter", gave: giveUps.length, compact: true, dropTag: false });
+  for (const name of names) {
+    rungs.push({ name, spacing: "normal", gave: 0, compact: false, tiny: false, dropTag: false });
+    for (let gave = 0; gave <= giveUps.length; gave++) rungs.push({ name, spacing: "tight", gave, compact: false, tiny: false, dropTag: false });
+    rungs.push({ name, spacing: "tight", gave: giveUps.length, compact: true, tiny: false, dropTag: false });
+    rungs.push({ name, spacing: "tighter", gave: giveUps.length, compact: true, tiny: false, dropTag: false });
   }
-  const last = rungs[rungs.length - 1];
-  for (const name of hasShort ? ["full", "short"] : ["full"]) rungs.push({ ...last, name, dropTag: true });
+  const spent = rungs[rungs.length - 1];
+  for (const name of names) rungs.push({ ...spent, name, tiny: true });
+  const tiny = rungs[rungs.length - 1];
+  for (const name of names) rungs.push({ ...tiny, name, dropTag: true });
   return rungs;
 }
 
@@ -646,13 +651,13 @@ function fitOneName(row, el) {
   // by selector so two ROW_GIVE_UPS selectors that ever matched the same element could never fight over it —
   // toggling each selector in turn could otherwise have a later rung hand an already-given-up element back.
   const candidates = [...new Set(ROW_GIVE_UPS.flatMap((sel) => [...row.querySelectorAll(sel)]))];
-  // D215: the Slot tags, which never leave the row but swap to their compact wording on the `compact` rungs.
+  // D215/D216: the Slot tags, which swap to their compact wording on the `compact` rungs and their tiny one on the `tiny` rungs.
   const tags = [...row.querySelectorAll(".badge-slot[data-compact]")];
   // Puts the row into exactly the state one rung describes, and answers whether anything actually moved. A
   // rung that changes nothing cannot change the answer either, so the caller skips re-measuring it — which
   // is what keeps the common case (a row with no extras to give up, so most of the middle rungs are no-ops)
   // to the same handful of measurements it always took.
-  const applyRung = ({ name, spacing, gave, compact, dropTag }) => {
+  const applyRung = ({ name, spacing, gave, compact, tiny, dropTag }) => {
     let moved = false;
     const text = name === "short" ? el.dataset.short : el.dataset.full;
     if (el.textContent !== text) { el.textContent = text; moved = true; }
@@ -666,7 +671,7 @@ function fitOneName(row, el) {
       if (n.classList.contains("prow-given-up") !== on) { n.classList.toggle("prow-given-up", on); moved = true; }
     }
     for (const t of tags) {
-      const want = compact ? t.dataset.compact : t.dataset.full;
+      const want = tiny ? (t.dataset.tiny || t.dataset.compact) : compact ? t.dataset.compact : t.dataset.full;
       if (want && t.textContent !== want) { t.textContent = want; moved = true; }
       if (t.classList.contains("prow-given-up") !== !!dropTag) { t.classList.toggle("prow-given-up", !!dropTag); moved = true; }
     }
@@ -745,9 +750,9 @@ const RESERVE_CODES = new Set(["IR", "PUP", "NFI", "SUSP", "EXEMPT"]);
 // or more (D77's bar), wears "Slot (58%)" beside his name wherever he is drawn, the rate rounded to a whole
 // number. The rate is field.js's slotRateOf: the current season's own rate (Adam, 2026-09-29, "just do
 // everyone": no snap gate, no pooling), and the tooltip says which season it is. No other position carries a
-// rate at all. `data-full`/`data-compact` are the two wordings fitNames' ladder swaps between on a tight row
-// ("Slot 58%" is the compact one); the tag is dropped only as the ladder's last rung, when even the short name
-// would otherwise be cut.
+// rate at all. `data-full`/`data-compact`/`data-tiny` are the three wordings fitNames' ladder swaps between on a
+// tight row ("Slot 58%" compact, D216's "S 58%" tiny; the tooltip always carries the full wording); the tag is
+// dropped only as the ladder's last rungs, when even the tiny tag with the short name would cut the name.
 export const SLOT_TAG_RATE = { WR: 35, TE: 20 };
 const slotTagRate = (p) => {
   const pos = String(p?.position || "");
@@ -762,7 +767,7 @@ export const slotBadge = (p) => {
   const pct = Math.round(rate);
   const title = `${pct}% of his snaps inside${p.slotSeasonCurrent ? `, ${p.slotSeasonCurrent}` : ""}`;
   const full = `Slot (${pct}%)`;
-  return `<span class="badge badge-slot" title="${esc(title)}" data-full="${full}" data-compact="Slot ${pct}%">${full}</span>`;
+  return `<span class="badge badge-slot" title="${esc(title)}" data-full="${full}" data-compact="Slot ${pct}%" data-tiny="S ${pct}%">${full}</span>`;
 };
 export const psBadge = (p, title = true) => {
   if (RESERVE_CODES.has(p.status?.code)) return "";

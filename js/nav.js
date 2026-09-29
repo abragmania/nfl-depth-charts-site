@@ -49,7 +49,7 @@ export function navStripHtml({ teams, abbr, page, unit, bandLabel, bandSlug, opp
   const offLit = page === "off" || (page === "group" && unit === "OFF");
   const defLit = page === "def" || (page === "group" && unit === "DEF");
   const pill = (label, href, lit) => `<a class="zoom-pill nav-pill${lit ? " active" : ""}" href="${href}">${label}</a>`;
-  const analyticsLink = `<a class="nav-help nav-analytics" href="${esc(analyticsHrefFor(page, unit, abbr))}" title="Open this team in NFL Analytics">Analytics</a>`;
+  const analyticsLink = `<a class="nav-help nav-analytics" href="${esc(analyticsHrefFor(page, unit, abbr))}" title="Open this team in NFL Analytics">Team stats</a>`;
   const pills = `<span class="nav-strip-pills">
     ${pill("Team", `#/team/${A}`, page === "team")}
     ${pill("Offense Depth", `#/team/${A}/off`, offLit)}

@@ -523,11 +523,12 @@ export function headshotUrl(espnId) {
 // status/statusSeason/latestWeek (D196, additive): his status entry when it applies to this page (currentStatus
 // above has already gated it on the season), the feed's season and the latest week on screen. With a status the name
 // carries the long badge after it and, under it, statusLine's one muted line; the name is red by isRedName. Without
-// one the header is exactly as before.
-export function playerHead({ lead = "", name = "", espnId = null, colour = null, pills = "", links = "", status = null, statusSeason = null, latestWeek = null } = {}) {
+// one the header is exactly as before. shot: false (D217) leaves the headshot circle out, so the header is Back, the name and the
+// links only.
+export function playerHead({ lead = "", name = "", espnId = null, colour = null, pills = "", links = "", status = null, statusSeason = null, latestWeek = null, shot: withShot = true } = {}) {
   const c = /^#[0-9a-fA-F]{3,8}$/.test(String(colour ?? "").trim()) ? String(colour).trim() : null;
   const url = headshotUrl(espnId);
-  const shot = `<span class="an-rc-shot">${url ? `<img src="${esc(url)}" alt="" width="56" height="56" loading="lazy" decoding="async" onerror="this.remove()">` : ""}</span>`;
+  const shot = !withShot ? "" : `<span class="an-rc-shot">${url ? `<img src="${esc(url)}" alt="" width="56" height="56" loading="lazy" decoding="async" onerror="this.remove()">` : ""}</span>`;
   const chip = statusChip(status, { long: true, season: statusSeason });
   const nameCls = statusNameClass(status);
   const h1 = `<h1${nameCls ? ` class="${nameCls}"` : ""}>${esc(name)}${chip ? ` ${chip}` : ""}</h1>`;

@@ -29,7 +29,7 @@ import { median, ratingTier, maddenEdition, iterationLabel } from "../agg_player
 import { renderFilterBar } from "../filterbar.js";
 import { ratingBars } from "../charts/hbars.js";
 import { headlineRow, fantasyBand, phaseBlock, varianceStrip, maddenFoot, playerHead, currentStatus, latestWeekIn } from "./kit.js";
-import { esc, isNum, signed, teamPill, qbStrips, qbZoneField, qbZoneLegend, qbZoneName, QB_ZONE_MODES, qbQuery, minDbOf, pfrNote } from "./qb.js";
+import { esc, isNum, signed, qbStrips, qbZoneField, qbZoneLegend, qbZoneName, QB_ZONE_MODES, qbQuery, minDbOf, pfrNote } from "./qb.js";
 // D209 part (2): the depth-chart card block every player page opens with — shared with player.js (the same
 // pass-catcher file) rather than duplicated, since both live in this app and the card logic itself only
 // exists once, in public/js/panel.js.
@@ -95,6 +95,15 @@ export function qbWeeklySeries(rawSeries, meta, games, winKeys) {
 export function ownWindow(series, winGames) {
   return (series || []).map((s) => (s.opp && s.team && !winGames.has(`${s.key}|${s.team}`) ? { ...s, inWin: false } : s));
 }
+// D217: the quarterback page's header is Back, his name (with his status badge) and the links; the headshot, team and
+// position chips and OVR pill are the depth-chart card right below it. Exported for the test.
+export function qbHeaderHtml({ gsis, team, name, teams, qs = "", status = null, statusSeason = null, latestWeek = null }) {
+  const depth = `../#/team/${encodeURIComponent(team)}/player/${encodeURIComponent(gsis)}`;
+  return playerHead({ lead: backLink(`#/qb${qs ? "?" + qs : ""}`, "Quarterbacks"), name, shot: false, colour: teams.get(team)?.colourPrimary,
+    links: `<div class="an-pl-links"><a href="${depth}">Depth chart →</a>${team ? `<a href="#/team/${esc(team)}${qs ? "?" + qs : ""}">Team page →</a>` : ""}</div>`,
+    status, statusSeason, latestWeek });
+}
+
 export function windowName(st, weeks) {
   if (st.window === "last3") return "Last 3";
   if (st.window === "range" && weeks.length) return weeks.length === 1 ? weekLabel(weeks[0], st.season) : `${weekLabel(weeks[0], st.season)}–${weekLabel(weeks[weeks.length - 1], st.season)}`;
@@ -443,8 +452,6 @@ export async function renderQbPlayer(ctx, params, query) {
       : ratingBars(mq.bars, "QB") + `<div class="an-note">EA's passing attributes; the tick is the QB median (${mq.peers} rated).</div>`}</div>`;
 
   const sub = `${seasonLabel(st)} · ${win.weeks.length ? (win.weeks.length === 1 ? weekLabel(win.weeks[0], st.season) : `${weekLabel(win.weeks[0], st.season)} to ${weekLabel(win.weeks[win.weeks.length - 1], st.season)}`) : "no games"}${st.window === "last3" ? " (each club's last 3 games)" : ""} · league reference: ${ref.text}${pnote ? " · " + pnote : ""}`;
-  const ovr = isNum(mq.ovr) ? `<span class="an-pl-ovr t-${ratingTier(mq.ovr)}" title="${esc(mq.title)} overall"><b>${mq.ovr}</b><small>OVR</small></span>` : "";
-  const depth = `../#/team/${encodeURIComponent(team)}/player/${encodeURIComponent(gsis)}`;
 
   // D209 🔵 fix round (item 1): same rule as player.js's own draw() — a redraw of the same QB reuses his
   // already-mounted depth-chart card element instead of rebuilding and remounting it.
@@ -452,10 +459,7 @@ export async function renderQbPlayer(ctx, params, query) {
     const reuse = reusesCard({ gsis: ui.cardGsis, el: ui.cardEl }, gsis) ? ui.cardEl : null;
     if (reuse?.parentNode) reuse.remove();
     root.innerHTML = `<section class="an-pl an-qbp">
-    ${playerHead({ lead: backLink(`#/qb${qs ? "?" + qs : ""}`, "Quarterbacks"), name, espnId: meta.espnId, colour: teams.get(team)?.colourPrimary,
-      pills: `${team ? teamPill(team, teams, qs, "an-pl-pill") : ""}<span class="an-pospill" data-band="QB">QB</span>${ovr}`,
-      links: `<div class="an-pl-links"><a href="${depth}">Depth chart →</a>${team ? `<a href="#/team/${esc(team)}${qs ? "?" + qs : ""}">Team page →</a>` : ""}</div>`,
-      status: currentStatus(feed, gsis, seasonsOf(st)), statusSeason: feed?.season ?? null, latestWeek: latestWeekIn(data.keys, feed?.season) })}
+    ${qbHeaderHtml({ gsis, team, name, teams, qs, status: currentStatus(feed, gsis, seasonsOf(st)), statusSeason: feed?.season ?? null, latestWeek: latestWeekIn(data.keys, feed?.season) })}
     ${reuse ? `<div data-cardslot></div>` : cardHtml}
     <div class="an-pl-bar"><div class="an-filters"></div></div>
     <div class="an-sub an-pl-sub">${esc(sub)}</div>
