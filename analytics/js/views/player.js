@@ -14,9 +14,9 @@
 // position's section, D188) and links to his depth-chart card (new tab) and his team page.
 import { fromQuery, toQuery, seasonsOf, weekLabel, splitKey, gamesInWindow } from "../filters.js";
 import { backLink } from "../router.js";
-import { loadFor, loadTeams, displayName, loadStatusFeed, loadTeamView, findCardByGsis, loadPlayerStats, loadPlayerHistory, loadPlayerGameLog, clubCards } from "../data.js";
+import { loadFor, loadTeams, displayName, loadStatusFeed } from "../data.js";
 import { isStatic } from "../../../js/api.js";
-import { playerView, maddenBlocking, maddenEdition, pageState, lastTeam } from "../agg_player.js";
+import { playerView, maddenBlocking, maddenEdition, pageState } from "../agg_player.js";
 import { aggregateUsage, usageReference, clubGames, colIndex, REF_POS } from "../agg.js";
 import { renderFilterBar } from "../filterbar.js";
 import { tierOf } from "../table.js";
@@ -26,9 +26,6 @@ import { weeklyStrips } from "../charts/bars.js";
 import { zoneField, zoneLegend, ZONE_MODES, zoneName } from "../charts/zonefield.js";
 import { ratingBars, routeList } from "../charts/hbars.js";
 import { headlineRow, fantasyBand, phaseBlock, varianceStrip, maddenFoot, playerHead, currentStatus, latestWeekIn, trendStrip } from "./kit.js";
-// D209 part (2): the depth-chart card block that opens every player page, drawn by the SAME code the
-// depth-chart panel uses (public/js/panel.js) — never a copy. See cardBlockHtml/loadCard below.
-import { cardBodyHtml, mountCardData } from "../../../js/panel.js";
 
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const NA = `<span class="an-na">–</span>`;
@@ -57,95 +54,19 @@ function loadMadden(season) {
   return maddenCache.get(season);
 }
 
-// D209 part (2): his depth-chart card — the same TeamView-derived PlayerCard the depth-chart app's own
-// panel.js draws (cardBodyHtml/mountCardData below), for his current club. `teams` is the Map renderPlayer
-// already loaded for the header's team pill; a club the fetch cannot resolve, or a man no longer on that
-// club's compiled chart, reads a one-line note instead of a broken block — never nothing (the ruling's own
-// words). loadTeamView caches per club per page load, so opening several players on the same team costs one
-// fetch.
-// `currentTeam` (D209 🔵 fix round) is his CURRENT club — see currentTeamOf below — and always wins when
-// known; `v.team` (the page's filter-window club, which for a traded man viewed on an older date range can
-// be the club he USED to play for) is only the fallback for the rare man neither source names.
-export async function loadCard(v, teams, currentTeam = null) {
-  const team = currentTeam || v.team;
-  if (!team) return { card: null, teamMeta: null, teamView: null, note: "No current club on file for him." };
-  const teamMeta = teams.get(team) || null;
-  let teamView;
-  try { teamView = await loadTeamView(team); }
-  catch { return { card: null, teamMeta, teamView: null, note: "Could not load his depth-chart card." }; }
-  const card = findCardByGsis(teamView, v.gsis);
-  if (!card) return { card: null, teamMeta, teamView, note: "He is not on his club's current depth chart." };
-  return { card, teamMeta, teamView, note: null };
+// Team pill in the club's colours: the same rule as table.js's teamPill (copied: that one is private to the table).
+function luminance(hex) {
+  const raw = String(hex || "").trim().replace(/^#/, "");
+  const full = raw.length === 3 ? raw.split("").map((c) => c + c).join("") : raw;
+  if (!/^[0-9a-f]{6}$/i.test(full)) return null;
+  const n = parseInt(full, 16);
+  const lin = (c) => { const v = c / 255; return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };
+  return 0.2126 * lin((n >> 16) & 255) + 0.7152 * lin((n >> 8) & 255) + 0.0722 * lin(n & 255);
 }
-
-// D209 🔵 fix round (item 2): his CURRENT club, for loadCard's lookup — never the page's filter-window club,
-// which a traded man viewed on an older date range would still show as his old team, wrongly reading "not on
-// his club's current depth chart" once he is looked up there. The injury-status feed (current season only,
-// refreshed more often than the weekly roster snapshots) wins when it names him; agg_player.js's lastTeam
-// (his latest roster week on file) is the fallback; null when neither source knows him, so loadCard falls
-// back to its own v.team. PURE.
-export function currentTeamOf(gsis, meta, feed) {
-  return feed?.players?.[gsis]?.team || lastTeam(meta) || null;
-}
-
-// "WR2 · starter" for a starting slot; a backup slot already reads "RB backup" from clubCards()'s own
-// " backup" suffix (D199), so it prints as-is rather than doubling up. clubCards() derives this from the
-// SAME TeamView loadCard just fetched, so the label on this page and the depth chart can never disagree.
-export function chartSlotLine(slot) {
-  if (!slot) return null;
-  return / backup$/.test(slot) ? slot : `${slot} · starter`;
-}
-
-// The card block: his depth-chart card's own markup (panel.js's cardBodyHtml, unchanged, D209's byte-for-
-// byte rule) plus one added line above it, his chart slot linking to the depth chart (the same route the
-// header's own "Depth chart" link uses). A missing card renders the one-line note instead.
-// D209 🔵 fix round (item 3): the link's player segment is info.card.playerKey, not v.gsis — the depth
-// chart's own card finder (public/js/main.js's findCard) matches on playerKey, which for a card keyed by
-// name rather than gsis (no gsisId on file) is not the same string, and opening with the wrong one lands on
-// the team page with no panel. The link's team segment is the club the card actually came from (info.teamMeta
-// / info.teamView, which loadCard resolves from his CURRENT club per item 2) rather than v.team, so the two
-// halves of the link always name the same club.
-export function cardBlockHtml(info, v) {
-  if (!info.card) return `<div class="an-note an-pl-cardnote">${esc(info.note || "No depth-chart card on file for him.")}</div>`;
-  const slot = clubCards(info.teamView)[v.gsis]?.slot ?? null;
-  const line = chartSlotLine(slot);
-  const abbr = info.teamMeta?.abbr || info.teamView?.abbr || v.team;
-  const depth = `../#/team/${encodeURIComponent(abbr)}/player/${encodeURIComponent(info.card.playerKey)}`;
-  return `<div class="panel-inner an-pl-card" style="--team-primary:${esc(info.teamMeta?.colourPrimary || "#333")};--team-secondary:${esc(info.teamMeta?.colourSecondary || "#777")}">
-    ${line ? `<a class="an-pl-cardslot" href="${esc(depth)}">${esc(line)}</a>` : ""}
-    ${cardBodyHtml(info.card, info.teamView?.season, info.teamMeta, info.teamView)}
-  </div>`;
-}
-
-// Mounts the card's async pieces (history, season stats, game log tab, games chip, draft round) once the
-// block above is actually in the DOM. The analytics app's own data.js loaders replace panel.js's default
-// fetches — not for path reasons any more (api.js's own getPlayer/getHistory/getGameLog now anchor every
-// static path to the site root from api.js's own module address, so they already reach the right file from
-// any page depth) but so each fetch is cached per player/club key (data.js's own loadPlayerStats /
-// loadPlayerHistory / loadPlayerGameLog), which api.js's bare getPlayer/getHistory do not do on their own —
-// see data.js's own header comment on those three. statsLink is off: this page IS the depth-chart card's
-// "Stats ↗" destination, so patching that link in here would point it at itself.
-// D209 🔵 fix round (item 1): the caller (renderPlayer/renderQbPlayer) calls this ONCE per player — a redraw
-// of the SAME player (filter change, week click, PI toggle, game-log fold) reuses the already-mounted card
-// element untouched instead of calling this again, so it never re-fetches or loses an open Game log tab. See
-// reusesCard below.
-export function mountCard(root, info) {
-  if (!info.card) return;
-  const box = root.querySelector(".an-pl-card");
-  if (!box) return;
-  mountCardData(box, info.card, info.teamView, info.teamMeta, {
-    statsLink: false, fetchPlayerFn: loadPlayerStats, getHistoryFn: loadPlayerHistory, getGameLogFn: loadPlayerGameLog,
-  });
-}
-
-// PURE (D209 🔵 fix round, item 1): whether a draw should reuse the depth-chart card element it is already
-// holding (`held`: { gsis, el }, the player id and DOM node a previous draw stashed) instead of building a
-// fresh one from cardHtml. True only when `held` names THIS draw's player — a different player (a navigation,
-// including a trade that moves him to a new club) or the very first draw for a player always gets a fresh
-// element, which the caller then actually mounts (fetches history/stats/game log); a redraw of the same
-// player reuses the held element as-is, so mounting never runs twice for one visit to his page.
-export function reusesCard(held, gsis) {
-  return !!(held && held.el && held.gsis === gsis);
+function teamPill(abbr, teams, q) {
+  const t = teams.get(abbr);
+  const style = t ? ` style="--team-bg:${esc(t.colourPrimary)};--team-ink:${(luminance(t.colourPrimary) ?? 0) > 0.40 ? "#14181d" : "#fff"}"` : "";
+  return `<a class="an-teampill an-pl-pill" href="#/team/${esc(abbr)}${q ? "?" + q : ""}"${style} title="Team page">${esc(abbr)}</a>`;
 }
 
 export function windowName(st, weeks) {
@@ -173,10 +94,7 @@ export function backFallback(pos) {
 // pastOpen: the game log's previous-season weeks unfolded (👁 fix round; folded to its totals row by default).
 // layout: the measured fits (fantasy chart width, log beside or under it, the strips' widths), keyed by the page's
 // link and width so a redraw (a zone click, the log toggle) lands right first time.
-// cardEl/cardGsis: the mounted depth-chart card element the page is currently holding, and which player it
-// belongs to (D209 🔵 fix round, item 1) — a redraw of the SAME player reuses it untouched instead of
-// rebuilding and remounting it.
-const ui = { gsis: null, zoneMode: "tgt", zone: null, pastOpen: false, layout: null, club: null, cardEl: null, cardGsis: null };
+const ui = { gsis: null, zoneMode: "tgt", zone: null, pastOpen: false, layout: null, club: null };
 
 // D182 (Adam, 2026-09-24): the RB week-by-week block drops the air-yards-share strip (his carries and rush share
 // show in the rushing block); WR and TE keep all three weekly strips. They now sit in the receiving block's body.
@@ -405,7 +323,7 @@ export async function renderPlayer(ctx, params, query) {
   const { root, isCurrent } = ctx;
   const gsis = params.gsis;
   const st = fromQuery(query);
-  if (ui.gsis !== gsis) { ui.gsis = gsis; ui.zone = null; ui.pastOpen = false; ui.cardEl = null; ui.cardGsis = null; }
+  if (ui.gsis !== gsis) { ui.gsis = gsis; ui.zone = null; ui.pastOpen = false; }
   const go = (n) => { const q = toQuery({ ...n, open: "" }); location.hash = `#/player/${encodeURIComponent(gsis)}${q ? "?" + q : ""}`; };
   if (!root.querySelector(".an-pl")) root.innerHTML = `<div class="an-msg">Loading player…</div>`;
   let data, teams, madden, feed;
@@ -435,19 +353,12 @@ export async function renderPlayer(ctx, params, query) {
   const name = displayName(gsis, data.players);
   document.title = `${name} · NFL Analytics`;
   const block = maddenBlocking(madden, gsis, v.pos, st.season);
-  const head = headerHtml(v, name, teams, qs, { status: currentStatus(feed, gsis, seasonsOf(st)), statusSeason: feed?.season ?? null, latestWeek: latestWeekIn(data.keys, feed?.season) });
-  // D209 part (2): his depth-chart card opens every player page, catcher or not — only the analytics
-  // sections below it differ by kind (the no-jumble rule: the card is the one shared thing besides the
-  // header strip, everything else stays each app's own).
-  const cardInfo = await loadCard(v, teams, currentTeamOf(gsis, data.players[gsis], feed));
-  if (!isCurrent()) return;
-  const cardHtml = cardBlockHtml(cardInfo, v);
+  const head = headerHtml(v, name, block, teams, qs, { status: currentStatus(feed, gsis, seasonsOf(st)), statusSeason: feed?.season ?? null, latestWeek: latestWeekIn(data.keys, feed?.season) });
   if (v.kind !== "catcher") {
     const fb = backFallback(v.pos);
     const back = `<a href="${fb.href}${qs ? "?" + qs : ""}">Back to ${fb.name}</a>`;
-    root.innerHTML = `<section class="an-pl">${head}${cardHtml}<div class="an-msg"><div class="an-msg-title">${v.kind === "qb" ? "Quarterback page" : `${esc(v.pos || "This position")} page`}: coming next</div>
+    root.innerHTML = `<section class="an-pl">${head}<div class="an-msg"><div class="an-msg-title">${v.kind === "qb" ? "Quarterback page" : `${esc(v.pos || "This position")} page`}: coming next</div>
       ${v.kind === "qb" ? "EPA per dropback, CPOE, success rate, aDOT, pressure and play-action splits, with the zone chart." : "Blocking-first views for linemen and the rest follow the pass catchers."} ${back}</div></section>`;
-    mountCard(root, cardInfo);
     return;
   }
 
@@ -469,19 +380,10 @@ export async function renderPlayer(ctx, params, query) {
   const gutters = cs ? (parseFloat(cs.paddingLeft) || 0) + (parseFloat(cs.paddingRight) || 0) : 0;
   const bandW = Math.max(600, Math.min((root.clientWidth || 1400) - gutters, 1760) - 32);
   const layoutKey = `${gsis}|${toQuery({ ...st, open: "" })}|${root.clientWidth}|${ui.pastOpen}`;
-  // D209 🔵 fix round (item 1): a redraw of the SAME player (a filter change, a week click, the PI toggle, the
-  // game-log fold — draw() can run here once or twice a render, both from this one call) must not rebuild his
-  // depth-chart card: that would re-fetch its history/stats/game-log and snap an open Game log tab shut. When
-  // ui.cardEl already holds this player's mounted card, draw() detaches it before the innerHTML swap discards
-  // it and splices the SAME element back into the new markup afterwards; only a fresh player (or the very
-  // first draw) embeds cardHtml and lets the caller mount it below.
   const draw = (lay) => {
     const bodyHtml = pageBody(v, st, { wn, activeKey, block, bandW, pastOpen: ui.pastOpen, club, clubQs: qs, ...lay });
-    const reuse = reusesCard({ gsis: ui.cardGsis, el: ui.cardEl }, gsis) ? ui.cardEl : null;
-    if (reuse?.parentNode) reuse.remove();
     root.innerHTML = `<section class="an-pl an-pl-rc">
     ${head}
-    ${reuse ? `<div data-cardslot></div>` : cardHtml}
     <div class="an-pl-bar"><div class="an-filters"></div>
       <label class="an-switch" title="A defensive pass interference is a no-play in the play-by-play; on, it counts as a target for the receiver (never a pass attempt, catch or yards)"><input type="checkbox" data-pi${st.pi === false ? "" : " checked"}><span>${st.pi === false ? "excl. PI targets" : "PI targets"}</span></label></div>
     <div class="an-sub an-pl-sub">${esc(sub)}</div>
@@ -489,17 +391,13 @@ export async function renderPlayer(ctx, params, query) {
     ${bodyHtml}
     <p class="an-foot">Targets, air yards, zones, EPA, success, YAC, carries, red-zone and goal-line looks, fumbles and DraftKings points (DK Classic scoring from the play rows: no 2-point conversions or return TDs, D194): nflverse play-by-play. Routes, Rt %, TPRR, YPRR: heatradar.app (charted). Snaps: nflverse snap counts. Separation, cushion, YAC over expected, rush yards over expected, NGS efficiency: Next Gen Stats. Yards before contact, drops: Pro Football Reference charting. Ranks and league figures: his position's reference pool in the window. Zone and route references pool every target to his position in the window. Blocking: EA Madden ratings.</p>
   </section>`;
-    if (reuse) root.querySelector("[data-cardslot]")?.replaceWith(reuse);
-    else { ui.cardEl = root.querySelector(".an-pl-card"); ui.cardGsis = gsis; }
   };
   // Drawn once at the last measured fits (or the defaults), then measured and, when a fit moved, drawn once more.
   let lay = ui.layout?.key === layoutKey ? ui.layout.lay : {};
-  const cardAlreadyMounted = reusesCard({ gsis: ui.cardGsis, el: ui.cardEl }, gsis); // before either draw() below
   draw(lay);
   const measured = measureLayout(root, v, bandW);
   if (JSON.stringify(measured) !== JSON.stringify(lay)) { lay = measured; draw(lay); }
   ui.layout = { key: layoutKey, lay };
-  if (!cardAlreadyMounted) mountCard(root, cardInfo); // after the final draw(), so it targets the DOM actually on screen
 
   renderFilterBar(root.querySelector(".an-filters"), st, { keys: data.keys, teams: [] }, go);
   root.querySelector("[data-gl-toggle]")?.addEventListener("click", () => { ui.pastOpen = !ui.pastOpen; renderPlayer(ctx, params, query); });
@@ -796,15 +694,15 @@ function measureLayout(root, v, bandW) {
   });
 }
 
-// D217: the header is Back, the man's name (with his status badge) and the links; his headshot, team and position chips
-// and OVR pill are the depth-chart card block's job right below it (D209), so they are not repeated here. The club
-// wash and rule stay. Exported for the test.
-export function headerHtml(v, name, teams, qs, stat = {}) {
+function headerHtml(v, name, block, teams, qs, stat = {}) {
+  const ovr = block.status === "ok" && isNum(block.ovr) ? `<span class="an-pl-ovr t-${block.ovr >= 90 ? "elite" : block.ovr >= 80 ? "strong" : block.ovr >= 70 ? "avg" : block.ovr >= 60 ? "weak" : "flat"}" title="${esc(block.title)} overall"><b>${block.ovr}</b><small>OVR</small></span>` : "";
   const depth = `../#/team/${encodeURIComponent(v.team)}/player/${encodeURIComponent(v.gsis)}`;
   const fb = backFallback(v.pos);
+  // The kit's header: his headshot left of the name, a quiet wash and a rule in his club's colour.
   return playerHead({
-    lead: backLink(`${fb.href}${qs ? "?" + qs : ""}`, fb.name), name, shot: false, colour: teams.get(v.team)?.colourPrimary,
-    links: `<div class="an-pl-links"><a href="${depth}">Depth chart →</a>${v.team ? `<a href="#/team/${esc(v.team)}${qs ? "?" + qs : ""}">Team page →</a>` : ""}</div>`,
+    lead: backLink(`${fb.href}${qs ? "?" + qs : ""}`, fb.name), name, espnId: v.espnId, colour: teams.get(v.team)?.colourPrimary,
+    pills: `${v.team ? teamPill(v.team, teams, qs) : ""}<span class="an-pospill" data-band="${BAND(v.pos)}">${esc(v.pos)}</span>${ovr}`,
+    links: `<div class="an-pl-links"><a href="${depth}" target="_blank" rel="noopener">Depth chart ↗</a>${v.team ? `<a href="#/team/${esc(v.team)}${qs ? "?" + qs : ""}">Team page →</a>` : ""}</div>`,
     // D196: his injury badge, red name and status line (already gated to the season on screen).
     status: stat.status || null, statusSeason: stat.statusSeason ?? null, latestWeek: stat.latestWeek ?? null,
   });
