@@ -579,7 +579,10 @@ function textOverflows(el) {
   if (typeof document.createRange !== "function" || !avail) return el.scrollWidth > el.clientWidth + 1;
   const range = document.createRange();
   range.selectNodeContents(el);
-  return range.getBoundingClientRect().width > avail + 0.5;
+  // D215 (👁, 2026-09-29): ANY overflow counts as not fitting. The old half-pixel allowance let a name run over by
+  // under a pixel on the scaled field, so the ladder stopped while the browser still drew an ellipsis. The 0.01
+  // only absorbs floating-point noise on a name that fits exactly (e.g. 81 of 81 px), which draws no ellipsis.
+  return range.getBoundingClientRect().width > avail + 0.01;
 }
 
 // D135 (Adam, 2026-09-17): what a row gives up, in order, before its name is touched. The quiet signal glyphs
@@ -612,7 +615,9 @@ export const ROW_SPACING = ["normal", "tight", "tighter"];
 // still idle). Spacing is spent before the name, and every rung is re-measured rather than guessed.
 // D215's Slot tag, in order: it compacts (above), then the name shortens, and then and only then, when the short
 // name (or a name with no short form) would still be cut at the tightest spacing, the tag is dropped (`dropTag`).
-// A row with no tag never reaches that rung's effect: it changes nothing there, so it is not even re-measured.
+// With the tag gone the FULL name is tried again first and the short name only after it, so a man who loses his
+// tag gets his first name back whenever the room it freed is enough. A row with no tag never reaches these rungs'
+// effect on the tag, and the full name there was already tried, so they cost it no extra measurement to speak of.
 export function nameLadder({ giveUps = ROW_GIVE_UPS, hasShort = false } = {}) {
   const rungs = [];
   for (const name of hasShort ? ["full", "short"] : ["full"]) {
@@ -622,7 +627,7 @@ export function nameLadder({ giveUps = ROW_GIVE_UPS, hasShort = false } = {}) {
     rungs.push({ name, spacing: "tighter", gave: giveUps.length, compact: true, dropTag: false });
   }
   const last = rungs[rungs.length - 1];
-  rungs.push({ ...last, dropTag: true });
+  for (const name of hasShort ? ["full", "short"] : ["full"]) rungs.push({ ...last, name, dropTag: true });
   return rungs;
 }
 
