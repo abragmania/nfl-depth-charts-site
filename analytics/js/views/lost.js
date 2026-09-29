@@ -142,8 +142,8 @@ export function lostCardHtml(list, { season, feedSeason, abbr = "", q = "", feed
     const nameLink = r.gsis
       ? who(r.gsis, r.name, cls)
       : r.playerKey
-        ? `<a class="${cls}" href="../#/team/${encodeURIComponent(abbr)}/player/${encodeURIComponent(r.playerKey)}" target="_blank" rel="noopener" title="on the depth chart">${esc(r.name)}</a>`
-        : `<a class="${cls}" href="../#/team/${encodeURIComponent(abbr)}" target="_blank" rel="noopener" title="on the depth chart">${esc(r.name)}</a>`;
+        ? `<a class="${cls}" href="../#/team/${encodeURIComponent(abbr)}/player/${encodeURIComponent(r.playerKey)}" title="on the depth chart">${esc(r.name)}</a>`
+        : `<a class="${cls}" href="../#/team/${encodeURIComponent(abbr)}" title="on the depth chart">${esc(r.name)}</a>`;
     const band = BAND(r.pos);
     return `<span class="an-tm-lostline"><span class="an-pospill" data-band="${esc(SKILL_BANDS.has(band) ? band : "OTHER")}">${esc(r.pos)}</span> ${nameLink} <span class="an-tm-loststat">${st.html}</span>`
       + (st.missed ? ` · ${esc(st.missed)}` : "")

@@ -9,7 +9,7 @@
 // so a rule can address this page alone.
 import { fromQuery, toQuery, seasonsOf, weekLabel } from "../filters.js";
 import { loadFor, loadTeams } from "../data.js";
-import { aggregateTeams, teamReference, teamTier, teamZones, sortTeamRows, OFF_TIER } from "../agg_team.js";
+import { aggregateTeams, teamReference, teamTier, teamZones, sortTeamRows, OFF_TIER, SOFT_KEYS } from "../agg_team.js";
 import { TIER_NAMES } from "../agg.js";
 import { renderFilterBar } from "../filterbar.js";
 import { esc, NA, isNum, pct, fix, signed, teamPill, qbStrips, pfrNote, seasonLabel } from "./qb.js";
@@ -106,15 +106,17 @@ function detailHtml(r, st, q, ref, wn, lgZones, players) {
         ${tile("Expl run %", PP(O.runExplPct), "runExplPct", PP(L.runExplPct), "Designed runs of 10+ yards / designed runs")}
         ${tile("Stuffed %", PP(O.stuffPct), "stuffPct", PP(L.stuffPct), "Designed runs gaining 0 or less / designed runs (lower is better)")}
       </div></div>
-      <div class="an-dlinks"><a href="#/team/${encodeURIComponent(r.team)}${q ? "?" + q : ""}">Team page →</a><a href="#/team/${encodeURIComponent(r.team)}/defense${q ? "?" + q : ""}">Defense page →</a><a href="#/grid${q ? "?" + q : ""}">Grid →</a><a href="../#/team/${encodeURIComponent(r.team)}" target="_blank" rel="noopener">Depth chart ↗</a></div>
+      <div class="an-dlinks"><a href="#/team/${encodeURIComponent(r.team)}${q ? "?" + q : ""}">Team page →</a><a href="#/team/${encodeURIComponent(r.team)}/defense${q ? "?" + q : ""}">Defense page →</a><a href="#/grid${q ? "?" + q : ""}">Grid →</a><a href="../#/team/${encodeURIComponent(r.team)}">Depth chart →</a></div>
     </div></div>`;
 }
 
 export const offAnchor = { id: null, top: null };
 
-// PURE (no DOM): the table's markup. view: { ref, teams, windowName, lgZones, players, sort, dir }.
+// PURE (no DOM): the table's markup. view: { ref, teams, windowName, lgZones, players, sort, dir, hl }. `hl`
+// (D208, the Rankings page's hl= query key) is a club abbr whose row gets the "is-hl" class (styled in
+// analytics.css) so a Grid cell or a club tile's Rankings link can point straight at one club's row.
 export function offTableHtml(rows, st, query, view) {
-  const { ref, sort, dir } = view;
+  const { ref, sort, dir, hl } = view;
   const list = sortTeamRows(rows, "off", sort, dir);
   const q = query || "", nCols = 3 + OFF_COLS.length + 1;
   const th = (k, h, t, cls = "") => `<th class="${cls}${sort === k ? " sorted " + dir : ""}" data-sort="${k}" title="${esc(t)}">${h}</th>`;
@@ -137,9 +139,9 @@ export function offTableHtml(rows, st, query, view) {
           bar = `<i class="an-bar" style="width:${Math.min(100, (v / c.bar) * 100).toFixed(1)}%"></i>`;
         }
       }
-      return `<td class="num g-${c.grp}${c.gs ? " gs" : ""}${t ? " t-" + t : ""}${bar ? " has-bar" : ""}${c.signed ? " c-signed" : ""}">${bar}<span>${c.f(v)}</span></td>`;
+      return `<td class="num g-${c.grp}${c.gs ? " gs" : ""}${t ? " t-" + t + (SOFT_KEYS.includes(c.k) ? " t-soft" : "") : ""}${bar ? " has-bar" : ""}${c.signed ? " c-signed" : ""}">${bar}<span>${c.f(v)}</span></td>`;
     }).join("");
-    return `<tr class="an-row${open ? " open" : ""}" data-id="${esc(r.team)}" tabindex="0" aria-expanded="${open}">
+    return `<tr class="an-row${open ? " open" : ""}${r.team === hl ? " is-hl" : ""}" data-id="${esc(r.team)}" tabindex="0" aria-expanded="${open}">
       <td class="c-rank">${i + 1}</td>
       <td class="c-name">${teamPill(r.team, view.teams, q)}<span class="an-def-name">${esc(view.teams?.get(r.team)?.nickname || view.teams?.get(r.team)?.name || r.team)}</span></td>
       <td class="num">${r.g}</td>${cells}<td class="c-spark">${offSpark(r.series.off)}</td></tr>`
@@ -147,19 +149,35 @@ export function offTableHtml(rows, st, query, view) {
   }).join("");
   return `<div class="an-tbar">
       <span class="an-count">${list.length} offense${list.length === 1 ? "" : "s"}</span>
-      <span class="an-legend" title="Each value against every club's in this window: elite at the clubs' 90th percentile or better, then the 70th, 40th and 15th; low below. Higher is better for EPA, success, completion %, explosive plays, YPC, rushing yards and yards before contact; lower is better for sack %, pressure % and stuffed %. Plays/g, pass %, aDOT and PA % are not coloured.">
+      <span class="an-legend" title="Each value against every club's in this window: elite at the clubs' 90th percentile or better, then the 70th, 40th and 15th; low below. Higher is better for EPA, success, completion %, explosive plays, YPC, rushing yards and yards before contact; lower is better for sack %, pressure % and stuffed %. Plays/g is coloured muted (a lean, not a verdict); pass %, aDOT and PA % are not coloured.">
         ${TIER_NAMES.map((t) => `<i class="t-${t}"></i>`).join("")}<span>elite → low among the clubs</span></span>
       <span class="an-hint">Click a row to open the offense</span>
     </div>
     <div class="an-tscroll"><table class="an-table an-def-table"><thead>${groupRow}${head}</thead><tbody>${body || `<tr><td colspan="${nCols}" class="an-empty">No games in this window.</td></tr>`}</tbody></table></div>`;
 }
 
-export async function renderOffense(ctx, query) {
+// PURE: the #/offense address for state n, `hl` (D208's highlighted club, or "") carried along - fix round: every
+// OTHER call this page's go() used to make (a sort, a row open, a filter change) wrote toQuery(n) alone, which has
+// no notion of hl, so the first click after arriving from a Grid cell or a Rankings link dropped the highlight. go()
+// is DOM-bound (it sets location.hash), so the address-building line lives here where a test can reach it directly.
+export function offHref(n, hl) {
+  const params = new URLSearchParams(toQuery(n));
+  if (hl) params.set("hl", hl);
+  const q = params.toString();
+  return `#/offense${q ? "?" + q : ""}`;
+}
+
+// `opts.hl` (D208): the club abbr the Rankings page wants highlighted on this side, passed through to
+// offTableHtml's view.hl. Nothing else calls renderOffense with a second table argument (main.js's own /offense
+// route is now an alias, views/rankings.js is the only caller), so this stays a plain optional param rather than
+// something read off the query here too.
+export async function renderOffense(ctx, query, opts = {}) {
   const { root, isCurrent } = ctx;
+  const { hl = "" } = opts;
   const st = fromQuery(query);
   const { sort, dir } = offSort(query, st);
   document.title = "Offense · NFL Analytics";
-  const go = (n) => { const q = toQuery(n); location.hash = `#/offense${q ? "?" + q : ""}`; };
+  const go = (n) => { location.hash = offHref(n, hl); };
   if (!root.querySelector(".an-off")) root.innerHTML = `<div class="an-msg">Loading offenses…</div>`;
   let data, teams;
   try {
@@ -185,7 +203,7 @@ export async function renderOffense(ctx, query) {
   const span = agg.weeks.length ? (agg.weeks.length === 1 ? weekLabel(agg.weeks[0], st.season) : `${weekLabel(agg.weeks[0], st.season)} to ${weekLabel(agg.weeks[agg.weeks.length - 1], st.season)}`) : "no games";
   root.innerHTML = `<section class="an-def an-pl an-off">
     <div class="an-head">
-      <h1>Offense</h1>
+      <h1>Rankings</h1>
       <div class="an-sub">${esc(seasonLabel(st))} · ${esc(span)}${st.window === "last3" ? " (each club's last 3 games)" : ""} · league reference: ${esc(ref.text)}${pnote ? " · " + esc(pnote) : ""}</div>
       ${data.missing.length ? `<div class="an-warn">${esc(data.missing.join(", "))} files are not built yet.</div>` : ""}
     </div>
@@ -195,7 +213,7 @@ export async function renderOffense(ctx, query) {
   </section>`;
   renderFilterBar(root.querySelector(".an-filters"), st, { keys: data.keys, teams: [] }, go);
   const el = root.querySelector(".an-tablewrap");
-  el.innerHTML = offTableHtml(agg.rows, st, qs, { ref, teams, windowName: wn, lgZones: agg.lgZones, players: data.players, sort, dir });
+  el.innerHTML = offTableHtml(agg.rows, st, qs, { ref, teams, windowName: wn, lgZones: agg.lgZones, players: data.players, sort, dir, hl });
   el.querySelectorAll("th[data-sort]").forEach((h) => h.addEventListener("click", () => {
     const k = h.dataset.sort === "rank" ? "epaPlay" : h.dataset.sort;
     const d = sort === k ? (dir === "desc" ? "asc" : "desc") : bestDir(k);
