@@ -7,7 +7,7 @@
 import { backLink } from "../router.js";
 import { fromQuery, toQuery, seasonsOf, weekLabel } from "../filters.js";
 import { loadFor, loadTeams, loadStatusFeed, loadClubCards, displayName } from "../data.js";
-import { aggregateTeams, teamReference, teamTier, teamRank, teamZones, teamTargets, teamCarries, OFF_TIER, DEF_TIER, SOFT_KEYS } from "../agg_team.js";
+import { aggregateTeams, teamReference, teamTier, teamRank, teamZones, teamTargets, teamCarries, OFF_TIER, DEF_TIER, SOFT_KEYS, RANK_LOW_FIRST } from "../agg_team.js";
 import { gridRows, GRID_CATEGORIES, displayed } from "../agg_grid.js";
 import { absences, isMissing } from "../agg_absence.js";
 import { renderFilterBar } from "../filterbar.js";
@@ -18,6 +18,9 @@ import { lineBlock } from "./kit.js";
 import { RZ_I5_FLOOR } from "../agg_player.js";
 
 const P = (v, d = 1) => (isNum(v) ? pct(v, d) + "%" : NA);
+// A missing figure on a kit.js lineBlock tile. lineBlock escapes every value, so the NA placeholder (HTML markup, for
+// the raw-HTML tiles and rows) would print as text there; these tiles take a plain dash instead.
+const DASH = "–";
 const BAND = (pos) => (pos === "RB" || pos === "FB" ? "BACKFIELD" : pos);
 export const TEAM_ZONE_MODES = QB_ZONE_MODES.filter((m) => ["att", "cmpPct", "ydsAtt", "epaAtt"].includes(m.k));
 const ord = (n) => (n === 1 ? "1st" : n === 2 ? "2nd" : n === 3 ? "3rd" : n === 4 ? "4th" : "");
@@ -48,11 +51,15 @@ const OLINE_RUN_PROXY = "Stuffed % and yards before contact: proxy for the line 
 // lists (read-only) rather than importing them: both those files already import from this one (teamPageState and
 // friends), so importing them back here would risk a module cycle - the same reason OLINE_PASS_PROXY/OLINE_RUN_PROXY
 // above are copied rather than imported from views/grid.js. Keep these two sets in step with OFF_COLS/DEF_COLS by hand.
-export const RANKINGS_OFF_KEYS = new Set(["epaPlay", "succPct", "explPct", "playsG", "passRate", "epaDb", "cmpPct", "adot", "sackPct", "pressPct", "paPct", "proe", "proeNeutral", "epaCar", "ypc", "rushYdsG", "stuffPct", "ybcCar", "ptsDrive", "rzTdPct", "thirdPct"]);
+export const RANKINGS_OFF_KEYS = new Set(["epaPlay", "succPct", "explPct", "playsG", "passRate", "epaDb", "cmpPct", "adot", "sackPct", "pressPct", "paPct", "proe", "proeNeutral", "epaCar", "ypc", "rushYdsG", "stuffPct", "ybcCar", "ptsDrive", "rzTdPct", "thirdPct", "neutralSecs", "noHuddlePct", "shotgunPct", "motionPct"]);
 export const RANKINGS_DEF_KEYS = new Set(["epaPlay", "succPct", "explPct", "playsG", "epaDb", "cmpPct", "adot", "sackPct", "pressPct", "pressuresG", "blitzPct", "epaCar", "ypc"]);
 // The direction that puts the best club first for a key (OFF_TIER/DEF_TIER's -1 = lower is better = ascending;
 // everything else, including a neutral key, descending) - the offense/defense tables' own bestDir rule.
-const rankingsBestDir = (side, k) => ((side === "def" ? DEF_TIER : OFF_TIER)[k] === -1 ? "asc" : "desc");
+// An untiered key in RANK_LOW_FIRST (seconds per play: the fastest first) is ascending too.
+const rankingsBestDir = (side, k) => {
+  const d = (side === "def" ? DEF_TIER : OFF_TIER)[k];
+  return d === -1 || (!d && RANK_LOW_FIRST.has(k)) ? "asc" : "desc";
+};
 // The href for one tile's figure: side ("off"/"def"), the key, the club's abbreviation, and the page's current
 // filter query (carried the way every other link on this page already carries it).
 export function rankingsHref(side, k, abbr, qs) {
@@ -117,19 +124,53 @@ export function playCallingHtml({ O = {}, L = {}, rows = [], abbr = "", qs = "",
   const plays = (n) => `${n ?? 0} play${n === 1 ? "" : "s"}`;
   const tiles = PROE_TILES.map(([label, k, where]) => {
     const rk = rankOf(k), n = O[k + "N"] ?? 0;
-    return { label, value: pts(O[k]) ?? NA, lg: pts(L[k]), rank: rk ? ordinal(rk.rank) : null, rankOf: rk ? String(rk.of) : null,
+    return { label, value: pts(O[k]) ?? DASH, lg: pts(L[k]), rank: rk ? ordinal(rk.rank) : null, rankOf: rk ? String(rk.of) : null,
       sub: plays(n), href: href(k),
       title: `Pass rate over expectation ${where}: the dropback rate minus the expected pass rate (nflverse xpass) on the same plays, in percentage points, over ${plays(n)} with an expectation. Style, not quality: not coloured. 1st = most pass-happy over expectation.` };
   });
   const nrk = rankOf("neutralPassRate");
-  tiles.push({ label: "Neutral pass rate", value: P(O.neutralPassRate), lg: isNum(L.neutralPassRate) ? P(L.neutralPassRate) : null,
+  tiles.push({ label: "Neutral pass rate", value: isNum(O.neutralPassRate) ? P(O.neutralPassRate) : DASH, lg: isNum(L.neutralPassRate) ? P(L.neutralPassRate) : null,
     rank: nrk ? ordinal(nrk.rank) : null, rankOf: nrk ? String(nrk.of) : null, sub: plays(O.neutralPlays), href: href("neutralPassRate"),
     title: `Dropbacks / plays in neutral script (score within 7, quarters 1-3), over ${plays(O.neutralPlays)}. Style, not quality: not coloured. 1st = passes most.` });
+  tiles.push(...paceShapeTiles({ O, L, rankOf, href, plays, side }));
+  // an-pc: analytics.css sets the twelve tiles as two even rows of six (pass rate, then pace and shape) on a desktop
+  // window instead of letting them wrap ten and two.
   return lineBlock({
     title: "Play calling",
     tiles,
-    foot: esc("Expected pass rate: nflverse xpass, the play-by-play model's chance an average offense drops back given the down, distance, field position, score and clock. A dropback is a pass attempt, sack or scramble. Penalty no-plays are not in the rows and the model is a fixed baseline, so the average club sits at the league figure shown, not at zero. Pass rate over expectation is style, not quality, so it is not coloured."),
-  });
+    foot: esc("Expected pass rate: nflverse xpass, the play-by-play model's chance an average offense drops back given the down, distance, field position, score and clock. A dropback is a pass attempt, sack or scramble. Penalty no-plays are not in the rows and the model is a fixed baseline, so the average club sits at the league figure shown, not at zero. Pass rate over expectation is style, not quality, so it is not coloured. Pace and shape (seconds per play, no-huddle, shotgun with pistol counted in, motion from FTN charting, personnel from nflverse) are style too, not coloured."),
+  }).replace('<div class="an-card an-line">', '<div class="an-card an-line an-pc">');
+}
+
+// D219 figures 2 and 3: the Play calling block's pace and shape tiles, after the PROE tiles. Style, not quality: none
+// is coloured; rank 1st = the most (for seconds per play, the fastest: RANK_LOW_FIRST). A window with no such column
+// (a season compiled before D219) reads "–"; the personnel tile reads "–" with "published after the season" when the
+// window's rows are D219 rows (they carry the shotgun flag) but no personnel, which nflverse publishes after a season.
+function paceShapeTiles({ O, L, rankOf, href, plays, side }) {
+  const faced = side === "def" ? " faced" : "";
+  const f1 = (v) => (+v).toFixed(1), pc = (v) => `${(v * 100).toFixed(1)}%`, sec = (v) => `${(+v).toFixed(1)} s`;
+  const NONE = "not in this window's files";
+  const of = (x, n, what) => (n > 0 ? `${x ?? 0} of ${n} ${what}` : NONE);
+  const tile = (label, k, fmt, sub, title) => {
+    const rk = rankOf(k);
+    return { label, value: isNum(O[k]) ? fmt(O[k]) : DASH, lg: isNum(L[k]) ? fmt(L[k]) : null,
+      rank: rk ? ordinal(rk.rank) : null, rankOf: rk ? String(rk.of) : null, sub, href: href(k), title };
+  };
+  const persSub = O.persN > 0 ? of(O.pers11, O.persN, "plays") : O.shotgunN > 0 ? "published after the season" : NONE;
+  return [
+    tile("Neutral sec/play", "neutralSecs", sec, O.neutralSecsN > 0 ? plays(O.neutralSecsN) : NONE,
+      `Seconds per play${faced} in neutral script (score within 7, quarters 1-3): the mean time from a snap to the offense's next snap in the same drive, over ${plays(O.neutralSecsN)} with a next snap (a drive's last snap and a snap before a quarter break have none). Pace, not quality: not coloured. Ranked fastest first: 1st = the fewest seconds.`),
+    tile("Neutral plays/g", "neutralPlaysG", f1, isNum(O.neutralPlaysG) ? `${plays(O.neutralPlays)} in ${O.g ?? 0} game${O.g === 1 ? "" : "s"}` : NONE,
+      `Neutral-script plays per game${faced} (score within 7, quarters 1-3): pass attempts, sacks, scrambles and designed runs. Volume, not quality: not coloured. 1st = the most.`),
+    tile("No-huddle %", "noHuddlePct", pc, of(O.noHuddle, O.noHuddleN, "plays"),
+      `No-huddle plays${faced} / plays, the play-by-play's no-huddle flag (FTN's charting agrees on every play so far). Style, not quality: not coloured. 1st = the most.`),
+    tile("Shotgun %", "shotgunPct", pc, of(O.shotgun, O.shotgunN, "plays"),
+      `Shotgun plays${faced} / plays, the play-by-play's shotgun flag with pistol counted as shotgun. FTN's charting disagrees on a small share of plays; the audit logs them. Style, not quality: not coloured. 1st = the most.`),
+    tile("Motion %", "motionPct", pc, of(O.motion, O.motionN, "charted"),
+      `Plays${faced} with pre-snap motion / plays FTN charted (every play type). Style, not quality: not coloured. 1st = the most.`),
+    tile("11 personnel %", "pers11Pct", pc, persSub,
+      `Plays${faced} with one back, one tight end and three receivers (11 personnel) / plays with a personnel value, nflverse's offense personnel. nflverse publishes personnel after the season, so the current season reads a dash. Style, not quality: not coloured. 1st = the most.`),
+  ];
 }
 
 // D219 figure 7: the club page's "Drives" block (kit.js lineBlock, no headline chips), right after Play calling.
@@ -139,10 +180,9 @@ export function playCallingHtml({ O = {}, L = {}, rows = [], abbr = "", qs = "",
 // before D219) reads "–" with a sub line saying so, never NaN. PURE, the playCallingHtml signature; side "def" gives
 // what the defense faced (built, not drawn yet). Values are plain text: kit.js escapes them, so never the NA markup.
 export function drivesHtml({ O = {}, L = {}, rows = [], abbr = "", qs = "", side = "off", cuts = null } = {}) {
-  const DASH = "–";
   const rankOf = (k) => (isNum(O[k]) ? teamRank(rows, side, k, abbr) : null);
   const href = (k) => (side === "off" && RANKINGS_OFF_KEYS.has(k) ? rankingsHref("off", k, abbr, qs) : null);
-  const n = (x, one, many) => `${x ?? 0} ${x === 1 ? one : many}`;
+  const n =(x, one, many) => `${x ?? 0} ${x === 1 ? one : many}`;
   const noDrives = !(O.driveG > 0), noThird = !(O.third > 0);
   const faced = side === "def" ? " faced" : "";
   const tile = (label, k, fmt, sub, title) => {
@@ -325,7 +365,7 @@ export async function renderTeam(ctx, params, query) {
     // chips' "12th of 32" wording (no "clubs") rather than the tile's own "22nd of 32 clubs".
     // D206: linked to Rankings when the key has a column there, else to the Grid's own category column - never a
     // dead end (kit.js's lineBlock wraps a tile in <a> when href is set).
-    return { label, value: isNum(v) ? fmt(v) : NA, lg: isNum(lgv) ? fmt(lgv) : null,
+    return { label, value: isNum(v) ? fmt(v) : DASH, lg: isNum(lgv) ? fmt(lgv) : null,
       rank: rk ? ordinal(rk.rank) : null, rankOf: rk ? String(rk.of) : null, sub, tier: tr,
       href: RANKINGS_OFF_KEYS.has(k) ? rankingsHref("off", k, abbr, qs) : OL_GRID_LINK[k] ? gridTileHref(OL_GRID_LINK[k], qs) : null };
   };

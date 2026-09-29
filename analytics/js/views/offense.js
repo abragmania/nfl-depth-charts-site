@@ -9,7 +9,7 @@
 // so a rule can address this page alone.
 import { fromQuery, toQuery, seasonsOf, weekLabel } from "../filters.js";
 import { loadFor, loadTeams } from "../data.js";
-import { aggregateTeams, teamReference, teamTier, teamZones, sortTeamRows, OFF_TIER, SOFT_KEYS } from "../agg_team.js";
+import { aggregateTeams, teamReference, teamTier, teamZones, sortTeamRows, OFF_TIER, SOFT_KEYS, RANK_LOW_FIRST } from "../agg_team.js";
 import { TIER_NAMES } from "../agg.js";
 import { renderFilterBar } from "../filterbar.js";
 import { esc, NA, isNum, pct, fix, signed, teamPill, qbStrips, pfrNote, seasonLabel } from "./qb.js";
@@ -42,14 +42,20 @@ export const OFF_COLS = [
   { k: "ybcCar", h: "YBC/car", t: "PFR: yards before contact per carry (higher is better)", f: (v) => fix(v, 1), grp: "rd" },
   // D219 figure 7: a Drives group on the end (nothing before it moves), tiered higher-is-better (OFF_TIER).
   { k: "ptsDrive", h: "Pts/dr", t: "Points per drive: the points the offense actually scored on its own snaps (a touchdown 6 plus the try, a field goal 3) / its drives, kneel-only drives left out (higher is better)", f: (v) => fix(v, 2), grp: "dr" },
-  { k: "rzTdPct", h: "RZ TD %", t: "Red-zone touchdown rate: drives that reached the opponent's 20 and ended in a touchdown / drives that reached it (a field goal is a trip, not a touchdown; higher is better)", f: (v) => P(v, 0), grp: "dr" },
+  { k: "rzTdPct", h: "RZ TD %", t: "Red-zone touchdown rate: drives that reached the opponent's 20 and ended in a touchdown / drives that reached it (a field goal is a trip, not a touchdown; higher is better)", f: (v) => P(v, 1), grp: "dr" },
   { k: "thirdPct", h: "3rd %", t: "Third-down conversion: third-down plays that gained a first down or scored / third-down plays, pass-interference plays left out; a first down a foul gave counts; reads a little under NFL.com's because penalty no-plays are not in the rows (higher is better)", f: (v) => P(v, 1), grp: "dr" },
+  // D219 figures 2 and 3: a Pace group on the end (nothing before it moves); style, not quality, so uncoloured (not in
+  // OFF_TIER). Seconds per play sorts fastest first (RANK_LOW_FIRST), the rest most first.
+  { k: "neutralSecs", h: "Sec/play", t: "Seconds per play in neutral script (score within 7, quarters 1-3): the mean time from a snap to the offense's next snap in the same drive. Pace, not quality: not coloured. Fastest first.", f: (v) => fix(v, 1), grp: "pc" },
+  { k: "noHuddlePct", h: "No-huddle %", t: "No-huddle plays / plays, the play-by-play's flag. Style, not quality: not coloured.", f: (v) => P(v, 1), grp: "pc" },
+  { k: "shotgunPct", h: "Shotgun %", t: "Shotgun plays / plays, the play-by-play's flag with pistol counted as shotgun (FTN's charting disagrees on a small share; the audit logs them). Style, not quality: not coloured.", f: (v) => P(v, 1), grp: "pc" },
+  { k: "motionPct", h: "Motion %", t: "FTN: plays with pre-snap motion / plays charted. Style, not quality: not coloured.", f: (v) => P(v, 1), grp: "pc" },
 ];
-const GROUPS = [["ov", "Overall"], ["pd", "Passing"], ["rd", "Rushing"], ["dr", "Drives"]];
+const GROUPS = [["ov", "Overall"], ["pd", "Passing"], ["rd", "Rushing"], ["dr", "Drives"], ["pc", "Pace"]];
 OFF_COLS.forEach((c, i) => { c.gs = i === 0 || OFF_COLS[i - 1].grp !== c.grp; });
 const SORTABLE = new Set([...OFF_COLS.map((c) => c.k), "team", "g"]);
 // First click on a column sorts best-first: descending where higher is better (offense's default direction).
-export const bestDir = (k) => (OFF_TIER[k] === -1 || k === "team" ? "asc" : "desc");
+export const bestDir = (k) => (OFF_TIER[k] === -1 || k === "team" || (!OFF_TIER[k] && RANK_LOW_FIRST.has(k)) ? "asc" : "desc");
 export const offSort = (query, st) => {
   const has = new URLSearchParams(String(query || "").replace(/^\?/, "")).has("sort");
   return has && SORTABLE.has(st.sort) ? { sort: st.sort, dir: st.dir } : { sort: "epaPlay", dir: "desc" };
@@ -156,7 +162,7 @@ export function offTableHtml(rows, st, query, view) {
   }).join("");
   return `<div class="an-tbar">
       <span class="an-count">${list.length} offense${list.length === 1 ? "" : "s"}</span>
-      <span class="an-legend" title="Each value against every club's in this window: elite at the clubs' 90th percentile or better, then the 70th, 40th and 15th; low below. Higher is better for EPA, success, completion %, explosive plays, YPC, rushing yards, yards before contact, points per drive, red-zone TD % and third-down %; lower is better for sack %, pressure % and stuffed %. Plays/g is coloured muted (a lean, not a verdict); pass %, aDOT, PA % and pass rate over expectation (PROE, Neutral PROE) are not coloured.">
+      <span class="an-legend" title="Each value against every club's in this window: elite at the clubs' 90th percentile or better, then the 70th, 40th and 15th; low below. Higher is better for EPA, success, completion %, explosive plays, YPC, rushing yards, yards before contact, points per drive, red-zone TD % and third-down %; lower is better for sack %, pressure % and stuffed %. Plays/g is coloured muted (a lean, not a verdict); pass %, aDOT, PA % and pass rate over expectation (PROE, Neutral PROE) and the Pace columns (seconds per play, no-huddle, shotgun, motion) are not coloured.">
         ${TIER_NAMES.map((t) => `<i class="t-${t}"></i>`).join("")}<span>elite → low among the clubs</span></span>
       <span class="an-hint">Click a row to open the offense</span>
     </div>
@@ -216,7 +222,7 @@ export async function renderOffense(ctx, query, opts = {}) {
     </div>
     <div class="an-filters"></div>
     <div class="an-tablewrap"></div>
-    <p class="an-foot">Plays, EPA, success, sacks, completions, aDOT, explosive plays and the zone field: nflverse play-by-play (defensive pass interference no-plays are left out). Play action: FTN charting. PROE: the expected pass rate is nflverse xpass (penalty no-plays are not in the rows). Drives: nflverse play-by-play drives, the points the offense scored on its own snaps; 3rd % reads a little under NFL.com's (penalty no-plays are not in the rows). Pressure %: PFR advanced stats, the club's quarterbacks' pressured dropbacks over their dropbacks (about a week behind). Stuffed % and yards before contact: PFR advanced rushing${agg.unmapped.length ? ` (${agg.unmapped.length} row${agg.unmapped.length === 1 ? "" : "s"} could not be placed on a club)` : ""}. Zone references pool every attempt in the window.</p>
+    <p class="an-foot">Plays, EPA, success, sacks, completions, aDOT, explosive plays and the zone field: nflverse play-by-play (defensive pass interference no-plays are left out). Play action: FTN charting. PROE: the expected pass rate is nflverse xpass (penalty no-plays are not in the rows). Drives: nflverse play-by-play drives, the points the offense scored on its own snaps; 3rd % reads a little under NFL.com's (penalty no-plays are not in the rows). Pace: seconds per play in neutral script, no-huddle and shotgun (pistol counted in) from nflverse play-by-play, motion from FTN charting. Pressure %: PFR advanced stats, the club's quarterbacks' pressured dropbacks over their dropbacks (about a week behind). Stuffed % and yards before contact: PFR advanced rushing${agg.unmapped.length ? ` (${agg.unmapped.length} row${agg.unmapped.length === 1 ? "" : "s"} could not be placed on a club)` : ""}. Zone references pool every attempt in the window.</p>
   </section>`;
   renderFilterBar(root.querySelector(".an-filters"), st, { keys: data.keys, teams: [] }, go);
   const el = root.querySelector(".an-tablewrap");

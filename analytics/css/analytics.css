@@ -486,7 +486,7 @@ td[class*=" t-"] > span { color:var(--t); font-weight:700; }
 .an-tm-covwrap { display:flex; flex-direction:column; gap:8px; width:470px; }
 .an-tm-covtiles { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:6px; }
 .an-tm-covwrap .an-pl-plays { width:auto; }
-.an-tm-distc { flex:0 1 560px; min-width:420px; }
+.an-tm-distc { flex:0 1 610px; min-width:420px; } /* 👁 D219: the row's columns need 578px plus the card's padding; 560 clipped the sub column */
 /* Distribution bars: one line per man, name + position, a bar of his share in his tier colour, the figure, then the detail. */
 .an-tm-dist { display:flex; flex-direction:column; gap:5px; }
 .an-tm-drow { display:grid; grid-template-columns:150px 34px minmax(120px, 1fr) 52px 190px; align-items:center; gap:8px; font-size:12.5px; }
@@ -510,6 +510,9 @@ td[class*=" t-"] > span { color:var(--t); font-weight:700; }
 @media (max-width:1760px) { .an-card.an-line.an-tm-gridrow { max-width:1100px; } } /* after the base rule, so it wins at the narrower band */
 /* D219: a line block with no headline chips (the club page's Play calling block) drops the empty chip row and its gap. */
 .an-line-head:empty { display:none; }
+/* D219 increment E: the Play calling block's twelve tiles as two even rows of six (pass rate, then pace and shape) on a
+   desktop window, not ten and two; narrower windows keep analytics_recut.css's flex wrap. */
+@media (min-width:900px) { .an-card.an-line.an-pc .an-line-tiles { display:grid; grid-template-columns:repeat(6, minmax(134px, auto)); } }
 
 /* ---- defense leaderboard (#/defense) ---- */
 .an-def-name { color:var(--ink); font-weight:700; }
