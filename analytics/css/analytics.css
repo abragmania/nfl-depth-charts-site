@@ -513,6 +513,10 @@ td[class*=" t-"] > span { color:var(--t); font-weight:700; }
 /* D219 increment E: the Play calling block's twelve tiles as two even rows of six (pass rate, then pace and shape) on a
    desktop window, not ten and two; narrower windows keep analytics_recut.css's flex wrap. */
 @media (min-width:900px) { .an-card.an-line.an-pc .an-line-tiles { display:grid; grid-template-columns:repeat(6, minmax(134px, auto)); } }
+/* D219 increment E fix: the Rankings offense table with More open (Drives and Pace showing) on a window it does not fit:
+   table.js fitOpen marks the frame .an-over and it scrolls sideways instead of clipping (the RB table's rule). */
+.an-off .an-tscroll.an-over { overflow-x:auto; }
+.an-off .an-tscroll.an-over .an-table thead th { position:static; }
 
 /* ---- defense leaderboard (#/defense) ---- */
 .an-def-name { color:var(--ink); font-weight:700; }

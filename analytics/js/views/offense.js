@@ -14,6 +14,7 @@ import { TIER_NAMES } from "../agg.js";
 import { renderFilterBar } from "../filterbar.js";
 import { esc, NA, isNum, pct, fix, signed, teamPill, qbStrips, pfrNote, seasonLabel } from "./qb.js";
 import { windowName } from "./qbplayer.js";
+import { moreFrom, visibleCols, allOpen, toggleMore, moreCell, fitOpen, wireMore } from "../table.js";
 import { teamPageState, clubZoneField, clubZoneLegend, zonePlaysHtml, TEAM_ZONE_MODES } from "./team.js";
 
 const P = (v, d = 1) => (isNum(v) ? pct(v, d) : NA);
@@ -53,6 +54,13 @@ export const OFF_COLS = [
 ];
 const GROUPS = [["ov", "Overall"], ["pd", "Passing"], ["rd", "Rushing"], ["dr", "Drives"], ["pc", "Pace"]];
 OFF_COLS.forEach((c, i) => { c.gs = i === 0 || OFF_COLS[i - 1].grp !== c.grp; });
+// D219 increment E fix: the Drives and Pace groups are ANCILLARY, hidden behind the Running backs table's More ▸ /
+// ◂ Less toggle (table.js openGroups/visibleCols/toggleMore, keyed on a truthy `anc`), so the default table fits a
+// 1536 window with no sideways scroll. A sort on one of their columns (a club tile's Rankings link) opens that group;
+// more=1 opens both. Their cells keep their own tier colours (unlike the RB table's ancillary columns).
+const ANC_GROUPS = new Set(["dr", "pc"]);
+OFF_COLS.forEach((c) => { c.anc = ANC_GROUPS.has(c.grp) ? c.grp : ""; });
+const DEFAULT_SORT = "epaPlay";
 const SORTABLE = new Set([...OFF_COLS.map((c) => c.k), "team", "g"]);
 // First click on a column sorts best-first: descending where higher is better (offense's default direction).
 export const bestDir = (k) => (OFF_TIER[k] === -1 || k === "team" || (!OFF_TIER[k] && RANK_LOW_FIRST.has(k)) ? "asc" : "desc");
@@ -131,13 +139,16 @@ export const offAnchor = { id: null, top: null };
 export function offTableHtml(rows, st, query, view) {
   const { ref, sort, dir, hl } = view;
   const list = sortTeamRows(rows, "off", sort, dir);
-  const q = query || "", nCols = 3 + OFF_COLS.length + 1;
+  // The More toggle (table.js): Drives and Pace show only with more=1 (st.more) or when the sort is one of theirs.
+  const mst = { ...st, sort }, cols = visibleCols(OFF_COLS, mst, DEFAULT_SORT);
+  const q = query || "", nCols = 3 + cols.length + 1;
   const th = (k, h, t, cls = "") => `<th class="${cls}${sort === k ? " sorted " + dir : ""}" data-sort="${k}" title="${esc(t)}">${h}</th>`;
-  const groupRow = `<tr class="an-grp"><th colspan="3"></th>${GROUPS.map(([g, l]) => `<th colspan="${OFF_COLS.filter((c) => c.grp === g).length}" class="g-${g} gs">${l}</th>`).join("")}<th></th></tr>`;
-  const head = `<tr>${th("rank", "#", "Rank")}${th("team", "Offense", "Club", "c-name")}${th("g", "G", "Games in the window")}${OFF_COLS.map((c) => th(c.k, c.h, c.t, "g-" + c.grp + (c.gs ? " gs" : ""))).join("")}<th class="c-spark" title="EPA per play by week: green above zero (good), red below">EPA/play by week</th></tr>`;
+  // The toggle leads the group row over rank and club (moreCell spans two); a blank cell sits over G.
+  const groupRow = `<tr class="an-grp">${moreCell(allOpen(OFF_COLS, mst, DEFAULT_SORT))}<th></th>${GROUPS.map(([g, l]) => [g, l, cols.filter((c) => c.grp === g).length]).filter((x) => x[2] > 0).map(([g, l, n]) => `<th colspan="${n}" class="g-${g} gs">${l}</th>`).join("")}<th></th></tr>`;
+  const head = `<tr>${th("rank", "#", "Rank")}${th("team", "Offense", "Club", "c-name")}${th("g", "G", "Games in the window")}${cols.map((c) => th(c.k, c.h, c.t, "g-" + c.grp + (c.gs ? " gs" : ""))).join("")}<th class="c-spark" title="EPA per play by week: green above zero (good), red below">EPA/play by week</th></tr>`;
   const body = list.map((r, i) => {
     const open = st.open === r.team;
-    const cells = OFF_COLS.map((c) => {
+    const cells = cols.map((c) => {
       const v = r.off[c.k], t = teamTier("off", c.k, v, ref.cuts);
       let bar = "";
       if (c.bar && isNum(v)) {
@@ -176,6 +187,7 @@ export function offTableHtml(rows, st, query, view) {
 export function offHref(n, hl) {
   const params = new URLSearchParams(toQuery(n));
   if (hl) params.set("hl", hl);
+  if (n.more) params.set("more", "1");
   const q = params.toString();
   return `#/offense${q ? "?" + q : ""}`;
 }
@@ -188,6 +200,7 @@ export async function renderOffense(ctx, query, opts = {}) {
   const { root, isCurrent } = ctx;
   const { hl = "" } = opts;
   const st = fromQuery(query);
+  st.more = moreFrom(query);
   const { sort, dir } = offSort(query, st);
   document.title = "Offense · NFL Analytics";
   const go = (n) => { location.hash = offHref(n, hl); };
@@ -227,6 +240,9 @@ export async function renderOffense(ctx, query, opts = {}) {
   renderFilterBar(root.querySelector(".an-filters"), st, { keys: data.keys, teams: [] }, go);
   const el = root.querySelector(".an-tablewrap");
   el.innerHTML = offTableHtml(agg.rows, st, qs, { ref, teams, windowName: wn, lgZones: agg.lgZones, players: data.players, sort, dir, hl });
+  // More open on a narrow window: the frame scrolls sideways only when the table is wider than it (.an-over).
+  fitOpen(el);
+  wireMore(el, () => go(toggleMore(OFF_COLS, { ...st, sort, dir }, DEFAULT_SORT)));
   el.querySelectorAll("th[data-sort]").forEach((h) => h.addEventListener("click", () => {
     const k = h.dataset.sort === "rank" ? "epaPlay" : h.dataset.sort;
     const d = sort === k ? (dir === "desc" ? "asc" : "desc") : bestDir(k);
