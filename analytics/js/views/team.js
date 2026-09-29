@@ -47,7 +47,7 @@ const OLINE_RUN_PROXY = "Stuffed % and yards before contact: proxy for the line 
 // lists (read-only) rather than importing them: both those files already import from this one (teamPageState and
 // friends), so importing them back here would risk a module cycle - the same reason OLINE_PASS_PROXY/OLINE_RUN_PROXY
 // above are copied rather than imported from views/grid.js. Keep these two sets in step with OFF_COLS/DEF_COLS by hand.
-export const RANKINGS_OFF_KEYS = new Set(["epaPlay", "succPct", "explPct", "playsG", "passRate", "epaDb", "cmpPct", "adot", "sackPct", "pressPct", "paPct", "epaCar", "ypc", "rushYdsG", "stuffPct", "ybcCar"]);
+export const RANKINGS_OFF_KEYS = new Set(["epaPlay", "succPct", "explPct", "playsG", "passRate", "epaDb", "cmpPct", "adot", "sackPct", "pressPct", "paPct", "proe", "proeNeutral", "epaCar", "ypc", "rushYdsG", "stuffPct", "ybcCar"]);
 export const RANKINGS_DEF_KEYS = new Set(["epaPlay", "succPct", "explPct", "playsG", "epaDb", "cmpPct", "adot", "sackPct", "pressPct", "pressuresG", "blitzPct", "epaCar", "ypc"]);
 // The direction that puts the best club first for a key (OFF_TIER/DEF_TIER's -1 = lower is better = ascending;
 // everything else, including a neutral key, descending) - the offense/defense tables' own bestDir rule.
@@ -95,6 +95,40 @@ export function clubGridRowHtml(gridRow, side) {
     return `<div class="an-tm-gc" title="${esc(`${label}: ${c.note}`)}"><span class="an-tm-gc-label">${esc(label)}</span>${body}</div>`;
   }).join("");
   return `<div class="an-card an-line an-tm-gridrow"><div class="an-dh">Grid <span class="an-dsub">the same 0-100 ratings the Team grid shows for this club</span></div><div class="an-tm-gridcells">${cells}</div></div>`;
+}
+
+// D219 figure 1: the club page's "Play calling" block (kit.js lineBlock, no headline chips): pass rate over
+// expectation overall and in four situations, and the neutral-script pass rate. Style, not quality, so every tile is
+// uncoloured (none of these keys is in OFF_TIER); each carries the league mean and the club's rank (1st = the most
+// pass-happy). PURE: O = the club's side row, L = the league means for that side, rows = every club's rows (for the
+// rank), side "off" (the defense page may later pass "def": the same figures, what the defense faced).
+const PROE_TILES = [
+  ["PROE", "proe", "on every play"],
+  ["PROE early downs", "proeEarly", "on 1st and 2nd down"],
+  ["PROE neutral", "proeNeutral", "in neutral script (score within 7, quarters 1-3)"],
+  ["PROE red zone", "proeRz", "in the red zone (the opponent's 20 or closer)"],
+  ["PROE inside 5", "proeI5", "inside the opponent's 5"],
+];
+export function playCallingHtml({ O = {}, L = {}, rows = [], abbr = "", qs = "", side = "off" } = {}) {
+  const pts = (v) => (isNum(v) ? `${signed(v, 1)} pts` : null);
+  const rankOf = (k) => (isNum(O[k]) ? teamRank(rows, side, k, abbr) : null);
+  const href = (k) => (side === "off" && RANKINGS_OFF_KEYS.has(k) ? rankingsHref("off", k, abbr, qs) : null);
+  const plays = (n) => `${n ?? 0} play${n === 1 ? "" : "s"}`;
+  const tiles = PROE_TILES.map(([label, k, where]) => {
+    const rk = rankOf(k), n = O[k + "N"] ?? 0;
+    return { label, value: pts(O[k]) ?? NA, lg: pts(L[k]), rank: rk ? ordinal(rk.rank) : null, rankOf: rk ? String(rk.of) : null,
+      sub: `${plays(n)} with an expectation`, href: href(k),
+      title: `Pass rate over expectation ${where}: the dropback rate minus the expected pass rate (nflverse xpass) on the same plays, in percentage points, over ${plays(n)} with an expectation. Style, not quality: not coloured. 1st = most pass-happy over expectation.` };
+  });
+  const nrk = rankOf("neutralPassRate");
+  tiles.push({ label: "Neutral pass rate", value: P(O.neutralPassRate), lg: isNum(L.neutralPassRate) ? P(L.neutralPassRate) : null,
+    rank: nrk ? ordinal(nrk.rank) : null, rankOf: nrk ? String(nrk.of) : null, sub: plays(O.neutralPlays), href: href("neutralPassRate"),
+    title: `Dropbacks / plays in neutral script (score within 7, quarters 1-3), over ${plays(O.neutralPlays)}. Style, not quality: not coloured. 1st = passes most.` });
+  return lineBlock({
+    title: "Play calling",
+    tiles,
+    foot: esc("Expected pass rate: nflverse xpass, the play-by-play model's chance an average offense drops back given the down, distance, field position, score and clock. A dropback is a pass attempt, sack or scramble. Penalty no-plays are not in the rows. Pass rate over expectation is style, not quality, so it is not coloured."),
+  });
 }
 
 // qbZoneField speaks of one passer ("his", "every QB"); on a club's field the words become the club's and the league's.
@@ -221,7 +255,7 @@ export async function renderTeam(ctx, params, query) {
   };
   const tiles = [
     tile("Plays/g", fix(O.playsG, 1), "playsG", fix(L.playsG, 1), "Plays per game: pass attempts, sacks, scrambles and designed runs (no penalties, kneels or spikes)"),
-    tile("Pass rate", P(O.passRate), "passRate", P(L.passRate), "Dropbacks / plays (all situations: the ledger carries no score, so no neutral-situation rate)"),
+    tile("Pass rate", P(O.passRate), "passRate", P(L.passRate), "Dropbacks / plays, all situations (the neutral-script rate and pass rate over expectation are in Play calling below)"),
     tile("EPA/play", signed(O.epaPlay, 3), "epaPlay", signed(L.epaPlay, 3), "Expected points added per play"),
     tile("EPA/db", signed(O.epaDb, 3), "epaDb", signed(L.epaDb, 3), "EPA per dropback (sacks and scrambles included)"),
     tile("EPA/carry", signed(O.epaCar, 3), "epaCar", signed(L.epaCar, 3), "EPA per designed run"),
@@ -313,6 +347,7 @@ export async function renderTeam(ctx, params, query) {
     ${clubGridRowHtml(gridRow, "off")}
     <div data-lost>${lostHtml()}</div>
     <div class="an-pl-tiles an-tm-tiles">${tiles}</div>
+    ${playCallingHtml({ O, L, rows: win.rows, abbr, qs })}
     ${olineHtml}
     <div class="an-tm-row">
       <div class="an-card an-tm-weeks"><div class="an-dh">Week by week <span class="an-dsub">click a week to show it alone; click it again for the whole window</span></div><div class="an-pl-scroll">${weekly}</div></div>

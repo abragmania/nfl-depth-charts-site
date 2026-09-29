@@ -25,13 +25,16 @@ export const OFF_COLS = [
   { k: "succPct", h: "Succ %", t: "Share of plays that were successful (higher is better)", f: (v) => P(v, 1), grp: "ov" },
   { k: "explPct", h: "Expl %", t: "Explosive plays: runs of 10+ yards and completions of 20+ / plays (higher is better)", f: (v) => P(v, 1), grp: "ov" },
   { k: "playsG", h: "Plays/g", t: "Plays per game: pass attempts, sacks, scrambles and designed runs", f: (v) => fix(v, 1), grp: "ov" },
-  { k: "passRate", h: "Pass %", t: "Dropbacks / plays (all situations: the ledger carries no score, so no neutral-situation rate)", f: (v) => P(v, 1), grp: "ov" },
+  { k: "passRate", h: "Pass %", t: "Dropbacks / plays, all situations (the neutral-script figure is Neut PROE, under Passing)", f: (v) => P(v, 1), grp: "ov" },
   { k: "epaDb", h: "EPA/db", t: "EPA per dropback (sacks and scrambles included; higher is better)", f: (v) => signed(v, 3), grp: "pd" },
   { k: "cmpPct", h: "Cmp %", t: "Completion % (higher is better)", f: (v) => P(v, 1), grp: "pd" },
   { k: "adot", h: "aDOT", t: "Air yards per attempt", f: (v) => fix(v, 1), grp: "pd" },
   { k: "sackPct", h: "Sack %", t: "Sacks / dropbacks (lower is better)", f: (v) => P(v, 1), grp: "pd" },
   { k: "pressPct", h: "Press %", t: "PFR: the club's quarterbacks' pressured dropbacks / their dropbacks, about a week behind (lower is better)", f: (v) => P(v, 1), grp: "pd" },
   { k: "paPct", h: "PA %", t: "FTN: play-action dropbacks / dropbacks charted", f: (v) => P(v, 0), grp: "pd" },
+  // D219 figure 1: pass rate over expectation, in percentage points; style, not quality, so uncoloured (not in OFF_TIER).
+  { k: "proe", h: "PROE", t: "Pass rate over expectation: the dropback rate minus the expected pass rate (nflverse xpass) on the same plays, in percentage points, over the plays with an expectation. Style, not quality: not coloured. 1st = most pass-happy over expectation.", f: (v) => signed(v, 1), grp: "pd" },
+  { k: "proeNeutral", h: "Neut PROE", t: "Pass rate over expectation in neutral script (score within 7, quarters 1-3): the dropback rate minus the expected pass rate (nflverse xpass) on the same plays, in percentage points. Style, not quality: not coloured. 1st = most pass-happy over expectation.", f: (v) => signed(v, 1), grp: "pd" },
   { k: "epaCar", h: "EPA/car", t: "EPA per designed run (higher is better)", f: (v) => signed(v, 3), grp: "rd" },
   { k: "ypc", h: "YPC", t: "Yards per designed run (higher is better)", f: (v) => fix(v, 1), grp: "rd" },
   { k: "rushYdsG", h: "Yds/g", t: "Rushing yards per game (designed runs)", f: (v) => fix(v, 1), grp: "rd" },
@@ -149,7 +152,7 @@ export function offTableHtml(rows, st, query, view) {
   }).join("");
   return `<div class="an-tbar">
       <span class="an-count">${list.length} offense${list.length === 1 ? "" : "s"}</span>
-      <span class="an-legend" title="Each value against every club's in this window: elite at the clubs' 90th percentile or better, then the 70th, 40th and 15th; low below. Higher is better for EPA, success, completion %, explosive plays, YPC, rushing yards and yards before contact; lower is better for sack %, pressure % and stuffed %. Plays/g is coloured muted (a lean, not a verdict); pass %, aDOT and PA % are not coloured.">
+      <span class="an-legend" title="Each value against every club's in this window: elite at the clubs' 90th percentile or better, then the 70th, 40th and 15th; low below. Higher is better for EPA, success, completion %, explosive plays, YPC, rushing yards and yards before contact; lower is better for sack %, pressure % and stuffed %. Plays/g is coloured muted (a lean, not a verdict); pass %, aDOT, PA % and pass rate over expectation (PROE, Neut PROE) are not coloured.">
         ${TIER_NAMES.map((t) => `<i class="t-${t}"></i>`).join("")}<span>elite → low among the clubs</span></span>
       <span class="an-hint">Click a row to open the offense</span>
     </div>
@@ -209,7 +212,7 @@ export async function renderOffense(ctx, query, opts = {}) {
     </div>
     <div class="an-filters"></div>
     <div class="an-tablewrap"></div>
-    <p class="an-foot">Plays, EPA, success, sacks, completions, aDOT, explosive plays and the zone field: nflverse play-by-play (defensive pass interference no-plays are left out). Play action: FTN charting. Pressure %: PFR advanced stats, the club's quarterbacks' pressured dropbacks over their dropbacks (about a week behind). Stuffed % and yards before contact: PFR advanced rushing${agg.unmapped.length ? ` (${agg.unmapped.length} row${agg.unmapped.length === 1 ? "" : "s"} could not be placed on a club)` : ""}. Zone references pool every attempt in the window.</p>
+    <p class="an-foot">Plays, EPA, success, sacks, completions, aDOT, explosive plays and the zone field: nflverse play-by-play (defensive pass interference no-plays are left out). Play action: FTN charting. PROE: the expected pass rate is nflverse xpass (penalty no-plays are not in the rows). Pressure %: PFR advanced stats, the club's quarterbacks' pressured dropbacks over their dropbacks (about a week behind). Stuffed % and yards before contact: PFR advanced rushing${agg.unmapped.length ? ` (${agg.unmapped.length} row${agg.unmapped.length === 1 ? "" : "s"} could not be placed on a club)` : ""}. Zone references pool every attempt in the window.</p>
   </section>`;
   renderFilterBar(root.querySelector(".an-filters"), st, { keys: data.keys, teams: [] }, go);
   const el = root.querySelector(".an-tablewrap");

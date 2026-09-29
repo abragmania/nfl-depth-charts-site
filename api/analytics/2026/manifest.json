@@ -58,15 +58,15 @@
  "weeks": [
   {
    "week": 1,
-   "hash": "ba257efcaa9399c0",
+   "hash": "9511c5c87b6c27a1",
    "plays": 1924,
-   "builtAt": "2026-09-29T18:08:04.560Z"
+   "builtAt": "2026-09-29T18:21:06.507Z"
   },
   {
    "week": 2,
-   "hash": "0f7e1b379612a72d",
+   "hash": "044f6cf9d2eeb6a2",
    "plays": 1936,
-   "builtAt": "2026-09-29T18:08:04.560Z"
+   "builtAt": "2026-09-29T18:21:06.507Z"
   },
   {
    "week": 3,

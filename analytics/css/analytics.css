@@ -508,6 +508,8 @@ td[class*=" t-"] > span { color:var(--t); font-weight:700; }
 .an-tm-gc .gc { width:100%; min-width:112px; height:48px; }
 .an-tm-gc .gc b { font-size:19px; }
 @media (max-width:1760px) { .an-card.an-line.an-tm-gridrow { max-width:1100px; } } /* after the base rule, so it wins at the narrower band */
+/* D219: a line block with no headline chips (the club page's Play calling block) drops the empty chip row and its gap. */
+.an-line-head:empty { display:none; }
 
 /* ---- defense leaderboard (#/defense) ---- */
 .an-def-name { color:var(--ink); font-weight:700; }

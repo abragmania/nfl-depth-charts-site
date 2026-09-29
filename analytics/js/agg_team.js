@@ -10,8 +10,8 @@
 // is each club's own last three games, on offense and on defense):
 //   play         = a pass attempt, a sack, a scramble or a designed run. A defensive-pass-interference no-play the
 //                  ledger kept (pi=1) is a receiver's target only and is in no team figure (as on the QB views).
-//   dropback     = a pass attempt, a sack or a scramble. Pass rate = dropbacks / plays (plain: the ledger carries no
-//                  score, so no neutral-situation rate).
+//   dropback     = a pass attempt, a sack or a scramble. Pass rate = dropbacks / plays, all situations (the
+//                  neutral-script rate is neutralPassRate below).
 //   EPA/play, Success %  = over plays carrying the figure; EPA/dropback over dropbacks; EPA/carry over designed runs.
 //   YPC (defense, D192)  = rushing yards allowed / designed runs faced (a scramble is not a designed run; summed
 //                  over the window, not a mean of per-game averages). Lower is better.
@@ -54,6 +54,19 @@
 //   Run stop % (runStopPct, defense) = 1 − Run succ %: designed runs faced that were unsuccessful / designed runs faced
 //                  carrying a success value; null when Run succ % is null.
 //   defTargets / defCarries: the men a defense faced (teamTargets / teamCarries with opp = the defense), see below.
+// Play calling (D219 figure 1; additive, no existing figure changes). xpass = nflverse's expected pass rate for the
+// play (0 to 1), sd = the score differential from the offense's side, both on the play rows since increment A.
+//   PROE (proe)  = dropback rate minus mean xpass, both over the plays that CARRY an xpass (a play without one is in
+//                  neither), in PERCENTAGE POINTS (×100, signed: +3.5 = passing 3.5 points more than expected).
+//                  proeN = how many plays that is. Splits, each over its own plays with an xpass: proeEarly (down 1
+//                  or 2), proeNeutral (neutral script: score within 7 either way, |sd| <= 7, in quarters 1-3; a play
+//                  without an sd is not neutral), proeRz (yardline_100 <= 20), proeI5 (yardline_100 <= 5); each with
+//                  its own count (proeEarlyN, ...).
+//   Neutral pass rate (neutralPassRate) = dropbacks / plays in neutral script (every neutral play, xpass or not);
+//                  neutralPlays the count.
+//   On DEFENSE these are what the defense FACED (its opponents' PROE against it). Style, not quality: neither way
+//   is better, so none of these keys is in OFF_TIER/DEF_TIER (uncoloured); the league mean and rank still show, rank
+//   1 = the most pass-happy over expectation (teamRank's high-first default for an untiered key).
 // LEAGUE REFERENCE (Adam's perspective rule, D177): the plain mean over the clubs in the window (32 in a full week;
 // fewer on a week with byes), and colour tiers at the clubs' 90/70/40/15th percentiles (agg.js; under 8 clubs,
 // uncoloured). Lower-is-better keys are cut on the negated value; neutral keys (pass rate, aDOT, blitz %) are not
@@ -97,8 +110,20 @@ export function teamPlay(r, C) {
     blitz: db && bl !== null ? bl >= 1 : null,
     expl: type === "run" || type === "scramble" ? yards >= EXPL_RUN : complete && yards >= EXPL_PASS,
     band: r[C.band], dir: r[C.dir],
+    // D219 play calling: the expectation and the situation (null where the row has no such column or value).
+    xpass: num(r[C.xpass]), sd: num(r[C.sd]), qtr: num(r[C.qtr]), down: num(r[C.down]), yl: num(r[C.yardline_100]),
   };
 }
+
+// D219: the PROE splits (key, the play's filter). "neutral" is also the neutral pass rate's filter.
+const isNeutral = (e) => e.sd !== null && Math.abs(e.sd) <= 7 && e.qtr !== null && e.qtr >= 1 && e.qtr <= 3;
+export const PROE_SPLITS = Object.freeze([
+  ["proe", () => true],
+  ["proeEarly", (e) => e.down === 1 || e.down === 2],
+  ["proeNeutral", isNeutral],
+  ["proeRz", (e) => e.yl !== null && e.yl <= 20],
+  ["proeI5", (e) => e.yl !== null && e.yl <= 5],
+]);
 
 const emptyCell = () => ({ n: 0, cmp: 0, yds: 0, td: 0, int: 0, epa: 0, epaN: 0 });
 function addCell(c, e) { c.n++; if (e.complete) { c.cmp++; c.yds += e.yards; } if (e.td) c.td++; if (e.int) c.int++; if (e.epa !== null) { c.epa += e.epa; c.epaN++; } }
@@ -113,10 +138,15 @@ const newSide = () => ({ games: new Set(), plays: 0, epa: 0, epaN: 0, succ: 0, s
   covTgt: 0, covCmp: 0, covYds: 0, covTd: 0, covInt: 0, covWeeks: new Set(), ybc: 0, ybcCar: 0, ybcWeeks: new Set(),
   // Line-block additions (D198): PFR hurries on the QB rows (offense own, defense the opposing QBs'), and the
   // defenders' own hurries and hits summed (the pressuresG rule).
-  pfrHurries: 0, qbHurries: 0, defHurries: 0, defHits: 0 });
+  pfrHurries: 0, qbHurries: 0, defHurries: 0, defHits: 0,
+  // D219 play calling: per PROE split { n plays with an xpass, db dropbacks among them, x sum of their xpass }, and
+  // the neutral-script plays and dropbacks (xpass or not).
+  pe: Object.fromEntries(PROE_SPLITS.map(([k]) => [k, { n: 0, db: 0, x: 0 }])), nPlays: 0, nDb: 0 });
 
 function addPlay(a, key, e, playRec) {
   a.plays++;
+  if (isNeutral(e)) { a.nPlays++; if (e.db) a.nDb++; }
+  if (e.xpass !== null) for (const [k, ok] of PROE_SPLITS) if (ok(e)) { const c = a.pe[k]; c.n++; c.x += e.xpass; if (e.db) c.db++; }
   const w = a.wk.get(key) || { plays: 0, db: 0, epa: 0, epaN: 0, runs: 0, dbEpa: 0, dbEpaN: 0, runEpa: 0, runEpaN: 0 };
   w.plays++; if (e.db) w.db++;
   if (e.epa !== null) { a.epa += e.epa; a.epaN++; w.epa += e.epa; w.epaN++; }
@@ -161,6 +191,9 @@ function sideRates(a, g) {
     ybc: a.ybc, ybcCarries: a.ybcCar, ybcCar: ratio(a.ybc, a.ybcCar), ybcWeeks: a.ybcWeeks.size,
     // Line-block additions (D198), additive. sacksG is play-by-play (D178), never PFR's sack columns.
     sacksG: ratio(a.sacks, g), hurryPctAllowed: ratio(a.pfrHurries, a.pfrDb), pfrHurries: a.pfrHurries,
+    // D219 play calling, additive: PROE in percentage points and its splits, each with its play count; neutral pass rate.
+    ...Object.fromEntries(PROE_SPLITS.flatMap(([k]) => { const c = a.pe[k]; return [[k, c.n > 0 ? ((c.db - c.x) / c.n) * 100 : null], [k + "N", c.n]]; })),
+    neutralPassRate: ratio(a.nDb, a.nPlays), neutralPlays: a.nPlays,
   };
 }
 
@@ -280,7 +313,9 @@ export function aggregateTeams(blocks, players, st, opts = {}) {
 // ---- the league reference among clubs ------------------------------------------------------------------------
 export const TEAM_LG_KEYS = ["plays", "playsG", "dbG", "runsG", "passRate", "epaPlay", "epaDb", "epaCar", "succPct", "adot", "cmpPct", "sackPct", "pressPct", "pressuresG", "paPct", "blitzPct", "explPct", "ypc", "runSuccPct", "runExplPct",
   "rushYdsG", "stuffPct", "pressPctAllowed", "hitPctAllowed", "ybcCar", "covYdsTgt", "covCmpPct", "covRating",
-  "hurryPctAllowed", "hurriesG", "hitsG", "sacksG", "runStopPct"];
+  "hurryPctAllowed", "hurriesG", "hitsG", "sacksG", "runStopPct",
+  // D219 play calling: uncoloured (not in OFF_TIER/DEF_TIER), league mean and rank only.
+  "proe", "proeEarly", "proeNeutral", "proeRz", "proeI5", "neutralPassRate"];
 // Direction: 1 = higher is better, -1 = lower is better. The grid additions (D195): on offense more rushing yards,
 // YPC and yards before contact are better, and fewer stuffed runs, pressures and hits allowed; on defense the
 // reverse for the run figures, more stuffed runs forced and more pressure and hits forced, and a lower passer
