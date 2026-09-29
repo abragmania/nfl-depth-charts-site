@@ -18,9 +18,9 @@
 // card-banner, banner-out, banner-active, badge*, rating-pill, tray-label/tray-chip)
 // rather than inventing parallel styles.
 import { getTeams, getTeam, invalidateTeam } from "./api.js";
-import { esc, BAND_DISPLAY, headshotHtml, wireDepthToggles, isFullyOut, isScratch, psBadge, snapHistoryHtml, withClubRole } from "./cards.js";
+import { esc, BAND_DISPLAY, headshotHtml, wireDepthToggles, isFullyOut, isScratch, psBadge, slotBadge, snapHistoryHtml, withClubRole } from "./cards.js";
 import { headerHtml, mountTeamField, teamBodyHtml } from "./team.js";
-import { SIDE_CARD_W, SIDE_MAX_DEPTH_ROWS, regroupSlotReceivers, columnRankReason } from "./field.js";
+import { SIDE_CARD_W, SIDE_MAX_DEPTH_ROWS } from "./field.js";
 import { fitToViewport, disposeCurrentView, SIDE_MIN_READABLE_SCALE } from "./viewfit.js";
 import { navStripHtml, wireNav } from "./nav.js";
 
@@ -188,9 +188,8 @@ function signalMarkers(p) {
 // D49: the group view's "big" cards get one extra line — height/weight/age/college from card.bio when
 // the compile step has attached it (ESPN bio fetch, per PROJECT.md, only happens on card-expand and is
 // cached — so plenty of players won't have it yet); falls back to "#N · POS" so the line is never blank.
-// `opts.posLabel` (D93 on the group page, below): the position line reads off the COLUMN the card is
-// standing in, not off the club slot the server listed the man at, so a receiver drawn in the derived
-// WR · Slot column cannot have the bio line underneath him still saying "WR2".
+// `opts.posLabel` (the group page, below): the position line reads off the COLUMN the card is standing in,
+// so the bio line and the column pill always say the same thing.
 function bioLineText(p, opts = {}) {
   const bio = p.bio;
   if (bio) {
@@ -208,8 +207,7 @@ function bioLineText(p, opts = {}) {
 }
 
 // The one place this file decides what a card calls the position its man plays: the column's own label
-// when the caller knows it (the group page, since D93 can move a man into a column his card has never
-// heard of), otherwise the label the server listed him at.
+// when the caller knows it (the group page), otherwise the label the server listed him at.
 function positionLine(p, opts = {}) {
   return opts.posLabel || p.displayLabel || p.position || "";
 }
@@ -247,6 +245,7 @@ function fullCard(p, teamAbbr, opts = {}) {
     <span class="card-badges">
       ${isFullyOut(p) ? "" : statusBadge(p.status)}
       ${psBadge(p)}
+      ${slotBadge(p)}
     </span>
     <span class="card-body${opts.wide ? " card-body-wide" : ""}">
       <span class="card-head">${headshotHtml(p, headSize)}${opts.wide ? jerseyCrest(p) : ""}</span>
@@ -430,50 +429,13 @@ function tierRow(n, cardHtml) {
   return `<div class="tier-row"><span class="tier-num">${num}</span>${cardHtml}</div>`;
 }
 
-// field.js's own `starterLed`, which that file does not export: a column is led by a starter when its
-// line-one man is a co-starter or carries one of the roles the server gives the man holding a column
-// (D12's listed-OUT starter and D44's ACTIVE fill-in included). Only a starter-led leftover column takes a
-// receiver number when the slot men are lifted out (D92/D93) — a column holding nothing but backups is not
-// a number-two receiver, so it prints a plain "WR". Kept in step with field.js by hand, the same way this
-// file's statusBadge/ratingPill helpers are kept in step with cards.js's.
-const STARTER_LED_ROLES = new Set(["STARTER", "STARTER_OUT", "ACTIVE"]);
-const starterLed = (slot) => {
-  const lineOne = slot?.players?.[0];
-  return !!lineOne && (lineOne.coStarter === true || STARTER_LED_ROLES.has(lineOne.role));
-};
-
-// D93 on the GROUP page. The team, offense and matchup pages all draw their receivers through field.js's
-// layoutPassCatchers, which lifts the men who play inside into their own WR · Slot column and renumbers
-// what survives WR1, WR2 down the row. D70 ("names consistent everywhere") makes the regrouped column the
-// chart on every view, so the WR band here goes through the SAME regrouper, handed the same input the
-// field hands it (the club's own column order), and is drawn in the same left-to-right order the field's
-// pass-catcher row uses — rather than building its stacks straight from the API's own unregrouped slots.
-//
-// A column is `{ slot, label, reason }`: `label` is the pill AND the position line on every card standing
-// in it (field.js calls the same thing `displayLabel`), and `reason` the tooltip sentence — the D86
-// "who plays inside" sentence on the derived column, columnRankReason's provenance sentence on a club one.
-// Every other band, and a receiver chart with nobody over the slot bar, comes back exactly as the API
-// listed it, labels and all.
-export function groupColumns(slots, band) {
-  // D143: the club's own Sam/Mike/Will/Rush word rides on the label here too, so the group page's pill and
-  // every card's position line in it read the same "OLB · Rush" the field's column pill prints.
-  const plain = () => slots.map((slot) => ({ slot, label: withClubRole(slot.label, slot), reason: null }));
-  if (band !== "WR") return plain();
-  const grouped = regroupSlotReceivers(slots);
-  if (!grouped) return plain();
-  const slotCol = { slot: grouped.slot, label: grouped.slot.label, reason: grouped.reason, derived: true };
-  let wrRank = 0;
-  const clubCols = grouped.kept.map((slot) => {
-    const label = starterLed(slot) ? `WR${++wrRank}` : "WR";
-    return { slot, label, reason: columnRankReason(slot, label) };
-  });
-  // layoutPassCatchers' own placement, minus the tight ends (they have their own group page): the outside
-  // receiver, the Slot column inside him, any further club columns, and the last club column on the right.
-  // One club column left keeps the left end with the Slot column inside it; none left (every charted
-  // receiver plays inside) leaves the Slot column standing alone.
-  return clubCols.length > 1
-    ? [clubCols[0], slotCol, ...clubCols.slice(1, -1), clubCols[clubCols.length - 1]]
-    : [...clubCols, slotCol];
+// The group page's columns: every band, receivers included, exactly as the club prints them (D215: the WR · Slot
+// column is gone, and a man who plays inside wears cards.js's "Slot (58%)" tag on his own card instead). A
+// column is `{ slot, label }`: `label` is the pill AND the position line on every card standing in it, with
+// the club's own Sam/Mike/Will/Rush word riding on it (D143) so the group page reads the same "OLB · Rush" the
+// field's column pill prints.
+export function groupColumns(slots) {
+  return slots.map((slot) => ({ slot, label: withClubRole(slot.label, slot) }));
 }
 
 // D91: `unit`/`gamesPlayed` ride along on the same size objects (lineOne/rest) fullCard already takes as
@@ -491,10 +453,7 @@ export function renderGroupStack(col, teamAbbr, wide = false, unit, gamesPlayed)
   const players = slot.players;
   // Lead ruling (2026-09-11, item 8): same "one slot, two names" label treatment as the side view, for
   // the same reason — an explicit coStarter pair at tier 1.
-  // `!col.derived` is cards.js's own guard (D83): two men in the WR · Slot column may each be a co-starter
-  // of the club column he came from, but they are not co-starters of each other, so the suffix must not
-  // follow them into a column the layout built.
-  const isPair = players.length >= 2 && players[0].coStarter && players[1].coStarter && !col.derived;
+  const isPair = players.length >= 2 && players[0].coStarter && players[1].coStarter;
   const labelText = isPair ? `${col.label} · co-starters` : col.label;
   const rows = [];
   let i = 0;
@@ -537,12 +496,8 @@ export function renderGroupStack(col, teamAbbr, wide = false, unit, gamesPlayed)
     : visible.join("");
   // D70: same band-hue pill as the main field and the side view — every slot on a group page shares one
   // band, so the tint is uniform here, but it stays the same colour a viewer just saw on the team page.
-  // D93: the pill's tooltip is the same sentence the field's own column label carries (cards.js's
-  // labelTitle) — why these men are the ones standing in the slot, or where a renumbered club column's
-  // number came from — so a reader who questions a pill gets the same answer on either page.
-  const labelTitle = col.reason ? ` title="${esc(col.reason)}"` : "";
   return `<div class="zoom-stack${stackHeatClass(slot)}" data-slot-id="${esc(slot.slotId)}"${stackHeatTitle(slot)}>
-    <div class="zoom-stack-label" data-band="${esc(slot.band || "")}"${labelTitle}>${esc(labelText)}</div>
+    <div class="zoom-stack-label" data-band="${esc(slot.band || "")}">${esc(labelText)}</div>
     <div class="zoom-stack-body">${rowsHtml}</div>
   </div>`;
 }
@@ -607,10 +562,7 @@ export async function renderZoomGroup(root, search, abbr, bandParam) {
   // this figure only sizes the tooltip's window, and this is the one place in the call chain with view.header.
   const rec = view.header?.record;
   const gamesPlayed = rec ? (rec.wins ?? 0) + (rec.losses ?? 0) + (rec.ties ?? 0) : null;
-  // D93: the WR band is regrouped exactly as the field regroups it before anything is measured or drawn,
-  // so the grid is sized for the columns that will actually appear — a club column emptied into the
-  // WR · Slot column is never given a slice of the grid and then left blank.
-  const columns = groupColumns(slots, band);
+  const columns = groupColumns(slots);
   const wide = columns.length <= GROUP_WIDE_MAX;
   const stacksHtml = columns.map((col) => renderGroupStack(col, A, wide, unit, gamesPlayed)).join("");
   const trayHtml = unlistedEntries.length ? renderUnlistedStack(unlistedEntries, A) : "";
