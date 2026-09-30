@@ -437,7 +437,7 @@ const meanOf = (rows, k) => mean(rows.map((r) => (r[k] === null || r[k] === unde
 export const RB_TREND_KEYS = ["oppShare", "snapPct", "tgtShare", "rzShare", "routePct"];
 export const REC_TREND_KEYS = ["tgtShare", "ayShare", "snapPct", "routePct", "rzTgtShare"];
 
-function trendFigures(blocks, players, st, gsis, back) {
+export function trendFigures(blocks, players, st, gsis, back) {
   const winSet = gamesInWindow(clubGames(blocks), st);
   const situational = isSituational(st);
   const per = new Map(); // gk -> { club and his counts in that game }

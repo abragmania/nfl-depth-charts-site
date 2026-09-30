@@ -16,7 +16,8 @@ import { fromQuery, toQuery, seasonsOf, weekLabel, splitKey, gamesInWindow, rank
 import { backLink } from "../router.js";
 import { loadFor, loadTeams, displayName, loadStatusFeed, loadTeamView, findCardByGsis, loadPlayerStats, loadPlayerHistory, loadPlayerGameLog, clubCards } from "../data.js";
 import { isStatic } from "../../../js/api.js";
-import { playerView, maddenBlocking, maddenEdition, pageState, lastTeam, RZ_I5_FLOOR } from "../agg_player.js";
+import { playerView, maddenBlocking, maddenEdition, pageState, lastTeam, RZ_I5_FLOOR, trendFigures } from "../agg_player.js";
+import { weekState, seasonBlocks, weekAllowedCells, clubTargetCounts, weekStrip, VS_USUAL_TEXT } from "../agg_week.js";
 import { aggregateUsage, usageReference, clubGames, colIndex, REF_POS } from "../agg.js";
 import { renderFilterBar } from "../filterbar.js";
 import { tierOf } from "../table.js";
@@ -25,7 +26,7 @@ import { rushTier, RUSH_MIN_CAR } from "../agg_rush.js";
 import { weeklyStrips } from "../charts/bars.js";
 import { zoneField, zoneLegend, ZONE_MODES, zoneName } from "../charts/zonefield.js";
 import { ratingBars, routeList } from "../charts/hbars.js";
-import { headlineRow, fantasyBand, phaseBlock, varianceStrip, maddenFoot, playerHead, currentStatus, latestWeekIn, trendStrip } from "./kit.js";
+import { headlineRow, fantasyBand, phaseBlock, varianceStrip, maddenFoot, playerHead, currentStatus, latestWeekIn, trendStrip, thisWeekStrip } from "./kit.js";
 // D209 part (2): the depth-chart card block that opens every player page, drawn by the SAME code the
 // depth-chart panel uses (public/js/panel.js) — never a copy. See cardBlockHtml/loadCard below.
 import { cardBodyHtml, mountCardData } from "../../../js/panel.js";
@@ -144,6 +145,28 @@ export function mountCard(root, info) {
 // including a trade that moves him to a new club) or the very first draw for a player always gets a fresh
 // element, which the caller then actually mounts (fetches history/stats/game log); a redraw of the same
 // player reuses the held element as-is, so mounting never runs twice for one visit to his page.
+// D224 increment B: the This-week strip under the card (agg_week.js builds it, kit.js thisWeekStrip draws it), on
+// the current season only, season to date whatever the page's window. kind: "receiver" | "back" | "qb"; trendOf:
+// (blocks, state) -> that kind's trend (the page passes it so a QB's comes from agg_qb.js). Every figure is fed the
+// current season's blocks alone (seasonBlocks), so Include previous never leaks last season in. The club is the one
+// his card came from, and only when the card was found there: a released or unlisted man gets no strip rather than
+// his old club's. Never throws: a strip that cannot be built prints nothing rather than breaking the page.
+export function weekStripHtml({ data, st, gsis, pos, kind, cardInfo, feed, teamsPayload, trendOf }) {
+  try {
+    if (!cardInfo?.card) return "";
+    const club = cardInfo.teamMeta?.abbr || cardInfo.teamView?.abbr || null;
+    if (!club || !teamsPayload || +teamsPayload.season !== +st.season) return "";
+    const ws = weekState(st);
+    const blocks = seasonBlocks(data.blocks, st.season);
+    const strip = weekStrip({
+      kind, pos, gsis, season: st.season, teamsPayload, club, trend: trendOf ? trendOf(blocks, ws) : null,
+      cells: weekAllowedCells(blocks, data.players, ws), view: cardInfo.teamView || null, feed,
+      targets: clubTargetCounts(blocks, ws, club),
+    });
+    return thisWeekStrip(strip, { vsText: VS_USUAL_TEXT, weekFmt: (k) => weekLabel(k, st.season) });
+  } catch (e) { console.warn("This-week strip:", e); return ""; }
+}
+
 export function reusesCard(held, gsis) {
   return !!(held && held.el && held.gsis === gsis);
 }
@@ -442,6 +465,8 @@ export async function renderPlayer(ctx, params, query) {
   const cardInfo = await loadCard(v, teams, currentTeamOf(gsis, data.players[gsis], feed));
   if (!isCurrent()) return;
   const cardHtml = cardBlockHtml(cardInfo, v);
+  const teamsPayload = await loadTeams().catch(() => null);
+  if (!isCurrent()) return;
   if (v.kind !== "catcher") {
     const fb = backFallback(v.pos);
     const back = `<a href="${fb.href}${qs ? "?" + qs : ""}">Back to ${fb.name}</a>`;
@@ -452,6 +477,9 @@ export async function renderPlayer(ctx, params, query) {
   }
 
   const wn = windowName(st, v.weeks);
+  const isBackKind = v.recut?.kind === "back";
+  const weekHtml = weekStripHtml({ data, st, gsis, pos: v.pos, kind: isBackKind ? "back" : "receiver", cardInfo, feed, teamsPayload,
+    trendOf: (blocks, ws) => trendFigures(blocks, data.players, ws, gsis, isBackKind) });
   // D196: his club's pass catchers in the window, names in the depth chart's spelling.
   // Memoised per page link (the game log's fold toggle redraws without re-aggregating the league).
   const clubKey = `${gsis}|${toQuery({ ...st, open: "" })}|${v.team}`;
@@ -482,6 +510,7 @@ export async function renderPlayer(ctx, params, query) {
     root.innerHTML = `<section class="an-pl an-pl-rc">
     ${head}
     ${reuse ? `<div data-cardslot></div>` : cardHtml}
+    ${weekHtml}
     <div class="an-pl-bar"><div class="an-filters"></div>
       <label class="an-switch" title="A defensive pass interference is a no-play in the play-by-play; on, it counts as a target for the receiver (never a pass attempt, catch or yards)"><input type="checkbox" data-pi${st.pi === false ? "" : " checked"}><span>${st.pi === false ? "excl. PI targets" : "PI targets"}</span></label></div>
     <div class="an-sub an-pl-sub">${esc(sub)}</div>

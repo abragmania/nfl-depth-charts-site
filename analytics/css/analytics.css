@@ -556,3 +556,22 @@ td[class*=" t-"] > span { color:var(--t); font-weight:700; }
 .an-row.is-hl { box-shadow: inset 3px 0 0 var(--accent); }
 .an-row.is-hl td { background: color-mix(in srgb, var(--accent) 8%, transparent); } /* 👁 2026-09-27: a faint wash across the row, the stripe alone was too easy to miss */
 .an-row.is-hl td:first-child { padding-left:9px; }
+
+/* ---- D224 increment B: the This-week strip under the player page's card (kit.js thisWeekStrip) ---- */
+/* One quiet line, never a tile (D196): no box, muted text, the parts split by thin rules; it clips rather than wraps. */
+.an-wk { display:flex; align-items:center; gap:12px; flex-wrap:nowrap; overflow:hidden; white-space:nowrap; margin:0 2px; padding:2px 0;
+  color:var(--muted); font-size:12.5px; line-height:1.6; font-variant-numeric:tabular-nums; }
+.an-wk > * { flex:none; }
+.an-wk-head { color:var(--dim); font-size:10.5px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; }
+.an-wk-game { color:var(--ink); font-weight:600; }
+.an-wk-sep { width:1px; height:14px; background:var(--line); }
+.an-wk-vs, .an-wk-trend, .an-wk-tr { cursor:default; }
+.an-wk-v { font-weight:700; color:var(--t, var(--ink)); }
+.an-wk-rk { color:var(--dim); }
+.an-wk-lab { color:var(--dim); font-weight:700; }
+.an-wk-fig, .an-wk-tr { margin-left:12px; }
+.an-wk-arrow { font-style:normal; font-size:9.5px; color:var(--muted); } /* neutral, as the Trend strip's */
+.an-wk-health { display:inline-flex; align-items:center; gap:10px; }
+.an-wk-chip { display:inline-flex; align-items:center; gap:4px; cursor:default; }
+.an-wk-chip.ok { color:var(--muted); }
+.an-wk-more { color:var(--dim); font-weight:700; cursor:default; }

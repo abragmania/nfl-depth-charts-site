@@ -23,7 +23,7 @@ import { backLink } from "../router.js";
 import { loadFor, loadTeams, displayName, loadStatusFeed } from "../data.js";
 import { isStatic } from "../../../js/api.js";
 import { clubGames } from "../agg.js";
-import { aggregateQb, qbReference, qbTier, qbZones, qbSplits, SPLITS, QB_MADDEN_ATTRS, inQbPool, qbPoolStat, qbGameCuts, QB_MIN_DB } from "../agg_qb.js";
+import { qbTrend, aggregateQb, qbReference, qbTier, qbZones, qbSplits, SPLITS, QB_MADDEN_ATTRS, inQbPool, qbPoolStat, qbGameCuts, QB_MIN_DB } from "../agg_qb.js";
 import { fantasyByPlayer } from "../agg_fantasy.js";
 import { median, ratingTier, maddenEdition, iterationLabel } from "../agg_player.js";
 import { renderFilterBar } from "../filterbar.js";
@@ -33,7 +33,7 @@ import { esc, isNum, signed, qbStrips, qbZoneField, qbZoneLegend, qbZoneName, QB
 // D209 part (2): the depth-chart card block every player page opens with — shared with player.js (the same
 // pass-catcher file) rather than duplicated, since both live in this app and the card logic itself only
 // exists once, in public/js/panel.js.
-import { loadCard, cardBlockHtml, mountCard, reusesCard, currentTeamOf } from "./player.js";
+import { loadCard, cardBlockHtml, mountCard, reusesCard, currentTeamOf, weekStripHtml } from "./player.js";
 
 // Madden ratings for a season, from the data builder's madden.json (the same fetch as player.js's loadMadden, which
 // is private to that page). Never fails: absent or unreadable resolves to null and the block says so.
@@ -390,6 +390,11 @@ export async function renderQbPlayer(ctx, params, query) {
   const cardInfo = await loadCard({ team, gsis }, teams, currentTeamOf(gsis, meta, feed));
   if (!isCurrent()) return;
   const cardHtml = cardBlockHtml(cardInfo, { team, gsis });
+  // D224 increment B: the This-week strip under the card (current season only; player.js weekStripHtml).
+  const teamsPayload = await loadTeams().catch(() => null);
+  if (!isCurrent()) return;
+  const weekHtml = weekStripHtml({ data, st, gsis, pos: "QB", kind: "qb", cardInfo, feed, teamsPayload,
+    trendOf: (blocks, ws) => qbTrend(blocks, data.players, ws, gsis) });
   const mq = maddenQb(madden, gsis, st.season);
   const wn = windowName(st, win.weeks);
   const activeKey = st.window === "range" && st.from && st.from === st.to ? st.from : null;
@@ -473,6 +478,7 @@ export async function renderQbPlayer(ctx, params, query) {
     root.innerHTML = `<section class="an-pl an-qbp">
     ${qbHeaderHtml({ gsis, team, name, teams, qs, status: currentStatus(feed, gsis, seasonsOf(st)), statusSeason: feed?.season ?? null, latestWeek: latestWeekIn(data.keys, feed?.season) })}
     ${reuse ? `<div data-cardslot></div>` : cardHtml}
+    ${weekHtml}
     <div class="an-pl-bar"><div class="an-filters"></div></div>
     <div class="an-sub an-pl-sub">${esc(sub)}</div>
     ${data.missing.length ? `<div class="an-warn">${esc(data.missing.join(", "))} files are not built yet.</div>` : ""}
