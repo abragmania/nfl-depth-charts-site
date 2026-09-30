@@ -10,7 +10,7 @@ import { loadFor, loadTeams, loadStatusFeed, displayName } from "../data.js";
 import { clubGames } from "../agg.js";
 import { aggregateQb, qbReference, qbTier, qbZones, sortQbRows, QB_MIN_DB } from "../agg_qb.js";
 import { renderFilterBar } from "../filterbar.js";
-import { statusChip, statusNameClass, statusApplies } from "../table.js";
+import { statusChip, statusNameClass, statusApplies, hlOf, withHl, scrollToHl } from "../table.js";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 export const NA = `<span class="an-na">–</span>`;
@@ -249,7 +249,7 @@ function detailHtml(r, st, q, ref, wn, lgZones) {
       <div class="an-qb-blockh">Rushing <span class="an-dsub">${r.rushAtt} carries · ${r.rushYds} yds · ${r.rushTd} TD</span></div>
       ${rushHeadline(r, ref)}
       <div class="an-note">${r.des} designed run${r.des === 1 ? "" : "s"} (${r.desYds} yds) · ${r.scr} scramble${r.scr === 1 ? "" : "s"} (${r.scrYds} yds) · EPA/carry ${isNum(r.rushEpa) ? signed(r.rushEpa, 2) : "–"}</div>
-      <div class="an-dlinks"><a href="#/player/${encodeURIComponent(r.gsis)}${q ? "?" + q : ""}">Player page →</a><a href="${depth}" target="_blank" rel="noopener">Depth chart ↗</a></div>
+      <div class="an-dlinks"><a href="#/player/${encodeURIComponent(r.gsis)}${q ? "?" + q : ""}">Player page →</a><a href="${depth}">Depth chart →</a></div>
     </div></div>`;
 }
 
@@ -280,9 +280,9 @@ export function qbTableHtml(allRows, st, query, view = {}, status = {}) {
     const depth = `../#/team/${encodeURIComponent(r.team)}/player/${encodeURIComponent(r.gsis)}`;
     const ps = status[r.gsis];
     const chip = statusChip(ps, { season: view.statusSeason }), nameCls = statusNameClass(ps);
-    return `<tr class="an-row${open ? " open" : ""}" data-id="${esc(r.gsis)}" tabindex="0" aria-expanded="${open}">
+    return `<tr class="an-row${open ? " open" : ""}${view.hl && r.gsis === view.hl ? " is-hl" : ""}" data-id="${esc(r.gsis)}" tabindex="0" aria-expanded="${open}">
       <td class="c-rank">${i + 1}</td>
-      <td class="c-name"><a class="an-pname${nameCls ? " " + nameCls : ""}" href="#/player/${encodeURIComponent(r.gsis)}${q ? "?" + q : ""}">${esc(r.name)}</a>${teamPill(r.team, view.teams, q)}${chip}<a class="an-dc" href="${depth}" target="_blank" rel="noopener" title="Open his depth-chart card in a new tab" aria-label="Depth chart">↗</a></td>
+      <td class="c-name"><a class="an-pname${nameCls ? " " + nameCls : ""}" href="#/player/${encodeURIComponent(r.gsis)}${q ? "?" + q : ""}">${esc(r.name)}</a>${teamPill(r.team, view.teams, q)}${chip}<a class="an-dc" href="${depth}" title="Open his depth-chart card" aria-label="Depth chart">→</a></td>
       <td class="num">${r.g}</td>
       ${COLS.map((c) => cell(c, r)).join("")}
       <td class="c-spark">${epaSpark(r.series, st)}</td></tr>`
@@ -328,8 +328,9 @@ export async function renderQb(ctx, query) {
   const { root, isCurrent } = ctx;
   const st = fromQuery(query);
   const minDb = minDbOf(query);
+  const hl = hlOf(query); // D225b: a player page's ranking link highlights his row; the reader's own changes keep it and never re-scroll
   document.title = "Quarterbacks · NFL Analytics";
-  const go = (n, md = minDb) => { const q = qbQuery(n, md); location.hash = `#/qb${q ? "?" + q : ""}`; };
+  const go = (n, md = minDb) => { const q = withHl(qbQuery(n, md), hl); location.hash = `#/qb${q ? "?" + q : ""}`; };
   if (!root.querySelector(".an-qb")) root.innerHTML = `<div class="an-msg">Loading quarterbacks…</div>`;
   let data, teams, statusFeed;
   try {
@@ -370,7 +371,7 @@ export async function renderQb(ctx, query) {
   const el = root.querySelector(".an-tablewrap");
   // D196: badges are current-season only - statusApplies gates on the feed's own season against the window shown.
   const status = statusApplies(st, statusFeed.season) ? statusFeed.players : {};
-  el.innerHTML = qbTableHtml(agg.rows, st, qs, { ref, windowName, teams: teamsByAbbr, lgZones: lgAgg.lgZones, minDb, statusSeason: statusFeed.season }, status);
+  el.innerHTML = qbTableHtml(agg.rows, st, qs, { ref, windowName, teams: teamsByAbbr, lgZones: lgAgg.lgZones, minDb, statusSeason: statusFeed.season, hl }, status);
   el.querySelectorAll("th[data-sort]").forEach((h) => h.addEventListener("click", () => {
     const k = h.dataset.sort === "rank" ? DEFAULT_SORT : h.dataset.sort;
     const cur = COLS.some((c) => c.k === st.sort) || ["name", "g"].includes(st.sort) ? st.sort : DEFAULT_SORT;
@@ -396,4 +397,5 @@ export async function renderQb(ctx, query) {
     if (tr) window.scrollBy(0, tr.getBoundingClientRect().top - qbAnchor.top);
     qbAnchor.id = null;
   }
+  scrollToHl(root, hl, query);
 }

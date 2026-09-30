@@ -268,12 +268,34 @@ function detailHtml(row, st, q, P, windowName) {
       ${tile("Tgt %", pct(row.tgtShare), t("tgtShare", row.tgtShare), pct(L.tgtShare))}${tile("AY %", pct(row.ayShare), t("ayShare", row.ayShare), pct(L.ayShare))}
       ${tile("WOPR", fix(row.wopr, 2), t("wopr", row.wopr), fix(L.wopr, 2))}${tile("aDOT", fix(row.adot, 1), "", fix(L.adot, 1))}
       ${tile("EPA/Tgt", signed(row.epaTgt, 2), t("epaTgt", row.epaTgt), signed(L.epaTgt, 2))}${tile("YPRR", fix(row.yprr, 2), t("yprr", row.yprr), fix(L.yprr, 2))}
-      <div class="an-dlinks"><a href="#/player/${encodeURIComponent(row.gsis)}${q ? "?" + q : ""}">Player page →</a><a href="${depth}" target="_blank" rel="noopener">Depth chart ↗</a></div>
+      <div class="an-dlinks"><a href="#/player/${encodeURIComponent(row.gsis)}${q ? "?" + q : ""}">Player page →</a><a href="${depth}">Depth chart →</a></div>
     </div></div>`;
 }
 
 // The row the reader just clicked and where it sat on screen, so the re-render that follows can keep it there.
 export const anchor = { id: null, top: null };
+
+// D225b: a player page's ranking link carries `hl=<gsis>` (and `find=1`) into the Receivers, Running backs and
+// Quarterbacks boards (filters.js rankHref). hlOf reads hl from the hash query and withHl puts it back into a page's
+// own rebuilt query (a sort click or filter change keeps the highlight). scrollToHl centres his row ONLY on arrival from
+// a tile: it needs find=1, and strips it from the address with replaceState (no hashchange, no history entry), so a
+// re-render, a Back step or the reader's own changes never re-centre. The row class is the Rankings page's .an-row.is-hl.
+export const hlOf = (query) => { const v = new URLSearchParams(String(query || "").replace(/^\?/, "")).get("hl") || ""; return /^[A-Za-z0-9_.:-]{1,40}$/.test(v) ? v : ""; };
+export function withHl(q, hl) {
+  const p = new URLSearchParams(String(q || ""));
+  p.delete("hl");
+  if (hl) p.set("hl", hl);
+  return p.toString();
+}
+export function scrollToHl(root, hl, query) {
+  if (!hl || new URLSearchParams(String(query || "").replace(/^\?/, "")).get("find") !== "1") return;
+  [...root.querySelectorAll("tr.an-row")].find((t) => t.dataset.id === hl)?.scrollIntoView({ block: "center" });
+  const [path, qs = ""] = location.hash.split("?");
+  const p = new URLSearchParams(qs);
+  if (!p.has("find")) return;
+  p.delete("find");
+  history.replaceState(null, "", location.pathname + location.search + path + (p.toString() ? "?" + p : ""));
+}
 
 // ---- table ---------------------------------------------------------------------------------------------
 // The table's markup as a pure string (no DOM): everything renderTable needs to know to decide what to show,
@@ -318,9 +340,9 @@ export function tableHtml(allRows, st, query, view = {}, status = {}) {
     const depth = `../#/team/${encodeURIComponent(r.team)}/player/${encodeURIComponent(r.gsis)}`;
     const ps = status[r.gsis];
     const chip = statusChip(ps, { season: view.statusSeason }), nameCls = statusNameClass(ps);
-    return `<tr class="an-row${open ? " open" : ""}" data-id="${esc(r.gsis)}" tabindex="0" aria-expanded="${open}">
+    return `<tr class="an-row${open ? " open" : ""}${view.hl && r.gsis === view.hl ? " is-hl" : ""}" data-id="${esc(r.gsis)}" tabindex="0" aria-expanded="${open}">
       <td class="c-rank an-stick">${i + 1}</td>
-      <td class="c-name an-stick"><a class="an-pname${nameCls ? " " + nameCls : ""}" href="#/player/${encodeURIComponent(r.gsis)}${q ? "?" + q : ""}" title="${esc(r.name)}">${esc(r.name)}</a>${teamPill(r.team, teams, q)}<span class="an-pospill" data-band="${BAND(r.pos)}">${esc(r.pos)}</span>${chip}<a class="an-dc" href="${depth}" target="_blank" rel="noopener" title="Open his depth-chart card in a new tab" aria-label="Depth chart">↗</a></td>
+      <td class="c-name an-stick"><a class="an-pname${nameCls ? " " + nameCls : ""}" href="#/player/${encodeURIComponent(r.gsis)}${q ? "?" + q : ""}" title="${esc(r.name)}">${esc(r.name)}</a>${teamPill(r.team, teams, q)}<span class="an-pospill" data-band="${BAND(r.pos)}">${esc(r.pos)}</span>${chip}<a class="an-dc" href="${depth}" title="Open his depth-chart card" aria-label="Depth chart">→</a></td>
       <td class="num">${r.g}</td>
       ${cols.map((c) => cell(c, r)).join("")}
       <td class="c-spark">${sparkline(r.series, st)}</td></tr>`

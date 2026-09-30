@@ -37,9 +37,13 @@ const has = (v) => v !== null && v !== undefined && v !== "";
 // in the blanks so a page can pass only the fields it has. Never computes anything, never touches HTML.
 // rank/rankOf: his league rank beside the league figure ("lg 812 · 4th of 68 RBs") - both pre-formatted strings
 // the caller already worked out ("4th", "68 RBs"); kit.js only ever joins and escapes them.
-export function tileData({ label = "", value = "", lg = null, rank = null, rankOf = null, sub = null, tier = null, title = null, share = false, bar = null, lgBar = null } = {}) {
-  return { label, value, lg, rank, rankOf, sub, tier, title, share, bar, lgBar };
+export function tileData({ label = "", value = "", lg = null, rank = null, rankOf = null, sub = null, tier = null, title = null, share = false, bar = null, lgBar = null, href = null } = {}) {
+  return { label, value, lg, rank, rankOf, sub, tier, title, share, bar, lgBar, href };
 }
+
+// D225b: a tile that carries an href (a player page's ranking link to his leaderboard; the club page's D206 tiles) is
+// wrapped in the same .an-tile-link the club page uses (display:contents, so the tile's own layout is untouched).
+const tileLink = (d, body) => (d.href ? `<a class="an-tile-link" href="${esc(d.href)}">${body}</a>` : body);
 
 // The "lg 812 · 4th of 68 RBs" line shared by headlineRow and oppRow: lg alone, rank alone, or both joined by " · ".
 function lgRankEm(cls, d) {
@@ -56,12 +60,12 @@ function lgRankEm(cls, d) {
 export function headlineRow(tiles = []) {
   const items = (tiles || []).map((t) => {
     const d = tileData(t);
-    return `<div class="an-rc-htile${tierClass(d.tier)}"${titleAttr(d.title)}>` +
+    return tileLink(d, `<div class="an-rc-htile${tierClass(d.tier)}"${titleAttr(d.title)}>` +
       `<span class="an-rc-label">${esc(d.label)}</span>` +
       `<b class="an-rc-val">${esc(d.value)}</b>` +
       lgRankEm("an-rc-lg", d) +
       (d.sub ? `<div class="an-rc-sub">${esc(d.sub)}</div>` : "") +
-      `</div>`;
+      `</div>`);
   }).join("");
   return `<div class="an-rc-headline">${items}</div>`;
 }
@@ -79,13 +83,13 @@ export function oppRow(tiles = []) {
         (has(d.lgBar) && Number.isFinite(+d.lgBar) ? `<i class="an-rc-otick" style="left:${pctOf(d.lgBar)}%"></i>` : "") +
         `</div>`
       : "";
-    return `<div class="an-rc-otile ${kind}${tierClass(d.tier)}"${titleAttr(d.title)}>` +
+    return tileLink(d, `<div class="an-rc-otile ${kind}${tierClass(d.tier)}"${titleAttr(d.title)}>` +
       `<span class="an-rc-olabel">${esc(d.label)}</span>` +
       `<b class="an-rc-oval">${esc(d.value)}</b>` +
       lgRankEm("an-rc-olg", d) +
       bar +
       (d.sub ? `<div class="an-rc-osub">${esc(d.sub)}</div>` : "") +
-      `</div>`;
+      `</div>`);
   }).join("");
   return `<div class="an-rc-opp"><div class="an-rc-opph">Opportunity</div><div class="an-rc-opprow">${items}</div></div>`;
 }
@@ -435,15 +439,15 @@ export function phaseBlock({ title = "", tint = "pass", front = [], side = [], b
   const t = tint === "rush" ? "rush" : "pass";
   const frontHtml = (front || []).map((f) => {
     const d = tileData(f);
-    return `<div class="an-tile${tierClass(d.tier)}"${titleAttr(d.title)}>` +
+    return tileLink(d, `<div class="an-tile${tierClass(d.tier)}"${titleAttr(d.title)}>` +
       `<span>${esc(d.label)}</span><b>${esc(d.value)}</b>` +
       (has(d.lg) ? `<em> · lg ${esc(d.lg)}</em>` : "") +
       (d.sub ? `<div class="an-rc-sub">${esc(d.sub)}</div>` : "") +
-      `</div>`;
+      `</div>`);
   }).join("");
   const sideHtml = (side || []).map((s) => {
     const d = tileData(s);
-    return `<div class="an-rc-sideitem${tierClass(d.tier)}"${titleAttr(d.title)}><span>${esc(d.label)}</span><b>${esc(d.value)}</b></div>`;
+    return tileLink(d, `<div class="an-rc-sideitem${tierClass(d.tier)}"${titleAttr(d.title)}><span>${esc(d.label)}</span><b>${esc(d.value)}</b></div>`);
   }).join("");
   return `<div class="an-rc-phase an-rc-phase-${t}">` +
     `<div class="an-rc-phase-top">` +
@@ -493,11 +497,14 @@ export function lineBlock({ title = "", headline = [], tiles = [], foot = "" } =
   }).join("");
   const tileHtml = (tiles || []).map((t) => {
     const d = tileData(t);
-    return `<div class="an-tile${tierClass(d.tier)}"${titleAttr(d.title)}>` +
+    const body = `<div class="an-tile${tierClass(d.tier)}"${titleAttr(d.title)}>` +
       `<span>${esc(d.label)}</span><b>${esc(d.value)}</b>` +
       lgRankEm("an-rc-lg", d) +
       (d.sub ? `<div class="an-rc-sub">${esc(d.sub)}</div>` : "") +
       `</div>`;
+    // D206: a tile links to Rankings sorted by its own column only when the calling page set an href (a key with no
+    // Rankings column passes none) - the same .an-tile-link wrapper every other figure tile on the club page uses.
+    return d.href ? `<a class="an-tile-link" href="${esc(d.href)}">${body}</a>` : body;
   }).join("");
   return `<div class="an-card an-line"><div class="an-dh">${esc(title)}</div>` +
     `<div class="an-line-head">${chips}</div>` +
@@ -520,11 +527,12 @@ export function headshotUrl(espnId) {
 // status/statusSeason/latestWeek (D196, additive): his status entry when it applies to this page (currentStatus
 // above has already gated it on the season), the feed's season and the latest week on screen. With a status the name
 // carries the long badge after it and, under it, statusLine's one muted line; the name is red by isRedName. Without
-// one the header is exactly as before.
-export function playerHead({ lead = "", name = "", espnId = null, colour = null, pills = "", links = "", status = null, statusSeason = null, latestWeek = null } = {}) {
+// one the header is exactly as before. shot: false (D217) leaves the headshot circle out, so the header is Back, the name and the
+// links only.
+export function playerHead({ lead = "", name = "", espnId = null, colour = null, pills = "", links = "", status = null, statusSeason = null, latestWeek = null, shot: withShot = true } = {}) {
   const c = /^#[0-9a-fA-F]{3,8}$/.test(String(colour ?? "").trim()) ? String(colour).trim() : null;
   const url = headshotUrl(espnId);
-  const shot = `<span class="an-rc-shot">${url ? `<img src="${esc(url)}" alt="" width="56" height="56" loading="lazy" decoding="async" onerror="this.remove()">` : ""}</span>`;
+  const shot = !withShot ? "" : `<span class="an-rc-shot">${url ? `<img src="${esc(url)}" alt="" width="56" height="56" loading="lazy" decoding="async" onerror="this.remove()">` : ""}</span>`;
   const chip = statusChip(status, { long: true, season: statusSeason });
   const nameCls = statusNameClass(status);
   const h1 = `<h1${nameCls ? ` class="${nameCls}"` : ""}>${esc(name)}${chip ? ` ${chip}` : ""}</h1>`;

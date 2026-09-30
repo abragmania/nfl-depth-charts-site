@@ -5,11 +5,13 @@ import { fromQuery, toQuery, seasonsOf, weekLabel, POSITIONS } from "../filters.
 import { loadFor, loadTeams, loadStatusFeed } from "../data.js";
 import { aggregateUsage, clubGames, usageReference, REF_POS, POOL_PER_GAME, POOL_FLOOR } from "../agg.js";
 import { renderFilterBar } from "../filterbar.js";
-import { renderTable, anchor, moreFrom, withMore, statusApplies } from "../table.js";
+import { renderTable, anchor, moreFrom, withMore, statusApplies, hlOf, withHl, scrollToHl } from "../table.js";
 
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 // The More toggle's state (more=1) rides beside the shared filters (table.js withMore).
-const go = (st) => { const q = withMore(toQuery(st), st.more); location.hash = `#/receivers${q ? "?" + q : ""}`; };
+// D225b: hl (a player page's ranking link) keeps its highlight across the reader's own changes, which never re-scroll to it.
+let hl = "";
+const go = (st) => { const q = withHl(withMore(toQuery(st), st.more), hl); location.hash = `#/receivers${q ? "?" + q : ""}`; };
 
 // Same "picked season[ + previous season]" prefix as player.js's seasonLabel (D184).
 export function seasonLabel(st) {
@@ -26,6 +28,7 @@ function windowText(st, weeks) {
 export async function renderUsage(ctx, query) {
   const { root, isCurrent } = ctx;
   const st = { ...fromQuery(query), more: moreFrom(query) };
+  hl = hlOf(query);
   document.title = "Receivers · NFL Analytics";
   if (!root.querySelector(".an-usage")) root.innerHTML = `<div class="an-msg">Loading receivers…</div>`;
   let data, teams, statusFeed;
@@ -74,11 +77,12 @@ export async function renderUsage(ctx, query) {
   renderFilterBar(root.querySelector(".an-filters"), st, { keys: data.keys, teams: clubTeams }, go);
   // D196: badges are current-season only - statusApplies gates on the feed's own season against the window shown.
   const status = statusApplies(st, statusFeed.season) ? statusFeed.players : {};
-  renderTable(root.querySelector(".an-tablewrap"), rows, st, qs, go, { ref, windowName, teams: teamsByAbbr, statusSeason: statusFeed.season }, status);
+  renderTable(root.querySelector(".an-tablewrap"), rows, st, qs, go, { ref, windowName, teams: teamsByAbbr, statusSeason: statusFeed.season, hl }, status);
   // Keep the clicked row where the reader clicked it rather than letting the re-render jump the page.
   if (anchor.id) {
     const tr = [...root.querySelectorAll("tr.an-row")].find((t) => t.dataset.id === anchor.id);
     if (tr) window.scrollBy(0, tr.getBoundingClientRect().top - anchor.top);
     anchor.id = null;
   }
+  scrollToHl(root, hl, query);
 }
