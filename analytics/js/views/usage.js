@@ -5,7 +5,7 @@ import { fromQuery, toQuery, seasonsOf, weekLabel, POSITIONS } from "../filters.
 import { loadFor, loadTeams, loadStatusFeed } from "../data.js";
 import { aggregateUsage, clubGames, usageReference, REF_POS, POOL_PER_GAME, POOL_FLOOR } from "../agg.js";
 import { renderFilterBar } from "../filterbar.js";
-import { renderTable, anchor, moreFrom, withMore, statusApplies, hlOf, withHl, scrollToHl } from "../table.js";
+import { renderTable, anchor, withRzFigures, moreFrom, withMore, statusApplies, hlOf, withHl, scrollToHl } from "../table.js";
 
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 // The More toggle's state (more=1) rides beside the shared filters (table.js withMore).
@@ -50,7 +50,9 @@ export async function renderUsage(ctx, query) {
   const { rows, weeks } = aggregateUsage(data.blocks, data.players, st);
   // League references and tier cuts always come from the whole league at every position (each row is judged
   // against his own position's pool), so a one-club, one-opponent or one-position view still has perspective.
-  const ref = usageReference(aggregateUsage(data.blocks, data.players, { ...st, team: "", opp: "", pos: {} }).rows);
+  // D224 A: red-zone rates and shares on the rows (the shares are blank under an opponent, down or quarter filter); the league reference rows carry them too so the share column has position tiers.
+  withRzFigures(rows, data.blocks, data.players, st, "rec");
+  const ref = usageReference(withRzFigures(aggregateUsage(data.blocks, data.players, { ...st, team: "", opp: "", pos: {} }).rows, data.blocks, data.players, { ...st, team: "", opp: "", pos: {} }, "rec"));
   const shownPos = [...REF_POS].filter((p) => rows.some((r) => r.pos === p));
   const refLine = `League reference and colour tiers, by position: players with ${POOL_PER_GAME}+ targets/game (min ${POOL_FLOOR}) in the window (${shownPos.map((p) => `${p}s ${ref.at(p).n}`).join(" · ") || "none"})`;
   const windowName = st.window === "last3" ? "Last 3" : st.window === "range" && weeks.length ? `${weekLabel(weeks[0], st.season)}–${weekLabel(weeks[weeks.length - 1], st.season)}` : "Season";

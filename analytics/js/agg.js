@@ -302,7 +302,7 @@ export const referenceText = (pos, n, unit = "targets") => `${pos}s with ${POOL_
 export const TIER_PCTS = [0.9, 0.7, 0.4, 0.15];
 export const TIER_NAMES = ["elite", "strong", "avg", "weak", "flat"];
 export const MIN_POOL = 8;
-export const USAGE_TIER_KEYS = ["opp", "oppG", "oppShare", "tgtShare", "ayShare", "wopr", "routePct", "snapPct", "tprr", "yprr", "epaTgt", "dkG"];
+export const USAGE_TIER_KEYS = ["opp", "oppG", "oppShare", "tgtShare", "ayShare", "wopr", "routePct", "snapPct", "tprr", "yprr", "epaTgt", "dkG", "rzTgtShare"];
 const finite = (x) => x !== null && x !== undefined && Number.isFinite(+x);
 export function percentileCuts(vals) {
   const v = vals.filter(finite).map(Number).sort((a, b) => a - b);

@@ -552,7 +552,8 @@ export function pageBody(v, st, { wn = windowName(st, v.weeks || []), activeKey 
   // under a board's default minimum opens it with his own count as the minimum so his row is on the table.
   const board = back ? "rbs" : "receivers";
   const boardMin = back ? ((rr?.car ?? 0) < RUSH_MIN_CAR ? rr?.car ?? 0 : null) : ((r.tgt || 0) < defaultState().minTgt ? r.tgt || 0 : null);
-  const rl = (k) => rankHref(board, k, st, { gsis: v.gsis, pos, min: boardMin });
+  // D224 A: the two share columns ignore the opponent filter and print a dash under it, so their links drop it.
+  const rl = (k) => rankHref(board, k, k === "i5Share" || k === "rzTgtShare" ? { ...st, opp: "" } : st, { gsis: v.gsis, pos, min: boardMin });
   // The receiving figures a back's table carries under other names (his Rec yds and Rec TD); the rest of a back's
   // receiving tiles link only where the Running backs table has the same figure (its RZ and Succ % are carries').
   const RB_REC_COL = { rec: "rec", yds: "recYds", td: "recTd", yprr: "yprr", epaTgt: "epaTgt", catchPct: "catchPct", tprr: "tprr", routes: "routes", oppG: "oppG", oppShare: "oppShare", ydsOpp: "ydsOpp", epaOpp: "epaOpp" };
