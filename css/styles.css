@@ -50,25 +50,8 @@
 html,body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.4 "Segoe UI", system-ui, sans-serif; }
 .topbar { display:flex; align-items:center; gap:24px; padding:10px 28px; background:var(--panel); border-bottom:1px solid #22282f; position:sticky; top:0; z-index:5; }
 .brand { color:var(--ink); text-decoration:none; font-weight:800; letter-spacing:.12em; font-size:18px; }
-/* D209 part (1): the shared site strip (public/js/sitebar.js) — the site brand plus Depth Charts/Analytics
-   tabs — painted into #sitebar, the topbar's first child. .sitebar-brand matches .brand's look exactly (this
-   app's settled topbar look is the one the shared strip uses on both apps); the same two rules are duplicated
-   in public/analytics/css/analytics.css's .an-top block, the same convention that file already uses for the
-   tokens copied from this file's :root. */
-.sitebar-brand { color:var(--ink); text-decoration:none; font-weight:800; letter-spacing:.12em; font-size:18px; white-space:nowrap; }
-#sitebar { display:flex; align-items:center; gap:18px; } /* 👁 D209: brand and tabs on ONE line (the tabs nav is itself flex and dropped under the brand) */
-.sitebar-tabs { display:flex; align-items:center; gap:4px; margin-left:6px; }
-.sitebar-tab { color:var(--muted); text-decoration:none; font-weight:600; font-size:13.5px; padding:6px 12px; border-radius:999px; white-space:nowrap; }
-.sitebar-tab:hover { color:var(--ink); background:rgba(255,255,255,.06); }
-.sitebar-tab.on { color:#0b0d10; background:var(--ink); }
 .search { margin-left:auto; width:260px; padding:8px 12px; border-radius:6px; border:1px solid #2a323b; background:#0f1317; color:var(--ink); }
 .asof { color:var(--muted); font-size:13px; min-width:110px; text-align:right; }
-/* The trailing stamps (search box, How to read, as-of) sit at the strip's right end (D209 part 1: with the
-   old "Analytics ↗" link gone, one of these three now has to carry the auto margin that used to push it, and
-   search/guide-link/asof are always shown or hidden together in the two pairs this app has (landing: all
-   three; every other page: as-of alone) so #asof getting its own auto margin, cancelled whenever search is
-   showing, covers both. */
-.search[hidden] ~ #asof { margin-left:auto; }
 /* Ruling E: the team pages have to fit 1700x900 with no scrolling, so the page chrome is trimmed to the
    minimum that still looks deliberate. The landing grid keeps its old roomier padding (.page-landing). */
 main { padding:8px 14px 8px; width:100%; }
@@ -576,9 +559,6 @@ a.back { color:var(--muted); }
    after the name — or after the badges, which keep their place between the two. */
 .prow-name { flex:0 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:11px; }
 .prow-badges { flex:none; display:inline-flex; gap:2px; align-items:center; max-width:52px; overflow:hidden; }
-/* D215: a row wearing the Slot tag (about 50 units on its own) gets the room for it beside its status badge; the
-   name ladder (cards.js nameLadder) pays for it by compacting the tag and then shortening the name. */
-.prow-badges:has(.badge-slot), .column-compact .prow-badges:has(.badge-slot) { max-width:110px; }
 .prow-ovr { flex:none; font-size:10px; font-weight:800; font-variant-numeric:tabular-nums; min-width:19px; text-align:center;
   border-radius:var(--r-chip); padding:0 3px; background:rgba(255,255,255,.07); color:#c3cad2; }
 /* "NR" for a player with no Madden entry — quiet, but never an empty slot where every other row
@@ -975,7 +955,7 @@ a.back { color:var(--muted); }
 .badge-inactive { background:#8a94a0; color:#1a1a1a; }
 .badge-active { background:#1fb56c; color:#052b14; }
 .badge-ps { background:#3a424c; color:#dfe4e8; }
-.badge-slot { background:color-mix(in srgb, var(--band-WR, #4a90c2) 55%, #1a2a38); color:#e8f2fa; white-space:nowrap; flex-shrink:0; } /* D77/D215: the man lines up inside; "Slot (58%)" never wraps or squeezes: a tight row compacts it (cards.js nameLadder) and then shortens the name */
+.badge-slot { background:color-mix(in srgb, var(--band-WR, #4a90c2) 55%, #1a2a38); color:#e8f2fa; } /* D77: the man lines up inside */
 
 /* ONE line, always. A tray is a TRAY_H-tall strip in field.js's geometry, sized to hold its own text; nowrap
    guarantees it stays a strip if that estimate is ever a few pixels short, and overflow:hidden keeps the
