@@ -206,7 +206,7 @@ export const isSituational = (st) => st.downs.length > 0 || st.qtrs.length > 0;
 // A tile whose key is not in its board's set gets no link. LOW_FIRST: columns where the lower figure is the better one
 // open ascending, so the best man is first; every other column opens descending, as its header's first click does.
 export const BOARD_KEYS = Object.freeze({
-  receivers: new Set(["dkG", "dk", "rec", "yds", "td", "tgt", "tgtShare", "ayShare", "wopr", "rz", "ez", "rzTgtG", "rzTgtShare", "ezG", "routePct", "snapPct", "yprr", "epaTgt", "catchPct", "opp", "oppG", "oppShare", "ydsOpp", "epaOpp", "tdOpp", "ay", "adot", "routes", "tprr"]),
+  receivers: new Set(["dkG", "dk", "rec", "yds", "td", "tgt", "tgtShare", "ayShare", "wopr", "rz", "ez", "rzTgtG", "rzTgtShare", "ezG", "routePct", "snapPct", "yprr", "epaTgt", "catchPct", "opp", "oppG", "oppShare", "ydsOpp", "epaOpp", "tdOpp", "ay", "adot", "depthDeep", "routes", "tprr"]),
   rbs: new Set(["dkG", "dk", "yds", "td", "rec", "recYds", "recTd", "oppG", "oppShare", "car", "carG", "rushShare", "tgt", "tgtShare", "rzOpp", "rzOppG", "rzCarG", "i5Share", "snapPct", "ypc", "epaCar", "ryoeAtt", "yprr", "epaTgt", "succPct", "eff", "long", "explPct", "rz", "gl", "ydsOpp", "epaOpp", "tdOpp", "routes", "tprr", "catchPct"]),
   qb: new Set(["dkG", "dk", "yds", "td", "int", "db", "att", "epaDb", "cpoe", "succPct", "ypa", "rushAttG", "rushYdsG", "rushTd", "scrPct", "cmpPct", "adot", "sackPct", "pressPct", "paPct", "blitzPct", "ttt", "xcomp"]),
 });

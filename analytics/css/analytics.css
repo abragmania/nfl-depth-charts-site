@@ -491,6 +491,12 @@ td[class*=" t-"] > span { color:var(--t); font-weight:700; }
 .an-tm-covtiles { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:6px; }
 .an-tm-covwrap .an-pl-plays { width:auto; }
 .an-tm-distc { flex:0 1 610px; min-width:420px; } /* 👁 D219: the row's columns need 578px plus the card's padding; 560 clipped the sub column */
+.an-tm-distc-t { flex-basis:672px; } /* D224 D: the Target Share card gains a 56px Depth column (+62px with its gap), the Carry Share card stays 610 */
+/* D224 D: the target-depth mix bar, four muted parts shallow to deep (behind the line, short, intermediate, deep). */
+.an-depth { display:inline-flex; width:52px; height:10px; border-radius:3px; overflow:hidden; vertical-align:middle; background:#20262d; }
+.an-depth > i { display:block; flex-basis:0; min-width:2px; }
+.an-depth-behind { background:#5f6b78; } .an-depth-short { background:#4c7f9e; } .an-depth-inter { background:#b08d4a; } .an-depth-deep { background:#a9615b; }
+.an-table td.an-depth-td { text-align:center; }
 /* Distribution bars: one line per man, name + position, a bar of his share in his tier colour, the figure, then the detail. */
 .an-tm-dist { display:flex; flex-direction:column; gap:5px; }
 .an-tm-drow { display:grid; grid-template-columns:140px 34px minmax(120px, 1fr) 52px var(--dcols, 190px); align-items:center; gap:6px; font-size:12.5px; }

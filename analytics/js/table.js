@@ -113,6 +113,19 @@ export function shareSample(k, r, st) {
   return { count: "", title: `not shown, the club had ${club} such play${club === 1 ? "" : "s"} in his games (fewer than ${RZ_I5_FLOOR}); he had ${his}` };
 }
 export const shareCountHtml = (count) => (count ? `<small class="an-rzn" style="margin-left:3px;font-size:.72em;font-weight:400;opacity:.6">${count}</small>` : "");
+// D224 increment D: the target-depth mix bar (four parts, shallow to deep: behind the line, short, intermediate, deep)
+// and its hover, shared by the Receivers table and the club offense page's Target Share card. `depth` is agg.js's
+// depthMix; a man with no depth-tagged target gets a dash. The percents are rounded one by one, so they can read 99 or 101.
+export const DEPTH_PARTS = [["behind", "behind"], ["short", "short"], ["inter", "inter"], ["deep", "deep"]];
+export const DEPTH_TIP = "Target-depth mix: his targets by air yards, behind the line (0 or less) / short (1-9) / intermediate (10-19) / deep (20+), left to right. Shares are of the targets that have a depth. Sorts by the deep share.";
+export function depthTitle(depth, adot) {
+  if (!depth?.n) return "No targets with a depth";
+  return DEPTH_PARTS.map(([k, l]) => `${l} ${Math.round(depth.shares[k] * 100)}% (${depth[k]})`).join(" · ") + (Number.isFinite(adot) ? ` · aDOT ${adot.toFixed(1)}` : "");
+}
+export function depthBarHtml(depth, adot) {
+  if (!depth?.n) return DASH;
+  return `<span class="an-depth" title="${esc(depthTitle(depth, adot))}">${DEPTH_PARTS.map(([k]) => depth[k] ? `<i class="an-depth-${k}" style="flex-grow:${depth[k]}"></i>` : "").join("")}</span>`;
+}
 const COLS = [
   { k: "dkG", h: "DK/g", t: DK_TIPS.dkG, f: (v) => fix(v, 1), grp: "p" },
   { k: "dk", h: "DK", t: DK_TIPS.dk, f: (v) => fix(v, 1), grp: "p" },
@@ -139,6 +152,7 @@ const COLS = [
   { k: "tdOpp", h: "TD/opp", t: "(Receiving touchdowns + rushing touchdowns) / opportunities (targets + carries)", f: (v) => (v === null || v === undefined ? DASH : pct(v) + "%"), grp: "xp" },
   { k: "ay", h: "AY", t: "Air yards on his targets", f: int, grp: "xp" },
   { k: "adot", h: "aDOT", t: "Average depth of target (air yards per target)", f: (v) => fix(v, 1), grp: "xp" },
+  { k: "depthDeep", h: "Depth", t: DEPTH_TIP, f: (v) => pct(v), grp: "xp", depthBar: true },
   { k: "routes", h: "Routes", t: "Routes run (heatradar, charted; weeks under 8 routes are not listed)", f: int, grp: "xp" },
   { k: "tprr", h: "TPRR", t: "Targets per route run", f: (v) => fix(v, 2), grp: "xp" },
   { k: "rz", h: "RZ", t: "Red-zone targets (inside the 20), the window's total", f: int, grp: "xp" },
@@ -222,7 +236,7 @@ const BAND = (pos) => (pos === "RB" || pos === "FB" ? "BACKFIELD" : pos);
 // RB visible, the AY, AY %, WOPR and aDOT columns are dropped from the table entirely; in a mixed view they
 // stay (perspective for the WRs and TEs on the same page), but an RB's own row prints a dash in them rather
 // than a real-but-misleading number. Exported (pure) so tests can check both without a DOM.
-const AY_ONLY_KEYS = new Set(["ay", "ayShare", "wopr", "adot"]);
+const AY_ONLY_KEYS = new Set(["ay", "ayShare", "wopr", "adot", "depthDeep"]);
 export const rbOnlyMode = (pos) => Boolean(pos?.RB === "in" && !POSITIONS.some((p) => p !== "RB" && pos[p] === "in"));
 
 // ---- inline SVG ----------------------------------------------------------------------------------------
@@ -375,6 +389,10 @@ export function tableHtml(allRows, st, query, view = {}, status = {}) {
     const tier = c.anc || !TIER_KEYS.has(c.k) ? "" : tierOf(c.k, v, P?.cuts);
     const note = !c.anc && TIER_KEYS.has(c.k) && v !== null && v !== undefined ? tierNote(P?.cuts?.[c.k], r.pos) : "";
     const bar = c.bar && v !== null && v !== undefined ? `<i class="an-bar" style="width:${Math.min(100, (v / c.bar) * 100).toFixed(1)}%"></i>` : "";
+    if (c.depthBar) {
+      const ok = r.pos !== "RB";
+      return `<td class="num ${c.cls} an-depth-td">${ok ? depthBarHtml(r.depth, r.adot) : DASH}</td>`;
+    }
     const ss = shareSample(c.k, r, st), title = [note, ss.title].filter(Boolean).join(". ");
     return `<td class="num ${c.cls}${tier ? " t-" + tier : ""}${bar ? " has-bar" : ""}"${title ? ` title="${esc(title)}"` : ""}>${bar}<span>${c.f(v)}${shareCountHtml(ss.count)}</span></td>`;
   };

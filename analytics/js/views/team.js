@@ -16,6 +16,7 @@ import { windowName } from "./qbplayer.js";
 import { lostCardHtml } from "./lost.js";
 import { lineBlock } from "./kit.js";
 import { RZ_I5_FLOOR } from "../agg_player.js";
+import { depthBarHtml } from "../table.js";
 
 const P = (v, d = 1) => (isNum(v) ? pct(v, d) + "%" : NA);
 // A missing figure on a kit.js lineBlock tile. lineBlock escapes every value, so the NA placeholder (HTML markup, for
@@ -284,7 +285,7 @@ export function zonePlaysHtml(zones, zone, st, players, q, side = "off") {
 
 // Column sets for distList (D225a): tiny header + pixel width each. The club page's last column is the red-zone target
 // share / inside-the-5 carry share; the defense page's lists (team_def.js) stop at the third.
-export const TGT_COLS = [{ h: "Tgt", w: 30 }, { h: "Routes", w: 40 }, { h: "Snap %", w: 44 }, { h: "RZ share", w: 76 }];
+export const TGT_COLS = [{ h: "Tgt", w: 30 }, { h: "Routes", w: 40 }, { h: "Snap %", w: 44 }, { h: "RZ share", w: 76 }, { h: "Depth", w: 56 }];
 export const CAR_COLS = [{ h: "Car", w: 30 }, { h: "Ypc", w: 34 }, { h: "EPA", w: 44 }, { h: "Inside 5", w: 76 }];
 
 // A horizontal distribution bar list. items: [{ gsis, name, pos, share, tier, main, cells, title }]; `max` scales the bars.
@@ -437,7 +438,7 @@ export async function renderTeam(ctx, params, query) {
   const i5Fig = (r) => shareFig("I5", r.i5Share, r.i5Des, r.i5Runs,
     "Inside-the-5 carry share: his designed runs from the opponent's 5 or closer / the club's designed runs there in his games (scrambles on neither side)");
   const tgtItems = tgts.map((r) => ({ gsis: r.gsis, pos: r.pos, name: displayName(r.gsis, data.players), share: r.tgtShare, tier: r.tier,
-    main: P(r.tgtShare), cells: [r.tgt, isNum(r.routes) ? Math.round(r.routes) : "–", isNum(r.snapPct) ? `${Math.round(r.snapPct * 100)}%` : "–", rzFig(r)],
+    main: P(r.tgtShare), cells: [r.tgt, isNum(r.routes) ? Math.round(r.routes) : "–", isNum(r.snapPct) ? `${Math.round(r.snapPct * 100)}%` : "–", rzFig(r), depthBarHtml(r.depth, r.adot)],
     title: `${displayName(r.gsis, data.players)}: ${r.tgt} targets in ${r.g} game${r.g === 1 ? "" : "s"}, ${isNum(r.tgtShare) ? (r.tgtShare * 100).toFixed(1) + "%" : "–"} of the club's attempts in his games (${isNum(r.clubShare) ? Math.round(r.clubShare * 100) + "%" : "–"} of every club target in the window)${isNum(r.lgShare) ? `; ${r.pos} league average ${(r.lgShare * 100).toFixed(1)}%` : ""}${isNum(r.routes) ? `; ${Math.round(r.routes)} routes (heatradar)` : ""}${isNum(r.snapPct) ? `; ${Math.round(r.snapPct * 100)}% of snaps` : ""}` }));
   const carItems = cars.map((r) => ({ gsis: r.gsis, pos: r.pos, name: displayName(r.gsis, data.players), share: r.rushShare, tier: r.tier,
     main: P(r.rushShare), cells: [r.car, fix(r.ypc, 1), `<span class="${r.epaTier ? "t-" + r.epaTier : ""} an-tm-epa">${signed(r.epaCar, 2)}</span>`, i5Fig(r)],
@@ -467,7 +468,7 @@ export async function renderTeam(ctx, params, query) {
       <div class="an-card an-tm-zones"><div class="an-dh">Pass attempts by zone <span class="an-dsub">${zoned} attempts with a depth and direction · each cell vs every attempt in the league</span></div><div data-zones>${zoneHtml()}</div></div>
     </div>
     <div class="an-tm-row">
-      <div class="an-card an-tm-distc"><div class="an-dh">Target Share <span class="an-dsub">his targets ÷ the club's pass attempts in his games</span></div>${distList(tgtItems, qs, { max: 0.3, cols: TGT_COLS })}</div>
+      <div class="an-card an-tm-distc an-tm-distc-t"><div class="an-dh">Target Share <span class="an-dsub">his targets ÷ the club's pass attempts in his games</span></div>${distList(tgtItems, qs, { max: 0.3, cols: TGT_COLS })}</div>
       <div class="an-card an-tm-distc"><div class="an-dh">Carry Share <span class="an-dsub">his designed runs ÷ the club's in his games</span></div>${distList(carItems, qs, { max: 0.6, cols: CAR_COLS })}</div>
     </div>
     <p class="an-foot">Plays, pass rate, EPA, success, aDOT, completions, sacks, explosive plays, zones, targets and carries: nflverse play-by-play (defensive pass interference no-plays are left out of every team figure). Play action: FTN charting. Pressure %: PFR advanced stats, the club's quarterbacks' rows (a week behind). Routes: heatradar.app (charted). Snaps: nflverse snap counts. League reference: the plain mean over every club in the window; colours are the clubs' tiers.</p>
