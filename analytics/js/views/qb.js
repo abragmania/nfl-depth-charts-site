@@ -10,7 +10,7 @@ import { loadFor, loadTeams, loadStatusFeed, displayName } from "../data.js";
 import { clubGames } from "../agg.js";
 import { aggregateQb, qbReference, qbTier, qbZones, sortQbRows, QB_MIN_DB } from "../agg_qb.js";
 import { renderFilterBar } from "../filterbar.js";
-import { statusChip, statusNameClass, statusApplies, hlOf, withHl, scrollToHl, viewFrom, withView, columnsFor, pickView, viewCell, wantsDeciding, withViewSort, defaultSortFor, l3Title, withGroups, groupCells, WK_COLS, L3_NOTE, wireView } from "../table.js";
+import { statusChip, statusNameClass, statusApplies } from "../table.js";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 export const NA = `<span class="an-na">–</span>`;
@@ -195,23 +195,6 @@ COLS.forEach((c, i) => { c.gs = i === 0 || COLS[i - 1].grp !== c.grp; });
 // no longer colour; DK/g and Y/A are new tiered columns.
 const TIERED = new Set(["dkG", "epaDb", "succPct", "cpoe", "ypa", "rushAttG", "rushYdsG", "scrPct"]);
 const DEFAULT_SORT = "epaDb";
-// D224 F: the Deciding set (table.js "the Deciding preset"): DK/g, this week's opponent and what that defense gives up to
-// quarterbacks vs usual (DK/g and pass yds/g), his dropbacks per game over his club's last 3 games and the season, EPA/db,
-// CPOE (the status chip beside his name carries status). This table has no Standard of its own (its full set IS its Standard), so the control reads Deciding · All.
-const QB_DEC_GROUPS = [["dp", "Production", ""], ["dw", "This week", ""], ["du", "Usage", ""], ["de", "Efficiency", ""]];
-const qcol = (k, over = {}) => ({ ...COLS.find((c) => c.k === k), ...over });
-const DEC_COLS = withGroups([
-  qcol("dkG", { grp: "dp" }),
-  { ...WK_COLS.wkOpp, grp: "dw" },
-  { ...WK_COLS.wkVs, td: "", grp: "dw", h: "vs usual", t: WK_COLS.wkVs.t.replace("DK points per game against", "DK points per game (and pass yards per game, small) against").replace("Sorts by the figure", "Sorts by the DK/g figure") },
-  { k: "dbGL3", h: "Db/g L3", t: `Dropbacks per game (attempts + sacks + scrambles) over ${L3_NOTE}`, f: (v) => fix(v, 1), grp: "du" },
-  { k: "dbG", h: "Db/g", t: "Dropbacks per game he played in the window (attempts + sacks + scrambles)", f: (v) => fix(v, 1), grp: "du" },
-  qcol("epaDb", { grp: "de" }),
-  qcol("cpoe", { grp: "de" }),
-], QB_DEC_GROUPS);
-export const QB_DECIDING = Object.freeze(DEC_COLS.map((c) => c.k));
-export const qbWantsDeciding = (st) => wantsDeciding(COLS, DEC_COLS, st);
-const knownSort = (k) => COLS.some((c) => c.k === k) || DEC_COLS.some((c) => c.k === k) || ["name", "g"].includes(k);
 
 // Weekly EPA/db: a zero line, a point per week (hover for the week's figure and dropbacks).
 function epaSpark(series, st) {
@@ -266,7 +249,7 @@ function detailHtml(r, st, q, ref, wn, lgZones) {
       <div class="an-qb-blockh">Rushing <span class="an-dsub">${r.rushAtt} carries · ${r.rushYds} yds · ${r.rushTd} TD</span></div>
       ${rushHeadline(r, ref)}
       <div class="an-note">${r.des} designed run${r.des === 1 ? "" : "s"} (${r.desYds} yds) · ${r.scr} scramble${r.scr === 1 ? "" : "s"} (${r.scrYds} yds) · EPA/carry ${isNum(r.rushEpa) ? signed(r.rushEpa, 2) : "–"}</div>
-      <div class="an-dlinks"><a href="#/player/${encodeURIComponent(r.gsis)}${q ? "?" + q : ""}">Player page →</a><a href="${depth}">Depth chart →</a></div>
+      <div class="an-dlinks"><a href="#/player/${encodeURIComponent(r.gsis)}${q ? "?" + q : ""}">Player page →</a><a href="${depth}" target="_blank" rel="noopener">Depth chart ↗</a></div>
     </div></div>`;
 }
 
@@ -276,23 +259,19 @@ export const qbAnchor = { id: null, top: null };
 // `status`: D196's injury-status map (gsis -> status), already season-gated by the caller (table.js's
 // statusApplies) - pass {} to draw no badges. Never fetched here.
 export function qbTableHtml(allRows, st, query, view = {}, status = {}) {
-  const sortKey = knownSort(st.sort) ? st.sort : DEFAULT_SORT;
+  const sortKey = COLS.some((c) => c.k === st.sort) || ["name", "g"].includes(st.sort) ? st.sort : DEFAULT_SORT;
   const minDb = view.minDb ?? QB_MIN_DB;
   const rows = sortQbRows(allRows.filter((r) => r.db >= minDb), sortKey, st.dir);
   const q = query || "", ref = view.ref;
-  const sel = columnsFor(COLS, DEC_COLS, { ...st, sort: sortKey }, DEFAULT_SORT, GROUPS, QB_DEC_GROUPS, { twoWay: true });
-  const cols = sel.cols;
-  const nCols = 3 + cols.length + 1;
+  const nCols = 3 + COLS.length + 1;
   const th = (k, h, t, cls = "") => `<th class="${cls}${sortKey === k ? " sorted " + st.dir : ""}" data-sort="${k}" title="${esc(t)}">${h}</th>`;
-  const groupRow = `<tr class="an-grp">${viewCell(sel.view, { views: ["deciding", "all"], span: 3, stick: false })}${sel.view === "deciding" ? groupCells(cols, QB_DEC_GROUPS) : GROUPS.map(([g, l]) => `<th colspan="${COLS.filter((c) => c.grp === g).length}" class="g-${g} gs">${l}</th>`).join("")}<th></th></tr>`;
-  const head = `<tr>${th("rank", "#", "Rank", "c-rank")}${th("name", "Player", "Player and team", "c-name")}${th("g", "G", "Games in the window")}${cols.map((c) => th(c.k, c.h, c.t, "g-" + c.grp + (c.gs ? " gs" : ""))).join("")}<th class="c-spark" title="Weekly EPA per dropback; hover a point for the week">EPA/db by week</th></tr>`;
+  const groupRow = `<tr class="an-grp"><th colspan="3"></th>${GROUPS.map(([g, l]) => `<th colspan="${COLS.filter((c) => c.grp === g).length}" class="g-${g} gs">${l}</th>`).join("")}<th></th></tr>`;
+  const head = `<tr>${th("rank", "#", "Rank", "c-rank")}${th("name", "Player", "Player and team", "c-name")}${th("g", "G", "Games in the window")}${COLS.map((c) => th(c.k, c.h, c.t, "g-" + c.grp + (c.gs ? " gs" : ""))).join("")}<th class="c-spark" title="Weekly EPA per dropback; hover a point for the week">EPA/db by week</th></tr>`;
   const cell = (c, r) => {
-    if (c.html) return `<td class="num g-${c.grp}${c.gs ? " gs" : ""}${c.td ? " " + c.td : ""}">${r[c.html] || NA}</td>`;
     const v = r[c.k];
     const tier = TIERED.has(c.k) ? qbTier(c.k, v, ref?.cuts) : "";
     let title = "";
     if (c.k === "pressPct" && isNum(v)) title = `PFR: ${r.pfrWeeks} week${r.pfrWeeks === 1 ? "" : "s"}, ${r.pfrDb} dropbacks`;
-    if (c.k === "dbGL3") title = l3Title(r);
     if (c.k === "rushAttG" || c.k === "rushYdsG") title = `${r.rushAtt} carries (${r.des} designed, ${r.scr} scrambles), ${r.rushYds} yds in ${r.g} games`;
     return `<td class="num g-${c.grp}${c.gs ? " gs" : ""}${tier ? " t-" + tier : ""}"${title ? ` title="${esc(title)}"` : ""}><span>${c.f(v)}</span></td>`;
   };
@@ -301,11 +280,11 @@ export function qbTableHtml(allRows, st, query, view = {}, status = {}) {
     const depth = `../#/team/${encodeURIComponent(r.team)}/player/${encodeURIComponent(r.gsis)}`;
     const ps = status[r.gsis];
     const chip = statusChip(ps, { season: view.statusSeason }), nameCls = statusNameClass(ps);
-    return `<tr class="an-row${open ? " open" : ""}${view.hl && r.gsis === view.hl ? " is-hl" : ""}" data-id="${esc(r.gsis)}" tabindex="0" aria-expanded="${open}">
+    return `<tr class="an-row${open ? " open" : ""}" data-id="${esc(r.gsis)}" tabindex="0" aria-expanded="${open}">
       <td class="c-rank">${i + 1}</td>
-      <td class="c-name"><a class="an-pname${nameCls ? " " + nameCls : ""}" href="#/player/${encodeURIComponent(r.gsis)}${q ? "?" + q : ""}">${esc(r.name)}</a>${teamPill(r.team, view.teams, q)}${chip}<a class="an-dc" href="${depth}" title="Open his depth-chart card" aria-label="Depth chart">→</a></td>
+      <td class="c-name"><a class="an-pname${nameCls ? " " + nameCls : ""}" href="#/player/${encodeURIComponent(r.gsis)}${q ? "?" + q : ""}">${esc(r.name)}</a>${teamPill(r.team, view.teams, q)}${chip}<a class="an-dc" href="${depth}" target="_blank" rel="noopener" title="Open his depth-chart card in a new tab" aria-label="Depth chart">↗</a></td>
       <td class="num">${r.g}</td>
-      ${cols.map((c) => cell(c, r)).join("")}
+      ${COLS.map((c) => cell(c, r)).join("")}
       <td class="c-spark">${epaSpark(r.series, st)}</td></tr>`
       + (open ? `<tr class="an-detail"><td colspan="${nCols}"><div class="an-detail-wrap">${detailHtml(r, st, q, ref, view.windowName || "Window", view.lgZones)}</div></td></tr>` : "");
   }).join("");
@@ -326,7 +305,7 @@ export const minDbOf = (query) => { const v = new URLSearchParams(String(query |
 export function qbQuery(st, minDb) {
   const q = new URLSearchParams(toQuery(st));
   if (minDb !== QB_MIN_DB) q.set("mindb", minDb);
-  return withView(q.toString(), st.view, st);
+  return q.toString();
 }
 
 // Same "picked season[ + previous season]" prefix as player.js's seasonLabel (D184).
@@ -347,18 +326,16 @@ export function pfrNote(pfrThrough, latestKey, season) {
 
 export async function renderQb(ctx, query) {
   const { root, isCurrent } = ctx;
-  const st = withViewSort({ ...fromQuery(query), view: viewFrom(query, { twoWay: true }) }, query); // a Deciding address with no sort opens on DK/g
+  const st = fromQuery(query);
   const minDb = minDbOf(query);
-  const hl = hlOf(query); // D225b: a player page's ranking link highlights his row; the reader's own changes keep it and never re-scroll
   document.title = "Quarterbacks · NFL Analytics";
-  const go = (n, md = minDb) => { const q = withHl(qbQuery({ ...n, view: n.view || st.view }, md), hl); location.hash = `#/qb${q ? "?" + q : ""}`; };
+  const go = (n, md = minDb) => { const q = qbQuery(n, md); location.hash = `#/qb${q ? "?" + q : ""}`; };
   if (!root.querySelector(".an-qb")) root.innerHTML = `<div class="an-msg">Loading quarterbacks…</div>`;
-  let data, teams, statusFeed, payload = null;
+  let data, teams, statusFeed;
   try {
     // The D196 injury-status feed loads alongside the analytics data; it never throws (loadStatusFeed's own
     // contract), so a failure there never blocks the leaderboard.
-    [data, payload, statusFeed] = await Promise.all([loadFor(seasonsOf(st), st), loadTeams().catch(() => null), loadStatusFeed()]);
-    teams = payload?.teams || [];
+    [data, teams, statusFeed] = await Promise.all([loadFor(seasonsOf(st), st), loadTeams().then((j) => j.teams || []).catch(() => []), loadStatusFeed()]);
   } catch (e) {
     if (!isCurrent()) return;
     const notBuilt = e.status === 404 || e.status === 503;
@@ -377,7 +354,7 @@ export async function renderQb(ctx, query) {
   const clubTeams = [...new Set(clubGames(data.blocks).map((g) => g.team))].sort();
   const teamsByAbbr = new Map(teams.map((t) => [t.abbr, t]));
   const pnote = pfrNote(lgAgg.pfrThrough, lgAgg.latestKey, st.season);
-  const qs = qbQuery({ ...st, open: "", view: "" }, minDb);
+  const qs = qbQuery({ ...st, open: "" }, minDb);
   root.innerHTML = `<section class="an-qb">
     <div class="an-head">
       <h1>Quarterbacks</h1>
@@ -393,16 +370,11 @@ export async function renderQb(ctx, query) {
   const el = root.querySelector(".an-tablewrap");
   // D196: badges are current-season only - statusApplies gates on the feed's own season against the window shown.
   const status = statusApplies(st, statusFeed.season) ? statusFeed.players : {};
-  // D224 F: the Deciding set's last-3, this-week and status figures, only when that set is (or a sort needs it) on screen. Loaded on
-  // demand: deciding.js reaches the allowed table, which imports this file, so a static import here would be a cycle.
-  if (qbWantsDeciding(st)) { try { (await import("../deciding.js")).decorateDeciding(agg.rows, "qb", { blocks: data.blocks, players: data.players, st, payload }); } catch (e) { console.warn("Deciding figures unavailable:", e); } }
-  if (!isCurrent()) return;
-  el.innerHTML = qbTableHtml(agg.rows, st, qs, { ref, windowName, teams: teamsByAbbr, lgZones: lgAgg.lgZones, minDb, statusSeason: statusFeed.season, hl }, status);
-  wireView(el, (v) => go(pickView(COLS, DEC_COLS, { ...st, sort: knownSort(st.sort) ? st.sort : DEFAULT_SORT }, v === "standard" ? "all" : v, DEFAULT_SORT)));
+  el.innerHTML = qbTableHtml(agg.rows, st, qs, { ref, windowName, teams: teamsByAbbr, lgZones: lgAgg.lgZones, minDb, statusSeason: statusFeed.season }, status);
   el.querySelectorAll("th[data-sort]").forEach((h) => h.addEventListener("click", () => {
-    const k = h.dataset.sort === "rank" ? defaultSortFor(columnsFor(COLS, DEC_COLS, { ...st, sort: knownSort(st.sort) ? st.sort : DEFAULT_SORT }, DEFAULT_SORT, GROUPS, QB_DEC_GROUPS, { twoWay: true }).view, DEFAULT_SORT) : h.dataset.sort;
-    const cur = knownSort(st.sort) ? st.sort : DEFAULT_SORT;
-    const dir = cur === k ? (st.dir === "desc" ? "asc" : "desc") : ["name", "wkOpp"].includes(k) ? "asc" : "desc";
+    const k = h.dataset.sort === "rank" ? DEFAULT_SORT : h.dataset.sort;
+    const cur = COLS.some((c) => c.k === st.sort) || ["name", "g"].includes(st.sort) ? st.sort : DEFAULT_SORT;
+    const dir = cur === k ? (st.dir === "desc" ? "asc" : "desc") : k === "name" ? "asc" : "desc";
     go({ ...st, sort: k, dir });
   }));
   const min = el.querySelector("[data-min]");
@@ -424,5 +396,4 @@ export async function renderQb(ctx, query) {
     if (tr) window.scrollBy(0, tr.getBoundingClientRect().top - qbAnchor.top);
     qbAnchor.id = null;
   }
-  scrollToHl(root, hl, query);
 }
