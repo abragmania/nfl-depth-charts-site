@@ -5,13 +5,11 @@ import { fromQuery, toQuery, seasonsOf, weekLabel, POSITIONS } from "../filters.
 import { loadFor, loadTeams, loadStatusFeed } from "../data.js";
 import { aggregateUsage, clubGames, usageReference, REF_POS, POOL_PER_GAME, POOL_FLOOR } from "../agg.js";
 import { renderFilterBar } from "../filterbar.js";
-import { renderTable, anchor, withRzFigures, moreFrom, withMore, statusApplies, hlOf, withHl, scrollToHl } from "../table.js";
+import { renderTable, anchor, moreFrom, withMore, statusApplies } from "../table.js";
 
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 // The More toggle's state (more=1) rides beside the shared filters (table.js withMore).
-// D225b: hl (a player page's ranking link) keeps its highlight across the reader's own changes, which never re-scroll to it.
-let hl = "";
-const go = (st) => { const q = withHl(withMore(toQuery(st), st.more), hl); location.hash = `#/receivers${q ? "?" + q : ""}`; };
+const go = (st) => { const q = withMore(toQuery(st), st.more); location.hash = `#/receivers${q ? "?" + q : ""}`; };
 
 // Same "picked season[ + previous season]" prefix as player.js's seasonLabel (D184).
 export function seasonLabel(st) {
@@ -28,7 +26,6 @@ function windowText(st, weeks) {
 export async function renderUsage(ctx, query) {
   const { root, isCurrent } = ctx;
   const st = { ...fromQuery(query), more: moreFrom(query) };
-  hl = hlOf(query);
   document.title = "Receivers · NFL Analytics";
   if (!root.querySelector(".an-usage")) root.innerHTML = `<div class="an-msg">Loading receivers…</div>`;
   let data, teams, statusFeed;
@@ -50,9 +47,7 @@ export async function renderUsage(ctx, query) {
   const { rows, weeks } = aggregateUsage(data.blocks, data.players, st);
   // League references and tier cuts always come from the whole league at every position (each row is judged
   // against his own position's pool), so a one-club, one-opponent or one-position view still has perspective.
-  // D224 A: red-zone rates and shares on the rows (the shares are blank under an opponent, down or quarter filter); the league reference rows carry them too so the share column has position tiers.
-  withRzFigures(rows, data.blocks, data.players, st, "rec");
-  const ref = usageReference(withRzFigures(aggregateUsage(data.blocks, data.players, { ...st, team: "", opp: "", pos: {} }).rows, data.blocks, data.players, { ...st, team: "", opp: "", pos: {} }, "rec"));
+  const ref = usageReference(aggregateUsage(data.blocks, data.players, { ...st, team: "", opp: "", pos: {} }).rows);
   const shownPos = [...REF_POS].filter((p) => rows.some((r) => r.pos === p));
   const refLine = `League reference and colour tiers, by position: players with ${POOL_PER_GAME}+ targets/game (min ${POOL_FLOOR}) in the window (${shownPos.map((p) => `${p}s ${ref.at(p).n}`).join(" · ") || "none"})`;
   const windowName = st.window === "last3" ? "Last 3" : st.window === "range" && weeks.length ? `${weekLabel(weeks[0], st.season)}–${weekLabel(weeks[weeks.length - 1], st.season)}` : "Season";
@@ -79,12 +74,11 @@ export async function renderUsage(ctx, query) {
   renderFilterBar(root.querySelector(".an-filters"), st, { keys: data.keys, teams: clubTeams }, go);
   // D196: badges are current-season only - statusApplies gates on the feed's own season against the window shown.
   const status = statusApplies(st, statusFeed.season) ? statusFeed.players : {};
-  renderTable(root.querySelector(".an-tablewrap"), rows, st, qs, go, { ref, windowName, teams: teamsByAbbr, statusSeason: statusFeed.season, hl }, status);
+  renderTable(root.querySelector(".an-tablewrap"), rows, st, qs, go, { ref, windowName, teams: teamsByAbbr, statusSeason: statusFeed.season }, status);
   // Keep the clicked row where the reader clicked it rather than letting the re-render jump the page.
   if (anchor.id) {
     const tr = [...root.querySelectorAll("tr.an-row")].find((t) => t.dataset.id === anchor.id);
     if (tr) window.scrollBy(0, tr.getBoundingClientRect().top - anchor.top);
     anchor.id = null;
   }
-  scrollToHl(root, hl, query);
 }

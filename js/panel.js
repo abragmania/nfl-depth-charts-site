@@ -430,9 +430,7 @@ function showStatsTab(asideEl, tab) {
   if (tab !== "log" || !g || g.started) return;
   g.started = true;
   log.innerHTML = `<div class="panel-loading">Loading game log…</div>`;
-  // `g.getGameLogFn` lets a caller other than the depth-chart panel supply its own fetch (mountCardData's
-  // opts, below) — defaults to this file's own getGameLog so openPanel's behaviour is unchanged.
-  (g.getGameLogFn || getGameLog)(g.abbr)
+  getGameLog(g.abbr)
     .then((file) => {
       if (asideEl._panelGen !== g.gen) return;
       log.innerHTML = gameLogTableHtml(g.family, file?.players?.[g.playerKey] ?? null, file?.season ?? g.season, file?.team ?? null, snapSharePercent(g.snapShare));
@@ -573,27 +571,15 @@ function navigateAwayFromPlayer(asideEl) {
   else location.hash = origin;
 }
 
-// The Season stats / Game log tab click, split out of the close/back handler below so mountCardData can wire
-// it on its own (a container with no close button and no Escape-to-origin behaviour — the analytics player
-// page's card block) without pulling in navigateAwayFromPlayer's aside-only chrome. Wired once per container
-// (a fresh element each render, so "once" means once per render, not once ever), same as before.
-function wireStatsTabsOnce(containerEl) {
-  if (containerEl.dataset.statsTabsWired === "true") return;
-  containerEl.dataset.statsTabsWired = "true";
-  containerEl.addEventListener("click", (e) => {
-    const tab = e.target.closest("[data-stats-tab]");
-    if (tab) showStatsTab(containerEl, tab.dataset.statsTab);
-  });
-}
-
 // Escape and the close button both call this; wired once per aside element (a fresh <aside> is created
 // each time team.js re-renders a team page, so "once" means once per team-page render, not once ever).
 function wireCloseHandlersOnce(asideEl) {
   if (asideEl.dataset.panelWired === "true") return;
   asideEl.dataset.panelWired = "true";
-  wireStatsTabsOnce(asideEl);
   asideEl.addEventListener("click", (e) => {
     if (e.target.closest(".panel-close")) navigateAwayFromPlayer(asideEl);
+    const tab = e.target.closest("[data-stats-tab]");
+    if (tab) showStatsTab(asideEl, tab.dataset.statsTab);
   });
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape" && !asideEl.hidden) navigateAwayFromPlayer(asideEl);
@@ -642,17 +628,14 @@ export function gamesChipData(seasons) {
 // and team/key fallback logic exactly (see that file's renderHistory) so both calls resolve the same player.
 // Returns [] (not a throw) for the deliberate "no prior NFL seasons on record" 404 — a rookie's honest chip
 // is "0 games", not an error.
-// `getHistoryFn` defaults to this file's own getHistory (public/js/api.js) — mountCardData's caller can
-// supply a different one (the analytics player page's own data.js, whose relative paths are correct one
-// folder down from the site root; see mountCardData's header comment).
-async function fetchGamesSeasons(card, abbr, getHistoryFn = getHistory) {
+async function fetchGamesSeasons(card, abbr) {
   const team = String(abbr || card?.teamAbbr || card?.team || "").toUpperCase();
   const key = card?.playerKey ?? card?.gsisId ?? card?.espnId ?? "";
   if (!team || !key) return [];
   const q = new URLSearchParams();
   for (const [k, v] of [["gsisId", card?.gsisId], ["espnId", card?.espnId], ["pfrId", card?.pfrId], ["eaId", card?.rating?.eaId], ["name", card?.name], ["college", card?.bio?.college], ["birthDate", card?.bio?.birthDate], ["position", card?.displayLabel ?? card?.position]])
     if (v != null && v !== "") q.set(k, String(v));
-  const { ok, status, body } = await getHistoryFn(team, key, q);
+  const { ok, status, body } = await getHistory(team, key, q);
   if (status === 404 && body?.error?.code === "no_history") return [];
   if (!ok) throw new Error(body?.error?.message || `${status} /api/history`);
   return body?.seasons || [];
@@ -683,21 +666,17 @@ export function renderStats(asideEl, data, family, histSeasons = null) {
 }
 
 // --- public API ------------------------------------------------------------------------------------------
-// D209 part (2): the depth-chart card's own content, split out of panelShellHtml so the analytics player page
-// can draw the SAME markup above its own sections (public/analytics/js/views/player.js / views/qbplayer.js),
-// never a copy. Everything here is unchanged from what panelShellHtml used to build inline — this is a pure
-// extraction, proven byte-for-byte identical by tests/panel.test.mjs — panelShellHtml below just wraps it in
-// the aside's own chrome (the team-coloured box and the close button), which stays there for the depth-chart
-// panel only.
-export function cardBodyHtml(card, season, teamMeta, teamView = null) {
+function panelShellHtml(card, season, teamMeta, teamView = null) {
   const wordmark = teamMeta?.wordmarkUrl ? `<img class="panel-wordmark" src="${esc(teamMeta.wordmarkUrl)}" alt="${esc(teamMeta.abbr || "")}">` : "";
-  return `<div class="panel-head">
+  return `<div class="panel-inner" style="--team-primary:${esc(teamMeta?.colourPrimary || "#333")};--team-secondary:${esc(teamMeta?.colourSecondary || "#777")}">
+    <button type="button" class="panel-close" aria-label="Close player panel">&times;</button>
+    <div class="panel-head">
       <span class="panel-headshot-backdrop">${headshotHtml(card, 88)}</span>
       ${gradeBoxHtml(card.rating, season, card)}
       <div class="panel-head-main">
         <div class="panel-name">${esc(card.name)} <span class="panel-number">#${esc(card.number ?? dash)}</span></div>
         <div class="panel-label">${esc(card.displayLabel || card.position || "")}</div>
-        <a class="panel-stats-link" data-stats-link href="#" title="Open this player in NFL Analytics" hidden>Stats →</a>
+        <a class="panel-stats-link" data-stats-link href="#" target="_blank" rel="noopener" title="Open this player in NFL Analytics" hidden>Stats ↗</a>
         ${wordmark}
       </div>
     </div>
@@ -706,15 +685,7 @@ export function cardBodyHtml(card, season, teamMeta, teamView = null) {
     ${statusBlockHtml(card)}
     ${espnPlacementHtml(card, teamView)}
     <div class="panel-position-line" data-history>history loading…</div>
-    ${statsBoxHtml(card)}`;
-}
-
-// Exported so tests/panel.test.mjs can prove this shell really wraps cardBodyHtml's own output (never a
-// second copy of it) without needing a DOM.
-export function panelShellHtml(card, season, teamMeta, teamView = null) {
-  return `<div class="panel-inner" style="--team-primary:${esc(teamMeta?.colourPrimary || "#333")};--team-secondary:${esc(teamMeta?.colourSecondary || "#777")}">
-    <button type="button" class="panel-close" aria-label="Close player panel">&times;</button>
-    ${cardBodyHtml(card, season, teamMeta, teamView)}
+    ${statsBoxHtml(card)}
   </div>`;
 }
 
@@ -732,80 +703,15 @@ export function statsBoxHtml(card) {
     </div>`;
 }
 
-// D209 part (2): mounts everything cardBodyHtml's markup needs once it is already in the DOM under
-// `containerEl` — the season-history block (history.js's renderHistory), the games-experience chip, the ESPN
-// season-stats/game-log fetches and the draft-round patch. Split out of openPanel so the analytics player
-// page can draw the SAME card content above its own sections (public/analytics/js/views/player.js and
-// views/qbplayer.js) without duplicating any of this wiring — openPanel below is now a thin wrapper that adds
-// the aside-only chrome (origin tracking, the close button, Escape) around this.
-// `containerEl` owns its own generation counter (containerEl._panelGen, the same field openPanel always used)
-// so a container reused for a different player later voids any fetch still in flight from this call.
-// opts:
-//   statsLink (default true) — patch in the depth-chart panel's own "Stats ↗" link to the analytics page.
-//     The analytics page passes false: it IS that destination, so the link would point at itself.
-//   fetchPlayerFn / getHistoryFn / getGameLogFn — override the network calls this file's own api.js normally
-//     makes. api.js's own calls already resolve from any page depth (its static-mode paths anchor to the
-//     SITE ROOT from api.js's own module address, D209 🔵 fix round) — the analytics app passes its own
-//     data.js loaders here for CACHING, not path resolution: a card mounted for a player it has already
-//     fetched this page load costs no second request (data.js's loadPlayerStats/loadPlayerHistory; getGameLog
-//     already caches per club inside api.js itself). Default to this file's own fetchPlayer/getHistory/
-//     getGameLog, so openPanel's behaviour is unchanged.
-export function mountCardData(containerEl, card, teamView, teamMeta, { statsLink = true, fetchPlayerFn = fetchPlayer, getHistoryFn = getHistory, getGameLogFn = getGameLog } = {}) {
-  if (!containerEl || !card) return;
-  const myGen = (containerEl._panelGen = (containerEl._panelGen || 0) + 1);
-  const abbr = teamMeta?.abbr || teamView?.abbr || "";
-
-  wireStatsTabsOnce(containerEl);
-  { const h = containerEl.querySelector("[data-history]"); if (h) renderHistory(h, card, teamMeta, { abbr: teamView?.abbr ?? teamMeta?.abbr }); }
-  if (statsLink) patchStatsLink(containerEl, myGen, card, teamView?.season); // Job 2: shows itself only if this man has analytics data
-
-  // D115: independent of the ESPN-bio fetch below (gated on card.espnId) — the games count comes from
-  // gsis/pfr/name matching against nflverse history, not from ESPN, so this runs even for the small number
-  // of players with no ESPN id on file.
-  // The two fetches below feed each other: the history rows are the G column of the ESPN stats table (Adam,
-  // 2026-09-18), and they land in either order. Each stores what it got and re-renders the table if the other
-  // is already in. Both are cleared first, so a container opened on a second player never shows the first one's.
-  const family = statFamily(card);
-  containerEl._histSeasons = null;
-  containerEl._espnStats = null;
-  // D165: what the Game log tab fetches when it is first opened (showStatsTab); gen ties it to this opening.
-  containerEl._gameLogReq = { gen: myGen, abbr, playerKey: String(card.playerKey ?? ""), family, season: teamView?.season ?? null, snapShare: card.snapShare ?? null, started: false, getGameLogFn };
-
-  fetchGamesSeasons(card, abbr, getHistoryFn)
-    .then((seasons) => {
-      if (containerEl._panelGen !== myGen) return;
-      patchGamesChip(containerEl, gamesChipData(seasons));
-      containerEl._histSeasons = seasons;
-      if (containerEl._espnStats) renderStats(containerEl, containerEl._espnStats, family, seasons);
-    })
-    .catch(() => {}); // leave the dash placeholder; a real failure already surfaces via the history block above
-
-  if (!card.espnId) return; // finding 1: no ESPN id on file -> card-only panel, no fetch, no error state
-
-  fetchPlayerFn(card.espnId)
-    .then((data) => {
-      if (containerEl._panelGen !== myGen) return; // superseded by a later mountCardData() call
-      containerEl._espnStats = data;
-      renderStats(containerEl, data, family, containerEl._histSeasons);
-      fillDraftRound(containerEl, data.bio?.draft);
-    })
-    .catch((err) => {
-      if (containerEl._panelGen !== myGen) return;
-      const box = containerEl.querySelector("[data-stats]");
-      if (!box) return;
-      const { muted, text } = classifyStatsError(err, family);
-      box.innerHTML = `<div class="${muted ? "panel-stats-note" : "panel-error"}">${esc(text)}</div>`;
-    });
-}
-
 // openPanel(asideEl, card, teamView, teamMeta): fills and shows the aside for one player. `card` is the
 // already-resolved PlayerCard from the in-memory TeamView (team.js's job — see file header); `teamView` is
 // the whole compiled TeamView (used here only for its `season`); `teamMeta` is the team registry entry
 // (colours/wordmark/abbr). Safe to call repeatedly on the same aside for a different player — any
-// still-in-flight fetch from a previous call is ignored when it resolves (mountCardData's own generation
-// counter).
+// still-in-flight fetch from a previous call is ignored when it resolves (the generation counter below).
 export function openPanel(asideEl, card, teamView, teamMeta) {
   if (!asideEl || !card) return;
+  const myGen = (asideEl._panelGen = (asideEl._panelGen || 0) + 1);
+
   wireCloseHandlersOnce(asideEl);
   const abbr = teamMeta?.abbr || teamView?.abbr || "";
   asideEl.dataset.teamAbbr = abbr;
@@ -815,7 +721,46 @@ export function openPanel(asideEl, card, teamView, teamMeta) {
 
   asideEl.hidden = false;
   asideEl.innerHTML = panelShellHtml(card, teamView?.season, teamMeta, teamView);
-  mountCardData(asideEl, card, teamView, teamMeta);
+  { const h = asideEl.querySelector("[data-history]"); if (h) renderHistory(h, card, teamMeta, { abbr: teamView?.abbr ?? teamMeta?.abbr }); }
+  patchStatsLink(asideEl, myGen, card, teamView?.season); // Job 2: shows itself only if this man has analytics data
+
+  // D115: independent of the ESPN-bio fetch below (gated on card.espnId) — the games count comes from
+  // gsis/pfr/name matching against nflverse history, not from ESPN, so this runs even for the small number
+  // of players with no ESPN id on file.
+  // The two fetches below feed each other: the history rows are the G column of the ESPN stats table (Adam,
+  // 2026-09-18), and they land in either order. Each stores what it got and re-renders the table if the other
+  // is already in. Both are cleared first, so a panel opened on a second player never shows the first one's.
+  const family = statFamily(card);
+  asideEl._histSeasons = null;
+  asideEl._espnStats = null;
+  // D165: what the Game log tab fetches when it is first opened (showStatsTab); gen ties it to this opening.
+  asideEl._gameLogReq = { gen: myGen, abbr, playerKey: String(card.playerKey ?? ""), family, season: teamView?.season ?? null, snapShare: card.snapShare ?? null, started: false };
+
+  fetchGamesSeasons(card, abbr)
+    .then((seasons) => {
+      if (asideEl._panelGen !== myGen) return;
+      patchGamesChip(asideEl, gamesChipData(seasons));
+      asideEl._histSeasons = seasons;
+      if (asideEl._espnStats) renderStats(asideEl, asideEl._espnStats, family, seasons);
+    })
+    .catch(() => {}); // leave the dash placeholder; a real failure already surfaces via the history block above
+
+  if (!card.espnId) return; // finding 1: no ESPN id on file -> card-only panel, no fetch, no error state
+
+  fetchPlayer(card.espnId)
+    .then((data) => {
+      if (asideEl._panelGen !== myGen) return; // superseded by a later openPanel() call
+      asideEl._espnStats = data;
+      renderStats(asideEl, data, family, asideEl._histSeasons);
+      fillDraftRound(asideEl, data.bio?.draft);
+    })
+    .catch((err) => {
+      if (asideEl._panelGen !== myGen) return;
+      const box = asideEl.querySelector("[data-stats]");
+      if (!box) return;
+      const { muted, text } = classifyStatsError(err, family);
+      box.innerHTML = `<div class="${muted ? "panel-stats-note" : "panel-error"}">${esc(text)}</div>`;
+    });
 }
 
 // closePanel(asideEl): hides and clears the aside. Purely a DOM operation — never navigates, never touches
