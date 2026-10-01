@@ -18,6 +18,7 @@ import { loadFor, loadTeams, displayName, loadStatusFeed, loadTeamView, findCard
 import { isStatic } from "../../../js/api.js";
 import { playerView, maddenBlocking, maddenEdition, pageState, lastTeam, RZ_I5_FLOOR, trendFigures } from "../agg_player.js";
 import { weekState, seasonBlocks, weekAllowedCells, clubTargetCounts, weekStrip, VS_USUAL_TEXT } from "../agg_week.js";
+import { teammateSplits } from "../agg_absence.js";
 import { aggregateUsage, usageReference, clubGames, colIndex, REF_POS } from "../agg.js";
 import { renderFilterBar } from "../filterbar.js";
 import { tierOf } from "../table.js";
@@ -44,6 +45,19 @@ const tPct = (v, d = 1) => (isNum(v) ? (v * 100).toFixed(d) + "%" : DASH);
 const tSigned = (v, d) => (isNum(v) ? (v > 0 ? "+" : v < 0 ? "−" : "") + Math.abs(v).toFixed(d) : DASH);
 const ratio = (a, b) => (b > 0 ? a / b : null);
 const isBackPos = (pos) => pos === "RB" || pos === "FB";
+// D224 E: the With-and-without teammate in the link (ww=<gsis>), read beside the filter query and written back after it.
+export const wwOf = (query) => { const v = new URLSearchParams(String(query || "").replace(/^\?/, "")).get("ww"); return v && /^[A-Za-z0-9_.-]{1,20}$/.test(v) ? v : null; };
+// PURE: the pick after a draw whose link carries `linkWw`. held = { ww, wwQ }: the reader's pick and what the link said
+// at the last adoption. A link whose ww changed (a new address) wins; the same link again (the game-log fold redraws
+// from the address of the first draw) keeps the reader's pick. A teammate click changes ww only, never wwQ.
+export function wwFromLink(held, linkWw) {
+  return linkWw !== held.wwQ ? { ww: linkWw, wwQ: linkWw } : { ww: held.ww, wwQ: held.wwQ };
+}
+export function playerHash(gsis, st, ww = null) {
+  const q = toQuery({ ...st, open: "" });
+  const all = [q, ww ? `ww=${encodeURIComponent(ww)}` : ""].filter(Boolean).join("&");
+  return `#/player/${encodeURIComponent(gsis)}${all ? "?" + all : ""}`;
+}
 
 // Madden ratings for a season (D182), from the data builder's madden.json. Never fails: absent or unreadable
 // resolves to null and the blocking block says so.
@@ -199,7 +213,9 @@ export function backFallback(pos) {
 // cardEl/cardGsis: the mounted depth-chart card element the page is currently holding, and which player it
 // belongs to (D209 🔵 fix round, item 1) — a redraw of the SAME player reuses it untouched instead of
 // rebuilding and remounting it.
-const ui = { gsis: null, zoneMode: "tgt", zone: null, pastOpen: false, layout: null, club: null, cardEl: null, cardGsis: null };
+// ww/wwQ/wwSplit (D224 E): the teammate picked in the With-and-without section, the ww the link last carried (a redraw
+// from a stale query keeps the reader's own pick) and the memoised splits.
+const ui = { gsis: null, zoneMode: "tgt", zone: null, pastOpen: false, layout: null, club: null, cardEl: null, cardGsis: null, ww: null, wwQ: null, wwSplit: null };
 
 // D182 (Adam, 2026-09-24): the RB week-by-week block drops the air-yards-share strip (his carries and rush share
 // show in the rushing block); WR and TE keep all three weekly strips. They now sit in the receiving block's body.
@@ -423,13 +439,53 @@ export function clubTargetsHtml(ct, { qs = "", wn = "" } = {}) {
     `<table class="an-rc-club"><thead><tr><th></th><th></th>${cols.map(([, label]) => `<th>${esc(label)}</th>`).join("")}</tr></thead><tbody>${body}</tbody></table></div>`;
 }
 
+// ---- D224 increment E: with and without a teammate (agg_absence.js teammateSplits) -----------------------------
+// PURE. One section: a picker of the teammates who qualify (2+ games on each side) and, for the picked one, his figures
+// WITH that teammate and WITHOUT him: games, target share, route %, carry share (a back only) and DK/g. `pick` is the
+// wanted teammate (the link's ww); one that does not qualify falls back to the first that does. Nothing qualifies (or
+// no split at all): "" so the section is simply not there. nameOf gives the depth chart's spelling.
+export const WW_WHY = { qb1: ["QB1", "QB1 by pass attempts"], targets: ["targets", "top three on the club by targets"], back: ["RB", "the club's top back by designed runs"] };
+export function wwPicked(split, pick) {
+  const q = split?.qualified || [];
+  return q.find((c) => c.gsis === pick) || q[0] || null;
+}
+export function withWithoutHtml(split, { pick = null, back = false, qs = "", nameOf = (id, n) => n, weekFmt = (k) => k } = {}) {
+  const c = wwPicked(split, pick);
+  if (!c) return "";
+  const nm = (x) => nameOf(x.gsis, x.name);
+  const scope = `${split.seasons.join(" + ")} season to date, whatever the filters`;
+  const buttons = split.qualified.map((x) => {
+    const [tag, why] = WW_WHY[x.why] || ["", ""];
+    const unit = x.why === "qb1" ? "pass attempts" : x.why === "back" ? "designed runs" : "targets";
+    return `<button type="button" data-ww="${esc(x.gsis)}" class="${x === c ? "on" : ""}" title="${esc(`${nm(x)}: ${why}, ${x.count} ${unit} in ${split.season}`)}">${esc(nm(x))} <small>${esc(tag)}</small></button>`;
+  }).join("");
+  const W = c.with, O = c.without;
+  const pct = (v) => (isNum(v) ? (v * 100).toFixed(1) + "%" : DASH);
+  const games = (x) => x.keys.map((k) => weekFmt(k)).join(", ");
+  const plural = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
+  const rows = [
+    ["Games", (x) => String(x.games), (x) => `${plural(x.games, "game")} he played for ${split.team}: ${games(x)}`],
+    ["Target share", (x) => pct(x.tgtShare), (x) => `His ${x.tgt} targets / the club's ${x.att} pass attempts in those games (nflverse play-by-play)`],
+    ["Route %", (x) => pct(x.routePct), (x) => (x.routeGames ? `His ${x.routes} routes / the club dropbacks each charted week implies, ${plural(x.routeGames, "charted game")} (heatradar.app)` : "No charted routes in those games (heatradar.app charts 2026 only)")],
+    ...(back ? [["Carry share", (x) => pct(x.carShare), (x) => `His ${x.des} designed runs / the club's ${x.runs} designed runs in those games (nflverse play-by-play)`]] : []),
+    ["DK / g", (x) => tFix(x.dkG, 1), (x) => `${tFix(x.dk, 1)} DraftKings points over ${plural(x.games, "game")} (D194 scoring)`],
+  ];
+  const body = rows.map(([label, f, t]) => `<tr><th>${esc(label)}</th><td title="${esc(t(W))}">${esc(f(W))}</td><td title="${esc(t(O))}">${esc(f(O))}</td></tr>`).join("");
+  const link = `<a href="#/player/${encodeURIComponent(c.gsis)}${qs ? "?" + qs : ""}">${esc(nm(c))}</a>`;
+  return `<div class="an-pl-ww" data-wwsec><div class="an-dh">With and without <span class="an-dsub">${esc(split.team)} · ${esc(scope)} · only games both men were on ${esc(split.team)}; without = games he played and the teammate did not (a man signed mid-season counts his weeks before arriving as without)</span></div>` +
+    `<div class="an-pl-wwbody"><div class="an-seg an-pl-wwpick">${buttons}</div>` +
+    `<table class="an-pl-wwtab"><thead><tr><th></th><th>With ${link}</th><th>Without</th></tr></thead><tbody>${body}</tbody></table></div></div>`;
+}
+
 // ---- the page ------------------------------------------------------------------------------------------------
 export async function renderPlayer(ctx, params, query) {
   const { root, isCurrent } = ctx;
   const gsis = params.gsis;
   const st = fromQuery(query);
-  if (ui.gsis !== gsis) { ui.gsis = gsis; ui.zone = null; ui.pastOpen = false; ui.cardEl = null; ui.cardGsis = null; }
-  const go = (n) => { const q = toQuery({ ...n, open: "" }); location.hash = `#/player/${encodeURIComponent(gsis)}${q ? "?" + q : ""}`; };
+  if (ui.gsis !== gsis) { ui.gsis = gsis; ui.zone = null; ui.pastOpen = false; ui.cardEl = null; ui.cardGsis = null; ui.ww = null; ui.wwQ = null; }
+  // D224 E: the link's ww is adopted only when it changed, so a redraw from an older query keeps the reader's pick.
+  Object.assign(ui, wwFromLink(ui, wwOf(query)));
+  const go = (n) => { location.hash = playerHash(gsis, n, ui.ww); };
   if (!root.querySelector(".an-pl")) root.innerHTML = `<div class="an-msg">Loading player…</div>`;
   let data, teams, madden, feed;
   try {
@@ -489,6 +545,15 @@ export async function renderPlayer(ctx, params, query) {
     ui.club = { key: clubKey, ct };
   }
   const club = ui.club.ct;
+  // D224 E: the with-and-without splits, season to date (memoised per blocks, man and the switches they read).
+  const wwKey = `${gsis}|${st.season}|${st.with2025}|${st.pi}|${st.po}`;
+  if (ui.wwSplit?.key !== wwKey || ui.wwSplit.blocks !== data.blocks) {
+    let split = null;
+    try { split = teammateSplits(data.blocks, data.players, st, gsis); } catch (e) { console.warn("With and without:", e); }
+    ui.wwSplit = { key: wwKey, blocks: data.blocks, split };
+  }
+  const wwOpts = { back: isBackKind, qs, nameOf: (id, n) => displayName(id, data.players) || n, weekFmt: (k) => weekLabel(k, st.season) };
+  const wwHtml = () => withWithoutHtml(ui.wwSplit.split, { ...wwOpts, pick: ui.ww });
   const activeKey = st.window === "range" && st.from && st.from === st.to ? st.from : null;
   const sub = `${seasonLabel(st)} · ${v.weeks.length ? (v.weeks.length === 1 ? weekLabel(v.weeks[0], st.season) : `${weekLabel(v.weeks[0], st.season)} to ${weekLabel(v.weeks[v.weeks.length - 1], st.season)}`) : "no games"}${st.window === "last3" ? " (his club's last 3 games)" : ""} · league reference: ${v.recut.opportunityRefText}`;
   // The band's chart fits the page column (the kit caps each week's column, so it never stretches): the root's
@@ -504,7 +569,7 @@ export async function renderPlayer(ctx, params, query) {
   // it and splices the SAME element back into the new markup afterwards; only a fresh player (or the very
   // first draw) embeds cardHtml and lets the caller mount it below.
   const draw = (lay) => {
-    const bodyHtml = pageBody(v, st, { wn, activeKey, block, bandW, pastOpen: ui.pastOpen, club, clubQs: qs, ...lay });
+    const bodyHtml = pageBody(v, st, { wn, activeKey, block, bandW, pastOpen: ui.pastOpen, club, clubQs: qs, wwHtml: wwHtml(), ...lay });
     const reuse = reusesCard({ gsis: ui.cardGsis, el: ui.cardEl }, gsis) ? ui.cardEl : null;
     if (reuse?.parentNode) reuse.remove();
     root.innerHTML = `<section class="an-pl an-pl-rc">
@@ -533,6 +598,15 @@ export async function renderPlayer(ctx, params, query) {
   renderFilterBar(root.querySelector(".an-filters"), st, { keys: data.keys, teams: [] }, go);
   root.querySelector("[data-gl-toggle]")?.addEventListener("click", () => { ui.pastOpen = !ui.pastOpen; renderPlayer(ctx, params, query); });
   root.querySelector("[data-pi]")?.addEventListener("change", (e) => go({ ...st, pi: e.target.checked }));
+  // D224 E: a teammate button redraws the section alone and rewrites the link's ww in place (no re-render, no history entry).
+  const wireWw = (sec) => sec?.querySelectorAll("[data-ww]").forEach((b) => b.addEventListener("click", () => {
+    ui.ww = b.dataset.ww; // wwQ stays what the link said, so a redraw from that link keeps this pick
+    try { history.replaceState(history.state, "", playerHash(gsis, st, ui.ww)); } catch { /* the pick still shows */ }
+    const box = document.createElement("div"); box.innerHTML = wwHtml();
+    const next = box.firstElementChild;
+    if (next) { sec.replaceWith(next); wireWw(next); }
+  }));
+  wireWw(root.querySelector("[data-wwsec]"));
   // A weekly column (the fantasy chart's too) sets the window to that week; the same week again goes back.
   root.querySelectorAll(".an-wb-hit[data-key]").forEach((h) => h.addEventListener("click", () => {
     const k = h.dataset.key;
@@ -557,7 +631,7 @@ const zoneHtml = (v, st, wn) => `<div class="an-pl-zhead"><div class="an-seg" da
 // rushFit, the widths the receiving and rushing week strips spread across (default: their natural width); zoneMin,
 // the zone field plus its plays list's 260px minimum, so the zones wrap under the strips rather than squeeze; pastOpen,
 // the log's previous-season weeks unfolded.
-export function pageBody(v, st, { wn = windowName(st, v.weeks || []), activeKey = null, block = { status: "absent" }, bandW = 1400, chartW = null, stack = false, recFit = null, rushFit = null, zoneMin = null, pastOpen = false, club = null, clubQs = "", clubUnder = false } = {}) {
+export function pageBody(v, st, { wn = windowName(st, v.weeks || []), activeKey = null, block = { status: "absent" }, bandW = 1400, chartW = null, stack = false, recFit = null, rushFit = null, zoneMin = null, pastOpen = false, club = null, clubQs = "", clubUnder = false, wwHtml = "" } = {}) {
   const R = v.recut;
   const back = R.kind === "back";
   const pos = v.pos;
@@ -771,7 +845,8 @@ export function pageBody(v, st, { wn = windowName(st, v.weeks || []), activeKey 
       : block.status === "unrated" ? `<div class="an-note">No ${esc(maddenEdition(st.season))} rating on file for him.</div>`
       : ratingBars(block.bars, block.pos) + `<div class="an-note">EA's blocking attributes; the tick is the ${esc(block.pos)} median (${block.peers} rated). No free per-player blocking stat exists this season (D182).</div>`}</div>`;
 
-  return `${headline}${band}${phases}${variance}${maddenFoot(`<div class="an-pl-row">${blockHtml}</div>`)}`;
+  // D224 E: the With-and-without section (drawn by the page; "" when no teammate qualifies) sits under the Variance strip.
+  return `${headline}${band}${phases}${variance}${wwHtml || ""}${maddenFoot(`<div class="an-pl-row">${blockHtml}</div>`)}`;
 }
 const meanKey = (rows, k) => { const x = (rows || []).map((r) => r[k]).filter(isNum); return x.length ? x.reduce((a, b) => a + b, 0) / x.length : null; };
 

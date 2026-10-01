@@ -636,3 +636,18 @@ td[class*=" t-"] > span { color:var(--t); font-weight:700; }
 .an-wv-tr .an-wk-tr:first-child { margin-left:0; }
 .an-wv-cell .an-wk-fig { margin-left:10px; }
 .an-wv-note { padding:10px 14px; }
+
+/* ---- D224 E: With and without a teammate, under the Variance strip (the variance box's own panel look) ---- */
+.an-pl-ww { align-self:flex-start; max-width:100%; }
+.an-pl-wwbody { display:flex; flex-wrap:wrap; align-items:flex-start; gap:12px 28px; background:var(--panel2); border:1px solid var(--line); border-radius:var(--r-card); padding:13px 14px; }
+.an-pl-wwpick { flex-wrap:wrap; }
+.an-pl-wwpick small { color:var(--dim); font-size:10px; font-weight:700; margin-left:2px; }
+.an-pl-wwpick button.on small { color:var(--muted); }
+.an-pl-wwtab { border-collapse:collapse; font-size:12.5px; font-variant-numeric:tabular-nums; }
+.an-pl-wwtab th { color:var(--dim); font-size:10.5px; font-weight:700; text-align:left; padding:0 18px 4px 0; white-space:nowrap; }
+.an-pl-wwtab thead th:not(:first-child) { text-align:right; padding:0 0 4px 18px; }
+.an-pl-wwtab thead th a { color:var(--ink); text-decoration:none; }
+.an-pl-wwtab thead th a:hover { text-decoration:underline; }
+.an-pl-wwtab tbody th { padding-top:3px; padding-bottom:3px; }
+.an-pl-wwtab td { color:var(--ink); font-weight:700; text-align:right; padding:3px 0 3px 18px; min-width:96px; border-top:1px solid var(--line); cursor:default; }
+.an-pl-wwtab tbody th { border-top:1px solid var(--line); }

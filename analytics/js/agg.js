@@ -66,7 +66,7 @@ const num = (v) => (v === null || v === undefined || v === "" || !Number.isFinit
 const truthy = (v) => v === true || v === 1 || v === "1" || v === "true";
 const ratio = (a, b) => (b > 0 ? a / b : null);
 // heatradar-style tables may give route % as 0-1 or 0-100; normalise to a fraction.
-const frac = (p) => { const x = num(p); if (x === null || x <= 0) return null; return x > 1.5 ? x / 100 : x; };
+export const frac = (p) => { const x = num(p); if (x === null || x <= 0) return null; return x > 1.5 ? x / 100 : x; };
 
 // Every club-game the blocks hold: [{ key, team, gameId, opp, home }].
 export function clubGames(blocks) {
