@@ -4,9 +4,13 @@
 // routes exactly as before. In the published copy (GitHub Pages, no server at all) tools/publish.mjs has
 // written every one of those responses out as a flat file under dist/api/, and flipped index.html's
 // <meta name="nfl-static"> to "1". When that flag is set, every request below is rewritten to the matching
-// file path by staticPathFor() and fetched as a plain GET. The paths are RELATIVE on purpose: the published
-// site lives under https://abragmania.github.io/nfl-depth-charts-site/, so a leading "/" would escape the
-// sub-path and 404. Nothing else in the app knows or cares which mode it is in.
+// file path by staticPathFor() and fetched as a plain GET. The paths are anchored to the SITE ROOT, never to
+// the domain root: the published site lives under https://abragmania.github.io/nfl-depth-charts-site/, so a
+// leading "/" would escape the sub-path and 404. The root is found from this module's own address (js/api.js
+// sits one folder below it), so the same paths work from any page depth: the analytics app lives one folder
+// down at /analytics/ and, since D209, draws the depth-chart card through this module (a bare relative
+// "api/player/X.json" from there would have read /analytics/api/..., which does not exist). Nothing else in
+// the app knows or cares which mode it is in.
 let teamsCache = null;
 
 // Same sanitiser server/api/history.js uses for its own cache file names, so a playerKey that is not
@@ -50,8 +54,13 @@ export function isStatic() {
 
 // The single rewrite point. In live mode the URL is untouched; in static mode a known /api route becomes
 // its published file and anything else (there is nothing else on the read path) is left alone.
+// Under node (tests) the module address is a file: URL, so the root prefix is empty and the bare relative path
+// the tests already pin comes back unchanged.
+const SITE_ROOT = /^https?:/.test(import.meta.url) ? new URL("../", import.meta.url).href : "";
 export function resolveUrl(url) {
-  return isStatic() ? (staticPathFor(url) ?? url) : url;
+  if (!isStatic()) return url;
+  const p = staticPathFor(url);
+  return p ? SITE_ROOT + p : url;
 }
 
 export async function getJson(url) {
