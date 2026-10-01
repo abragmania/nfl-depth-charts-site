@@ -395,3 +395,70 @@ export function qbSplits(blocks, players, st, gsis, { noScreens = false } = {}) 
 // ---- Madden (QB passing attributes vs the QB median) ------------------------------------------------------
 export const QB_MADDEN_ATTRS = [["throwPower", "Throw Power"], ["throwAccuracyShort", "Short Accuracy"], ["throwAccuracyMid", "Mid Accuracy"],
   ["throwAccuracyDeep", "Deep Accuracy"], ["throwOnTheRun", "On the Run"], ["throwUnderPressure", "Under Pressure"], ["playAction", "Play Action"], ["awareness", "Awareness"]];
+
+// ---- The QB trend (D224 increment B: the This-week strip's last-3 arrows) ------------------------------------
+// As agg_player.js trendFigures: his LAST 3 GAMES PLAYED inside the window beside every game he played inside the
+// window, a club game he missed left out, never a zero. A game is his on the QB page's own rule (aggregateQb's g, the
+// Db/g tile's divisor): a club game where he has a QB event (qbEvent: a dropback or a carry). A snap alone, a
+// pass-interference no-play or a catch never makes a game his; his snap % joins a game he played (the routes rule in
+// trendFigures). Per game over the counted games:
+//   dbG    = dropbacks (qbEvent: attempts, sacks, scrambles; a PI no-play is none) / games
+//   carG   = carries (designed runs + scrambles) / games
+//   rzDbG  = dropbacks with the ledger's redzone flag / games
+//   snapPct = the mean of his weekly offensive snap % over the counted games with a snap figure (null under a down or
+//            quarter filter, as the row's).
+// Shape (frozen), as trendFigures': { kind: "qb", keys, games, last3Games, short, last3Weeks, figures: { [key]: {
+// last3, season, delta (last3 - season, in the figure's unit; snapPct in percentage points), pts (snapPct only), n3,
+// n } } }. The strip hides its arrows when games <= last3Games (fewer than four games), as the Trend strip does.
+export const QB_TREND_KEYS = ["dbG", "carG", "rzDbG", "snapPct"];
+export function qbTrend(blocks, players, st, gsis) {
+  const winSet = gamesInWindow(clubGames(blocks), st);
+  const situational = isSituational(st);
+  const per = new Map();
+  const M = (gk) => { if (!per.has(gk)) per.set(gk, { db: 0, car: 0, rzDb: 0, snap: null }); return per.get(gk); };
+  for (const b of blocks) {
+    const C = colIndex(b.cols);
+    for (const r of b.plays || []) {
+      const gk = `${b.key}|${r[C.posteam]}`;
+      if (!winSet.has(gk)) continue;
+      const e = qbEvent(r, C);
+      if (!e || e.id !== gsis) continue;
+      const m = M(gk);
+      if (e.db) { m.db++; if (truthy(r[C.redzone])) m.rzDb++; }
+      if (e.kind === "scramble" || e.kind === "run") m.car++;
+    }
+    const team = players?.[gsis]?.teams?.[b.key];
+    const gk = `${b.key}|${team}`;
+    if (!team || !winSet.has(gk)) continue;
+    const off = num(b.snaps?.[gsis]?.off);
+    if (off !== null && off > 0 && per.has(gk)) per.get(gk).snap = off / 100;
+  }
+  const played = [...per.keys()].sort();
+  const last3 = played.slice(-3);
+  const fig = (gks) => {
+    const s = { db: 0, car: 0, rzDb: 0, snap: 0, snapN: 0 };
+    for (const gk of gks) {
+      const m = per.get(gk);
+      s.db += m.db; s.car += m.car; s.rzDb += m.rzDb;
+      if (m.snap !== null) { s.snap += m.snap; s.snapN++; }
+    }
+    const n = gks.length;
+    return {
+      dbG: [ratio(s.db, n), n], carG: [ratio(s.car, n), n], rzDbG: [ratio(s.rzDb, n), n],
+      snapPct: situational ? [null, 0] : [ratio(s.snap, s.snapN), s.snapN],
+    };
+  };
+  const a = fig(last3), w = fig(played);
+  const figures = {};
+  for (const k of QB_TREND_KEYS) {
+    const [l3, n3] = a[k], [season, n] = w[k];
+    const d = l3 === null || season === null ? null : l3 - season;
+    const out = { last3: l3, season, delta: k === "snapPct" && d !== null ? d * 100 : d, n3, n };
+    if (k === "snapPct") out.pts = out.delta;
+    figures[k] = Object.freeze(out);
+  }
+  return Object.freeze({
+    kind: "qb", keys: Object.freeze([...QB_TREND_KEYS]), games: played.length, last3Games: last3.length,
+    short: last3.length < 3, last3Weeks: Object.freeze(last3.map((gk) => gk.split("|")[0])), figures: Object.freeze(figures),
+  });
+}

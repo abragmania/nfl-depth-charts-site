@@ -334,10 +334,9 @@ const CROP_MARGIN = 26;
 // islands rather than levels of one chart.
 const MAX_EXTRA_GAP = 220; // D75: a three-row offense page spreads its rows to fill the height rather than zooming
 // D76/D110: receivers/TE cluster pitch as a multiple of MIN_PITCH (1.2, down from 1.3) — the widest real
-// cluster (five places, e.g. Cleveland's WR·Slot/WR1/WR2/WR3/TE) still spreads across the turf rather
+// cluster (five places, e.g. a four-receiver chart plus its TE) still spreads across the turf rather
 // than huddling on the centre, and a hypothetical sixth place still fits inside the canvas.
 const PASS_CATCHER_PITCH = 1.2;
-const SLOT_COLUMN_MIN_RATE = 35; // D86: share of his OWN snaps a receiver must take inside to stand in the WR · Slot column; bar was 50 by D86, lowered to 40 by D118, lowered again to 35 by D163
 
 function offBandRange(band) {
   const cfg = OFF_BANDS[band] || { x: [REFERENCE_WIDTH / 2, REFERENCE_WIDTH / 2], n: 1 };
@@ -403,6 +402,18 @@ function placeOuterInner(count, outerMin, outerMax, innerMin, innerMax) {
 // there, and it must match server/compile/status.js's willNotPlay exactly. Do not fork a second copy: four
 // separate copies once drifted apart and all four were missing INACTIVE and EXEMPT.
 export const OUT_STATUS_CODES = new Set(["OUT", "IR", "PUP", "NFI", "SUSP", "INACTIVE", "EXEMPT"]);
+// D214 (Adam, 2026-09-29): "I just want to see everyone on the depth chart and not hidden, especially if they've
+// been playing or are going to play." A man has been playing when any of his recent games (the card's
+// snapHistory, the club's last three) shows snaps. Shared by cards.js's visible-row choice on both fit states.
+export function hasPlayed(p) {
+  return Array.isArray(p?.snapHistory) && p.snapHistory.some((h) => h && !h.absent && Number(h.pct) > 0);
+}
+// The order the visible depth rows are handed out in (lower first): a healthy man who has been playing, then a
+// healthy man who has not, then a man who is out. Demoted OUT starters (D104's rails) are handled before this.
+export function depthVisibilityRank(p) {
+  if (isFullyOut(p)) return 2;
+  return hasPlayed(p) ? 0 : 1;
+}
 export function isFullyOut(p) {
   return p.role === "STARTER_OUT" || OUT_STATUS_CODES.has(p.status?.code);
 }
@@ -475,7 +486,7 @@ export function outFillInDemotion(players) {
 
 // D104 is a DISPLAY rule and nothing else: this returns a reordered COPY for drawing, and never touches
 // the slot's own players[] array. Everything that reasons about who the starter of record is —
-// columnDecider (D93), receiverColumnLeader, D61's reserve placement, the heir logic, slot.injury — keeps
+// receiverColumnLeader, D61's reserve placement, the heir logic, slot.injury — keeps
 // reading players[0] off the compiled data, which is unchanged.
 export function displayOrder(players) {
   const n = outFillInDemotion(players);
@@ -585,295 +596,41 @@ function stackColumns(cols) {
   for (const c of cols.slice(1)) c.stackUnder = cols[0];
 }
 
-// WR · SLOT IS A REAL COLUMN OF SLOT RECEIVERS (D83): every charted receiver who qualifies for the slot
-// is lifted out of his club column into one synthetic column and removed from the column he came from —
-// nobody over the bar is left behind, nobody is drawn twice. A team with nobody over the bar has no Slot
-// column at all and keeps WR1/WR2/WR3 exactly as the club prints them.
+// D215 (Adam, 2026-09-29): there is no WR · Slot column. The receiver columns are drawn exactly as the club
+// prints them (D94's ESPN-ranked WR1/WR2/WR3, D97's left-to-right order), nobody is moved between them, and a
+// man who lines up inside wears a "Slot (58%)" tag beside his name instead (cards.js's slotBadge).
 //
-// Membership (50 by D86, 40 by D118, 35 by D163): a receiver qualifies once at least SLOT_COLUMN_MIN_RATE
-// percent of his OWN snaps are taken inside — not his share of the team's inside snaps, and not gated by
-// any minimum sample size (D117 retired D89's 100-snap floor: a thin sample is still evidence of where he
-// lines up).
-//
-// Ordering (D90): tier first (a listed-OUT starter's tier 0, then 1, then 2…, untiered last) so a backup
-// is never shown above a starter, then the rank of the column he came from, then slot snaps (most first,
-// null last), then the row the club printed him on.
-//
-// Whole-column move (D93): when a club column's own STARTER qualifies (columnDecider below picks the
-// decider for a listed-OUT/ACTIVE-fill-in pair), the WHOLE column becomes the WR · Slot column — same
-// order, backups stacked under him — and vanishes from the club columns, rather than leaving behind a
-// column of nothing but backups. If two starters qualify, the higher-ranked column (lower columnOrder,
-// D92) wins and becomes the Slot column; the other starter moves in as an individual below it and HIS
-// backups stay behind in his own, now backup-led, club column — the one case that can still leave a club
-// column holding only backups, which is what D92's "backup-led columns sort last" below still covers.
-// Within the merged group, D90's tier rule still governs: qualifying starters from other columns join
-// directly under the source column's line-one block, ahead of its own carried backups.
-//
-// Every man is judged on the same rate window: the current-season rate (D164 retired the 2025+2026 pool —
-// a man with no current-season data carries a null rate and stays in his club column). This is a DISPLAY
-// regrouping only — the compiled TeamView is untouched; every slot
-// is shallow-cloned and player cards are carried by reference, so a man's role/banner/badges/heat in the
-// Slot column are the same object the club column held.
-// slotSnapsPooled is the count every man is ordered on (D90) and shown in the tooltip's bracket; the
-// headline slotSnaps is only the fallback for a card with no pooled count at all. It no longer gates
-// membership (D117), so a null count is admitted on the rate alone and simply sorts last.
-const snapCount = (v) => (typeof v === "number" && Number.isFinite(v) && v >= 0 ? v : null);
-const slotSnapsOf = (p) => snapCount(p?.slotSnapsPooled) ?? snapCount(p?.slotSnaps);
-// D86: the one rate window every man is judged on — the current-season rate (D164), carried in the same
-// *Pooled fields for downstream readers. null means PlayerProfiler never measured him this season, and an
-// unmeasured man is not evidence of anything: he stays in his club column.
-const rateOf = (p) => {
-  const pooled = p?.slotRatePooled;
-  if (typeof pooled === "number" && Number.isFinite(pooled)) return pooled;
-  const own = p?.slotRate;
-  return typeof own === "number" && Number.isFinite(own) ? own : null;
-};
-// D92: the roles that make a man the leader of a real starter's column, as against a column of backups left
-// behind when the slot men moved out. Same list assignRoles works in: a co-starter is a starter on a shared
-// line one, a STARTER_OUT still holds his column (D12) and an ACTIVE man is the one filling in for him (D44).
-const STARTER_LED_ROLES = new Set(["STARTER", "STARTER_OUT", "ACTIVE"]);
-const starterLed = (slot) => {
-  const lineOne = slot?.players?.[0];
-  return !!lineOne && (lineOne.coStarter === true || STARTER_LED_ROLES.has(lineOne.role));
-};
-// D93: the one man whose qualification decides what happens to a whole club column. Normally the column's
-// line-one man — the only receiver the front end can see "leading" a slot. The exception is D12/D44's pair:
-// a listed-OUT starter with his ACTIVE fill-in under him. The fill-in is the receiver actually lining up
-// there this week, so HIS rate decides, and if he qualifies the out man rides into the Slot column with the
-// rest of the column rather than being stranded behind.
-//
-// The fill-in is NOT always row two. The server builds a column as [...outs, card, ...rest] and promoteFillIns
-// tags the first playable man after the LAST out man, so real shapes include [OUT, OUT, ACTIVE] (two men
-// listed out) and [OUT, backup on IR, ACTIVE] (the man behind him is unavailable too). So the decider is the
-// first ACTIVE man ANYWHERE in the column — exactly the man the server's own receiverColumnLeader
-// (server/compile/chart.js) picks when it ranks the column — and the out man himself only when the column
-// carries no ACTIVE man at all.
-function columnDecider(slot) {
-  const players = slot?.players || [];
-  const lineOne = players[0];
-  if (!lineOne) return null;
-  if (lineOne.role === "STARTER_OUT") return players.find((p) => p.role === "ACTIVE") || lineOne;
-  return lineOne;
-}
-
-// How many rows of a column make up its LINE ONE — the block no other column's man may be pushed inside.
-// Normally the single starter on row one; for D12/D44's shape every row from the listed-OUT starter down to
-// and including the ACTIVE man filling in for him (the rows between them are men listed out or unavailable,
-// which is exactly why the fill-in is not always row two); and for a co-starter pair, both names, which is
-// what lineOneCount above already draws as bold rows. Used when a second qualifying starter joins the Slot
-// column: he goes below that block, never between an out man and the man playing for him.
-function lineOneBlock(slot) {
-  const players = slot?.players || [];
-  if (!players.length) return 0;
-  if (players[0].role === "STARTER_OUT") {
-    const fill = players.findIndex((p) => p.role === "ACTIVE");
-    if (fill > 0) return fill + 1;
-  }
-  return lineOneCount(players);
-}
-
-// A card with no tier number sorts below every man who has one, in the order the club printed them.
-const UNTIERED = Number.MAX_SAFE_INTEGER;
-const tierOf = (p) => (typeof p?.tier === "number" && Number.isFinite(p.tier) ? p.tier : UNTIERED);
-
-// "Puka Nacua" -> "Nacua" for the Slot column's tooltip. A generational suffix is not a surname, so
-// "Marvin Harrison Jr." reads as "Harrison" rather than "Jr.".
-const NAME_SUFFIXES = new Set(["jr", "jr.", "sr", "sr.", "ii", "iii", "iv", "v"]);
-function lastName(name) {
-  const parts = String(name ?? "").trim().split(/\s+/).filter(Boolean);
-  while (parts.length > 1 && NAME_SUFFIXES.has(parts[parts.length - 1].toLowerCase())) parts.pop();
-  return parts[parts.length - 1] || String(name ?? "");
-}
-
-// Builds the WR · Slot slot and the club slots that survive it, or null when no receiver clears the bar.
-// Returns { slot, kept, reason }: `slot` is the synthetic column's slot object, `kept` the cloned club
-// slots with their slot men removed (an emptied one is dropped outright, so its column disappears from
-// the row), and `reason` the tooltip sentence naming every man in the column and the rate he plays inside
-// at. Called by layoutPassCatchers below AND by zoom.js's group page, so the two draw one regrouping.
-export function regroupSlotReceivers(wrSlots) {
-  // Pass one: every charted receiver PlayerProfiler has measured, deduped by card/playerKey (first listing
-  // wins — a chart that lists one man in two receiver columns; dedupSlots already resolves that on the
-  // server, this is belt and braces). wrSlots arrives in the club's own column order, so the array
-  // position IS the rank D90 orders by.
-  const charted = [];
-  const seen = new Set();
-  wrSlots.forEach((s, rank) => {
-    (s.players || []).forEach((p, row) => {
-      if (seen.has(p) || (p.playerKey != null && seen.has(p.playerKey))) return;
-      const rate = rateOf(p);
-      if (rate == null) return;
-      seen.add(p);
-      if (p.playerKey != null) seen.add(p.playerKey);
-      charted.push({ p, rate, rank, row, tier: tierOf(p), snaps: slotSnapsOf(p) });
-    });
-  });
-
-  // Pass two: everyone at or above SLOT_COLUMN_MIN_RATE, ordered per D90 (tier, then column rank, then
-  // slot snaps with the bigger workload first and null last, then the club's own printed row).
-  const qualified = charted
-    .filter((c) => c.rate >= SLOT_COLUMN_MIN_RATE)
-    .sort((a, b) => a.tier - b.tier || a.rank - b.rank || (b.snaps ?? -1) - (a.snaps ?? -1) || a.row - b.row)
-    .map((c) => c.p);
-  if (!qualified.length) return null;
-  const qualSet = new Set(qualified);
-  const qualKeys = new Set(qualified.map((p) => p.playerKey).filter((k) => k != null));
-  const isQualified = (p) => !!p && (qualSet.has(p) || (p.playerKey != null && qualKeys.has(p.playerKey)));
-
-  // Pass three (D93): a club column whose own STARTER qualifies (columnDecider decides who that is for a
-  // listed-OUT/ACTIVE-fill-in pair) takes its WHOLE column into the Slot column, same order, rather than
-  // leaving its backups behind in an orphaned column. With two qualifying starters, the higher-ranked
-  // column (lower columnOrder, D92) wins and becomes the Slot column; the other starter moves in as an
-  // individual and HIS backups stay behind in his own, now backup-led, club column — the one case that can
-  // still leave a club column holding nothing but backups (see the kept.sort below, D92).
-  //
-  // Accepted edge, low priority (no real club hits it today): if the column that LOSES the two-starters tie
-  // is a [STARTER_OUT, ACTIVE] pair and only the fill-in qualifies, he moves in alone and the out man is
-  // left leading his old column, whose `injury` block still names that fill-in as covering for him, now
-  // drawn one column over.
-  const starterColumns = wrSlots.filter((s) => starterLed(s) && isQualified(columnDecider(s)));
-  const source = starterColumns.length
-    ? starterColumns.reduce((a, b) => ((a.columnOrder ?? 0) <= (b.columnOrder ?? 0) ? a : b))
-    : null;
-  const group = source ? (source.players || []).slice() : [];
-  const inGroup = new Set(group);
-  const groupKeys = new Set(group.map((p) => p.playerKey).filter((k) => k != null));
-  // Men who qualify on their own, from every OTHER column, join the starter-led group in D90's order (tier,
-  // then column rank, then slot snaps, then printed row) — but split so a BACKUP never sits above a
-  // STARTER (D90): a second qualifying starter joins right under the source column's line-one block, ahead
-  // of the backups that column carried in.
-  const individuals = qualified.filter((p) => !inGroup.has(p) && !(p.playerKey != null && groupKeys.has(p.playerKey)));
-  // A starter is a man his club lists on line one or two (tier 0/1) or whom the server marks as leading a
-  // column (D12/D44's listed-OUT starter + ACTIVE fill-in, or a co-starter) — the same test starterLed uses.
-  const isStarter = (p) => tierOf(p) <= 1 || STARTER_LED_ROLES.has(p.role) || p?.coStarter === true;
-  const head = group.slice(0, lineOneBlock(source));
-  const carried = group.slice(head.length);
-  const men = source
-    ? [...head, ...individuals.filter(isStarter), ...carried, ...individuals.filter((p) => !isStarter(p))]
-    : [...individuals];
-
-  const moved = new Set(men);
-  const movedKeys = new Set(men.map((p) => p.playerKey).filter((k) => k != null));
-  const kept = [];
-  for (const s of wrSlots) {
-    const players = (s.players || []).filter((p) => !moved.has(p) && !(p.playerKey != null && movedKeys.has(p.playerKey)));
-    if (players.length) kept.push({ ...s, players });
-  }
-  // D92: lifting the slot men out can leave a column with nothing but backups in it (the losing starter
-  // above, or a chart never starter-led to begin with). That is not a number-two receiver and must not be
-  // drawn ahead of a starter's column, so starter-led columns sort first and backup-led ones follow, each
-  // group keeping the server's own order.
-  kept.sort((a, b) => (starterLed(a) ? 0 : 1) - (starterLed(b) ? 0 : 1));
-
-  // The derived column stands where the source club column stood, so it carries that column's own dressing
-  // with it — `injury` (cards.js's heat underline/glow) and `rankSource`/`espnRank`/`clubLabel`
-  // (columnRankReason's tooltip) — or the Slot column would lose a club's injury heat the moment its
-  // starter qualified. Absent when no starter column qualified. `sourceSlotId` is informational only.
-  const slot = {
-    slotId: "OFF-WR-SLOT", unit: "OFF", band: "WR", ordinal: 0, columnOrder: 0,
-    label: "WR · Slot", derived: true, players: men,
-    ...(source
-      ? { injury: source.injury, rankSource: source.rankSource, espnRank: source.espnRank, clubLabel: source.clubLabel, sourceSlotId: source.slotId }
-      : {}),
-  };
-  // D86: the tooltip leads with the rate that qualified each man and carries his slot snaps in brackets
-  // behind it (dropped when null — D117 admits a man on rate alone with no snap count).
-  const entryOf = (p) => {
-    const snaps = slotSnapsOf(p);
-    return `${lastName(p.name)} ${rateOf(p)}%${snaps == null ? "" : ` (${snaps} slot snaps)`}`;
-  };
-  // D93: the column can hold men who never cleared the bar — a qualifying starter's own backups, carried in
-  // with his column. The first sentence names only the men the bar was actually read on, so it stays true;
-  // the carried men (including a listed-OUT starter above an ACTIVE fill-in who didn't clear the bar
-  // himself) are named in a clause of their own, so nobody on the column is left unexplained.
-  const carriedOver = source ? men.filter((p) => inGroup.has(p) && !isQualified(p)) : [];
-  const decider = source ? columnDecider(source) : null;
-  const carriedClause = carriedOver.length && decider
-    ? `; listed behind ${lastName(decider.name)} by the club: ${carriedOver.map((p) => lastName(p.name)).join(", ")}`
-    : "";
-  const reason = `Slot receivers (35 percent or more of their snaps inside): ${men.filter(isQualified).map(entryOf).join(", ")}${carriedClause}`;
-  return { slot, kept, reason };
-}
-
-// D92: a receiver column's number is ESPN's rank of the man leading it, not the club's, so a leftover
-// column's tooltip has to say where its number came from AND what the club itself prints, or the pill and
-// the tooltip would contradict each other. `rankSource` is the server's own provenance ("espn" when ESPN
-// ranked the leading man, "chart" when only the chart's printed order placed the column); the club's
-// printed position is the number on its own label, or the column's ordinal when the club doesn't number.
-//
-// D93 renumbers surviving columns down their left-to-right order, so the pill on the box and this sentence
-// can quote two different numbers (pill WR1, server label WR2) — `displayLabel` is what the box actually
-// prints, and when it differs from the server's own label the sentence opens by saying so.
-//
-// D94: WR columns built straight off ESPN's own chart carry `clubLabel: "WR (ESPN)"` and `labelSource:
-// "espn"`, and have no real club position to quote (printedOrdinal would otherwise fall back to
-// `slot.ordinal`, which is just ESPN's own column count dressed up as something the club printed). Such a
-// column drops the "the club prints it" clause and says only what's true: ESPN listed it at this number.
-// Called by layoutPassCatchers below AND by zoom.js's group page, so both print the same sentence.
-const ORDINAL_SUFFIX = (n) => (n % 100 >= 11 && n % 100 <= 13 ? "th" : ["th", "st", "nd", "rd"][n % 10] ?? "th");
-function printedOrdinal(slot) {
-  const m = /(\d+)\s*$/.exec(String(slot?.clubLabel ?? ""));
-  const n = m ? Number(m[1]) : Number(slot?.ordinal);
-  return Number.isFinite(n) && n > 0 ? `${n}${ORDINAL_SUFFIX(n)}` : null;
-}
-export function columnRankReason(slot, displayLabel = null) {
-  const printed = printedOrdinal(slot);
-  const renumbered = displayLabel && displayLabel !== slot?.label
-    ? `Numbered ${displayLabel} here because the slot man's column stands apart; `
-    : "";
-  const isEspnColumn = slot?.clubLabel === "WR (ESPN)" || (slot?.band === "WR" && slot?.labelSource === "espn");
-  if (isEspnColumn) {
-    return `${renumbered}ESPN lists this column ${slot.label}`;
-  }
-  if (slot?.rankSource === "espn") {
-    return `${renumbered}ESPN ranks this column ${slot.label}${printed ? `; the club prints it ${printed}` : ""}`;
-  }
-  return `${renumbered}${printed ? `printed ${printed} on the chart` : "printed in the chart's own order"}`;
+// slotRateOf is the ONE slot rate the tag and its tooltip read: the CURRENT season's own rate, which the
+// compile writes as slotRateCurrent for every receiver and tight end (Adam, 2026-09-29: "Forget the 20 snaps
+// thing, just do everyone", retiring D164's gate). null means PlayerProfiler has no figure for him this
+// season, and such a man wears no tag: no pooling with last season and no fallback to the headline slotRate.
+export function slotRateOf(p) {
+  const v = p?.slotRateCurrent;
+  return typeof v === "number" && Number.isFinite(v) ? v : null;
 }
 
 // The PASS CATCHERS row (D69's row, D71's x-maths, D97's left-to-right order): one evenly-pitched cluster
 // centred on the field's centre line, at the same MIN_PITCH every other row uses — not the field-accurate
 // "two pitches outside the tackles" placement D63 originally used. Reads left to right as
-//   WR1 · WR · Slot (if any) · WR2 · ... · TE(s) · WRlast
-// i.e. the club columns in ascending order, the Slot column (if any) right after WR1, tight end(s) tucked
-// inside the last receiver (a second TE stacks under the first on one x, so a two-TE club takes no extra
-// width). Nothing is written back into `lm`: with the receivers in a cluster there is no receiver position
-// for the secondary to mirror, so the corners/nickel are fixed off the tackles in mirrorLandmarks (D71).
+//   WR1 · WR2 · ... · TE(s) · WRlast
+// i.e. the club's receiver columns in ascending order exactly as it prints them (D215: nothing regrouped,
+// nothing renumbered), tight end(s) tucked inside the last receiver (a second TE stacks under the first on
+// one x, so a two-TE club takes no extra width). Nothing is written back into `lm`: with the receivers in a
+// cluster there is no receiver position for the secondary to mirror, so the corners/nickel are fixed off the
+// tackles in mirrorLandmarks (D71).
 function layoutPassCatchers(offSlots, lm, style) {
-  const col = (slot, band, extra = {}) => ({ slot, x: lm.C, height: slotContentHeight(slot, style), width: colWidth(style), band, ...extra });
-  const wrSlots = offSlots.filter((s) => s.band === "WR").slice().sort(byColumnOrder);
+  const col = (slot, band) => ({ slot, x: lm.C, height: slotContentHeight(slot, style), width: colWidth(style), band });
+  const wrCols = offSlots.filter((s) => s.band === "WR").slice().sort(byColumnOrder).map((s) => col(s, "WR"));
   const teCols = offSlots.filter((s) => s.band === "TE").slice().sort(byColumnOrder).map((s) => col(s, "TE"));
-
-  // D83: the slot men are regrouped into their own column before any geometry happens, so the cluster is
-  // laid out over the columns that will actually be drawn — an emptied club column is never given a place
-  // in the comb and then hidden, it simply is not there.
-  const grouped = regroupSlotReceivers(wrSlots);
-  const slotCol = grouped ? col(grouped.slot, "WR", { displayLabel: "WR · Slot", derived: true, slotReason: grouped.reason }) : null;
-  // D93: once a qualifying starter's whole column moves into the Slot column, what's left is a clean run of
-  // real receiver columns, so they are RENUMBERED WR1, WR2… down their own left-to-right order (still
-  // ESPN's, D92) — a display label only: the slot keeps the server's own `label`, so the tooltip can still
-  // quote both numbers truthfully. A column left holding only the losing starter's backups (see
-  // regroupSlotReceivers, D92) is not a number-two receiver, so it prints a plain "WR" and takes no number;
-  // starter-led columns number straight through it.
-  let wrRank = 0;
-  const wrCols = grouped
-    ? grouped.kept.map((s) => {
-      const displayLabel = starterLed(s) ? `WR${++wrRank}` : "WR";
-      return col(s, "WR", { displayLabel, slotReason: columnRankReason(s, displayLabel) });
-    })
-    : wrSlots.map((s) => col(s, "WR"));
 
   stackColumns(teCols); // TE2 under TE1: the stack takes ONE place in the cluster, not two
   const te = teCols.length ? [teCols[0]] : [];
-  // D97: the pills must read ascending left to right (WR1, WR2, WR3…): the club columns stay in their own
-  // order, the Slot column (if any) slots in right after WR1, and the tight end(s) stay tucked inside the
-  // last receiver as D71/D76 place them.
-  const placed = (wrCols.length > 1
-    ? [wrCols[0], ...(slotCol ? [slotCol] : []), ...wrCols.slice(1, -1), ...te, wrCols[wrCols.length - 1]]
-    : [...wrCols, ...(slotCol ? [slotCol] : []), ...te]
-  ).filter(Boolean);
+  const placed = wrCols.length > 1
+    ? [...wrCols.slice(0, -1), ...te, wrCols[wrCols.length - 1]]
+    : [...wrCols, ...te];
   const pitch = MIN_PITCH * PASS_CATCHER_PITCH;
   placed.forEach((c, i) => { c.x = lm.C + (i - (placed.length - 1) / 2) * pitch; });
-  return [...(slotCol ? [slotCol] : []), ...wrCols, ...teCols];
+  return [...wrCols, ...teCols];
 }
 
 // The BACKFIELD row: the quarterback stays centred on the centre (Adam: "QB centred behind C as now")
