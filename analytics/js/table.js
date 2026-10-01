@@ -10,7 +10,6 @@
 //    targets / the club attempts over the window), never as a mean of the weekly percentages.
 import { sortRows, tierFromCuts, tierNote, TIER_NAMES, USAGE_TIER_KEYS, MIN_POOL } from "./agg.js";
 import { weekLabel, POSITIONS, seasonsOf } from "./filters.js";
-import { rzI5Shares, RZ_I5_FLOOR } from "./agg_player.js";
 // D196: the injury badge and red-name rule, kit.js's own copy (built the same round by the player-page builder,
 // which owns kit.js/analytics_recut.css) - re-exported here so the Receivers/QB/Running backs tables draw the
 // exact same badge, in the exact same CSS (.an-stchip/.an-st-*, already in analytics_recut.css), as the player
@@ -75,57 +74,6 @@ export const DK_TIPS = {
   dk: `DraftKings points over the window, scored game by game (a bonus counts per game, never per window). ${DK_RULE}`,
 };
 export const CATCH_TIP = "Catch %: receptions / targets, pass-interference targets left out (a PI target is never a catch or an incompletion)";
-// D224 increment A: the red-zone figures as per-game rates and shares (Adam, 2026-09-30: nothing existing is removed, the
-// raw counts sit behind More). The rates divide the table's own counts by his games in the window. The shares come from
-// agg_player.js's rzI5Shares (the club and player pages' figure, never recomputed here), which ignores the opponent, down,
-// quarter and home/away filters, so under any of them the share is blank rather than wrong.
-const SHARE_NOTE = "Blank under an opponent, down, quarter or home/away filter (the share ignores them).";
-export const RZ_TIPS = {
-  rzTgtG: "Red-zone targets per game he played (targets inside the opponent's 20 / his games in the window)",
-  rzTgtShare: `Red-zone target share: his red-zone targets / his club's red-zone pass attempts in his games. ${SHARE_NOTE}`,
-  ezG: "End-zone targets per game he played (end-zone targets / his games in the window)",
-  rzOppG: "Red-zone opportunities per game he played (carries + targets inside the opponent's 20 / his games in the window)",
-  rzCarG: "Red-zone carries per game he played (carries inside the opponent's 20 / his games in the window)",
-  i5Share: `Inside-the-5 carry share: his designed runs from the opponent's 5 or closer / his club's designed runs there in his games (scrambles on neither side). ${SHARE_NOTE}`,
-};
-export const sharesBlanked = (st) => Boolean(st?.opp || st?.downs?.length || st?.qtrs?.length || st?.ha);
-const perGame = (n, g) => (g > 0 && Number.isFinite(n) ? n / g : null);
-// Adds the red-zone figures to the aggregation's rows in place (and returns them). `kind` "rec" adds rzTgtG, rzTgtShare,
-// ezG; "rb" adds rzOppG, rzCarG, i5Share. `st.team` narrows his games to that club, as the aggregation does.
-export function withRzFigures(rows, blocks, players, st, kind, { blank = sharesBlanked(st) } = {}) {
-  const sh = blank ? null : rzI5Shares(blocks, players, st, st.team || "");
-  for (const r of rows) {
-    const x = sh?.get(r.gsis);
-    if (kind === "rec") { r.rzTgtG = perGame(r.rz, r.g); r.ezG = perGame(r.ez, r.g); r.rzTgtShare = x?.rzTgtShare ?? null; r.rzTgtN = x?.rzTgtN ?? null; r.rzAttN = x?.rzAttN ?? null; }
-    else { r.rzOppG = perGame(r.rzOpp, r.g); r.rzCarG = perGame(r.rz, r.g); r.i5Share = x?.i5Share ?? null; r.i5Des = x?.i5Des ?? null; r.i5Runs = x?.i5Runs ?? null; }
-  }
-  return rows;
-}
-// The sample behind a share, for its cell (both tables): the small "(3/3)" beside the percent and a sentence for the
-// cell's title, the club page's wording (views/team.js shareFig). Under the 3-play floor the cell is a dash and the
-// title says why; a filter-blanked share (sharesBlanked) says nothing here, the column header already does.
-export function shareSample(k, r, st) {
-  const [his, club, what] = k === "rzTgtShare" ? [r.rzTgtN, r.rzAttN, "red-zone pass attempts"] : k === "i5Share" ? [r.i5Des, r.i5Runs, "designed runs from the 5 or closer"] : [];
-  if (!what || !Number.isFinite(his) || !Number.isFinite(club)) return { count: "", title: "" };
-  const share = r[k];
-  if (Number.isFinite(share)) return { count: `${his}/${club}`, title: `his ${his} of the club's ${club} in his games` };
-  if (sharesBlanked(st)) return { count: "", title: "" };
-  return { count: "", title: `not shown, the club had ${club} such play${club === 1 ? "" : "s"} in his games (fewer than ${RZ_I5_FLOOR}); he had ${his}` };
-}
-export const shareCountHtml = (count) => (count ? `<small class="an-rzn" style="margin-left:3px;font-size:.72em;font-weight:400;opacity:.6">${count}</small>` : "");
-// D224 increment D: the target-depth mix bar (four parts, shallow to deep: behind the line, short, intermediate, deep)
-// and its hover, shared by the Receivers table and the club offense page's Target Share card. `depth` is agg.js's
-// depthMix; a man with no depth-tagged target gets a dash. The percents are rounded one by one, so they can read 99 or 101.
-export const DEPTH_PARTS = [["behind", "behind"], ["short", "short"], ["inter", "inter"], ["deep", "deep"]];
-export const DEPTH_TIP = "Target-depth mix: his targets by air yards, behind the line (0 or less) / short (1-9) / intermediate (10-19) / deep (20+), left to right. Shares are of the targets that have a depth. Sorts by the deep share.";
-export function depthTitle(depth, adot) {
-  if (!depth?.n) return "No targets with a depth";
-  return DEPTH_PARTS.map(([k, l]) => `${l} ${Math.round(depth.shares[k] * 100)}% (${depth[k]})`).join(" · ") + (Number.isFinite(adot) ? ` · aDOT ${adot.toFixed(1)}` : "");
-}
-export function depthBarHtml(depth, adot) {
-  if (!depth?.n) return DASH;
-  return `<span class="an-depth" title="${esc(depthTitle(depth, adot))}">${DEPTH_PARTS.map(([k]) => depth[k] ? `<i class="an-depth-${k}" style="flex-grow:${depth[k]}"></i>` : "").join("")}</span>`;
-}
 const COLS = [
   { k: "dkG", h: "DK/g", t: DK_TIPS.dkG, f: (v) => fix(v, 1), grp: "p" },
   { k: "dk", h: "DK", t: DK_TIPS.dk, f: (v) => fix(v, 1), grp: "p" },
@@ -136,9 +84,8 @@ const COLS = [
   { k: "tgtShare", h: "Tgt %", t: "Target share: his targets / his club's pass attempts in his games", f: (v) => pct(v), grp: "o", bar: 0.4 },
   { k: "ayShare", h: "AY %", t: "Air-yards share: his air yards / his club's air yards in his games", f: (v) => pct(v), grp: "o", bar: 0.55 },
   { k: "wopr", h: "WOPR", t: "Weighted opportunity: 1.5 x target share + 0.7 x air-yards share", f: (v) => fix(v, 2), grp: "o", bar: 0.9 },
-  { k: "rzTgtG", h: "RZ tgt/g", t: RZ_TIPS.rzTgtG, f: (v) => fix(v, 2), grp: "o" },
-  { k: "rzTgtShare", h: "RZ tgt %", t: RZ_TIPS.rzTgtShare, f: (v) => pct(v), grp: "o", bar: 0.5 },
-  { k: "ezG", h: "EZ/g", t: RZ_TIPS.ezG, f: (v) => fix(v, 2), grp: "o" },
+  { k: "rz", h: "RZ", t: "Red-zone targets (inside the 20)", f: int, grp: "o" },
+  { k: "ez", h: "EZ", t: "End-zone targets", f: int, grp: "o" },
   { k: "routePct", h: "Rt %", t: "Route participation: routes / club dropbacks", f: (v) => pct(v, 0), grp: "o", bar: 1 },
   { k: "snapPct", h: "Snap %", t: "Share of his club's offensive snaps (nflverse snap counts)", f: (v) => pct(v, 0), grp: "o", bar: 1 },
   { k: "yprr", h: "YPRR", t: "Receiving yards per route run", f: (v) => fix(v, 2), grp: "e" },
@@ -152,11 +99,8 @@ const COLS = [
   { k: "tdOpp", h: "TD/opp", t: "(Receiving touchdowns + rushing touchdowns) / opportunities (targets + carries)", f: (v) => (v === null || v === undefined ? DASH : pct(v) + "%"), grp: "xp" },
   { k: "ay", h: "AY", t: "Air yards on his targets", f: int, grp: "xp" },
   { k: "adot", h: "aDOT", t: "Average depth of target (air yards per target)", f: (v) => fix(v, 1), grp: "xp" },
-  { k: "depthDeep", h: "Depth", t: DEPTH_TIP, f: (v) => pct(v), grp: "xp", depthBar: true },
   { k: "routes", h: "Routes", t: "Routes run (heatradar, charted; weeks under 8 routes are not listed)", f: int, grp: "xp" },
   { k: "tprr", h: "TPRR", t: "Targets per route run", f: (v) => fix(v, 2), grp: "xp" },
-  { k: "rz", h: "RZ", t: "Red-zone targets (inside the 20), the window's total", f: int, grp: "xp" },
-  { k: "ez", h: "EZ", t: "End-zone targets, the window's total", f: int, grp: "xp" },
 ];
 // [key, label, ancillary tint or ""]. The ancillary label is lighter (CSS: .an-anc) and tinted pass or run.
 const GROUPS = [["p", "Production", ""], ["o", "Opportunity", ""], ["e", "Efficiency", ""], ["xp", "Receiving detail", "pass"]];
@@ -236,7 +180,7 @@ const BAND = (pos) => (pos === "RB" || pos === "FB" ? "BACKFIELD" : pos);
 // RB visible, the AY, AY %, WOPR and aDOT columns are dropped from the table entirely; in a mixed view they
 // stay (perspective for the WRs and TEs on the same page), but an RB's own row prints a dash in them rather
 // than a real-but-misleading number. Exported (pure) so tests can check both without a DOM.
-const AY_ONLY_KEYS = new Set(["ay", "ayShare", "wopr", "adot", "depthDeep"]);
+const AY_ONLY_KEYS = new Set(["ay", "ayShare", "wopr", "adot"]);
 export const rbOnlyMode = (pos) => Boolean(pos?.RB === "in" && !POSITIONS.some((p) => p !== "RB" && pos[p] === "in"));
 
 // ---- inline SVG ----------------------------------------------------------------------------------------
@@ -324,34 +268,12 @@ function detailHtml(row, st, q, P, windowName) {
       ${tile("Tgt %", pct(row.tgtShare), t("tgtShare", row.tgtShare), pct(L.tgtShare))}${tile("AY %", pct(row.ayShare), t("ayShare", row.ayShare), pct(L.ayShare))}
       ${tile("WOPR", fix(row.wopr, 2), t("wopr", row.wopr), fix(L.wopr, 2))}${tile("aDOT", fix(row.adot, 1), "", fix(L.adot, 1))}
       ${tile("EPA/Tgt", signed(row.epaTgt, 2), t("epaTgt", row.epaTgt), signed(L.epaTgt, 2))}${tile("YPRR", fix(row.yprr, 2), t("yprr", row.yprr), fix(L.yprr, 2))}
-      <div class="an-dlinks"><a href="#/player/${encodeURIComponent(row.gsis)}${q ? "?" + q : ""}">Player page →</a><a href="${depth}">Depth chart →</a></div>
+      <div class="an-dlinks"><a href="#/player/${encodeURIComponent(row.gsis)}${q ? "?" + q : ""}">Player page →</a><a href="${depth}" target="_blank" rel="noopener">Depth chart ↗</a></div>
     </div></div>`;
 }
 
 // The row the reader just clicked and where it sat on screen, so the re-render that follows can keep it there.
 export const anchor = { id: null, top: null };
-
-// D225b: a player page's ranking link carries `hl=<gsis>` (and `find=1`) into the Receivers, Running backs and
-// Quarterbacks boards (filters.js rankHref). hlOf reads hl from the hash query and withHl puts it back into a page's
-// own rebuilt query (a sort click or filter change keeps the highlight). scrollToHl centres his row ONLY on arrival from
-// a tile: it needs find=1, and strips it from the address with replaceState (no hashchange, no history entry), so a
-// re-render, a Back step or the reader's own changes never re-centre. The row class is the Rankings page's .an-row.is-hl.
-export const hlOf = (query) => { const v = new URLSearchParams(String(query || "").replace(/^\?/, "")).get("hl") || ""; return /^[A-Za-z0-9_.:-]{1,40}$/.test(v) ? v : ""; };
-export function withHl(q, hl) {
-  const p = new URLSearchParams(String(q || ""));
-  p.delete("hl");
-  if (hl) p.set("hl", hl);
-  return p.toString();
-}
-export function scrollToHl(root, hl, query) {
-  if (!hl || new URLSearchParams(String(query || "").replace(/^\?/, "")).get("find") !== "1") return;
-  [...root.querySelectorAll("tr.an-row")].find((t) => t.dataset.id === hl)?.scrollIntoView({ block: "center" });
-  const [path, qs = ""] = location.hash.split("?");
-  const p = new URLSearchParams(qs);
-  if (!p.has("find")) return;
-  p.delete("find");
-  history.replaceState(null, "", location.pathname + location.search + path + (p.toString() ? "?" + p : ""));
-}
 
 // ---- table ---------------------------------------------------------------------------------------------
 // The table's markup as a pure string (no DOM): everything renderTable needs to know to decide what to show,
@@ -389,21 +311,16 @@ export function tableHtml(allRows, st, query, view = {}, status = {}) {
     const tier = c.anc || !TIER_KEYS.has(c.k) ? "" : tierOf(c.k, v, P?.cuts);
     const note = !c.anc && TIER_KEYS.has(c.k) && v !== null && v !== undefined ? tierNote(P?.cuts?.[c.k], r.pos) : "";
     const bar = c.bar && v !== null && v !== undefined ? `<i class="an-bar" style="width:${Math.min(100, (v / c.bar) * 100).toFixed(1)}%"></i>` : "";
-    if (c.depthBar) {
-      const ok = r.pos !== "RB";
-      return `<td class="num ${c.cls} an-depth-td">${ok ? depthBarHtml(r.depth, r.adot) : DASH}</td>`;
-    }
-    const ss = shareSample(c.k, r, st), title = [note, ss.title].filter(Boolean).join(". ");
-    return `<td class="num ${c.cls}${tier ? " t-" + tier : ""}${bar ? " has-bar" : ""}"${title ? ` title="${esc(title)}"` : ""}>${bar}<span>${c.f(v)}${shareCountHtml(ss.count)}</span></td>`;
+    return `<td class="num ${c.cls}${tier ? " t-" + tier : ""}${bar ? " has-bar" : ""}"${note ? ` title="${esc(note)}"` : ""}>${bar}<span>${c.f(v)}</span></td>`;
   };
   const body = rows.map((r, i) => {
     const open = st.open === r.gsis;
     const depth = `../#/team/${encodeURIComponent(r.team)}/player/${encodeURIComponent(r.gsis)}`;
     const ps = status[r.gsis];
     const chip = statusChip(ps, { season: view.statusSeason }), nameCls = statusNameClass(ps);
-    return `<tr class="an-row${open ? " open" : ""}${view.hl && r.gsis === view.hl ? " is-hl" : ""}" data-id="${esc(r.gsis)}" tabindex="0" aria-expanded="${open}">
+    return `<tr class="an-row${open ? " open" : ""}" data-id="${esc(r.gsis)}" tabindex="0" aria-expanded="${open}">
       <td class="c-rank an-stick">${i + 1}</td>
-      <td class="c-name an-stick"><a class="an-pname${nameCls ? " " + nameCls : ""}" href="#/player/${encodeURIComponent(r.gsis)}${q ? "?" + q : ""}" title="${esc(r.name)}">${esc(r.name)}</a>${teamPill(r.team, teams, q)}<span class="an-pospill" data-band="${BAND(r.pos)}">${esc(r.pos)}</span>${chip}<a class="an-dc" href="${depth}" title="Open his depth-chart card" aria-label="Depth chart">→</a></td>
+      <td class="c-name an-stick"><a class="an-pname${nameCls ? " " + nameCls : ""}" href="#/player/${encodeURIComponent(r.gsis)}${q ? "?" + q : ""}" title="${esc(r.name)}">${esc(r.name)}</a>${teamPill(r.team, teams, q)}<span class="an-pospill" data-band="${BAND(r.pos)}">${esc(r.pos)}</span>${chip}<a class="an-dc" href="${depth}" target="_blank" rel="noopener" title="Open his depth-chart card in a new tab" aria-label="Depth chart">↗</a></td>
       <td class="num">${r.g}</td>
       ${cols.map((c) => cell(c, r)).join("")}
       <td class="c-spark">${sparkline(r.series, st)}</td></tr>`

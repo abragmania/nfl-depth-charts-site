@@ -27,7 +27,7 @@ const PHONE_HEADSHOT = { size: 32, minRating: PHONE_HEADSHOT_MIN_RATING };
 const RESIZE_DEBOUNCE = 180;
 
 // A column's place in the list is exactly its place on the field: the level groups in reading order, and
-// left to right inside each one (so the pass catchers read WR1, WR2, TE, WR3, and the line LT to RT).
+// left to right inside each one (so the pass catchers read WR1, WR · Slot, TE, WR2, and the line LT to RT).
 // A stacked column (TE2 under TE1) shares its leader's x and follows it.
 function columnsOf(layout, unit, bands) {
   return layout.columns
@@ -160,18 +160,19 @@ export function renderPhoneList(root, { view, team, abbr, chrome, rerender }) {
   return dispose;
 }
 
-// B4 (hover-only information): the column pill carries its injury-heat line in its title (and, for a desktop
-// reader, the label's provenance). A phone has no hover, so a tap on the pill opens that sentence as a
-// popover instead of following the pill's link; the link itself survives as the popover's own "See every player" line, so the group page is still reachable. The player-specific
+// B4 (hover-only information): the column pill carries a `reason` in its title — why this column is
+// numbered WR2, which men qualify for the slot column (D86/D92/D93). A phone has no hover, so a tap on the
+// pill opens that sentence as a popover instead of following the pill's link; the link itself survives as
+// the popover's own "See every player" line, so the group page is still reachable. The player-specific
 // tooltips (the ESPN placement, the fill-in reason) are step 2's job, in the player sheet.
 function wireColumnPills(root) {
   const close = () => { for (const el of root.querySelectorAll(".phone-pop")) el.remove(); };
   const onClick = (e) => {
     const pill = e.target.closest(".column-label");
     if (!pill || !root.contains(pill)) { close(); return; }
-    // The pill's title is the injury-heat line plus, for the desktop reader, the provenance of its label
-    // ("source: espn"). The provenance is an internal word, so the popover
-    // drops it and shows only what a reader asked.
+    // The pill's title is the column's reason sentence plus, for the desktop reader, the provenance of its
+    // label ("source: espn") and the injury-heat line. The provenance is an internal word, so the popover
+    // drops it and shows only what a reader asked: why this column is numbered or named what it is.
     const text = (pill.getAttribute("title") || "").split(" · ").filter((part) => !/^source: /.test(part)).join(" · ");
     // A tap NEVER silently leaves the list — a pill with nothing to explain still opens the popover, which
     // is where the link to that position group lives. Leaving the page stays the reader's own choice.

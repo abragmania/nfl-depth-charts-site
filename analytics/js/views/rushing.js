@@ -10,7 +10,7 @@ import { clubGames, tierNote, TIER_NAMES, MIN_POOL, POOL_PER_GAME, POOL_FLOOR } 
 import { aggregateRush, rushReference, rushTier, sortRushRows, rushOpts, rushQueryFrom, samePos, RUSH_DEFAULT_POS, RUSH_MIN_CAR, RUSH_TIER_KEYS, BIN_LABELS, GOAL_LINE } from "../agg_rush.js";
 import { renderFilterBar } from "../filterbar.js";
 import { esc, NA, isNum, pct, fix, signed, int, teamPill, qbStrips, seasonLabel } from "./qb.js";
-import { DK_TIPS, CATCH_TIP, withGroups, RZ_TIPS, withRzFigures, shareSample, shareCountHtml, groupCells, moreFrom, withMore, visibleCols, allOpen, toggleMore, moreCell, fitOpen, wireMore, statusChip, statusNameClass, statusApplies, hlOf, withHl, scrollToHl } from "../table.js";
+import { DK_TIPS, CATCH_TIP, withGroups, groupCells, moreFrom, withMore, visibleCols, allOpen, toggleMore, moreCell, fitOpen, wireMore, statusChip, statusNameClass, statusApplies } from "../table.js";
 
 // 👁 fix round, finding 4: qb.js's fix()/int() print JS's native ASCII hyphen for a negative value ("-2", "-0.12"),
 // while epaCar/epaTgt/epaOpp/ryoeAtt on this same table already use signed() and print the true minus ("−0.90").
@@ -26,8 +26,7 @@ const intM = (v) => int(v).replace(/^-/, "−");
 // keeps its key, value, format, tooltip and sort; the old Volume, Scoring zone, Big plays and Involvement headers and
 // D191's "Efficiency (opp)" are gone (D191's Opp/g and Opp % now sit in Opportunity, the rest in the gold group).
 // Lead's call (7b): the raw Opp and Car counts are dropped from the gold group so the open table fits the 1760 column
-// at 2560; Opp/g carries Opp, and sort=opp links still sort (the rank header sorts by carries). Car came back as a
-// column on 2026-09-27 (Adam).
+// at 2560; Opp/g and Car/g carry them, and sort=opp or sort=car links still sort (the rank header sorts by carries).
 const COLS = [
   { k: "dkG", h: "DK/g", t: DK_TIPS.dkG, f: (v) => fixM(v, 1), grp: "p" },
   { k: "dk", h: "DK", t: DK_TIPS.dk, f: (v) => fixM(v, 1), grp: "p" },
@@ -38,15 +37,11 @@ const COLS = [
   { k: "recTd", h: "Rec TD", t: "Receiving touchdowns", f: intM, grp: "p" },
   { k: "oppG", h: "Opp/g", t: "Opportunities (carries + targets) per game he played", f: (v) => fixM(v, 1), grp: "o", bar: 28 },
   { k: "oppShare", h: "Opp %", t: "Opportunity share: (his designed runs + his targets) / (his club's designed runs + his club's pass attempts) in his games (scrambles are on neither side)", f: (v) => pct(v), grp: "o", bar: 0.5 },
-  // Adam, 2026-09-27: "carries should be a sortable stat, obviously" - the raw count is a column again (7b had
-  // dropped it for width; sort=car had kept working through the rank header, but nothing on screen said so).
-  { k: "car", h: "Car", t: "Carries in the window (designed runs plus scrambles)", f: intM, grp: "o" },
   { k: "carG", h: "Car/g", t: "Carries per game he played", f: (v) => fixM(v, 1), grp: "o", bar: 22 },
   { k: "rushShare", h: "Rush %", t: "Rush share: his designed runs / his club's designed runs in his games (scrambles are called passes: on neither side)", f: (v) => pct(v), grp: "o", bar: 0.8 },
   { k: "tgt", h: "Tgt", t: "Targets (the Receivers page's count)", f: intM, grp: "o" },
   { k: "tgtShare", h: "Tgt %", t: "Target share: his targets / his club's pass attempts in his games", f: (v) => pct(v), grp: "o", bar: 0.3 },
-  { k: "rzOppG", h: "RZ opp/g", t: RZ_TIPS.rzOppG, f: (v) => fixM(v, 2), grp: "o" },
-  { k: "i5Share", h: "i5 %", t: RZ_TIPS.i5Share, f: (v) => pct(v, 0), grp: "o", bar: 0.6 },
+  { k: "rzOpp", h: "RZ opp", t: "Red-zone opportunities: his red-zone carries + his red-zone targets (opponent's 20 or closer)", f: intM, grp: "o" },
   { k: "snapPct", h: "Snap %", t: "Share of his club's offensive snaps (nflverse snap counts)", f: (v) => pct(v, 0), grp: "o", bar: 1 },
   { k: "ypc", h: "YPC", t: "Yards per carry", f: (v) => fixM(v, 1), grp: "e" },
   { k: "epaCar", h: "EPA/car", t: "Expected points added per carry", f: (v) => signed(v, 2), grp: "e" },
@@ -57,8 +52,6 @@ const COLS = [
   { k: "eff", h: "Eff", t: "NGS efficiency: distance run per rushing yard; lower is more north-south (weighted by his carries each week)", f: (v) => fixM(v, 2), grp: "xr" },
   { k: "long", h: "Long", t: "Longest carry", f: intM, grp: "xr" },
   { k: "explPct", h: "Expl %", t: "Explosive rate: carries of 10+ yards / carries", f: (v) => pct(v, 0), grp: "xr" },
-  { k: "rzOpp", h: "RZ opp", t: "Red-zone opportunities: his red-zone carries + his red-zone targets (opponent's 20 or closer), the window's total", f: intM, grp: "xr" },
-  { k: "rzCarG", h: "RZ car/g", t: RZ_TIPS.rzCarG, f: (v) => fixM(v, 2), grp: "xr" },
   { k: "rz", h: "RZ", t: "Red-zone carries (opponent's 20 or closer)", f: intM, grp: "xr" },
   { k: "gl", h: "GL", t: `Goal-line carries (opponent's ${GOAL_LINE} or closer)`, f: intM, grp: "xr" },
   { k: "ydsOpp", h: "Yds/opp", t: "(Rushing yards + receiving yards) / opportunities (carries + targets)", f: (v) => fixM(v, 1), grp: "xr" },
@@ -76,8 +69,8 @@ export const RB_TABLE_ORDER = GROUPS.map(([g, l]) => [l, COLS.filter((c) => c.gr
 const TIERED = new Set(RUSH_TIER_KEYS);
 const SORTABLE = new Set([...COLS.map((c) => c.k), "name", "g", "car", "opp"]);
 // The totals that sort but are not columns, and the column that shows them (🔵 on 7b: the default sort is carries).
-export const SHOWN_AS = { opp: "oppG" }; // car is its own column now (2026-09-27)
-const SHOWN_AS_TEXT = { opp: "total opportunities" };
+export const SHOWN_AS = { car: "carG", opp: "oppG" };
+const SHOWN_AS_TEXT = { car: "total carries", opp: "total opportunities" };
 const BAND = (pos) => (pos === "RB" || pos === "FB" ? "BACKFIELD" : pos);
 
 // Weekly carries: a line with the position's carries-per-game league line dashed behind it.
@@ -137,7 +130,7 @@ function detailHtml(r, st, q, P, wn) {
       ${tile("Snap %", pct(r.snapPct, 0), "snapPct", pct(L.snapPct, 0))}${tile("Rush %", pct(r.rushShare), "rushShare", pct(L.rushShare))}
       ${tile("Tgt %", pct(r.tgtShare), "tgtShare", pct(L.tgtShare))}${tile("Targets", intM(r.tgt), "", fixM(L.tgt, 1))}
       ${tile("Routes", intM(r.routes), "", fixM(L.routes, 0), "heatradar, charted")}${tile("Car/g", fixM(r.carG, 1), "carG", fixM(L.carG, 1))}
-      <div class="an-dlinks"><a href="#/player/${encodeURIComponent(r.gsis)}${q ? "?" + q : ""}">Player page →</a><a href="${depth}">Depth chart →</a></div>
+      <div class="an-dlinks"><a href="#/player/${encodeURIComponent(r.gsis)}${q ? "?" + q : ""}">Player page →</a><a href="${depth}" target="_blank" rel="noopener">Depth chart ↗</a></div>
     </div></div></div>`;
 }
 
@@ -172,18 +165,16 @@ export function rushTableHtml(allRows, st, query, view = {}, status = {}) {
     let title = tiered && isNum(v) ? tierNote(P?.cuts?.[c.k], r.pos) : "";
     if (c.k === "carG" && r.scr) title = `${title ? title + ". " : ""}${r.car} carries: ${r.des} designed runs, ${r.scr} scrambles`;
     const bar = c.bar && isNum(v) ? `<i class="an-bar" style="width:${Math.min(100, (v / c.bar) * 100).toFixed(1)}%"></i>` : "";
-    const ss = shareSample(c.k, r, st);
-    if (ss.title) title = [title, ss.title].filter(Boolean).join(". ");
-    return `<td class="num ${c.cls}${tier ? " t-" + tier : ""}${bar ? " has-bar" : ""}"${title ? ` title="${esc(title)}"` : ""}>${bar}<span>${c.f(v)}${shareCountHtml(ss.count)}</span></td>`;
+    return `<td class="num ${c.cls}${tier ? " t-" + tier : ""}${bar ? " has-bar" : ""}"${title ? ` title="${esc(title)}"` : ""}>${bar}<span>${c.f(v)}</span></td>`;
   };
   const body = rows.map((r, i) => {
     const open = st.open === r.gsis;
     const depth = `../#/team/${encodeURIComponent(r.team)}/player/${encodeURIComponent(r.gsis)}`;
     const ps = status[r.gsis];
     const chip = statusChip(ps, { season: view.statusSeason }), nameCls = statusNameClass(ps);
-    return `<tr class="an-row${open ? " open" : ""}${view.hl && r.gsis === view.hl ? " is-hl" : ""}" data-id="${esc(r.gsis)}" tabindex="0" aria-expanded="${open}">
+    return `<tr class="an-row${open ? " open" : ""}" data-id="${esc(r.gsis)}" tabindex="0" aria-expanded="${open}">
       <td class="c-rank an-stick">${i + 1}</td>
-      <td class="c-name an-stick"><a class="an-pname${nameCls ? " " + nameCls : ""}" href="#/player/${encodeURIComponent(r.gsis)}${q ? "?" + q : ""}" title="${esc(r.name)}">${esc(r.name)}</a>${teamPill(r.team, view.teams, q)}<span class="an-pospill" data-band="${BAND(r.pos)}">${esc(r.pos)}</span>${chip}<a class="an-dc" href="${depth}" title="Open his depth-chart card" aria-label="Depth chart">→</a></td>
+      <td class="c-name an-stick"><a class="an-pname${nameCls ? " " + nameCls : ""}" href="#/player/${encodeURIComponent(r.gsis)}${q ? "?" + q : ""}" title="${esc(r.name)}">${esc(r.name)}</a>${teamPill(r.team, view.teams, q)}<span class="an-pospill" data-band="${BAND(r.pos)}">${esc(r.pos)}</span>${chip}<a class="an-dc" href="${depth}" target="_blank" rel="noopener" title="Open his depth-chart card in a new tab" aria-label="Depth chart">↗</a></td>
       <td class="num">${r.g}</td>
       ${cols.map((c) => cell(c, r)).join("")}
       <td class="c-spark">${carrySpark(r.series, st, ref?.at(r.pos)?.lg?.carG)}</td></tr>`
@@ -219,14 +210,13 @@ export const rushQuery = (st, minCar) => withMore(rushQueryFrom(toQuery(st), st,
 export async function renderRushing(ctx, query) {
   const { root, isCurrent } = ctx;
   const { st, minCar } = rushState(query);
-  const hl = hlOf(query); // D225b: a player page's ranking link highlights his row; the reader's own changes keep it and never re-scroll
   document.title = "Running backs · NFL Analytics";
   const go = (n, mc = minCar) => {
     // The filter bar's Reset returns Usage's default positions (WR/TE/RB); a chip click changes one position, so a
     // jump to exactly that set that changes more than one is the Reset: send it to the rushing default instead.
     const diff = POSITIONS.filter((p) => (n.pos[p] || "") !== (st.pos[p] || "")).length;
     if (diff > 1 && samePos(n.pos, DEFAULT_POS)) n = { ...n, pos: { ...RUSH_DEFAULT_POS } };
-    const q = withHl(rushQuery(n, mc), hl); location.hash = `#/rbs${q ? "?" + q : ""}`;
+    const q = rushQuery(n, mc); location.hash = `#/rbs${q ? "?" + q : ""}`;
   };
   if (!root.querySelector(".an-rush")) root.innerHTML = `<div class="an-msg">Loading running backs…</div>`;
   let data, teams, statusFeed;
@@ -244,11 +234,8 @@ export async function renderRushing(ctx, query) {
   }
   if (!isCurrent()) return;
   const agg = aggregateRush(data.blocks, data.players, st);
-  // D224 A: red-zone rates and the inside-the-5 share on the rows (the share is blank under an opponent, down or quarter filter).
-  withRzFigures(agg.rows, data.blocks, data.players, st, "rb");
   // League references and tier cuts always come from the whole league at every position, the same window.
-  const lgSt = { ...st, team: "", opp: "", pos: {} };
-  const ref = rushReference(withRzFigures(aggregateRush(data.blocks, data.players, lgSt).rows, data.blocks, data.players, lgSt, "rb"));
+  const ref = rushReference(aggregateRush(data.blocks, data.players, { ...st, team: "", opp: "", pos: {} }).rows);
   for (const r of agg.rows) r.name = displayName(r.gsis, data.players);
   const weeks = agg.weeks;
   const windowName = st.window === "last3" ? "Last 3" : st.window === "range" && weeks.length ? `${weekLabel(weeks[0], st.season)}–${weekLabel(weeks[weeks.length - 1], st.season)}` : "Season";
@@ -275,7 +262,7 @@ export async function renderRushing(ctx, query) {
   const el = root.querySelector(".an-tablewrap");
   // D196: badges are current-season only - statusApplies gates on the feed's own season against the window shown.
   const status = statusApplies(st, statusFeed.season) ? statusFeed.players : {};
-  el.innerHTML = rushTableHtml(agg.rows, st, qs, { ref, windowName, teams: teamsByAbbr, minCar, statusSeason: statusFeed.season, hl }, status);
+  el.innerHTML = rushTableHtml(agg.rows, st, qs, { ref, windowName, teams: teamsByAbbr, minCar, statusSeason: statusFeed.season }, status);
   fitOpen(el);
   wireMore(el, () => go(toggleMore(COLS, { ...st, sort: SORTABLE.has(st.sort) ? st.sort : "car" }, "car")));
   el.querySelectorAll("th[data-sort]").forEach((h) => h.addEventListener("click", () => {
@@ -303,5 +290,4 @@ export async function renderRushing(ctx, query) {
     if (tr) window.scrollBy(0, tr.getBoundingClientRect().top - rushAnchor.top);
     rushAnchor.id = null;
   }
-  scrollToHl(root, hl, query);
 }
