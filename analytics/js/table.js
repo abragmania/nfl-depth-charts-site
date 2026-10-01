@@ -311,7 +311,7 @@ export function wireView(el, onPick) {
 // names the row field holding the cell's markup (a dash when the row has none); `sortRow` is the field the column sorts on.
 export const WK_COLS = {
   wkOpp: { k: "wkOpp", h: "Next", t: "This week's opponent (vs = home, @ = away), from the published schedule; a club on its bye reads Bye. Current season only. Sorts by club", html: "wkOppHtml" },
-  wkVs: { k: "wkVs", h: "vs usual", t: "What that defense gives up to his position, DK points per game against what the same offenses' men of that position usually get (the allowed table's vs usual), with its rank among the 32 defenses; the same figure as the This-week strip. Colour is the defense's: green = it held the position under its norm (a tough matchup for him). Hover for the words. Sorts by the figure, softest first", html: "wkVsHtml", td: "an-vs1" },
+  wkVs: { k: "wkVs", h: "vs usual", t: "What that defense gives up to his position, DK points per game against what the same offenses' men of that position usually get (the allowed table's vs usual), with its rank among the 32 defenses; the same figure as the This-week strip. Colour is his: green = a soft matchup (it gives the position more than usual), red = a tough one. Hover for the words. Sorts by the figure, softest first", html: "wkVsHtml", td: "an-vs1" },
 };
 export const L3_NOTE = "his club's last 3 games this season, the Last 3 window's rule (each club's three most recent games, a bye skipped), whatever the page's window";
 // The games behind a last-3 figure (deciding.js gL3: the games he played of those three), for the cell's hover.

@@ -576,9 +576,17 @@ export function fmtVsUsual(v, digits = 1, { sign = true } = {}) {
 // "Jalen Hurts" -> "J. Hurts"; a one-word name as it is.
 export const shortName = (name) => { const p = String(name || "").trim().split(/\s+/); return p.length > 1 ? `${p[0][0]}. ${p.slice(1).join(" ")}` : p[0] || ""; };
 
+// "Green means good for him" (Adam, 2026-10-01): the allowed table colours a vs-usual figure from the DEFENSE's side
+// (elite = held men furthest under their norm; for INT the table already flips its direction, so elite is still the
+// defense's good side). Every place that shows the figure from a PLAYER's side mirrors that tier here, once: elite <->
+// flat, strong <-> weak, avg stays, none stays none. The number and the rank are never touched.
+const PLAYER_VIEW_TIER = Object.freeze({ elite: "flat", strong: "weak", avg: "avg", weak: "strong", flat: "elite" });
+export const playerViewTier = (tier) => PLAYER_VIEW_TIER[tier] || "";
+const vsTierClass = (f) => tierClass(playerViewTier(f.tier));
+
 // D224 increment C: the vs-usual hover, shared by thisWeekStrip and the This-week page's vsUsualCell below. m: agg_week.js
 // vsUsualFor()'s { team, n, grp, figs }; vsText: agg_week.js VS_USUAL_TEXT. One line per figure in words (a soft or a
-// tough matchup for HIM, the lead's 2026-09-30 call: the colour is the defense's, not his), then the definition and
+// tough matchup for HIM; the colour reads from his side too: green = soft), then the definition and
 // each figure's allowed-against-usual line.
 const vsUsualLabel = (f) => WEEK_FIG_LABEL[f.k] || f.label;
 export function vsUsualTip(m, vsText = "") {
@@ -601,8 +609,8 @@ export function vsUsualTip(m, vsText = "") {
 export function vsUsualCell(m, { vsText = "" } = {}) {
   if (!m || !m.figs?.length || !Number.isFinite(m.figs[0].v)) return `<span class="an-wv-cell" title="No baseline yet: no game of this defense's against an offense with another game to compare">–</span>`;
   const [h, ...rest] = m.figs;
-  const sub = rest.filter((f) => Number.isFinite(f.v)).map((f) => `<span class="an-wk-fig"><span class="an-wk-lab">${esc(vsUsualLabel(f))}</span> <b class="an-wk-v${tierClass(f.tier)}">${fmtVsUsual(f.v, f.digits)}</b>${f.rank ? ` <span class="an-wk-rk">${ord(f.rank)}</span>` : ""}</span>`).join("");
-  return `<span class="an-wv-cell"${titleAttr(vsUsualTip(m, vsText))}><b class="an-wk-v${tierClass(h.tier)}">${fmtVsUsual(h.v, h.digits)}</b>${h.rank ? ` <span class="an-wk-rk">${ord(h.rank)}</span>` : ""}${sub}</span>`;
+  const sub = rest.filter((f) => Number.isFinite(f.v)).map((f) => `<span class="an-wk-fig"><span class="an-wk-lab">${esc(vsUsualLabel(f))}</span> <b class="an-wk-v${vsTierClass(f)}">${fmtVsUsual(f.v, f.digits)}</b>${f.rank ? ` <span class="an-wk-rk">${ord(f.rank)}</span>` : ""}</span>`).join("");
+  return `<span class="an-wv-cell"${titleAttr(vsUsualTip(m, vsText))}><b class="an-wk-v${vsTierClass(h)}">${fmtVsUsual(h.v, h.digits)}</b>${h.rank ? ` <span class="an-wk-rk">${ord(h.rank)}</span>` : ""}${sub}</span>`;
 }
 
 export function thisWeekStrip(data, { maxChips = 5, vsText = "", weekFmt = null } = {}) {
@@ -617,8 +625,8 @@ export function thisWeekStrip(data, { maxChips = 5, vsText = "", weekFmt = null 
     const lab = vsUsualLabel;
     const [h, ...rest] = m.figs;
     const tip = vsUsualTip(m, vsText);
-    const sub = rest.filter((f) => Number.isFinite(f.v)).map((f) => `<span class="an-wk-fig"><span class="an-wk-lab">${esc(lab(f))}</span> <b class="an-wk-v${tierClass(f.tier)}">${fmtVsUsual(f.v, f.digits)}</b>${f.rank ? ` <span class="an-wk-rk">${ord(f.rank)}</span>` : ""}</span>`).join("");
-    parts.push(`<span class="an-wk-vs"${titleAttr(tip)}><b class="an-wk-v${tierClass(h.tier)}">${fmtVsUsual(h.v, h.digits)}</b> ${esc(lab(h))} vs usual${h.rank ? `, <span class="an-wk-rk">${ord(h.rank)}</span>` : ""}${sub}</span>`);
+    const sub = rest.filter((f) => Number.isFinite(f.v)).map((f) => `<span class="an-wk-fig"><span class="an-wk-lab">${esc(lab(f))}</span> <b class="an-wk-v${vsTierClass(f)}">${fmtVsUsual(f.v, f.digits)}</b>${f.rank ? ` <span class="an-wk-rk">${ord(f.rank)}</span>` : ""}</span>`).join("");
+    parts.push(`<span class="an-wk-vs"${titleAttr(tip)}><b class="an-wk-v${vsTierClass(h)}">${fmtVsUsual(h.v, h.digits)}</b> ${esc(lab(h))} vs usual${h.rank ? `, <span class="an-wk-rk">${ord(h.rank)}</span>` : ""}${sub}</span>`);
   }
   const t = data.trend;
   if (t && !t.hidden && t.marks?.length) {
