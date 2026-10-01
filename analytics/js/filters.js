@@ -197,3 +197,38 @@ export function playPredicate(st, C) {
 
 // Down and quarter cannot be split out of a weekly table (routes, snaps): those columns go blank under them.
 export const isSituational = (st) => st.downs.length > 0 || st.qtrs.length > 0;
+
+// ---- D225b: ranking links ---------------------------------------------------------------------------------------
+// A figure tile on a player's page opens his position's leaderboard sorted by that figure's own column, on the same
+// season / window / include-previous switches the page is on, with his row highlighted (`hl=<gsis>`, read by the
+// three leaderboards through table.js's hlOf). BOARD_KEYS mirrors each leaderboard's column keys by hand (filters.js
+// imports nothing; tests/analytics_rank_links.test.mjs checks the three sets against the tables' own column lists).
+// A tile whose key is not in its board's set gets no link. LOW_FIRST: columns where the lower figure is the better one
+// open ascending, so the best man is first; every other column opens descending, as its header's first click does.
+export const BOARD_KEYS = Object.freeze({
+  receivers: new Set(["dkG", "dk", "rec", "yds", "td", "tgt", "tgtShare", "ayShare", "wopr", "rz", "ez", "rzTgtG", "rzTgtShare", "ezG", "routePct", "snapPct", "yprr", "epaTgt", "catchPct", "opp", "oppG", "oppShare", "ydsOpp", "epaOpp", "tdOpp", "ay", "adot", "routes", "tprr"]),
+  rbs: new Set(["dkG", "dk", "yds", "td", "rec", "recYds", "recTd", "oppG", "oppShare", "car", "carG", "rushShare", "tgt", "tgtShare", "rzOpp", "rzOppG", "rzCarG", "i5Share", "snapPct", "ypc", "epaCar", "ryoeAtt", "yprr", "epaTgt", "succPct", "eff", "long", "explPct", "rz", "gl", "ydsOpp", "epaOpp", "tdOpp", "routes", "tprr", "catchPct"]),
+  qb: new Set(["dkG", "dk", "yds", "td", "int", "db", "att", "epaDb", "cpoe", "succPct", "ypa", "rushAttG", "rushYdsG", "rushTd", "scrPct", "cmpPct", "adot", "sackPct", "pressPct", "paPct", "blitzPct", "ttt", "xcomp"]),
+});
+const LOW_FIRST = { receivers: new Set(), rbs: new Set(["eff"]), qb: new Set(["sackPct", "pressPct", "int"]) };
+const MIN_PARAM = { receivers: "min", rbs: "mincar", qb: "mindb" };
+
+// PURE: the leaderboard address for one tile, or null when the figure has no column there. board: "receivers" |
+// "rbs" | "qb"; key: the column key; st: the page's filter state; gsis: the man to highlight; pos: his position (a
+// receiver other than WR or TE gets his own chip lit so the default chips do not hide him); min: the leaderboard's
+// minimum (targets, carries or dropbacks) to open with, so a man under the default minimum still shows (null = its
+// default). The club filter is dropped (the tile speaks for the whole league); the opponent filter is kept, so the
+// highlighted row shows the same figure as the tile he clicked. `find=1` marks an arrival from a tile: the board
+// centres his row once and strips it from the address (table.js scrollToHl), so Back never re-scrolls.
+export function rankHref(board, key, st, { gsis = "", pos = "", min = null } = {}) {
+  if (!BOARD_KEYS[board]?.has(key) || !gsis) return null;
+  const dir = LOW_FIRST[board].has(key) ? "asc" : "desc";
+  const s = { ...st, team: "", open: "", sort: key, dir };
+  s.pos = board === "receivers" && POSITIONS.includes(pos) && !(pos in DEFAULT_POS) ? { ...DEFAULT_POS, [pos]: "in" } : { ...DEFAULT_POS };
+  const q = new URLSearchParams(toQuery(s));
+  q.set("sort", key); q.set("dir", dir); q.set("hl", gsis); q.set("find", "1");
+  if (board !== "receivers") q.delete("pos"); // the backs' and quarterbacks' boards keep their own default chips
+  q.delete("min"); // the page's own minimum never rides along (it would stick on the board); only the override below sets one
+  if (min !== null && Number.isFinite(+min)) q.set(MIN_PARAM[board], Math.max(0, Math.floor(+min)));
+  return `#/${board}?${q.toString()}`;
+}

@@ -24,6 +24,8 @@
 // single caller would be more invasive than just drawing the (much simpler, single-row) chart this band needs.
 // charts/bars.js is untouched by this file as of this draft.
 
+import { displayed } from "../agg_grid.js";
+
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
 // A tier string is only ever used inside a class="" attribute, so it is restricted to word characters rather than
@@ -37,9 +39,13 @@ const has = (v) => v !== null && v !== undefined && v !== "";
 // in the blanks so a page can pass only the fields it has. Never computes anything, never touches HTML.
 // rank/rankOf: his league rank beside the league figure ("lg 812 · 4th of 68 RBs") - both pre-formatted strings
 // the caller already worked out ("4th", "68 RBs"); kit.js only ever joins and escapes them.
-export function tileData({ label = "", value = "", lg = null, rank = null, rankOf = null, sub = null, tier = null, title = null, share = false, bar = null, lgBar = null } = {}) {
-  return { label, value, lg, rank, rankOf, sub, tier, title, share, bar, lgBar };
+export function tileData({ label = "", value = "", lg = null, rank = null, rankOf = null, sub = null, tier = null, title = null, share = false, bar = null, lgBar = null, href = null } = {}) {
+  return { label, value, lg, rank, rankOf, sub, tier, title, share, bar, lgBar, href };
 }
+
+// D225b: a tile that carries an href (a player page's ranking link to his leaderboard; the club page's D206 tiles) is
+// wrapped in the same .an-tile-link the club page uses (display:contents, so the tile's own layout is untouched).
+const tileLink = (d, body) => (d.href ? `<a class="an-tile-link" href="${esc(d.href)}">${body}</a>` : body);
 
 // The "lg 812 · 4th of 68 RBs" line shared by headlineRow and oppRow: lg alone, rank alone, or both joined by " · ".
 function lgRankEm(cls, d) {
@@ -56,12 +62,12 @@ function lgRankEm(cls, d) {
 export function headlineRow(tiles = []) {
   const items = (tiles || []).map((t) => {
     const d = tileData(t);
-    return `<div class="an-rc-htile${tierClass(d.tier)}"${titleAttr(d.title)}>` +
+    return tileLink(d, `<div class="an-rc-htile${tierClass(d.tier)}"${titleAttr(d.title)}>` +
       `<span class="an-rc-label">${esc(d.label)}</span>` +
       `<b class="an-rc-val">${esc(d.value)}</b>` +
       lgRankEm("an-rc-lg", d) +
       (d.sub ? `<div class="an-rc-sub">${esc(d.sub)}</div>` : "") +
-      `</div>`;
+      `</div>`);
   }).join("");
   return `<div class="an-rc-headline">${items}</div>`;
 }
@@ -79,13 +85,13 @@ export function oppRow(tiles = []) {
         (has(d.lgBar) && Number.isFinite(+d.lgBar) ? `<i class="an-rc-otick" style="left:${pctOf(d.lgBar)}%"></i>` : "") +
         `</div>`
       : "";
-    return `<div class="an-rc-otile ${kind}${tierClass(d.tier)}"${titleAttr(d.title)}>` +
+    return tileLink(d, `<div class="an-rc-otile ${kind}${tierClass(d.tier)}"${titleAttr(d.title)}>` +
       `<span class="an-rc-olabel">${esc(d.label)}</span>` +
       `<b class="an-rc-oval">${esc(d.value)}</b>` +
       lgRankEm("an-rc-olg", d) +
       bar +
       (d.sub ? `<div class="an-rc-osub">${esc(d.sub)}</div>` : "") +
-      `</div>`;
+      `</div>`);
   }).join("");
   return `<div class="an-rc-opp"><div class="an-rc-opph">Opportunity</div><div class="an-rc-opprow">${items}</div></div>`;
 }
@@ -435,15 +441,15 @@ export function phaseBlock({ title = "", tint = "pass", front = [], side = [], b
   const t = tint === "rush" ? "rush" : "pass";
   const frontHtml = (front || []).map((f) => {
     const d = tileData(f);
-    return `<div class="an-tile${tierClass(d.tier)}"${titleAttr(d.title)}>` +
+    return tileLink(d, `<div class="an-tile${tierClass(d.tier)}"${titleAttr(d.title)}>` +
       `<span>${esc(d.label)}</span><b>${esc(d.value)}</b>` +
       (has(d.lg) ? `<em> · lg ${esc(d.lg)}</em>` : "") +
       (d.sub ? `<div class="an-rc-sub">${esc(d.sub)}</div>` : "") +
-      `</div>`;
+      `</div>`);
   }).join("");
   const sideHtml = (side || []).map((s) => {
     const d = tileData(s);
-    return `<div class="an-rc-sideitem${tierClass(d.tier)}"${titleAttr(d.title)}><span>${esc(d.label)}</span><b>${esc(d.value)}</b></div>`;
+    return tileLink(d, `<div class="an-rc-sideitem${tierClass(d.tier)}"${titleAttr(d.title)}><span>${esc(d.label)}</span><b>${esc(d.value)}</b></div>`);
   }).join("");
   return `<div class="an-rc-phase an-rc-phase-${t}">` +
     `<div class="an-rc-phase-top">` +
@@ -493,11 +499,14 @@ export function lineBlock({ title = "", headline = [], tiles = [], foot = "" } =
   }).join("");
   const tileHtml = (tiles || []).map((t) => {
     const d = tileData(t);
-    return `<div class="an-tile${tierClass(d.tier)}"${titleAttr(d.title)}>` +
+    const body = `<div class="an-tile${tierClass(d.tier)}"${titleAttr(d.title)}>` +
       `<span>${esc(d.label)}</span><b>${esc(d.value)}</b>` +
       lgRankEm("an-rc-lg", d) +
       (d.sub ? `<div class="an-rc-sub">${esc(d.sub)}</div>` : "") +
       `</div>`;
+    // D206: a tile links to Rankings sorted by its own column only when the calling page set an href (a key with no
+    // Rankings column passes none) - the same .an-tile-link wrapper every other figure tile on the club page uses.
+    return d.href ? `<a class="an-tile-link" href="${esc(d.href)}">${body}</a>` : body;
   }).join("");
   return `<div class="an-card an-line"><div class="an-dh">${esc(title)}</div>` +
     `<div class="an-line-head">${chips}</div>` +
@@ -520,11 +529,12 @@ export function headshotUrl(espnId) {
 // status/statusSeason/latestWeek (D196, additive): his status entry when it applies to this page (currentStatus
 // above has already gated it on the season), the feed's season and the latest week on screen. With a status the name
 // carries the long badge after it and, under it, statusLine's one muted line; the name is red by isRedName. Without
-// one the header is exactly as before.
-export function playerHead({ lead = "", name = "", espnId = null, colour = null, pills = "", links = "", status = null, statusSeason = null, latestWeek = null } = {}) {
+// one the header is exactly as before. shot: false (D217) leaves the headshot circle out, so the header is Back, the name and the
+// links only.
+export function playerHead({ lead = "", name = "", espnId = null, colour = null, pills = "", links = "", status = null, statusSeason = null, latestWeek = null, shot: withShot = true } = {}) {
   const c = /^#[0-9a-fA-F]{3,8}$/.test(String(colour ?? "").trim()) ? String(colour).trim() : null;
   const url = headshotUrl(espnId);
-  const shot = `<span class="an-rc-shot">${url ? `<img src="${esc(url)}" alt="" width="56" height="56" loading="lazy" decoding="async" onerror="this.remove()">` : ""}</span>`;
+  const shot = !withShot ? "" : `<span class="an-rc-shot">${url ? `<img src="${esc(url)}" alt="" width="56" height="56" loading="lazy" decoding="async" onerror="this.remove()">` : ""}</span>`;
   const chip = statusChip(status, { long: true, season: statusSeason });
   const nameCls = statusNameClass(status);
   const h1 = `<h1${nameCls ? ` class="${nameCls}"` : ""}>${esc(name)}${chip ? ` ${chip}` : ""}</h1>`;
@@ -537,4 +547,100 @@ export function playerHead({ lead = "", name = "", espnId = null, colour = null,
 // html: ready-made HTML (e.g. the ratingBars() output pages already build) - not escaped, see file header.
 export function maddenFoot(html = "") {
   return `<div class="an-rc-maddenfoot">${html || ""}</div>`;
+}
+
+// ---- D224 increment B: the This-week strip, one quiet line under the depth-chart card -------------------------
+// data: agg_week.js weekStrip() ({ kind, grp, game, matchup, trend, health }); null or undefined prints nothing.
+// Never a tile (D196 struck a next-opponent tile): a single muted line, parts separated by thin rules. Figures arrive
+// computed; this only formats: the vs-usual value and its colour are the allowed table's (tier as that table colours
+// it: green = the defense held the position under its norm, a tough matchup), the rank its rank among the defenses.
+// maxChips: health chips shown before the rest fold into a "+n" whose hover lists them (one line at 1536 wide).
+export const WEEK_TREND_LABELS = { ...TREND_LABELS, routePct: "Rt %", dbG: "Db/g", carG: "Car/g", rzDbG: "RZ db/g", snapPct: "Snap %" };
+const WEEK_FIG_LABEL = { dk: "DK/g", targets: "Tgt/g", carries: "Car/g", passYds: "Pass yds/g" };
+const WEEK_POS_SHORT = { QB: "QBs", RB: "RBs", WR: "WRs", TE: "TEs" };
+const WEEK_POS_NAME = { QB: "quarterbacks", RB: "running backs", WR: "wide receivers", TE: "tight ends" };
+const ord = (n) => { const v = n % 100; return `${n}${v >= 11 && v <= 13 ? "th" : ["th", "st", "nd", "rd"][n % 10] || "th"}`; };
+// A signed figure with a true minus ("+2.4", "−1.0", "0.0"), rounded by the allowed table's own rule (agg_grid.js
+// displayed(), what its figNum prints and its ranks tie on), so the strip never differs from the table on a half.
+// sign: false prints the magnitude alone (the hover's words).
+export function fmtVsUsual(v, digits = 1, { sign = true } = {}) {
+  if (!Number.isFinite(v)) return "–";
+  const x = displayed(+v, { digits, pct: false });
+  if (x === 0) return (0).toFixed(digits);
+  const t = Math.abs(x).toFixed(digits);
+  return sign ? `${x < 0 ? "−" : "+"}${t}` : t;
+}
+// "Jalen Hurts" -> "J. Hurts"; a one-word name as it is.
+export const shortName = (name) => { const p = String(name || "").trim().split(/\s+/); return p.length > 1 ? `${p[0][0]}. ${p.slice(1).join(" ")}` : p[0] || ""; };
+
+// D224 increment C: the vs-usual hover, shared by thisWeekStrip and the This-week page's vsUsualCell below. m: agg_week.js
+// vsUsualFor()'s { team, n, grp, figs }; vsText: agg_week.js VS_USUAL_TEXT. One line per figure in words (a soft or a
+// tough matchup for HIM, the lead's 2026-09-30 call: the colour is the defense's, not his), then the definition and
+// each figure's allowed-against-usual line.
+const vsUsualLabel = (f) => WEEK_FIG_LABEL[f.k] || f.label;
+export function vsUsualTip(m, vsText = "") {
+  const pn = WEEK_POS_NAME[m.grp] || "that position";
+  const lab = vsUsualLabel;
+  const plainNum = (v, d) => fmtVsUsual(v, d, { sign: false });
+  const tipOf = (f) => `${lab(f)} to ${pn}: ${plainNum(f.allowed, f.digits)} allowed against ${plainNum(f.usual, f.digits)} usual over ${m.n} game${m.n === 1 ? "" : "s"} this season with a baseline${f.rank ? `, ${ord(f.rank)} of ${f.of} (1st = held furthest under their norm)` : ""}`;
+  const short = WEEK_POS_SHORT[m.grp] || pn;
+  const plain = (f) => {
+    if (!Number.isFinite(f.v)) return null;
+    const x = plainNum(f.v, f.digits), rk = f.rank ? ` (${ord(f.rank)} of ${f.of})` : "";
+    if (+x === 0) return `An even matchup: ${m.team} gives ${short} what they usually get in ${lab(f)}${rk}`;
+    return `${f.v > 0 ? "A soft" : "A tough"} matchup: ${m.team} gives ${short} ${x} ${lab(f)} ${f.v > 0 ? "more" : "less"} than they usually get${rk}`;
+  };
+  return [...m.figs.map(plain).filter(Boolean), "", `This season to date, whatever the page's window. ${vsText}.`, ...m.figs.map(tipOf)].join("\n");
+}
+// D224 increment C: the This-week page's vs-usual cell beside a man: the headline figure (DK/g) coloured and ranked
+// exactly as the strip prints it, the position's other figures small after it, the same hover. A dash when the defense
+// has no baseline yet.
+export function vsUsualCell(m, { vsText = "" } = {}) {
+  if (!m || !m.figs?.length || !Number.isFinite(m.figs[0].v)) return `<span class="an-wv-cell" title="No baseline yet: no game of this defense's against an offense with another game to compare">–</span>`;
+  const [h, ...rest] = m.figs;
+  const sub = rest.filter((f) => Number.isFinite(f.v)).map((f) => `<span class="an-wk-fig"><span class="an-wk-lab">${esc(vsUsualLabel(f))}</span> <b class="an-wk-v${tierClass(f.tier)}">${fmtVsUsual(f.v, f.digits)}</b>${f.rank ? ` <span class="an-wk-rk">${ord(f.rank)}</span>` : ""}</span>`).join("");
+  return `<span class="an-wv-cell"${titleAttr(vsUsualTip(m, vsText))}><b class="an-wk-v${tierClass(h.tier)}">${fmtVsUsual(h.v, h.digits)}</b>${h.rank ? ` <span class="an-wk-rk">${ord(h.rank)}</span>` : ""}${sub}</span>`;
+}
+
+export function thisWeekStrip(data, { maxChips = 5, vsText = "", weekFmt = null } = {}) {
+  if (!data) return "";
+  const parts = [];
+  const g = data.game;
+  // A kickoff already past (the teams file not yet moved on) prints the opponent alone; a game outside the league's
+  // current week says which week. No next game prints no game part.
+  if (g) parts.push(`<span class="an-wk-game">${g.kind === "bye" ? "Bye" : `${g.home ? "vs" : "@"} ${esc(g.opp)}${g.kickText ? ` · ${esc(g.kickText)}` : ""}${g.otherWeek && g.week ? ` · Wk ${g.week}` : ""}`}</span>`);
+  const m = data.matchup;
+  if (m && m.figs?.length && Number.isFinite(m.figs[0].v)) {
+    const lab = vsUsualLabel;
+    const [h, ...rest] = m.figs;
+    const tip = vsUsualTip(m, vsText);
+    const sub = rest.filter((f) => Number.isFinite(f.v)).map((f) => `<span class="an-wk-fig"><span class="an-wk-lab">${esc(lab(f))}</span> <b class="an-wk-v${tierClass(f.tier)}">${fmtVsUsual(f.v, f.digits)}</b>${f.rank ? ` <span class="an-wk-rk">${ord(f.rank)}</span>` : ""}</span>`).join("");
+    parts.push(`<span class="an-wk-vs"${titleAttr(tip)}><b class="an-wk-v${tierClass(h.tier)}">${fmtVsUsual(h.v, h.digits)}</b> ${esc(lab(h))} vs usual${h.rank ? `, <span class="an-wk-rk">${ord(h.rank)}</span>` : ""}${sub}</span>`);
+  }
+  const t = data.trend;
+  if (t && !t.hidden && t.marks?.length) {
+    const wf = weekFmt || ((k) => `W${+String(k).split("-")[1]}`);
+    const items = t.marks.map((x) => {
+      const dir = x.delta > 0.05 ? "up" : x.delta < -0.05 ? "down" : "";
+      const lab = WEEK_TREND_LABELS[x.k] || x.k;
+      const fmt = (v) => (!Number.isFinite(v) ? "–" : x.unit === "pts" ? `${(v * 100).toFixed(1)}%` : v.toFixed(1));
+      const tip = `${lab}: last 3 ${fmt(x.last3)} over ${x.n3} game${x.n3 === 1 ? "" : "s"}, season ${fmt(x.season)} over ${x.n} (${x.unit === "pts" ? "percentage points" : "per game"}); above or below only, never good or bad`;
+      return `<span class="an-wk-tr"${titleAttr(tip)}><span class="an-wk-lab">${esc(lab)}</span> ${dir ? `<i class="an-wk-arrow">${dir === "up" ? "▲" : "▼"}</i> ` : ""}${fmtVsUsual(x.delta, 1)}</span>`;
+    });
+    parts.push(`<span class="an-wk-trend"${titleAttr(`His last ${t.last3Games} games played (${(t.last3Weeks || []).map(wf).join(", ")}) against all ${t.games} this season`)}><span class="an-wk-lab">Last 3</span>${items.join("")}</span>`);
+  }
+  const hl = data.health || [];
+  if (hl.length) {
+    const chip = (c) => `<span class="an-wk-chip${c.code ? "" : " ok"}" title="${esc(`${c.name} (${c.why === "QB1" ? "his QB1" : c.why === "OL" ? "line starter" : c.why === "back" ? "listed back" : "top target"})${c.status?.label ? `: ${c.status.label}` : ""}`)}"><span class="${statusNameClass(c.status)}">${esc(shortName(c.name))}</span>${c.code ? statusChip(c.status) : ""}</span>`;
+    // The 🔵 rule: a flagged man never folds away for a healthy one. Stable order: missing first, then any status,
+    // then healthy; only healthy chips fold into "+n" (every flagged chip shows, even past maxChips).
+    const rank = (c) => (c.missing ? 0 : c.code ? 1 : 2);
+    const sorted = hl.map((c, i) => [c, i]).sort((a, b) => rank(a[0]) - rank(b[0]) || a[1] - b[1]).map(([c]) => c);
+    const flagged = sorted.filter((c) => rank(c) < 2), healthy = sorted.filter((c) => rank(c) === 2);
+    const room = Math.max(0, maxChips - flagged.length);
+    const shown = [...flagged, ...healthy.slice(0, room)], more = healthy.slice(room);
+    const moreHtml = more.length ? `<span class="an-wk-more" title="${esc(more.map((c) => `${c.name}${c.code ? ` (${c.code})` : ""}`).join(", "))}">+${more.length}</span>` : "";
+    parts.push(`<span class="an-wk-health">${shown.map(chip).join("")}${moreHtml}</span>`);
+  }
+  return `<div class="an-wk"><span class="an-wk-head">This week</span>${parts.join(`<i class="an-wk-sep"></i>`)}</div>`;
 }

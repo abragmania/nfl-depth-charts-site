@@ -36,26 +36,43 @@
   "pressure",
   "pi",
   "fumbler",
-  "fumLost"
+  "fumLost",
+  "sd",
+  "xpass",
+  "drive",
+  "firstDown",
+  "secs",
+  "noHuddle",
+  "shotgun",
+  "pers"
+ ],
+ "driveCols": [
+  "game_id",
+  "posteam",
+  "drive",
+  "result",
+  "pts",
+  "rz",
+  "plays"
  ],
  "weeks": [
   {
    "week": 1,
-   "hash": "5fbaa30fe0b33d38",
+   "hash": "ee4d88593ba9be7c",
    "plays": 1924,
-   "builtAt": "2026-09-30T18:01:20.748Z"
+   "builtAt": "2026-10-01T00:44:25.844Z"
   },
   {
    "week": 2,
-   "hash": "ff68b803b1f40751",
+   "hash": "bf43ce149b224452",
    "plays": 1936,
-   "builtAt": "2026-09-30T18:01:20.748Z"
+   "builtAt": "2026-10-01T00:44:25.844Z"
   },
   {
    "week": 3,
-   "hash": "b825b4de157aade0",
+   "hash": "f4be144466a69ab5",
    "plays": 2000,
-   "builtAt": "2026-09-30T18:01:20.748Z"
+   "builtAt": "2026-10-01T00:44:25.844Z"
   }
  ],
  "throughWeek": 3,
@@ -63,36 +80,36 @@
  "heldUntil": "2026-10-06T09:00:00.000Z",
  "sources": {
   "pbp": {
-   "fetchedAt": "2026-09-30T18:01:02.345Z",
+   "fetchedAt": "2026-10-01T00:39:09.855Z",
    "sha": "0b085c0a3a2dc7e5e595a4d5234e16096362b82c87f6bdb01a11d8264fe00e37"
   },
   "ftn": {
-   "fetchedAt": "2026-09-30T18:01:03.024Z",
+   "fetchedAt": "2026-10-01T00:40:32.739Z",
    "sha": "f805065157e4ae1aab63f7ba55cad23ca66449d17502bb54871b14c57a5ca301"
   },
   "ngs": {
-   "fetchedAt": "2026-09-30T18:01:03.683Z",
+   "fetchedAt": "2026-10-01T00:40:34.128Z",
    "sha": "cadb18f82c416ffd"
   },
   "pfr": {
-   "fetchedAt": "2026-09-30T10:04:53.934Z",
-   "sha": "7d72af8acfbd9478"
+   "fetchedAt": "2026-10-01T00:40:34.641Z",
+   "sha": "9065d309afdfcba4"
   },
   "pfrRush": {
-   "fetchedAt": "2026-09-30T10:04:54.150Z",
-   "sha": "9d383330e0f498e35fed3932b0254faa6b5820322c3b5b7d01fb188d01e5477f"
+   "fetchedAt": "2026-10-01T00:40:34.885Z",
+   "sha": "6d7c46e3ee23a55c643aefbccf8537fdc2d3fa16764e4abe07ac9539e36489f4"
   },
   "pfrRec": {
-   "fetchedAt": "2026-09-30T10:04:54.352Z",
-   "sha": "0d5c2bb2929420dea770dd11f99f8ce78591565bea177d6c1a6b8c40fe2fa4ba"
+   "fetchedAt": "2026-10-01T00:40:35.137Z",
+   "sha": "c3de043573febd575aaa7d1312747b0251df0981d3946cb0a31bef7edd211323"
   },
   "routes": {
-   "fetchedAt": "2026-09-30T10:04:54.660Z",
+   "fetchedAt": "2026-10-01T00:40:36.333Z",
    "sha": "5b13aa0e252af99e2001c6e1e9030c5fc12bd080b7dbc5bff2d88ae63ab0a83a"
   },
   "participation": null,
   "snaps": {
-   "fetchedAt": "2026-09-30T10:00:41.580Z",
+   "fetchedAt": "2026-10-01T00:29:56.384Z",
    "sha": "c5868527b1052ae572b2d8f34a7bb777675a5e762ceaeb25f72f10d1c59846d5"
   }
  }

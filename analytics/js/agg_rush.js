@@ -66,7 +66,7 @@ export const BIN_LABELS = ["0 or less", "1–3", "4–9", "10+"];
 const binOf = (y) => (y <= 0 ? 0 : y <= 3 ? 1 : y <= 9 ? 2 : 3);
 
 // Colour tiers by position. Eff is cut on the negated value (lower is better).
-export const RUSH_TIER_KEYS = ["opp", "oppG", "oppShare", "carG", "rushShare", "ypc", "succPct", "epaCar", "ryoeAtt", "eff", "explPct", "snapPct", "tgtShare", "dkG"];
+export const RUSH_TIER_KEYS = ["opp", "oppG", "oppShare", "carG", "rushShare", "ypc", "succPct", "epaCar", "ryoeAtt", "eff", "explPct", "snapPct", "tgtShare", "dkG", "i5Share"];
 export const RUSH_LOWER_BETTER = new Set(["eff"]);
 export const RUSH_LG_KEYS = ["opp", "oppG", "oppShare", "ydsOpp", "epaOpp", "tdOpp", "car", "carG", "rushShare", "yds", "ypc", "succPct", "epaCar", "ryoeAtt", "eff", "rz", "gl", "td", "long", "explPct", "snapPct", "routes", "tgt", "tgtShare",
   // re-cut increment 3 (B2)
