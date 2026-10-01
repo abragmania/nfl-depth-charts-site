@@ -255,7 +255,8 @@ export function gameOdds(g) {
 // then anyone else on the club's chart with TARGET_SHARE_FLOOR or more of every target the club threw this season
 // (targets: [{ gsis, clubShare }], agg_team.js teamTargets rows; clubShare is the honest volume test, kept on the
 // entry so the page can show it), most targets first. An out starter (role STARTER_OUT) carries his
-// fill-in, the slot's ACTIVE man, beneath him (D214: never hide a man who plays). Returns [{ slot, kind ("qb" |
+// fill-in, the slot's ACTIVE man, beneath him; any other picked man who will not play takes the slot's next man who
+// plays beneath him (D214: never hide a man who plays). Returns [{ slot, kind ("qb" |
 // "back" | "receiver"), band, man: { gsis, name, role, status }, fill: same | null, extra (true for a 15%+ man) }].
 export const TARGET_SHARE_FLOOR = 0.15;
 export function skillStarters(view, { targets = [], feed = null } = {}) {
@@ -274,6 +275,13 @@ export function skillStarters(view, { targets = [], feed = null } = {}) {
       let fill = null;
       if (p.role === "STARTER_OUT") {
         const f = ps.find((q, j) => j > i && q.role === "ACTIVE" && !used.has(String(q.gsisId)));
+        if (f) { used.add(String(f.gsisId)); fill = man(f); }
+      }
+      // 👁 2026-09-30 (PIT's Rico Dowdle, the chart's second RB, OUT): any picked man who will not play and has no
+      // ACTIVE fill-in takes the slot's next man who plays beneath him - the man the depth chart draws in his place
+      // (it greys an out backup to the slot's last row), so the man who plays is never hidden (D214).
+      if (!fill && isMissing(statusOf(String(p.gsisId), p, feed))) {
+        const f = ps.find((q, j) => j > i && !used.has(String(q.gsisId)) && !isMissing(statusOf(String(q.gsisId), q, feed)));
         if (f) { used.add(String(f.gsisId)); fill = man(f); }
       }
       out.push({ man: man(p), fill });

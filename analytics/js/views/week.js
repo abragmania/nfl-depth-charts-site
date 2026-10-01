@@ -83,7 +83,7 @@ export function startersHtml(rows, { def = "", q = "" } = {}) {
     if (!rz) return `<td class="num">${DASH}</td>`;
     const s = shareSample(rz.k, rz.r, {});
     const v = rz.r[rz.k];
-    const txt = isNum(v) ? (rz.k === "i5Share" ? pct(v, 0) : pct(v)) : DASH;
+    const txt = isNum(v) ? `${pct(v, 0)}%` : DASH; // whole percent, as the club page's share columns print it
     const what = rz.k === "i5Share" ? "Inside-the-5 carry share" : "Red-zone target share";
     return `<td class="num"${s.title ? ` title="${esc(`${what}: ${s.title}`)}"` : ""}>${txt}${shareCountHtml(s.count)}</td>`;
   };
@@ -173,7 +173,7 @@ export async function renderWeek(ctx, params, query) {
   // The depth-chart pages' own strip (gamesbar.js gamesBarHtml, its fold and links), this page's links passed in.
   const strip = gamesBarHtml([...teams.values()], games, [away, home], WEEK_LINKS);
   const pill = (a) => (teams.has(a) ? teamPill(a, teams, qs, "an-pl-pill an-tm-headpill") : esc(a));
-  const head = `<div class="an-pl-head">${backLink(`#/receivers${readerQs ? "?" + readerQs : ""}`, "Receivers")}${pill(away)}<h1>${esc(teams.get(away)?.name || away)} at ${esc(teams.get(home)?.name || home)}</h1>${pill(home)}
+  const head = `<div class="an-pl-head">${backLink(`#/grid${readerQs ? "?" + readerQs : ""}`, "Grid")}${pill(away)}<h1>${esc(teams.get(away)?.name || away)} at ${esc(teams.get(home)?.name || home)}</h1>${pill(home)}
     <div class="an-pl-links"><a href="../#/matchup/${encodeURIComponent(away)}/${encodeURIComponent(home)}">Depth-chart matchup →</a></div></div>`;
   document.title = `${away} at ${home} · This week · NFL Analytics`;
   const shell = (body) => `<section class="an-pl an-wv">${head}${strip}${body}</section>`;
@@ -218,8 +218,8 @@ export async function renderWeek(ctx, params, query) {
       <div class="an-card an-wv-starters"><div class="an-dh">${esc(off)} skill starters <span class="an-dsub">as charted, plus anyone with 15%+ of every target the club threw this season · beside each, what ${esc(def)} gives up to his position against the usual</span></div>
         ${rows ? startersHtml(rows, { def, q: qs }) : `<div class="an-note">${esc(off)}'s depth chart could not be loaded.</div>`}</div>
       <div class="an-wv-cols">
-        <div class="an-wv-col">${playCallingHtml({ O, L: lgOff, rows: agg.rows, abbr: off, qs, foot: false })}${olineBlockHtml({ O, L: lgOff, rows: agg.rows, abbr: off, qs, cuts: ref.cuts, gridRow: gOff, pnote })}</div>
-        <div class="an-wv-col">${dlineBlockHtml({ D, L: lgDef, rows: agg.rows, abbr: def, qs, cuts: ref.cuts, gridRow: gDef, pnote })}${cov}</div>
+        <div class="an-wv-col">${playCallingHtml({ O, L: lgOff, rows: agg.rows, abbr: off, qs, foot: false })}<div class="an-wv-ol">${olineBlockHtml({ O, L: lgOff, rows: agg.rows, abbr: off, qs, cuts: ref.cuts, gridRow: gOff, pnote })}</div></div>
+        <div class="an-wv-col"><div class="an-wv-dl">${dlineBlockHtml({ D, L: lgDef, rows: agg.rows, abbr: def, qs, cuts: ref.cuts, gridRow: gDef, pnote })}</div>${cov}</div>
       </div>
     </div>`;
   };

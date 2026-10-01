@@ -578,6 +578,9 @@ td[class*=" t-"] > span { color:var(--t); font-weight:700; }
 
 /* ---- D224 increment C: the This-week matchup page (views/week.js) ---------------------------------------------- */
 .an-wv { display:flex; flex-direction:column; gap:12px; }
+/* 👁: the games strip runs the full window as on the depth-chart pages; everything else keeps the app's 1760 column. */
+.an-main:has(> .an-wv) { padding-inline:28px; }
+.an-wv > :not(.games-bar) { width:100%; max-width:var(--col); margin-inline:auto; box-sizing:border-box; }
 /* The week's games strip is the depth-chart pages' own (gamesbar.js gamesBarHtml, styled by ../css/matchup.css). */
 .an-wv .games-bar { margin-bottom:0; }
 /* The Play calling tiles are narrower here than on the club page: a tile's small print wraps rather than clipping. */
@@ -595,7 +598,15 @@ td[class*=" t-"] > span { color:var(--t); font-weight:700; }
 .an-wv-cols { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:12px; align-items:start; }
 .an-wv-col { display:flex; flex-direction:column; gap:12px; min-width:0; }
 .an-wv-col .an-card.an-line { width:auto; max-width:none; }
-.an-wv .an-card.an-line.an-pc .an-line-tiles { grid-template-columns:repeat(6, minmax(0, 1fr)); }
+/* 👁: Play calling and O-line share six even columns so their tiles line up column for column; the D-line takes a
+   deliberate 4+3 in a 1536 window and one row of seven on a big screen; below 1500 the offence's blocks step to four
+   columns. Tiles drop their 134px floor here and their figure prints at the base tile size so it fits. */
+.an-wv .an-wv-col .an-card.an-line .an-line-tiles { display:grid; gap:8px; grid-template-columns:repeat(6, minmax(0, 1fr)); }
+.an-wv .an-wv-col .an-wv-dl .an-card.an-line .an-line-tiles { grid-template-columns:repeat(4, minmax(0, 1fr)); }
+@media (min-width:1900px) { .an-wv .an-wv-col .an-wv-dl .an-card.an-line .an-line-tiles { grid-template-columns:repeat(7, minmax(0, 1fr)); } }
+@media (max-width:1500px) { .an-wv .an-wv-col .an-card.an-line .an-line-tiles { grid-template-columns:repeat(4, minmax(0, 1fr)); } }
+.an-wv .an-wv-col .an-line-tiles .an-tile { min-width:0; }
+.an-wv .an-wv-col .an-line-tiles .an-tile b { font-size:17px; white-space:nowrap; }
 @media (max-width:1200px) { .an-wv-cols { grid-template-columns:minmax(0, 1fr); } }
 .an-wv-cov .an-tm-covtiles { grid-template-columns:repeat(4, minmax(110px, auto)); }
 /* (3) the starters table: hugs its columns, never stretched. */
@@ -606,7 +617,9 @@ td[class*=" t-"] > span { color:var(--t); font-weight:700; }
 .an-wv-table td { padding:4px 8px; white-space:nowrap; border-bottom:1px solid #1a2026; }
 .an-wv-table td.num { text-align:right; }
 .an-wv-slot { color:var(--muted); font-weight:700; font-size:11px; }
-.an-wv-name a { color:var(--ink); font-weight:700; text-decoration:none; }
+.an-wv-name a { font-weight:700; text-decoration:none; }
+.an-wv-name a:not(.an-st-name-out) { color:var(--ink); } /* an out man keeps the red name (analytics_recut.css) */
+.an-wv-table td.an-wv-name { min-width:170px; } /* both halves' tables line up whatever the longest name */
 .an-wv-name a:hover { text-decoration:underline; }
 .an-wv-name .an-stchip { margin-left:6px; }
 .an-wv-fillrow td { border-bottom-color:#1a2026; }
