@@ -18,22 +18,18 @@
 // Interactivity (D177): a weekly column (strips or the fantasy chart) sets the window to that week and back; a zone
 // cell lists the plays behind it; the header has a Back button (router.js backLink: the page he came from, else
 // Quarterbacks) and links to his depth-chart card (new tab) and his team page.
-import { fromQuery, seasonsOf, weekLabel, splitKey, gamesInWindow, rankHref } from "../filters.js";
+import { fromQuery, seasonsOf, weekLabel, splitKey, gamesInWindow } from "../filters.js";
 import { backLink } from "../router.js";
 import { loadFor, loadTeams, displayName, loadStatusFeed } from "../data.js";
 import { isStatic } from "../../../js/api.js";
 import { clubGames } from "../agg.js";
-import { qbTrend, aggregateQb, qbReference, qbTier, qbZones, qbSplits, SPLITS, QB_MADDEN_ATTRS, inQbPool, qbPoolStat, qbGameCuts, QB_MIN_DB } from "../agg_qb.js";
+import { aggregateQb, qbReference, qbTier, qbZones, qbSplits, SPLITS, QB_MADDEN_ATTRS, inQbPool, qbPoolStat, qbGameCuts } from "../agg_qb.js";
 import { fantasyByPlayer } from "../agg_fantasy.js";
 import { median, ratingTier, maddenEdition, iterationLabel } from "../agg_player.js";
 import { renderFilterBar } from "../filterbar.js";
 import { ratingBars } from "../charts/hbars.js";
 import { headlineRow, fantasyBand, phaseBlock, varianceStrip, maddenFoot, playerHead, currentStatus, latestWeekIn } from "./kit.js";
-import { esc, isNum, signed, qbStrips, qbZoneField, qbZoneLegend, qbZoneName, QB_ZONE_MODES, qbQuery, minDbOf, pfrNote } from "./qb.js";
-// D209 part (2): the depth-chart card block every player page opens with — shared with player.js (the same
-// pass-catcher file) rather than duplicated, since both live in this app and the card logic itself only
-// exists once, in public/js/panel.js.
-import { loadCard, cardBlockHtml, mountCard, reusesCard, currentTeamOf, weekStripHtml } from "./player.js";
+import { esc, isNum, signed, teamPill, qbStrips, qbZoneField, qbZoneLegend, qbZoneName, QB_ZONE_MODES, qbQuery, minDbOf, pfrNote } from "./qb.js";
 
 // Madden ratings for a season, from the data builder's madden.json (the same fetch as player.js's loadMadden, which
 // is private to that page). Never fails: absent or unreadable resolves to null and the block says so.
@@ -95,15 +91,6 @@ export function qbWeeklySeries(rawSeries, meta, games, winKeys) {
 export function ownWindow(series, winGames) {
   return (series || []).map((s) => (s.opp && s.team && !winGames.has(`${s.key}|${s.team}`) ? { ...s, inWin: false } : s));
 }
-// D217: the quarterback page's header is Back, his name (with his status badge) and the links; the headshot, team and
-// position chips and OVR pill are the depth-chart card right below it. Exported for the test.
-export function qbHeaderHtml({ gsis, team, name, teams, qs = "", status = null, statusSeason = null, latestWeek = null }) {
-  const depth = `../#/team/${encodeURIComponent(team)}/player/${encodeURIComponent(gsis)}`;
-  return playerHead({ lead: backLink(`#/qb${qs ? "?" + qs : ""}`, "Quarterbacks"), name, shot: false, colour: teams.get(team)?.colourPrimary,
-    links: `<div class="an-pl-links"><a href="${depth}">Depth chart →</a>${team ? `<a href="#/team/${esc(team)}${qs ? "?" + qs : ""}">Team page →</a>` : ""}</div>`,
-    status, statusSeason, latestWeek });
-}
-
 export function windowName(st, weeks) {
   if (st.window === "last3") return "Last 3";
   if (st.window === "range" && weeks.length) return weeks.length === 1 ? weekLabel(weeks[0], st.season) : `${weekLabel(weeks[0], st.season)}–${weekLabel(weeks[weeks.length - 1], st.season)}`;
@@ -149,14 +136,6 @@ export const QB_PAGE_FIGURES = Object.freeze({
   rushFront: ["rushAtt", "rushAttG", "rushYdsG", "rushYds", "rushTd", "rushEpaG"], rushSide: ["scrPct", "scr", "scrYds", "des", "desYds", "rushEpa"],
   variance: [...QB_VARIANCE_ORDER, "fl", "fum"],
 });
-
-// PURE (D225b): each tile given an href to its column on the Quarterbacks board (null where the board has no such
-// column), for the man `gsis`; st: the page's filter state; db: his dropbacks and minDb: the board's DEFAULT minimum (never the page's own leaked mindb), so a man
-// under it opens the board with his own count as the minimum.
-export function linkQbTiles(tiles, st, { gsis, db, minDb }) {
-  const min = (db ?? 0) < minDb ? db ?? 0 : null;
-  return tiles.map((t) => ({ ...t, href: rankHref("qb", t.key, st, { gsis, min }) }));
-}
 
 // PURE: the headline tiles (kit tileData shape plus `key`). R: his aggregateQb row ({} when none); ref: qbReference.
 // League figure = the pool's plain mean; rank = his place in the pool (only when he is in it); tier from the pool.
@@ -316,10 +295,7 @@ export function qbGameLog(series, fantasyGames, season, cuts = {}) {
 // Page-local view state that does not belong in the link: the zone measure, the open zone, screens in the splits.
 // pastOpen: the game log's previous-season weeks unfolded (folded to its totals row by default). layout: the measured
 // fits (the chart's width, the log beside or under it, the strips' widths), keyed by the link and the page width.
-// cardEl/cardGsis: the mounted depth-chart card element the page is currently holding, and which player it
-// belongs to (D209 🔵 fix round, item 1) — a redraw of the SAME player reuses it untouched instead of
-// rebuilding and remounting it.
-const ui = { gsis: null, zoneMode: "cmpPct", zone: null, noScreens: false, pastOpen: false, layout: null, cardEl: null, cardGsis: null };
+const ui = { gsis: null, zoneMode: "cmpPct", zone: null, noScreens: false, pastOpen: false, layout: null };
 
 // PURE: bar width and gap for qbStrips so its weeks spread across `fit` px (the same rule as charts/bars.js
 // weeklyStrips' fit: an even share per week, the bar at most 90px wide, the rest gap); no fit, or under 44px a
@@ -350,7 +326,7 @@ export async function renderQbPlayer(ctx, params, query) {
   const gsis = params.gsis;
   const st = fromQuery(query);
   const minDb = minDbOf(query);
-  if (ui.gsis !== gsis) { ui.gsis = gsis; ui.zone = null; ui.pastOpen = false; ui.cardEl = null; ui.cardGsis = null; }
+  if (ui.gsis !== gsis) { ui.gsis = gsis; ui.zone = null; ui.pastOpen = false; }
   const go = (n) => { const q = qbQuery({ ...n, open: "" }, minDb); location.hash = `#/player/${encodeURIComponent(gsis)}${q ? "?" + q : ""}`; };
   if (!root.querySelector(".an-qbp")) root.innerHTML = `<div class="an-msg">Loading quarterback…</div>`;
   let data, teams, madden, feed;
@@ -386,15 +362,6 @@ export async function renderQbPlayer(ctx, params, query) {
   const frow = full.rows.find((x) => x.gsis === gsis) || null;
   const lastKey = Object.keys(meta.teams || {}).sort().pop();
   const team = r?.team || frow?.team || (lastKey ? meta.teams[lastKey] : "");
-  // D209 part (2): his depth-chart card opens the page, same as the pass-catcher page (player.js).
-  const cardInfo = await loadCard({ team, gsis }, teams, currentTeamOf(gsis, meta, feed));
-  if (!isCurrent()) return;
-  const cardHtml = cardBlockHtml(cardInfo, { team, gsis });
-  // D224 increment B: the This-week strip under the card (current season only; player.js weekStripHtml).
-  const teamsPayload = await loadTeams().catch(() => null);
-  if (!isCurrent()) return;
-  const weekHtml = weekStripHtml({ data, st, gsis, pos: "QB", kind: "qb", cardInfo, feed, teamsPayload,
-    trendOf: (blocks, ws) => qbTrend(blocks, data.players, ws, gsis) });
   const mq = maddenQb(madden, gsis, st.season);
   const wn = windowName(st, win.weeks);
   const activeKey = st.window === "range" && st.from && st.from === st.to ? st.from : null;
@@ -405,10 +372,6 @@ export async function renderQbPlayer(ctx, params, query) {
   const winKeys = new Set(win.weeks);
   const series = ownWindow(qbWeeklySeries(frow?.series || full.weeks.map((key) => ({ key })), meta, games, winKeys), gamesInWindow(clubGames(data.blocks), pst));
   const R = r || {};
-  // D225b: each tile whose figure has a column on the Quarterbacks board opens that board sorted by it (best first), on
-  // this page's season and window, with his row highlighted; a man under the board's minimum dropbacks opens it with
-  // his own count as the minimum. Tiles with no such column (TD-INT, total yards, snap %...) get no link.
-  const linked = (tiles) => linkQbTiles(tiles, st, { gsis, db: R.db, minDb: QB_MIN_DB });
 
   // (2) Fantasy: the game log over the window's weeks, its heat against every pool QB's games, the chart's overlay
   // (pass attempts and carries) on one count scale.
@@ -425,7 +388,7 @@ export async function renderQbPlayer(ctx, params, query) {
   const bandOpts = {
     title: "Fantasy", sub: `DraftKings · ${tFix(R.dkG, 1)} per game · ${tFix(R.dk, 1)} total${dkRank}`,
     rows: log.rows, columns: log.columns, shareLabels: ["Pass attempts", "Carries"], ovScale: { max: ovTop, top: `${ovTop} att`, bottom: "0" },
-    total: `${wn} ${tFix(R.dk, 1)}`, avg: L.dkG, avgText: `lg ${tFix(L.dkG, 1)}/g`, tiles: linked(qbOppTiles(R, ref)), current: st.season,
+    total: `${wn} ${tFix(R.dk, 1)}`, avg: L.dkG, avgText: `lg ${tFix(L.dkG, 1)}/g`, tiles: qbOppTiles(R, ref), current: st.season,
   };
   const fantasyHtml = () => fantasyBand({ ...bandOpts, pastOpen: ui.pastOpen, width: lay.chartW || bandW, stack: !!lay.stack });
 
@@ -447,7 +410,7 @@ export async function renderQbPlayer(ctx, params, query) {
       <div class="an-card an-qbp-splitsc"><div class="an-dh">Splits <span class="an-dsub">his dropbacks vs every QB's, same window</span>
         <label class="an-switch an-qbp-scr" title="Leave FTN-charted screen passes out of every split"><input type="checkbox" data-screens${ui.noScreens ? " checked" : ""}><span>Exclude screens</span></label></div><div data-splits></div></div>
     </div>`;
-  const pt = qbPassTiles(R, ref, pnote); pt.front = linked(pt.front); pt.side = linked(pt.side);
+  const pt = qbPassTiles(R, ref, pnote);
   const passBlock = () => phaseBlock({ title: "Passing", tint: "pass", front: pt.front, side: pt.side, body: passBody() });
 
   // Rushing: the four-figure front, the side items, carries and yards by week.
@@ -457,7 +420,7 @@ export async function renderQbPlayer(ctx, params, query) {
     { k: "car", label: "Carries", signed: false, span: maxCar * 1.05, fmt: (v) => `${v} carries`, short: (v) => String(v), total: R.rushAtt, totalText: `${wn} ${R.rushAtt ?? 0}`, avg: L.rushAttG, avgText: `lg ${isNum(L.rushAttG) ? L.rushAttG.toFixed(1) : "–"}/g` },
     { k: "ryds", label: "Rush yards", signed: false, span: maxRy * 1.05, fmt: (v) => `${v} yds`, short: (v) => String(v), total: R.rushYds, totalText: `${wn} ${R.rushYds ?? 0}`, avg: L.rushYdsG, avgText: `lg ${isNum(L.rushYdsG) ? L.rushYdsG.toFixed(0) : "–"}/g` },
   ];
-  const rtl = qbRushTiles(R, ref); rtl.front = linked(rtl.front); rtl.side = linked(rtl.side);
+  const rtl = qbRushTiles(R, ref);
   const rushBlock = () => phaseBlock({ title: "Rushing", tint: "rush", front: rtl.front, side: rtl.side,
     body: `<div class="an-pl-scroll an-qbp-rush">${series.length ? qbStrips(series, rushStrips, { season: st.season, activeKey, hit: true, sh: 40, lw: 108, rw: 62, ...stripFit(lay.rushW, series.length, { lw: 108, rw: 62, bw: 34, gap: 7 }) }) : ""}</div>` });
 
@@ -469,36 +432,29 @@ export async function renderQbPlayer(ctx, params, query) {
       : ratingBars(mq.bars, "QB") + `<div class="an-note">EA's passing attributes; the tick is the QB median (${mq.peers} rated).</div>`}</div>`;
 
   const sub = `${seasonLabel(st)} · ${win.weeks.length ? (win.weeks.length === 1 ? weekLabel(win.weeks[0], st.season) : `${weekLabel(win.weeks[0], st.season)} to ${weekLabel(win.weeks[win.weeks.length - 1], st.season)}`) : "no games"}${st.window === "last3" ? " (each club's last 3 games)" : ""} · league reference: ${ref.text}${pnote ? " · " + pnote : ""}`;
+  const ovr = isNum(mq.ovr) ? `<span class="an-pl-ovr t-${ratingTier(mq.ovr)}" title="${esc(mq.title)} overall"><b>${mq.ovr}</b><small>OVR</small></span>` : "";
+  const depth = `../#/team/${encodeURIComponent(team)}/player/${encodeURIComponent(gsis)}`;
 
-  // D209 🔵 fix round (item 1): same rule as player.js's own draw() — a redraw of the same QB reuses his
-  // already-mounted depth-chart card element instead of rebuilding and remounting it.
-  const draw = () => {
-    const reuse = reusesCard({ gsis: ui.cardGsis, el: ui.cardEl }, gsis) ? ui.cardEl : null;
-    if (reuse?.parentNode) reuse.remove();
-    root.innerHTML = `<section class="an-pl an-qbp">
-    ${qbHeaderHtml({ gsis, team, name, teams, qs, status: currentStatus(feed, gsis, seasonsOf(st)), statusSeason: feed?.season ?? null, latestWeek: latestWeekIn(data.keys, feed?.season) })}
-    ${reuse ? `<div data-cardslot></div>` : cardHtml}
-    ${weekHtml}
+  const draw = () => { root.innerHTML = `<section class="an-pl an-qbp">
+    ${playerHead({ lead: backLink(`#/qb${qs ? "?" + qs : ""}`, "Quarterbacks"), name, espnId: meta.espnId, colour: teams.get(team)?.colourPrimary,
+      pills: `${team ? teamPill(team, teams, qs, "an-pl-pill") : ""}<span class="an-pospill" data-band="QB">QB</span>${ovr}`,
+      links: `<div class="an-pl-links"><a href="${depth}" target="_blank" rel="noopener">Depth chart ↗</a>${team ? `<a href="#/team/${esc(team)}${qs ? "?" + qs : ""}">Team page →</a>` : ""}</div>`,
+      status: currentStatus(feed, gsis, seasonsOf(st)), statusSeason: feed?.season ?? null, latestWeek: latestWeekIn(data.keys, feed?.season) })}
     <div class="an-pl-bar"><div class="an-filters"></div></div>
     <div class="an-sub an-pl-sub">${esc(sub)}</div>
     ${data.missing.length ? `<div class="an-warn">${esc(data.missing.join(", "))} files are not built yet.</div>` : ""}
     ${r ? "" : `<div class="an-warn">No dropbacks or carries for him in this window.</div>`}
-    ${headlineRow(linked(qbHeadlineTiles(R, ref)))}
+    ${headlineRow(qbHeadlineTiles(R, ref))}
     ${fantasyHtml()}
     <div class="an-qbp-split">${passBlock()}<div class="an-qbp-side">${rushBlock()}${variance}${maddenFoot(maddenHtml)}</div></div>
     <p class="an-foot">Dropbacks, attempts, completions, yards, TD, INT, aDOT, EPA, success, CPOE, sacks, scrambles, designed runs, red-zone and inside-the-10 figures, fumbles and zones: nflverse play-by-play. DraftKings points: the same play rows, DraftKings Classic scoring with no 2-point conversions or return touchdowns (kneel-downs are not in the rows). Snap %: nflverse snap counts. Play action, screens, blitz % and the blitz split: FTN charting. Pressure % and drops by his receivers: PFR advanced stats (a week behind). Pressured vs clean: the 2025 participation file (per-play pressure; none exists for 2026 yet). Time to throw and expected completion: Next Gen Stats. Passing attributes: EA Madden ratings. Zone references pool every QB attempt in the window; every other league figure is the QB reference pool's. No QBR.</p>
-  </section>`;
-    if (reuse) root.querySelector("[data-cardslot]")?.replaceWith(reuse);
-    else { ui.cardEl = root.querySelector(".an-pl-card"); ui.cardGsis = gsis; }
-  };
-  const cardAlreadyMounted = reusesCard({ gsis: ui.cardGsis, el: ui.cardEl }, gsis); // before either draw() below
+  </section>`; };
   draw();
   const q = (sel, prop = "clientWidth") => root.querySelector(sel)?.[prop] || 0;
   const measured = qbLayoutFrom({ bandW, logW: q(".an-rc-fanband .an-rc-gl", "offsetWidth"), chartWeeks: root.querySelectorAll(".an-rc-fanchart .an-wb-hit").length,
     weeksW: q(".an-qbp-weeks .an-pl-scroll"), rushW: q(".an-qbp-rush") });
   if (JSON.stringify(measured) !== JSON.stringify(lay)) { lay = measured; draw(); }
   ui.layout = { key: layoutKey, lay };
-  if (!cardAlreadyMounted) mountCard(root, cardInfo); // after the final draw(), so it targets the DOM actually on screen
   root.querySelector("[data-gl-toggle]")?.addEventListener("click", () => { ui.pastOpen = !ui.pastOpen; renderQbPlayer(ctx, params, query); });
   renderFilterBar(root.querySelector(".an-filters"), st, { keys: data.keys, teams: [] }, go);
   root.querySelectorAll(".an-wb-hit[data-key]").forEach((h) => h.addEventListener("click", () => {
