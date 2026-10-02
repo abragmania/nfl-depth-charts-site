@@ -60,19 +60,11 @@ export const STATUS_KEY = [
 ];
 export const STATUS_KEY_RULINGS = ["D25", "D26", "D60", "D81", "D105"];
 
-// D210 (no dead ends): the page also leads somewhere. From a club's page the link opens that club's real chart
-// ("See it on GB's chart →"); with no club known it points at the team picker. Pure: the caller passes the hash.
-export function liveLinkFor(fromHash) {
-  const m = /^#\/(?:team|matchup)\/([A-Z]{2,3})\b/.exec(fromHash || "");
-  return m ? { href: `#/team/${m[1]}`, text: `See it on ${m[1]}'s chart →` } : { href: "#/", text: "Pick a team →" };
-}
-
-export function guideHtml(live = liveLinkFor(null)) {
+export function guideHtml() {
   const labels = GUIDE_CALLOUTS.map((c, i) => `<div class="guide-label" data-part="${i}" data-side="${c.side}" data-rulings="${esc(c.rulings.join(" "))}"><b>${esc(c.title)}</b> ${esc(c.text)}</div>`).join("");
   const key = STATUS_KEY.map(([code, words]) => `<b>${esc(code)}</b> ${esc(words)}`).join(" · ");
   return `<div class="guide">
     <a class="guide-back" href="#/">← Back</a>
-    <a class="guide-live" href="${esc(live.href)}">${esc(live.text)}</a>
     <h1>How to read a depth chart</h1>
     <figure class="guide-fig">
       <div class="guide-stage field-scale">${sampleColumnHtml()}</div>
@@ -193,7 +185,7 @@ export async function renderGuide(root, search) {
   if (search) search.hidden = true;
   document.title = "How to read · NFL Depth Charts";
   const from = arrivedFrom && !arrivedFrom.startsWith("#/guide") ? arrivedFrom : null;
-  root.innerHTML = guideHtml(liveLinkFor(from));
+  root.innerHTML = guideHtml();
   const fig = root.querySelector(".guide-fig");
   const draw = () => drawLeaders(fig);
   fitNames(root);
