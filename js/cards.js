@@ -9,13 +9,29 @@
 // rating-tier surface colours all survive the shrink. The SIDE, GROUP and MATCHUP views keep their big
 // headshot cards and their own renderers (zoom.js's fullCard, matchup.js's matchupCard) — they come
 // through renderSlotBody below, which is deliberately untouched by this ruling.
-import { lineOneCount, lineOneHeight, visibleDepthRows, displayOrder, outFillInDemotion, OUT_STATUS_CODES, isFullyOut, isScratch, fillingIn } from "./field.js";
+import { lineOneCount, lineOneHeight, visibleDepthRows, displayOrder, outFillInDemotion, OUT_STATUS_CODES, isFullyOut, isScratch, fillingIn, depthVisibilityRank, slotRateOf } from "./field.js";
 // Re-exported so zoom.js and matchup.js share this single definition rather than keeping their own
 // copies. D60's isScratch rides the same route.
 export { OUT_STATUS_CODES, isFullyOut, isScratch };
 
 const ESC = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ESC[c]);
+
+// A logo or crest path as the page can actually load it. The API hands back a bare "img/logos/GB-dark.png".
+// A leading "/" (what the three callers used to add) looks at the DOMAIN root, which is wrong on the public
+// site: it lives under /nfl-depth-charts-site/, so every crest and games-strip logo 404'd there (Adam,
+// 2026-09-27: "it's the public site where there's no logos"), while the same code worked locally because the
+// local server serves at the root. A bare relative path is not safe either: inside a CSS custom property it can
+// resolve against styles.css's own /css/ folder. So the path is made absolute against the SITE ROOT, found from
+// this module's own address (js/cards.js sits one folder below it), which is right from any page depth: the
+// analytics app lives one folder down and draws the depth-chart card since D209. An http(s) URL passes through;
+// under node (the tests) the module address is a file: URL and the path is returned as given.
+const SITE_ROOT = /^https?:/.test(import.meta.url) ? new URL("../", import.meta.url).href : "";
+export function assetUrl(u) {
+  if (!u || /^https?:\/\//.test(u)) return u || "";
+  if (!SITE_ROOT) return u;
+  return SITE_ROOT + u.replace(/^\/+/, "");
+}
 
 // D70: single source of truth for band display names — a band's internal CODE ("NB", "BACKFIELD") is not
 // what a reader sees ("CB · Nickel", "Backfield"). Anything that shows a band to a human reads this table
@@ -28,7 +44,7 @@ export const bandDisplay = (band) => BAND_DISPLAY[band] || band || "";
 
 // D143: when the club's own chart calls a linebacker row Sam, Mike, Will or Rush, the server puts that word
 // on the slot as `clubRole` and leaves the LABEL the plain baseline (MLB / OLB / ILB). It prints after the
-// label exactly the way "CB · Nickel" and "WR · Slot" read (D70) — "OLB · Rush", "ILB · Will". The plain
+// label exactly the way "CB · Nickel" reads (D70) — "OLB · Rush", "ILB · Will". The plain
 // label is what every layout rule still reads (field.js's isMikeLabel/isEndLabel), so this composes for
 // DISPLAY only, in one place shared by the column pill and by each card's position line.
 export const withClubRole = (label, slot) => (slot?.clubRole ? `${label} · ${slot.clubRole}` : label);
@@ -359,7 +375,7 @@ function overviewLineOne(p, teamAbbr, opts = {}) {
   const badges = [
     isFullyOut(p) ? "" : statusBadge(p.status),
     psBadge(p),
-    slotBadge(p, opts),
+    slotBadge(p),
     weekOneChip(p.weekOneNote),
     alsoListedChips(p, opts.slotLookup, opts.ownLabel),
   ].join("");
@@ -412,9 +428,10 @@ function overviewLineOne(p, teamAbbr, opts = {}) {
 function overviewDepth(p, teamAbbr, opts = {}) {
   const badges = [
     psBadge(p),
-    slotBadge(p, opts),
     statusBadge(p.status),
     fillingIn(p) ? `<span class="badge badge-active">FILLING IN</span>` : "",
+    // D215: the Slot tag follows the status badges, so a crowded badge box can never clip OUT/IR off the row.
+    slotBadge(p),
     weekOneChip(p.weekOneNote),
     alsoListedChips(p, opts.slotLookup, opts.ownLabel),
   ].join("");
@@ -458,9 +475,10 @@ export function compactRow(p, teamAbbr, opts = {}) {
   const title = tooltipFor(p);
   const badgesHtml = [
     psBadge(p),
-    slotBadge(p, opts),
     statusBadge(p.status),
     fillingIn(p) ? `<span class="badge badge-active">ACTIVE</span>` : "",
+    // D215: the Slot tag follows the status badges, so a crowded badge box can never clip OUT/IR off the row.
+    slotBadge(p),
     weekOneChip(p.weekOneNote),
     alsoListedChips(p, opts.slotLookup, opts.ownLabel),
   ].join("");
@@ -561,7 +579,10 @@ function textOverflows(el) {
   if (typeof document.createRange !== "function" || !avail) return el.scrollWidth > el.clientWidth + 1;
   const range = document.createRange();
   range.selectNodeContents(el);
-  return range.getBoundingClientRect().width > avail + 0.5;
+  // D215 (👁, 2026-09-29): ANY overflow counts as not fitting. The old half-pixel allowance let a name run over by
+  // under a pixel on the scaled field, so the ladder stopped while the browser still drew an ellipsis. The 0.01
+  // only absorbs floating-point noise on a name that fits exactly (e.g. 81 of 81 px), which draws no ellipsis.
+  return range.getBoundingClientRect().width > avail + 0.01;
 }
 
 // D135 (Adam, 2026-09-17): what a row gives up, in order, before its name is touched. The quiet signal glyphs
@@ -569,7 +590,12 @@ function textOverflows(el) {
 // INACTIVE), the PS badge and the D91 snap trio are NOT on this list: each is a fact about whether and how much
 // the man plays, which is what the row is for. D167 (2026-09-23) dropped the part-time marker's own entry
 // (".sig-LOW_SNAPS") along with the marker itself; the remaining give-ups keep their order.
-export const ROW_GIVE_UPS = [".signal-glyph", ".chip-ghost", ".chip-wk1", ".badge-slot"];
+// D215 (Adam, 2026-09-29): the Slot tag is NOT an ordinary give-up: it is shown on every page that draws the man.
+// When the row is still short of room after every give-up, the tag COMPACTS from "Slot (58%)" to "Slot 58%" (its
+// own rung in the ladder below, before the tightest spacing); after that the name shortens; and only if the SHORT
+// name would still be cut is the tag dropped (`dropTag`, the ladder's very last rung). A cut name is worse than a
+// missing tag, and the panel and the tooltip still carry the rate.
+export const ROW_GIVE_UPS = [".signal-glyph", ".chip-ghost", ".chip-wk1"];
 
 // The three spacing states a row can be in, cheapest first. "normal" is the row as drawn; "tight"
 // (`prow-tight`) drops the jersey number's reserved gutter and the wide gaps around it; "tighter"
@@ -582,17 +608,31 @@ export const ROW_SPACING = ["normal", "tight", "tighter"];
 // while behaving wrong.
 //
 // THE ORDER IS: the full name at normal spacing; the full name tightened; the full name after giving up each
-// kind of quiet extra in turn; the full name at the tightest spacing there is — and only when all of that has
+// kind of quiet extra in turn; the full name with the Slot tag compacted (D215, `compact`); the full name at the
+// tightest spacing there is — and only when all of that has
 // failed, the short "F. Surname" form, which then starts again from the top (D146 (3): a shortened name gets
 // its gutter and its signal glyphs back, so it is never printed in a squeezed row with 30-65px of the row
 // still idle). Spacing is spent before the name, and every rung is re-measured rather than guessed.
+// The Slot tag, in order (D215, D216): "Slot (58%)", then compact "Slot 58%", then the name shortens, then the
+// TINY tag "S 58%" (`tiny`, at the tightest spacing: first with the full name, which the freed room may bring
+// back, then with the short one), and only when even that would still cut the name is the tag dropped
+// (`dropTag`, the ladder's last rungs; no real row reaches them). With the tag gone the FULL name is tried again
+// first and the short name only after it, so a man who loses his tag gets his first name back whenever the
+// room it freed is enough. A row with no tag never reaches these rungs' effect on the tag, and the full name
+// there was already tried, so they cost it no extra measurement to speak of.
 export function nameLadder({ giveUps = ROW_GIVE_UPS, hasShort = false } = {}) {
+  const names = hasShort ? ["full", "short"] : ["full"];
   const rungs = [];
-  for (const name of hasShort ? ["full", "short"] : ["full"]) {
-    rungs.push({ name, spacing: "normal", gave: 0 });
-    for (let gave = 0; gave <= giveUps.length; gave++) rungs.push({ name, spacing: "tight", gave });
-    rungs.push({ name, spacing: "tighter", gave: giveUps.length });
+  for (const name of names) {
+    rungs.push({ name, spacing: "normal", gave: 0, compact: false, tiny: false, dropTag: false });
+    for (let gave = 0; gave <= giveUps.length; gave++) rungs.push({ name, spacing: "tight", gave, compact: false, tiny: false, dropTag: false });
+    rungs.push({ name, spacing: "tight", gave: giveUps.length, compact: true, tiny: false, dropTag: false });
+    rungs.push({ name, spacing: "tighter", gave: giveUps.length, compact: true, tiny: false, dropTag: false });
   }
+  const spent = rungs[rungs.length - 1];
+  for (const name of names) rungs.push({ ...spent, name, tiny: true });
+  const tiny = rungs[rungs.length - 1];
+  for (const name of names) rungs.push({ ...tiny, name, dropTag: true });
   return rungs;
 }
 
@@ -611,11 +651,13 @@ function fitOneName(row, el) {
   // by selector so two ROW_GIVE_UPS selectors that ever matched the same element could never fight over it —
   // toggling each selector in turn could otherwise have a later rung hand an already-given-up element back.
   const candidates = [...new Set(ROW_GIVE_UPS.flatMap((sel) => [...row.querySelectorAll(sel)]))];
+  // D215/D216: the Slot tags, which swap to their compact wording on the `compact` rungs and their tiny one on the `tiny` rungs.
+  const tags = [...row.querySelectorAll(".badge-slot[data-compact]")];
   // Puts the row into exactly the state one rung describes, and answers whether anything actually moved. A
   // rung that changes nothing cannot change the answer either, so the caller skips re-measuring it — which
   // is what keeps the common case (a row with no extras to give up, so most of the middle rungs are no-ops)
   // to the same handful of measurements it always took.
-  const applyRung = ({ name, spacing, gave }) => {
+  const applyRung = ({ name, spacing, gave, compact, tiny, dropTag }) => {
     let moved = false;
     const text = name === "short" ? el.dataset.short : el.dataset.full;
     if (el.textContent !== text) { el.textContent = text; moved = true; }
@@ -627,6 +669,11 @@ function fitOneName(row, el) {
     for (const n of candidates) {
       const on = handed.has(n);
       if (n.classList.contains("prow-given-up") !== on) { n.classList.toggle("prow-given-up", on); moved = true; }
+    }
+    for (const t of tags) {
+      const want = tiny ? (t.dataset.tiny || t.dataset.compact) : compact ? t.dataset.compact : t.dataset.full;
+      if (want && t.textContent !== want) { t.textContent = want; moved = true; }
+      if (t.classList.contains("prow-given-up") !== !!dropTag) { t.classList.toggle("prow-given-up", !!dropTag); moved = true; }
     }
     if (moved) dropEmptyWrappers();
     return moved;
@@ -680,11 +727,16 @@ function heatTitle(injury) {
 // handed in by renderColumn) is filled before any other out row, and only then the rest of the chart's own
 // order. field.js's shownOutRows does the same "how many places are left once the tail has taken one"
 // arithmetic when it reserves the column's height, so the box and this selection stay in step.
+// D214 (Adam, 2026-09-29, "just don't hide him"): the places go to D104's demoted rails first (the injury story),
+// then to healthy men who have been PLAYING, then to healthy men who have not, then to out men — the reverse of
+// the D61-era preference above, which put an IR backup on show and collapsed the playing man behind "+N more"
+// (Darius Cooper, 2026-09-28). Inside each rank the chart's own printed order holds.
 function keepOutRowsVisible(depth, n, mustKeep = []) {
   if (n <= 0) return [];
   const keep = new Set(mustKeep.slice(0, n));
-  for (const p of depth) { if (keep.size >= n) break; if (isFullyOut(p)) keep.add(p); }
-  for (const p of depth) { if (keep.size >= n) break; keep.add(p); }
+  for (const rank of [0, 1, 2]) {
+    for (const p of depth) { if (keep.size >= n) break; if (depthVisibilityRank(p) === rank) keep.add(p); }
+  }
   return depth.filter((p) => keep.has(p));
 }
 
@@ -693,16 +745,30 @@ function keepOutRowsVisible(depth, n, mustKeep = []) {
 // elevation (off the 53) or for a man who was on any club's practice squad this season and now sits on the
 // active roster (server's practiceSquadPromoted) — the tooltip wording tells the two cases apart.
 const RESERVE_CODES = new Set(["IR", "PUP", "NFI", "SUSP", "EXEMPT"]);
-// D77 (Adam): "Slot" describes the man, not only the column — a player who lines up inside often enough
-// wears a small Slot tag wherever he sits.
-// D83/D86 (Adam, 2026-09-15): for RECEIVERS that tag is now redundant and gone. Every receiver who qualifies
-// stands in the real WR · Slot column (field.js's regroupSlotReceivers), so tagging him there — or
-// anywhere else, since he is nowhere else any more — would print the same fact twice. TIGHT ENDS have no
-// slot column to move into, so theirs stays, at Adam's 20% bar; no other position carries a rate at all.
-export const SLOT_TAG_RATE = { TE: 20 };
-const slotTagRate = (p) => (/TE/i.test(p.position || "") ? SLOT_TAG_RATE.TE : null);
-export const slotBadge = (p, opts = {}) => { const bar = slotTagRate(p); return (bar != null && typeof p.slotRate === "number" && p.slotRate >= bar && !opts.isSlotColumn
-  ? `<span class="badge badge-slot" title="Slot: ${esc(String(p.slotRate))}% of snaps${p.slotSeason ? " (" + esc(String(p.slotSeason)) + ")" : ""}">Slot</span>` : ""); };
+// D215 (Adam, 2026-09-29: "for any guy over 35% slot he gets marked as slot ... Slot (58%)"): there is no
+// Slot column; a receiver who takes 35 percent or more of his own snaps inside, or a tight end at 20 percent
+// or more (D77's bar), wears "Slot (58%)" beside his name wherever he is drawn, the rate rounded to a whole
+// number. The rate is field.js's slotRateOf: the current season's own rate (Adam, 2026-09-29, "just do
+// everyone": no snap gate, no pooling), and the tooltip says which season it is. No other position carries a
+// rate at all. `data-full`/`data-compact`/`data-tiny` are the three wordings fitNames' ladder swaps between on a
+// tight row ("Slot 58%" compact, D216's "S 58%" tiny; the tooltip always carries the full wording); the tag is
+// dropped only as the ladder's last rungs, when even the tiny tag with the short name would cut the name.
+export const SLOT_TAG_RATE = { WR: 35, TE: 20 };
+const slotTagRate = (p) => {
+  const pos = String(p?.position || "");
+  if (/WR/i.test(pos)) return SLOT_TAG_RATE.WR;
+  if (/TE/i.test(pos)) return SLOT_TAG_RATE.TE;
+  return null;
+};
+export const slotBadge = (p) => {
+  const bar = slotTagRate(p);
+  const rate = bar == null ? null : slotRateOf(p);
+  if (rate == null || rate < bar) return "";
+  const pct = Math.round(rate);
+  const title = `${pct}% of his snaps inside${p.slotSeasonCurrent ? `, ${p.slotSeasonCurrent}` : ""}`;
+  const full = `Slot (${pct}%)`;
+  return `<span class="badge badge-slot" title="${esc(title)}" data-full="${full}" data-compact="Slot ${pct}%" data-tiny="S ${pct}%">${full}</span>`;
+};
 export const psBadge = (p, title = true) => {
   if (RESERVE_CODES.has(p.status?.code)) return "";
   if (p.onActiveRoster === false) {
@@ -719,25 +785,14 @@ export function renderColumn(col, teamAbbr, opts = {}) {
   const heatCls = slot.injury?.level && HEAT_CLASS[slot.injury.level] ? ` ${HEAT_CLASS[slot.injury.level]}` : "";
   const heatTitleText = heatCls ? heatTitle(slot.injury) : "";
   const labelHref = `#/team/${esc(teamAbbr)}/group/${esc((slot.band || "").toLowerCase())}`;
-  // col.slotReason (D64): why THIS receiver is the one standing in the slot. On the Slot column it is the
-  // D86 sentence naming the men at 35 percent or more of their own snaps inside (50 by D86, 40 by D118, 35 by D163); on a club
-  // column it is columnRankReason's sentence, ESPN's rank of the column plus what the club printed (D92/D93).
-  // It leads the tooltip because it is the thing a reader actually questions.
-  const labelTitle = esc([col.slotReason || "", slot.labelSource ? `source: ${slot.labelSource}` : "", heatTitleText].filter(Boolean).join(" · "));
-  // D83: `col.derived` marks a column the LAYOUT built rather than one the club charted (the WR · Slot
-  // column). Two men in it may happen to be co-starters of the club columns they came from, but they are
-  // not co-starters of each other, so the "· co-starters" suffix must not follow them into it.
-  const pair = players.length >= 2 && players[0].coStarter && players[1].coStarter && !col.derived;
+  const labelTitle = esc([slot.labelSource ? `source: ${slot.labelSource}` : "", heatTitleText].filter(Boolean).join(" · "));
   // Lead ruling (2026-09-11): a co-starter pair is ONE slot with two names on it, not two separate
   // rankings — the column label says so directly instead of leaving it to be inferred from two adjacent
   // STARTER tags.
-  // D63: the LAYOUT may override what a column calls itself — the receiver it places in the slot reads
-  // "WR · Slot" regardless of his rank (D70: the rank moved into the tooltip, see slotReason in field.js's
-  // regroupSlotReceivers), since which man plays inside is the question that row answers. The slot's own label
-  // is still the identity everywhere else (the group link, the "also listed at" chips).
-  // D143: and the club's own Sam/Mike/Will/Rush word follows the label it qualifies, the way the nickel's
+  const pair = players.length >= 2 && players[0].coStarter && players[1].coStarter;
+  // D143: the club's own Sam/Mike/Will/Rush word follows the label it qualifies, the way the nickel's
   // "CB · Nickel" does. `ownLabel` below stays the raw slot label, which is what alsoListedChips matches on.
-  const baseLabel = withClubRole(col.displayLabel || slot.label, slot);
+  const baseLabel = withClubRole(slot.label, slot);
   const labelText = pair ? `${baseLabel} · co-starters` : baseLabel;
   // D70: the band hue on the pill comes from data-band (styles.css maps it to --band-color), one fixed
   // colour per position group across every team and every view — not the team tint the rest of the pill
@@ -755,7 +810,7 @@ export function renderColumn(col, teamAbbr, opts = {}) {
   // knows which side of the ball this column is on — never guessed from the players themselves — so every
   // row renderer below reads the tooltip's "offensive"/"defensive" word off opts.unit rather than each
   // reinventing its own way to ask.
-  const colOpts = { ...opts, band: slot.band, ownLabel: slot.label, labelSource: slot.labelSource, style, isSlotColumn: /Slot/.test(col.displayLabel || ""), unit: col.unit };
+  const colOpts = { ...opts, band: slot.band, ownLabel: slot.label, labelSource: slot.labelSource, style, unit: col.unit };
 
   // Ruling E: bold line-one row(s) — one starter normally, two for a co-starter pair or for D44's
   // OUT-starter-plus-ACTIVE-fill-in — then up to MAX_DEPTH_ROWS slim rows, the last of which becomes a
@@ -779,12 +834,12 @@ export function renderColumn(col, teamAbbr, opts = {}) {
     // (the rail rides behind the cap, the fill-in and co-starters are line-one rows, D104/D56).
     const cap = style.maxDepthRows ?? 1;
     const ordinary = depth.filter((p) => !railed.has(p));
-    // The one visible backup is the first man who can actually PLAY this week, not merely the first man
-    // listed — an OUT/INACTIVE/SUSP row there answers "who is behind him" with a man who is not.
-    // Order is otherwise untouched, so the hidden men stay behind the chip in the chart's printed order,
-    // and the COUNT is unchanged (field.js's depthPlan reserves the same box either way).
-    const lead = ordinary.findIndex((p) => !isFullyOut(p));
-    const ranked = lead > 0 ? [ordinary[lead], ...ordinary.filter((_, i) => i !== lead)] : ordinary;
+    // D214 (2026-09-29, refining D134): the visible backup is a healthy man who has been PLAYING (snaps in the
+    // club's last three games), then a healthy man who has not, then an out man — never an OUT/INACTIVE/SUSP row
+    // ahead of a man who plays. A stable sort by that rank keeps the chart's printed order inside each rank, so
+    // the hidden men behind the chip read in club order too; the COUNT is unchanged (field.js's depthPlan
+    // reserves the same box either way).
+    const ranked = ordinary.map((p, i) => ({ p, i })).sort((a, b) => depthVisibilityRank(a.p) - depthVisibilityRank(b.p) || a.i - b.i).map((x) => x.p);
     shownRest = ranked.slice(0, cap);
     shownOut = outRows;
     const hidden = ranked.slice(cap);
