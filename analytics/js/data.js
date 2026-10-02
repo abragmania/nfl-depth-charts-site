@@ -3,7 +3,7 @@
 // /api/analytics routes; static mode (the published site, <meta name="nfl-static" content="1">) reads the
 // flat files the publish step writes, through the same staticPathFor() the depth charts use (public/js/api.js).
 // This app is served one folder down (/analytics/), so every static path gets a "../" in front.
-import { isStatic, staticPathFor } from "../../js/api.js";
+import { isStatic, staticPathFor, getPlayer, getHistory, getGameLog } from "../../js/api.js";
 import { weekKey, splitKey, weekInScope } from "./filters.js";
 
 // Mirrors the analytics contract's static layout, used only if api.js's staticPathFor() does not (yet) map
@@ -97,13 +97,75 @@ export function loadStatus() { return statusFeed().then((f) => f.players); }
 // { [gsis]: { slot, ovr, posRank, posCount, maddenPos, role } } from the depth-chart app's compiled team view
 // (GET /api/team/<ABBR>; the published site's api/team/<ABBR>.json through resolveAnalyticsUrl). Fetched once per
 // club per page load. Never fails: an unreachable view resolves to {} and the next call asks again.
+// D209 part (2): the raw TeamView (server/compile's own shape) a club's compiled chart response carries —
+// what the depth-chart app's panel.js draws a player CARD from. Cached separately from clubCards() below so
+// the two share one fetch instead of two: clubCards() now reads through this cache rather than fetching on
+// its own, and a page that also wants the full view for one man's card (the analytics player page) gets it
+// without a second request.
+const teamViewCache = new Map();
+export function loadTeamView(abbr) {
+  const k = String(abbr || "").toUpperCase();
+  if (!teamViewCache.has(k)) {
+    teamViewCache.set(k, getJson(`/api/team/${encodeURIComponent(k)}`).catch((e) => { teamViewCache.delete(k); throw e; }));
+  }
+  return teamViewCache.get(k);
+}
+
 const clubCardsCache = new Map();
 export function loadClubCards(abbr) {
   const k = String(abbr || "").toUpperCase();
   if (!clubCardsCache.has(k)) {
-    clubCardsCache.set(k, getJson(`/api/team/${encodeURIComponent(k)}`).then(clubCards).catch(() => { clubCardsCache.delete(k); return {}; }));
+    clubCardsCache.set(k, loadTeamView(abbr).then(clubCards).catch(() => { clubCardsCache.delete(k); return {}; }));
   }
   return clubCardsCache.get(k);
+}
+
+// D209 part (2): the full PlayerCard for one man inside an already-fetched TeamView — the same traversal
+// public/js/main.js's own (unexported) findCard() uses to reopen the depth-chart panel without a page
+// render, duplicated here rather than reached into: this app's own rule (see public/js/panel.js's file
+// header) is that a small pure helper is copied per file instead of importing another builder's private
+// code. Matches on gsisId first (the reliable id), falling back to playerKey for the rare card whose gsisId
+// is unset but whose depth-chart key IS itself the gsis id (panel.js's GSIS_RE case). PURE.
+export function findCardByGsis(view, gsis) {
+  const hit = (p) => p?.gsisId === gsis || p?.playerKey === gsis;
+  for (const unit of ["OFF", "DEF"]) {
+    for (const slot of view?.units?.[unit] || []) {
+      for (const p of slot.players || []) if (hit(p)) return p;
+    }
+    const byBand = view?.unlisted?.[unit] || {};
+    for (const band of Object.keys(byBand)) for (const p of byBand[band] || []) if (hit(p)) return p;
+  }
+  return null;
+}
+
+// D209 part (2) — 🔵 fix round, item 5: the depth-chart card's own network calls. These used to reimplement
+// api.js's getPlayer/getHistory/getGameLog with their own "../"-prefixed fetches, back when api.js's own
+// static-mode paths were relative to the caller's own page and this app (one folder down at /analytics/)
+// needed a different prefix. api.js's paths are now anchored to the SITE ROOT from ITS OWN module address
+// (see that file's header comment), so they already reach the right published file from any page depth —
+// the "../"-prefixed reimplementation was dead weight duplicating that logic, and is gone. What is left of
+// these three is the one thing api.js's bare calls do not do on their own: cache per player/club key, the
+// same way loadPlayerGameLog always has, so a depth-chart card rebuilt for a player already seen this page
+// load (or, after the D209 fix round, a redraw of the SAME player, which no longer rebuilds it at all — see
+// views/player.js's mountCard) costs no second request.
+const playerStatsCache = new Map();
+export function loadPlayerStats(espnId) {
+  const k = String(espnId ?? "");
+  if (!playerStatsCache.has(k)) playerStatsCache.set(k, getPlayer(espnId).catch((e) => { playerStatsCache.delete(k); throw e; }));
+  return playerStatsCache.get(k);
+}
+
+const playerHistoryCache = new Map();
+export function loadPlayerHistory(abbr, playerKey, params = {}) {
+  const k = `${abbr}|${playerKey}|${new URLSearchParams(params).toString()}`;
+  if (!playerHistoryCache.has(k)) playerHistoryCache.set(k, getHistory(abbr, playerKey, params).catch((e) => { playerHistoryCache.delete(k); throw e; }));
+  return playerHistoryCache.get(k);
+}
+
+// getGameLog already caches per club inside api.js itself, so this is a plain pass-through (kept as its own
+// name/export for every caller already written against it).
+export function loadPlayerGameLog(abbr) {
+  return getGameLog(abbr);
 }
 
 // PURE: the cards map from a team view. The slot is named the way the chart prints it: each slot's own label ("WR1",
@@ -205,17 +267,25 @@ export async function loadFor(seasonList, st) {
   if (!ok.length) throw got[0].error;
   const missing = got.filter((g) => g.error).map((g) => g.s);
   const byKey = new Map();
-  for (const g of ok) for (const w of g.manifest.weeks || []) byKey.set(weekKey(g.s, w.week), { season: g.s, w, cols: g.manifest.cols });
+  for (const g of ok) for (const w of g.manifest.weeks || []) byKey.set(weekKey(g.s, w.week), { season: g.s, w, cols: g.manifest.cols, driveCols: g.manifest.driveCols });
   const keys = [...byKey.keys()].sort();
   const need = weeksNeeded(keys, st);
   const files = await Promise.all(need.map((k) => { const x = byKey.get(k); return loadWeek(x.season, x.w).then((f) => ({ k, x, f })); }));
-  const blocks = files.map(({ k, x, f }) => ({
-    season: x.season, week: splitKey(k).week, key: k, cols: f.cols || x.cols,
-    plays: f.plays || [], snaps: f.snaps || null, routes: f.routes || null, ngs: f.ngs || null, pfr: f.pfr || null,
-  }));
+  const blocks = files.map(({ k, x, f }) => weekBlock(k, x, f));
   // D183: the players map views read carries the depth-chart spelling already; displayName() is the same lookup.
   lastPlayers = applyIdentityNames(mergePlayers(ok.map((g) => ({ season: g.s, players: g.players }))), identityNames);
   return { blocks, players: lastPlayers, keys, manifests: ok.map((g) => ({ season: g.s, ...g.manifest })), missing };
+}
+
+// PURE: one fetched week file -> the block a view reads. `x` is the manifest side ({season, cols, driveCols}), `f`
+// the week file. D219: `drives` (one row per offensive drive, in `driveCols` order, see server/analytics/compile.js
+// DRIVE_COLS) rides along; a week file compiled before D219 has none, so it is [] and driveCols may be null.
+export function weekBlock(k, x, f) {
+  return {
+    season: x.season, week: splitKey(k).week, key: k, cols: f.cols || x.cols,
+    plays: f.plays || [], snaps: f.snaps || null, routes: f.routes || null, ngs: f.ngs || null, pfr: f.pfr || null,
+    driveCols: f.driveCols || x.driveCols || null, drives: f.drives || [],
+  };
 }
 
 // PURE: the per-season players files merged into one map whose `teams` are keyed by week key ("2025-14"),
