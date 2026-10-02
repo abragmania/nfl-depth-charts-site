@@ -349,14 +349,3 @@
 /* 👁: when Club targets cannot sit beside the zones, it goes under the zone grid in the zones' column, at its own width. */
 .an-pl-rc .an-pl-rczones > .an-pl-rcclub { width:fit-content; max-width:100%; margin-top:14px; }
 .an-tm-lostside { color:var(--dim); font-size:10.5px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; margin-right:-10px; }
-
-/* D224 increment G: the line blocks' per-game strips (team.js lineStripHtml, qbStrips small), under the O-line and
-   D-line tiles and the coverage card. width:0 + min-width:100% keeps the strip from widening a fit-content block (it
-   takes the block's width, never sets it); the SVG keeps its natural size and only scales down in a narrower column
-   (the This-week page's grid columns), bars and text together, as the viewBox allows. */
-.an-line-strip { width:0; min-width:100%; margin-top:12px; padding-top:8px; border-top:1px solid var(--line); }
-.an-line-strip-h { color:var(--muted); font-size:10.5px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; margin-bottom:2px; }
-.an-line-strip-h span { color:var(--dim); font-weight:400; letter-spacing:0; text-transform:none; margin-left:6px; font-size:11px; }
-.an-line-strip-svg svg { display:block; max-width:100%; height:auto; }
-.an-line-strip .an-wb-bar.an-qb-bar.plain { fill:#5f7186; }
-.an-line-strip-note { color:var(--dim); font-size:11px; margin-top:2px; }

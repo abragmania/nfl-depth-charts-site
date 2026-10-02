@@ -9,13 +9,13 @@
 // Route #/matchup/:a/:b renders A-offense-over-B-defense; #/matchup/:a alone resolves B from A's
 // header.nextOpponent (this week's schedule) and redirects, or shows a picker on a bye week.
 import { getTeams, getTeam } from "./api.js";
-import { esc, renderColumn, renderTray, fitNames, wireDepthToggles, espnSchemeOf, unitTagsHtml, assetUrl } from "./cards.js";
+import { esc, renderColumn, renderTray, fitNames, wireDepthToggles, espnSchemeOf, unitTagsHtml } from "./cards.js";
 import { computeLayout, renderFieldSvg, renderLevelLabels, FIELD_VARIANT } from "./field.js";
 import { mountScaledField, disposeCurrentView, MIN_READABLE_SCALE } from "./viewfit.js";
 import { navStripHtml, wireNav } from "./nav.js";
 import { isLightWash } from "./landing.js";
 // D173: this week's games strip (shared with the landing page) and the game line for the game being viewed.
-import { gamesBarHtml, gameLineHtml, findGame, wireGamesToggle } from "./gamesbar.js";
+import { gamesBarHtml, gameLineHtml, findGame } from "./gamesbar.js";
 // D111: one legend, drawn on both pages (see matchupLegendHtml). D134: one reduced-depth option object too.
 import { legendHtml, REDUCED_DEPTH_OPTS } from "./team.js";
 
@@ -59,9 +59,13 @@ function heatSummaryHtml(view) {
 }
 
 // Same URL rule team.js's fieldHtml uses for its single watermark (D95/D98 part 1): prefer the dark
-// crest, fall back to the plain logo, resolved against the page by cards.js assetUrl (a root-relative path
-// resolved against the document locally but 404'd on the public site, which lives under a sub-path).
-const watermarkUrl = (team) => assetUrl(team.logoDark || team.logo || "");
+// crest, fall back to the plain logo, and make a bare "img/logos/..." path root-relative so it resolves
+// against the document rather than against styles.css's own /css/ location.
+function watermarkUrl(team) {
+  let u = team.logoDark || team.logo || "";
+  if (u && !/^https?:\/\//.test(u) && !u.startsWith("/")) u = "/" + u;
+  return u;
+}
 
 // D98 part 2: one crest per half, each sized to ~74% of that half's own height (70-80% asked for) and
 // centred within it, reading the split straight off the layout this same field already computed (the
@@ -282,7 +286,6 @@ function wireByePicker(root, A) {
 // ---- entry point ----
 
 export async function renderMatchup(root, search, aAbbr, bAbbr) {
-  wireGamesToggle(root); // the games strip's fold/unfold (gamesbar.js), wired once per root
   search.hidden = true;
   disposeCurrentView(); // the outgoing view's observers must not outlive its DOM
   const A = (aAbbr || "").toUpperCase();
