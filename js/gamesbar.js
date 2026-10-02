@@ -2,6 +2,7 @@
 // Matchup page so the two draw the same chips from the same /api/teams `games` list. Pure string builders, no
 // DOM, so they are testable in Node (tests/landing.test.mjs, tests/gamesbar.test.mjs).
 import { icon, weatherIconKey, espnIconKey } from "./icons.js";
+import { assetUrl } from "./cards.js";
 
 const ESC = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ESC[c]);
@@ -41,13 +42,20 @@ export function gameChipData(g) {
 // defense, and either club may be the home side.)
 const isPair = (g, a, b) => !!g && ((g.away === a && g.home === b) || (g.away === b && g.home === a));
 
-function logoUrl(t) {
-  let u = t?.logoDark || t?.logo || "";
-  if (u && !/^https?:\/\//.test(u) && !u.startsWith("/")) u = "/" + u;
-  return u;
-}
+// Dark crest first, plain logo second, resolved against the page (cards.js assetUrl: a root-relative path broke
+// every logo on the public site, which lives under a sub-path).
+const logoUrl = (t) => assetUrl(t?.logoDark || t?.logo || "");
 
-function gameChipHtml(g, teamsByAbbr, active) {
+// D224 increment C (plan question 3's default): the chip still opens the depth chart's Matchup page; its kickoff row
+// becomes a link to the analytics This-week page for the game, adding no height. One anchor cannot hold another, so
+// the chip is a box: the Matchup link is an empty anchor stretched over the whole chip (.game-chip-open) and the
+// kickoff anchor sits above it. links: where the two go from the page drawing the strip ({ matchup(away, home),
+// week(away, home) }, both returning an href); the default suits the depth-chart pages at the site root.
+export const GAME_LINKS = Object.freeze({
+  matchup: (a, h) => `#/matchup/${a}/${h}`,
+  week: (a, h) => `analytics/#/week/${a}/${h}`,
+});
+function gameChipHtml(g, teamsByAbbr, active, links = GAME_LINKS) {
   const d = gameChipData(g);
   const cur = active ? ' aria-current="true"' : "";
   const title = [fmtKickoffET(g.kickoff), g.venue?.name].filter(Boolean).join(" · ");
@@ -59,24 +67,58 @@ function gameChipHtml(g, teamsByAbbr, active) {
     return `${logo}<span class="game-chip-abbr">${esc(abbr)}</span><span class="game-chip-data game-chip-data-${data?.kind ?? "none"}">${val}</span>`;
   }).join("");
   const note = d.neutral ? '<span class="game-chip-note" title="neutral site">vs</span>' : "";
-  return `<a class="game-chip${active ? " is-active" : ""}" href="#/matchup/${esc(g.away)}/${esc(g.home)}" title="${esc(title)}"${cur}>
-    <span class="game-chip-kick">${esc(d.kick)}${note}</span>${rows}
-  </a>`;
+  return `<div class="game-chip${active ? " is-active" : ""}" title="${esc(title)}">
+    <a class="game-chip-open" href="${esc(links.matchup(g.away, g.home))}" aria-label="${esc(`${g.away} at ${g.home}: Matchup`)}"${cur}></a>
+    <a class="game-chip-kick" href="${esc(links.week(g.away, g.home))}" title="${esc(`This week in Analytics: ${g.away} at ${g.home}`)}">${esc(d.kick)}${note}</a>${rows}
+  </div>`;
 }
 
 // One chip per game, kickoff order as the server sent it. `active` = [a, b]: the chip for the game between
 // those two clubs is marked as the one being viewed (D173). Clicking a chip opens away offense vs home defense.
-export function gamesRowHtml(teams, games, active = null) {
+// Adam, 2026-09-28 ("make the list of games expandable and contractable, so that I can clear them out when I
+// want more space"): the strip folds to one small line and unfolds again, on the landing page and the Matchup
+// page alike. The choice is a per-viewer convenience kept in localStorage (never state anyone else needs); a
+// blocked storage just means the fold lasts for this page.
+export const GAMES_FOLD_KEY = "nfl.gamesFolded";
+export function gamesFolded() {
+  try { return localStorage.getItem(GAMES_FOLD_KEY) === "1"; } catch { return false; }
+}
+function setGamesFolded(folded) {
+  try { localStorage.setItem(GAMES_FOLD_KEY, folded ? "1" : "0"); } catch { /* storage blocked: this page still folds */ }
+}
+export function gamesToggleHtml(folded, n) {
+  return `<button type="button" class="games-toggle" data-games-toggle aria-expanded="${folded ? "false" : "true"}" title="${folded ? "Show" : "Hide"} this week's games">${folded ? "▸" : "▾"} This week's games${folded ? ` (${n})` : ""}</button>`;
+}
+export function gamesRowHtml(teams, games, active = null, folded = gamesFolded(), links = GAME_LINKS) {
   const teamsByAbbr = new Map(teams.map((t) => [t.abbr, t]));
-  const chips = (games ?? []).map((g) => gameChipHtml(g, teamsByAbbr, !!active && isPair(g, active[0], active[1]))).join("");
-  return `<div class="games-row">${chips}</div>`;
+  const list = games ?? [];
+  const chips = list.map((g) => gameChipHtml(g, teamsByAbbr, !!active && isPair(g, active[0], active[1]), links)).join("");
+  return `${gamesToggleHtml(folded, list.length)}<div class="games-row"${folded ? " hidden" : ""}>${chips}</div>`;
+}
+// One delegated listener per root (the views re-render root's innerHTML, so it is wired once and survives).
+// A fold changes the height above the field, so the window gets a resize event and the fitted pages refit.
+export function wireGamesToggle(root) {
+  if (!root || root.dataset.gamesToggleWired) return;
+  root.dataset.gamesToggleWired = "1";
+  root.addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-games-toggle]");
+    if (!btn) return;
+    const row = btn.parentElement?.querySelector(".games-row");
+    if (!row) return;
+    const folded = !row.hidden;
+    row.hidden = folded;
+    setGamesFolded(folded);
+    btn.outerHTML = gamesToggleHtml(folded, row.children.length);
+    window.dispatchEvent(new Event("resize"));
+  });
 }
 
 // The Matchup page's strip: the same row in the same panel as the landing page's bar, without the landing
 // page's "Any matchup..." control (the Matchup page has its own opponent picker). Empty when there are no games.
-export function gamesBarHtml(teams, games, active) {
+// The analytics This-week page draws the same strip, passing its own links (one folder down).
+export function gamesBarHtml(teams, games, active, links = GAME_LINKS) {
   if (!games?.length) return "";
-  return `<nav class="matchup-bar games-bar" aria-label="This week's games">${gamesRowHtml(teams, games, active)}</nav>`;
+  return `<nav class="matchup-bar games-bar" aria-label="This week's games">${gamesRowHtml(teams, games, active, gamesFolded(), links)}</nav>`;
 }
 
 // This week's game between clubs a and b, in either order, or null (a hand-picked matchup, a bye).

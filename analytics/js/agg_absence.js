@@ -67,8 +67,9 @@
 // the depth chart's fill-in (status.fillIn: a gsis, an object with one, or a name) first when he is in the list, then
 // by the largest of his rises. `fillIn` on the
 // missing man carries the fill-in's before/since shares whether or not he rose.
-import { clubGames, colIndex, rushEvent } from "./agg.js";
-import { gamesInWindow, splitKey } from "./filters.js";
+import { clubGames, colIndex, rushEvent, frac } from "./agg.js";
+import { gamesInWindow, splitKey, weekInScope } from "./filters.js";
+import { fantasyByPlayer } from "./agg_fantasy.js";
 
 export const SKILL_POS = new Set(["QB", "RB", "FB", "WR", "TE"]);
 export const DEF_POS = new Set(["DE", "DT", "NT", "DL", "EDGE", "ED", "LB", "ILB", "OLB", "MLB", "CB", "NB", "DB", "S", "FS", "SS", "SAF"]);
@@ -313,4 +314,122 @@ export function withWithout(blocks, players, st, team, gsis, other) {
     without: pick(shares(idx, other, w.since)),
     beforeGames: w.before.map((g) => g.key), sinceKeys: w.since.map((g) => g.key), sinceGames: w.since.length,
   });
+}
+
+// ---- D224 increment E: with-and-without splits on a back's or receiver's page ---------------------------------
+// teammateSplits(blocks, players, st, gsis): his figures in the games a named teammate played and in the games that
+// teammate did not, for the teammates his role most plausibly hangs on.
+// SCOPE: the picked season (st.season), plus the season before it only when st.with2025 (the page's Include-previous
+// switch) is on; regular season unless st.po. The page's window (last 3, a week range) is NOT applied: these are
+// season-to-date splits. st.pi false skips pass-interference rows as everywhere else.
+// HIS CLUB: the club of his latest week in the picked season (players[gsis].teams); no week there, no splits (null).
+// HIS GAMES: the club's games in scope that he PLAYED for that club, the absence layer's rule (playedIn: an offensive
+// snap or a pass, target or carry for the club). A game for another club (before or after a trade) is never his game
+// here, so only games where both men were on the same club can count.
+// CANDIDATES (D219 call (i)'s default "top skill men", season to date = the picked season's club games, him left out):
+// the club's QB1 by pass attempts, the top three by targets, the top RB/FB by designed runs; in that order, a man named
+// twice listed once (his first reason kept), ties by name.
+// WITH = his games the teammate also played for the club. WITHOUT = his games the teammate did not play while still
+// on the club. The play rows only record the weeks a man played, so "still on the club" is read from his played
+// weeks IN THE GAME'S OWN SEASON (players[tm].teams): that week itself when he played it for some club, else his
+// latest earlier week that season, else his first later week that season. A game whose week so found is another club
+// (he had been traded away, or had not yet arrived from one) counts for nothing, and so does every game of a season
+// in which he played no week at all (a rookie or a newcomer is never "without" in last season's games). LIMITATION,
+// said on the page: a man signed mid-season with no earlier club that season has his weeks before arriving counted
+// as "without". A game neither man played counts for nothing.
+// FIGURES per side (the page's own share maths, over the side's games):
+//   tgtShare = his targets / the club's pass attempts in those games (a PI target counts for him, is no attempt)
+//   carShare = his designed runs / the club's designed runs (every run row) in those games
+//   routePct = his routes / the club dropbacks each charted week implies (routes / that week's route %), agg.js's rule
+//              over the weeks the routes table lists him; null when none is listed or a listed week has no route %
+//   dkG      = his DraftKings points (agg_fantasy.js, D194) summed over those games / the side's games (a game he
+//              played and scored nothing is a 0)
+//   games    = the side's game count; tgt, att, des, runs, routes, dropbacks, routeGames, dk carry the parts.
+// A teammate QUALIFIES when both sides have WW_MIN_GAMES (2) or more games; `qualified` lists only those, and the
+// page hides the section when it is empty. Returns null when he has no club in the picked season.
+export const WW_MIN_GAMES = 2;
+const BACK_POS = new Set(["RB", "FB"]);
+
+export function teammateSplits(blocks, players, st, gsis) {
+  const s = st || {};
+  const season = +s.season;
+  if (!Number.isFinite(season) || !gsis) return null;
+  const inSeasons = (key) => { const y = splitKey(key).season; return y === season || (!!s.with2025 && y === season - 1); };
+  const all = blocks || [];
+  const scoped = all.every((b) => inSeasons(b.key)) ? all : all.filter((b) => inSeasons(b.key));
+  const scopeOk = (key) => inSeasons(key) && weekInScope(key, { po: !!s.po });
+  const myWeeks = Object.keys(players?.[gsis]?.teams || {}).filter((k) => splitKey(k).season === season && scopeOk(k)).sort();
+  if (!myWeeks.length) return null;
+  const team = players[gsis].teams[myWeeks[myWeeks.length - 1]];
+  if (!team) return null;
+  const idx = clubIndex(scoped, players, { season, po: !!s.po, pi: s.pi }, team);
+  const mine = idx.games.filter((g) => playedIn(idx.per.get(g.gk), gsis, "off"));
+
+  // Candidates, season to date over the picked season's club games.
+  const tot = new Map();
+  for (const g of idx.games) {
+    if (g.season !== season) continue;
+    for (const [m, c] of idx.per.get(g.gk).men) {
+      if (m === gsis) continue;
+      const t = tot.get(m) || { att: 0, tgt: 0, des: 0 };
+      t.att += c.att; t.tgt += c.tgt; t.des += c.des; tot.set(m, t);
+    }
+  }
+  const nameOf = (id) => players?.[id]?.name || id;
+  const posOfId = (id) => String(players?.[id]?.pos || "").toUpperCase();
+  const top = (key, n, keep = () => true) => [...tot.entries()].filter(([id, t]) => t[key] > 0 && keep(id))
+    .sort((a, b) => b[1][key] - a[1][key] || nameOf(a[0]).localeCompare(nameOf(b[0]))).slice(0, n);
+  const picks = [];
+  const add = (list, why, key) => { for (const [id, t] of list) if (!picks.some((p) => p.gsis === id)) picks.push({ gsis: id, why, count: t[key], key }); };
+  add(top("att", 1), "qb1", "att");
+  add(top("tgt", 3), "targets", "tgt");
+  add(top("des", 1, (id) => BACK_POS.has(posOfId(id))), "back", "des");
+
+  // His fantasy games and route rows, once.
+  const fst = { season, with2025: !!s.with2025, window: "season", from: null, to: null, po: !!s.po, team: "", opp: "", ha: "", downs: [], qtrs: [] };
+  const dkBy = new Map((fantasyByPlayer(scoped, players, fst).get(gsis)?.games || []).map((g) => [g.gk, g.pts ?? 0]));
+  const routeBy = new Map();
+  for (const b of scoped) {
+    const rt = b.routes?.[gsis];
+    const n = num(rt?.routes);
+    if (n === null || players?.[gsis]?.teams?.[b.key] !== team) continue;
+    routeBy.set(`${b.key}|${team}`, { n, pct: frac(rt.routePct) });
+  }
+  const side = (games) => {
+    const x = shares(idx, gsis, games);
+    let att = 0, runs = 0, routes = 0, dropbacks = 0, routeGames = 0, pctOk = true, dk = 0;
+    for (const g of games) {
+      const G = idx.per.get(g.gk); att += G.att; runs += G.runs;
+      const r = routeBy.get(g.gk);
+      if (r) { routeGames++; routes += r.n; if (r.pct) dropbacks += r.n / r.pct; else if (r.n > 0) pctOk = false; }
+      dk += dkBy.get(g.gk) || 0;
+    }
+    return { games: games.length, keys: games.map((g) => g.key), tgt: x.tgt, att, tgtShare: x.tgtShare, des: x.des, runs, carShare: x.carShare,
+      routes: routeGames ? routes : null, dropbacks: routeGames && pctOk ? dropbacks : null, routeGames,
+      routePct: routeGames && pctOk ? ratio(routes, dropbacks) : null, dk: Math.round(dk * 100) / 100, dkG: ratio(dk, games.length) };
+  };
+  const scopeKeys = (id) => Object.entries(players?.[id]?.teams || {}).filter(([k]) => scopeOk(k)).sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
+  const candidates = picks.map((p) => {
+    const weeks = scopeKeys(p.gsis);
+    const clubAt = (key) => {
+      if (players?.[p.gsis]?.teams?.[key]) return players[p.gsis].teams[key]; // that very week, for some club
+      const yr = splitKey(key).season;
+      let before = null, after = null;
+      for (const [k, t] of weeks) {
+        if (splitKey(k).season !== yr) continue; // his own season only: no week that season, no club
+        if (k < key) before = t; else if (k > key && after === null) after = t;
+      }
+      return before ?? after;
+    };
+    const w = [], wo = [];
+    for (const g of mine) {
+      if (playedIn(idx.per.get(g.gk), p.gsis, "off")) w.push(g);
+      else if (clubAt(g.key) === team) wo.push(g);
+    }
+    const out = { gsis: p.gsis, name: nameOf(p.gsis), pos: posOfId(p.gsis), why: p.why, count: p.count, with: side(w), without: side(wo) };
+    out.qualifies = out.with.games >= WW_MIN_GAMES && out.without.games >= WW_MIN_GAMES;
+    return out;
+  });
+  return deepFreeze({ gsis, team, season, seasons: s.with2025 ? [season, season - 1] : [season], games: mine.length,
+    candidates, qualified: candidates.filter((c) => c.qualifies) });
 }
