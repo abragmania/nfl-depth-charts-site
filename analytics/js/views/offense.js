@@ -9,11 +9,12 @@
 // so a rule can address this page alone.
 import { fromQuery, toQuery, seasonsOf, weekLabel } from "../filters.js";
 import { loadFor, loadTeams } from "../data.js";
-import { aggregateTeams, teamReference, teamTier, teamZones, sortTeamRows, OFF_TIER } from "../agg_team.js";
+import { aggregateTeams, teamReference, teamTier, teamZones, sortTeamRows, OFF_TIER, SOFT_KEYS, RANK_LOW_FIRST } from "../agg_team.js";
 import { TIER_NAMES } from "../agg.js";
 import { renderFilterBar } from "../filterbar.js";
 import { esc, NA, isNum, pct, fix, signed, teamPill, qbStrips, pfrNote, seasonLabel } from "./qb.js";
 import { windowName } from "./qbplayer.js";
+import { moreFrom, visibleCols, allOpen, toggleMore, moreCell, fitOpen, wireMore } from "../table.js";
 import { teamPageState, clubZoneField, clubZoneLegend, zonePlaysHtml, TEAM_ZONE_MODES } from "./team.js";
 
 const P = (v, d = 1) => (isNum(v) ? pct(v, d) : NA);
@@ -25,24 +26,44 @@ export const OFF_COLS = [
   { k: "succPct", h: "Succ %", t: "Share of plays that were successful (higher is better)", f: (v) => P(v, 1), grp: "ov" },
   { k: "explPct", h: "Expl %", t: "Explosive plays: runs of 10+ yards and completions of 20+ / plays (higher is better)", f: (v) => P(v, 1), grp: "ov" },
   { k: "playsG", h: "Plays/g", t: "Plays per game: pass attempts, sacks, scrambles and designed runs", f: (v) => fix(v, 1), grp: "ov" },
-  { k: "passRate", h: "Pass %", t: "Dropbacks / plays (all situations: the ledger carries no score, so no neutral-situation rate)", f: (v) => P(v, 1), grp: "ov" },
+  { k: "passRate", h: "Pass %", t: "Dropbacks / plays, all situations (the neutral-script figure is Neutral PROE, under Passing)", f: (v) => P(v, 1), grp: "ov" },
   { k: "epaDb", h: "EPA/db", t: "EPA per dropback (sacks and scrambles included; higher is better)", f: (v) => signed(v, 3), grp: "pd" },
   { k: "cmpPct", h: "Cmp %", t: "Completion % (higher is better)", f: (v) => P(v, 1), grp: "pd" },
   { k: "adot", h: "aDOT", t: "Air yards per attempt", f: (v) => fix(v, 1), grp: "pd" },
   { k: "sackPct", h: "Sack %", t: "Sacks / dropbacks (lower is better)", f: (v) => P(v, 1), grp: "pd" },
   { k: "pressPct", h: "Press %", t: "PFR: the club's quarterbacks' pressured dropbacks / their dropbacks, about a week behind (lower is better)", f: (v) => P(v, 1), grp: "pd" },
   { k: "paPct", h: "PA %", t: "FTN: play-action dropbacks / dropbacks charted", f: (v) => P(v, 0), grp: "pd" },
+  // D219 figure 1: pass rate over expectation, in percentage points; style, not quality, so uncoloured (not in OFF_TIER).
+  { k: "proe", h: "PROE", t: "Pass rate over expectation: the dropback rate minus the expected pass rate (nflverse xpass) on the same plays, in percentage points, over the plays with an expectation. Style, not quality: not coloured. 1st = most pass-happy over expectation.", f: (v) => signed(v, 1), grp: "pd" },
+  { k: "proeNeutral", h: "Neutral PROE", t: "Pass rate over expectation in neutral script (score within 7, quarters 1-3): the dropback rate minus the expected pass rate (nflverse xpass) on the same plays, in percentage points. Style, not quality: not coloured. 1st = most pass-happy over expectation.", f: (v) => signed(v, 1), grp: "pd" },
   { k: "epaCar", h: "EPA/car", t: "EPA per designed run (higher is better)", f: (v) => signed(v, 3), grp: "rd" },
   { k: "ypc", h: "YPC", t: "Yards per designed run (higher is better)", f: (v) => fix(v, 1), grp: "rd" },
   { k: "rushYdsG", h: "Yds/g", t: "Rushing yards per game (designed runs)", f: (v) => fix(v, 1), grp: "rd" },
   { k: "stuffPct", h: "Stuff %", t: "Designed runs gaining 0 or less / designed runs (lower is better)", f: (v) => P(v, 1), grp: "rd" },
   { k: "ybcCar", h: "YBC/car", t: "PFR: yards before contact per carry (higher is better)", f: (v) => fix(v, 1), grp: "rd" },
+  // D219 figure 7: a Drives group on the end (nothing before it moves), tiered higher-is-better (OFF_TIER).
+  { k: "ptsDrive", h: "Pts/dr", t: "Points per drive: the points the offense actually scored on its own snaps (a touchdown 6 plus the try, a field goal 3) / its drives, kneel-only drives left out (higher is better)", f: (v) => fix(v, 2), grp: "dr" },
+  { k: "rzTdPct", h: "RZ TD %", t: "Red-zone touchdown rate: drives that reached the opponent's 20 and ended in a touchdown / drives that reached it (a field goal is a trip, not a touchdown; higher is better)", f: (v) => P(v, 1), grp: "dr" },
+  { k: "thirdPct", h: "3rd %", t: "Third-down conversion: third-down plays that gained a first down or scored / third-down plays, pass-interference plays left out; a first down a foul gave counts; reads a little under NFL.com's because penalty no-plays are not in the rows (higher is better)", f: (v) => P(v, 1), grp: "dr" },
+  // D219 figures 2 and 3: a Pace group on the end (nothing before it moves); style, not quality, so uncoloured (not in
+  // OFF_TIER). Seconds per play sorts fastest first (RANK_LOW_FIRST), the rest most first.
+  { k: "neutralSecs", h: "Sec/play", t: "Seconds per play in neutral script (score within 7, quarters 1-3): the mean time from a snap to the offense's next snap in the same drive. Pace, not quality: not coloured. Fastest first.", f: (v) => fix(v, 1), grp: "pc" },
+  { k: "noHuddlePct", h: "No-huddle %", t: "No-huddle plays / plays, the play-by-play's flag. Style, not quality: not coloured.", f: (v) => P(v, 1), grp: "pc" },
+  { k: "shotgunPct", h: "Shotgun %", t: "Shotgun plays / plays, the play-by-play's flag with pistol counted as shotgun (FTN's charting disagrees on a small share; the audit logs them). Style, not quality: not coloured.", f: (v) => P(v, 1), grp: "pc" },
+  { k: "motionPct", h: "Motion %", t: "FTN: plays with pre-snap motion / plays charted. Style, not quality: not coloured.", f: (v) => P(v, 1), grp: "pc" },
 ];
-const GROUPS = [["ov", "Overall"], ["pd", "Passing"], ["rd", "Rushing"]];
+const GROUPS = [["ov", "Overall"], ["pd", "Passing"], ["rd", "Rushing"], ["dr", "Drives"], ["pc", "Pace"]];
 OFF_COLS.forEach((c, i) => { c.gs = i === 0 || OFF_COLS[i - 1].grp !== c.grp; });
+// D219 increment E fix: the Drives and Pace groups are ANCILLARY, hidden behind the Running backs table's More ▸ /
+// ◂ Less toggle (table.js openGroups/visibleCols/toggleMore, keyed on a truthy `anc`), so the default table fits a
+// 1536 window with no sideways scroll. A sort on one of their columns (a club tile's Rankings link) opens that group;
+// more=1 opens both. Their cells keep their own tier colours (unlike the RB table's ancillary columns).
+const ANC_GROUPS = new Set(["dr", "pc"]);
+OFF_COLS.forEach((c) => { c.anc = ANC_GROUPS.has(c.grp) ? c.grp : ""; });
+const DEFAULT_SORT = "epaPlay";
 const SORTABLE = new Set([...OFF_COLS.map((c) => c.k), "team", "g"]);
 // First click on a column sorts best-first: descending where higher is better (offense's default direction).
-export const bestDir = (k) => (OFF_TIER[k] === -1 || k === "team" ? "asc" : "desc");
+export const bestDir = (k) => (OFF_TIER[k] === -1 || k === "team" || (!OFF_TIER[k] && RANK_LOW_FIRST.has(k)) ? "asc" : "desc");
 export const offSort = (query, st) => {
   const has = new URLSearchParams(String(query || "").replace(/^\?/, "")).has("sort");
   return has && SORTABLE.has(st.sort) ? { sort: st.sort, dir: st.dir } : { sort: "epaPlay", dir: "desc" };
@@ -106,23 +127,28 @@ function detailHtml(r, st, q, ref, wn, lgZones, players) {
         ${tile("Expl run %", PP(O.runExplPct), "runExplPct", PP(L.runExplPct), "Designed runs of 10+ yards / designed runs")}
         ${tile("Stuffed %", PP(O.stuffPct), "stuffPct", PP(L.stuffPct), "Designed runs gaining 0 or less / designed runs (lower is better)")}
       </div></div>
-      <div class="an-dlinks"><a href="#/team/${encodeURIComponent(r.team)}${q ? "?" + q : ""}">Team page →</a><a href="#/team/${encodeURIComponent(r.team)}/defense${q ? "?" + q : ""}">Defense page →</a><a href="#/grid${q ? "?" + q : ""}">Grid →</a><a href="../#/team/${encodeURIComponent(r.team)}" target="_blank" rel="noopener">Depth chart ↗</a></div>
+      <div class="an-dlinks"><a href="#/team/${encodeURIComponent(r.team)}${q ? "?" + q : ""}">Team page →</a><a href="#/team/${encodeURIComponent(r.team)}/defense${q ? "?" + q : ""}">Defense page →</a><a href="#/grid${q ? "?" + q : ""}">Grid →</a><a href="../#/team/${encodeURIComponent(r.team)}">Depth chart →</a></div>
     </div></div>`;
 }
 
 export const offAnchor = { id: null, top: null };
 
-// PURE (no DOM): the table's markup. view: { ref, teams, windowName, lgZones, players, sort, dir }.
+// PURE (no DOM): the table's markup. view: { ref, teams, windowName, lgZones, players, sort, dir, hl }. `hl`
+// (D208, the Rankings page's hl= query key) is a club abbr whose row gets the "is-hl" class (styled in
+// analytics.css) so a Grid cell or a club tile's Rankings link can point straight at one club's row.
 export function offTableHtml(rows, st, query, view) {
-  const { ref, sort, dir } = view;
+  const { ref, sort, dir, hl } = view;
   const list = sortTeamRows(rows, "off", sort, dir);
-  const q = query || "", nCols = 3 + OFF_COLS.length + 1;
+  // The More toggle (table.js): Drives and Pace show only with more=1 (st.more) or when the sort is one of theirs.
+  const mst = { ...st, sort }, cols = visibleCols(OFF_COLS, mst, DEFAULT_SORT);
+  const q = query || "", nCols = 3 + cols.length + 1;
   const th = (k, h, t, cls = "") => `<th class="${cls}${sort === k ? " sorted " + dir : ""}" data-sort="${k}" title="${esc(t)}">${h}</th>`;
-  const groupRow = `<tr class="an-grp"><th colspan="3"></th>${GROUPS.map(([g, l]) => `<th colspan="${OFF_COLS.filter((c) => c.grp === g).length}" class="g-${g} gs">${l}</th>`).join("")}<th></th></tr>`;
-  const head = `<tr>${th("rank", "#", "Rank")}${th("team", "Offense", "Club", "c-name")}${th("g", "G", "Games in the window")}${OFF_COLS.map((c) => th(c.k, c.h, c.t, "g-" + c.grp + (c.gs ? " gs" : ""))).join("")}<th class="c-spark" title="EPA per play by week: green above zero (good), red below">EPA/play by week</th></tr>`;
+  // The toggle leads the group row over rank and club (moreCell spans two); a blank cell sits over G.
+  const groupRow = `<tr class="an-grp">${moreCell(allOpen(OFF_COLS, mst, DEFAULT_SORT))}<th></th>${GROUPS.map(([g, l]) => [g, l, cols.filter((c) => c.grp === g).length]).filter((x) => x[2] > 0).map(([g, l, n]) => `<th colspan="${n}" class="g-${g} gs">${l}</th>`).join("")}<th></th></tr>`;
+  const head = `<tr>${th("rank", "#", "Rank")}${th("team", "Offense", "Club", "c-name")}${th("g", "G", "Games in the window")}${cols.map((c) => th(c.k, c.h, c.t, "g-" + c.grp + (c.gs ? " gs" : ""))).join("")}<th class="c-spark" title="EPA per play by week: green above zero (good), red below">EPA/play by week</th></tr>`;
   const body = list.map((r, i) => {
     const open = st.open === r.team;
-    const cells = OFF_COLS.map((c) => {
+    const cells = cols.map((c) => {
       const v = r.off[c.k], t = teamTier("off", c.k, v, ref.cuts);
       let bar = "";
       if (c.bar && isNum(v)) {
@@ -137,9 +163,9 @@ export function offTableHtml(rows, st, query, view) {
           bar = `<i class="an-bar" style="width:${Math.min(100, (v / c.bar) * 100).toFixed(1)}%"></i>`;
         }
       }
-      return `<td class="num g-${c.grp}${c.gs ? " gs" : ""}${t ? " t-" + t : ""}${bar ? " has-bar" : ""}${c.signed ? " c-signed" : ""}">${bar}<span>${c.f(v)}</span></td>`;
+      return `<td class="num g-${c.grp}${c.gs ? " gs" : ""}${t ? " t-" + t + (SOFT_KEYS.includes(c.k) ? " t-soft" : "") : ""}${bar ? " has-bar" : ""}${c.signed ? " c-signed" : ""}">${bar}<span>${c.f(v)}</span></td>`;
     }).join("");
-    return `<tr class="an-row${open ? " open" : ""}" data-id="${esc(r.team)}" tabindex="0" aria-expanded="${open}">
+    return `<tr class="an-row${open ? " open" : ""}${r.team === hl ? " is-hl" : ""}" data-id="${esc(r.team)}" tabindex="0" aria-expanded="${open}">
       <td class="c-rank">${i + 1}</td>
       <td class="c-name">${teamPill(r.team, view.teams, q)}<span class="an-def-name">${esc(view.teams?.get(r.team)?.nickname || view.teams?.get(r.team)?.name || r.team)}</span></td>
       <td class="num">${r.g}</td>${cells}<td class="c-spark">${offSpark(r.series.off)}</td></tr>`
@@ -147,19 +173,37 @@ export function offTableHtml(rows, st, query, view) {
   }).join("");
   return `<div class="an-tbar">
       <span class="an-count">${list.length} offense${list.length === 1 ? "" : "s"}</span>
-      <span class="an-legend" title="Each value against every club's in this window: elite at the clubs' 90th percentile or better, then the 70th, 40th and 15th; low below. Higher is better for EPA, success, completion %, explosive plays, YPC, rushing yards and yards before contact; lower is better for sack %, pressure % and stuffed %. Plays/g, pass %, aDOT and PA % are not coloured.">
+      <span class="an-legend" title="Each value against every club's in this window: elite at the clubs' 90th percentile or better, then the 70th, 40th and 15th; low below. Higher is better for EPA, success, completion %, explosive plays, YPC, rushing yards, yards before contact, points per drive, red-zone TD % and third-down %; lower is better for sack %, pressure % and stuffed %. Plays/g is coloured muted (a lean, not a verdict); pass %, aDOT, PA % and pass rate over expectation (PROE, Neutral PROE) and the Pace columns (seconds per play, no-huddle, shotgun, motion) are not coloured.">
         ${TIER_NAMES.map((t) => `<i class="t-${t}"></i>`).join("")}<span>elite → low among the clubs</span></span>
       <span class="an-hint">Click a row to open the offense</span>
     </div>
     <div class="an-tscroll"><table class="an-table an-def-table"><thead>${groupRow}${head}</thead><tbody>${body || `<tr><td colspan="${nCols}" class="an-empty">No games in this window.</td></tr>`}</tbody></table></div>`;
 }
 
-export async function renderOffense(ctx, query) {
+// PURE: the #/offense address for state n, `hl` (D208's highlighted club, or "") carried along - fix round: every
+// OTHER call this page's go() used to make (a sort, a row open, a filter change) wrote toQuery(n) alone, which has
+// no notion of hl, so the first click after arriving from a Grid cell or a Rankings link dropped the highlight. go()
+// is DOM-bound (it sets location.hash), so the address-building line lives here where a test can reach it directly.
+export function offHref(n, hl) {
+  const params = new URLSearchParams(toQuery(n));
+  if (hl) params.set("hl", hl);
+  if (n.more) params.set("more", "1");
+  const q = params.toString();
+  return `#/offense${q ? "?" + q : ""}`;
+}
+
+// `opts.hl` (D208): the club abbr the Rankings page wants highlighted on this side, passed through to
+// offTableHtml's view.hl. Nothing else calls renderOffense with a second table argument (main.js's own /offense
+// route is now an alias, views/rankings.js is the only caller), so this stays a plain optional param rather than
+// something read off the query here too.
+export async function renderOffense(ctx, query, opts = {}) {
   const { root, isCurrent } = ctx;
+  const { hl = "" } = opts;
   const st = fromQuery(query);
+  st.more = moreFrom(query);
   const { sort, dir } = offSort(query, st);
   document.title = "Offense · NFL Analytics";
-  const go = (n) => { const q = toQuery(n); location.hash = `#/offense${q ? "?" + q : ""}`; };
+  const go = (n) => { location.hash = offHref(n, hl); };
   if (!root.querySelector(".an-off")) root.innerHTML = `<div class="an-msg">Loading offenses…</div>`;
   let data, teams;
   try {
@@ -185,17 +229,20 @@ export async function renderOffense(ctx, query) {
   const span = agg.weeks.length ? (agg.weeks.length === 1 ? weekLabel(agg.weeks[0], st.season) : `${weekLabel(agg.weeks[0], st.season)} to ${weekLabel(agg.weeks[agg.weeks.length - 1], st.season)}`) : "no games";
   root.innerHTML = `<section class="an-def an-pl an-off">
     <div class="an-head">
-      <h1>Offense</h1>
+      <h1>Rankings</h1>
       <div class="an-sub">${esc(seasonLabel(st))} · ${esc(span)}${st.window === "last3" ? " (each club's last 3 games)" : ""} · league reference: ${esc(ref.text)}${pnote ? " · " + esc(pnote) : ""}</div>
       ${data.missing.length ? `<div class="an-warn">${esc(data.missing.join(", "))} files are not built yet.</div>` : ""}
     </div>
     <div class="an-filters"></div>
     <div class="an-tablewrap"></div>
-    <p class="an-foot">Plays, EPA, success, sacks, completions, aDOT, explosive plays and the zone field: nflverse play-by-play (defensive pass interference no-plays are left out). Play action: FTN charting. Pressure %: PFR advanced stats, the club's quarterbacks' pressured dropbacks over their dropbacks (about a week behind). Stuffed % and yards before contact: PFR advanced rushing${agg.unmapped.length ? ` (${agg.unmapped.length} row${agg.unmapped.length === 1 ? "" : "s"} could not be placed on a club)` : ""}. Zone references pool every attempt in the window.</p>
+    <p class="an-foot">Plays, EPA, success, sacks, completions, aDOT, explosive plays and the zone field: nflverse play-by-play (defensive pass interference no-plays are left out). Play action: FTN charting. PROE: the expected pass rate is nflverse xpass (penalty no-plays are not in the rows). Drives: nflverse play-by-play drives, the points the offense scored on its own snaps; 3rd % reads a little under NFL.com's (penalty no-plays are not in the rows). Pace: seconds per play in neutral script, no-huddle and shotgun (pistol counted in) from nflverse play-by-play, motion from FTN charting. Pressure %: PFR advanced stats, the club's quarterbacks' pressured dropbacks over their dropbacks (about a week behind). Stuffed % and yards before contact: PFR advanced rushing${agg.unmapped.length ? ` (${agg.unmapped.length} row${agg.unmapped.length === 1 ? "" : "s"} could not be placed on a club)` : ""}. Zone references pool every attempt in the window.</p>
   </section>`;
   renderFilterBar(root.querySelector(".an-filters"), st, { keys: data.keys, teams: [] }, go);
   const el = root.querySelector(".an-tablewrap");
-  el.innerHTML = offTableHtml(agg.rows, st, qs, { ref, teams, windowName: wn, lgZones: agg.lgZones, players: data.players, sort, dir });
+  el.innerHTML = offTableHtml(agg.rows, st, qs, { ref, teams, windowName: wn, lgZones: agg.lgZones, players: data.players, sort, dir, hl });
+  // More open on a narrow window: the frame scrolls sideways only when the table is wider than it (.an-over).
+  fitOpen(el);
+  wireMore(el, () => go(toggleMore(OFF_COLS, { ...st, sort, dir }, DEFAULT_SORT)));
   el.querySelectorAll("th[data-sort]").forEach((h) => h.addEventListener("click", () => {
     const k = h.dataset.sort === "rank" ? "epaPlay" : h.dataset.sort;
     const d = sort === k ? (dir === "desc" ? "asc" : "desc") : bestDir(k);

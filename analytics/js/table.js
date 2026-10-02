@@ -10,6 +10,7 @@
 //    targets / the club attempts over the window), never as a mean of the weekly percentages.
 import { sortRows, tierFromCuts, tierNote, TIER_NAMES, USAGE_TIER_KEYS, MIN_POOL } from "./agg.js";
 import { weekLabel, POSITIONS, seasonsOf } from "./filters.js";
+import { rzI5Shares, RZ_I5_FLOOR } from "./agg_player.js";
 // D196: the injury badge and red-name rule, kit.js's own copy (built the same round by the player-page builder,
 // which owns kit.js/analytics_recut.css) - re-exported here so the Receivers/QB/Running backs tables draw the
 // exact same badge, in the exact same CSS (.an-stchip/.an-st-*, already in analytics_recut.css), as the player
@@ -74,6 +75,57 @@ export const DK_TIPS = {
   dk: `DraftKings points over the window, scored game by game (a bonus counts per game, never per window). ${DK_RULE}`,
 };
 export const CATCH_TIP = "Catch %: receptions / targets, pass-interference targets left out (a PI target is never a catch or an incompletion)";
+// D224 increment A: the red-zone figures as per-game rates and shares (Adam, 2026-09-30: nothing existing is removed, the
+// raw counts sit behind More). The rates divide the table's own counts by his games in the window. The shares come from
+// agg_player.js's rzI5Shares (the club and player pages' figure, never recomputed here), which ignores the opponent, down,
+// quarter and home/away filters, so under any of them the share is blank rather than wrong.
+const SHARE_NOTE = "Blank under an opponent, down, quarter or home/away filter (the share ignores them).";
+export const RZ_TIPS = {
+  rzTgtG: "Red-zone targets per game he played (targets inside the opponent's 20 / his games in the window)",
+  rzTgtShare: `Red-zone target share: his red-zone targets / his club's red-zone pass attempts in his games. ${SHARE_NOTE}`,
+  ezG: "End-zone targets per game he played (end-zone targets / his games in the window)",
+  rzOppG: "Red-zone opportunities per game he played (carries + targets inside the opponent's 20 / his games in the window)",
+  rzCarG: "Red-zone carries per game he played (carries inside the opponent's 20 / his games in the window)",
+  i5Share: `Inside-the-5 carry share: his designed runs from the opponent's 5 or closer / his club's designed runs there in his games (scrambles on neither side). ${SHARE_NOTE}`,
+};
+export const sharesBlanked = (st) => Boolean(st?.opp || st?.downs?.length || st?.qtrs?.length || st?.ha);
+const perGame = (n, g) => (g > 0 && Number.isFinite(n) ? n / g : null);
+// Adds the red-zone figures to the aggregation's rows in place (and returns them). `kind` "rec" adds rzTgtG, rzTgtShare,
+// ezG; "rb" adds rzOppG, rzCarG, i5Share. `st.team` narrows his games to that club, as the aggregation does.
+export function withRzFigures(rows, blocks, players, st, kind, { blank = sharesBlanked(st) } = {}) {
+  const sh = blank ? null : rzI5Shares(blocks, players, st, st.team || "");
+  for (const r of rows) {
+    const x = sh?.get(r.gsis);
+    if (kind === "rec") { r.rzTgtG = perGame(r.rz, r.g); r.ezG = perGame(r.ez, r.g); r.rzTgtShare = x?.rzTgtShare ?? null; r.rzTgtN = x?.rzTgtN ?? null; r.rzAttN = x?.rzAttN ?? null; }
+    else { r.rzOppG = perGame(r.rzOpp, r.g); r.rzCarG = perGame(r.rz, r.g); r.i5Share = x?.i5Share ?? null; r.i5Des = x?.i5Des ?? null; r.i5Runs = x?.i5Runs ?? null; }
+  }
+  return rows;
+}
+// The sample behind a share, for its cell (both tables): the small "(3/3)" beside the percent and a sentence for the
+// cell's title, the club page's wording (views/team.js shareFig). Under the 3-play floor the cell is a dash and the
+// title says why; a filter-blanked share (sharesBlanked) says nothing here, the column header already does.
+export function shareSample(k, r, st) {
+  const [his, club, what] = k === "rzTgtShare" ? [r.rzTgtN, r.rzAttN, "red-zone pass attempts"] : k === "i5Share" ? [r.i5Des, r.i5Runs, "designed runs from the 5 or closer"] : [];
+  if (!what || !Number.isFinite(his) || !Number.isFinite(club)) return { count: "", title: "" };
+  const share = r[k];
+  if (Number.isFinite(share)) return { count: `${his}/${club}`, title: `his ${his} of the club's ${club} in his games` };
+  if (sharesBlanked(st)) return { count: "", title: "" };
+  return { count: "", title: `not shown, the club had ${club} such play${club === 1 ? "" : "s"} in his games (fewer than ${RZ_I5_FLOOR}); he had ${his}` };
+}
+export const shareCountHtml = (count) => (count ? `<small class="an-rzn" style="margin-left:3px;font-size:.72em;font-weight:400;opacity:.6">${count}</small>` : "");
+// D224 increment D: the target-depth mix bar (four parts, shallow to deep: behind the line, short, intermediate, deep)
+// and its hover, shared by the Receivers table and the club offense page's Target Share card. `depth` is agg.js's
+// depthMix; a man with no depth-tagged target gets a dash. The percents are rounded one by one, so they can read 99 or 101.
+export const DEPTH_PARTS = [["behind", "behind"], ["short", "short"], ["inter", "inter"], ["deep", "deep"]];
+export const DEPTH_TIP = "Target-depth mix: his targets by air yards, behind the line (0 or less) / short (1-9) / intermediate (10-19) / deep (20+), left to right. Shares are of the targets that have a depth. Sorts by the deep share.";
+export function depthTitle(depth, adot) {
+  if (!depth?.n) return "No targets with a depth";
+  return DEPTH_PARTS.map(([k, l]) => `${l} ${Math.round(depth.shares[k] * 100)}% (${depth[k]})`).join(" · ") + (Number.isFinite(adot) ? ` · aDOT ${adot.toFixed(1)}` : "");
+}
+export function depthBarHtml(depth, adot) {
+  if (!depth?.n) return DASH;
+  return `<span class="an-depth" title="${esc(depthTitle(depth, adot))}">${DEPTH_PARTS.map(([k]) => depth[k] ? `<i class="an-depth-${k}" style="flex-grow:${depth[k]}"></i>` : "").join("")}</span>`;
+}
 const COLS = [
   { k: "dkG", h: "DK/g", t: DK_TIPS.dkG, f: (v) => fix(v, 1), grp: "p" },
   { k: "dk", h: "DK", t: DK_TIPS.dk, f: (v) => fix(v, 1), grp: "p" },
@@ -84,8 +136,9 @@ const COLS = [
   { k: "tgtShare", h: "Tgt %", t: "Target share: his targets / his club's pass attempts in his games", f: (v) => pct(v), grp: "o", bar: 0.4 },
   { k: "ayShare", h: "AY %", t: "Air-yards share: his air yards / his club's air yards in his games", f: (v) => pct(v), grp: "o", bar: 0.55 },
   { k: "wopr", h: "WOPR", t: "Weighted opportunity: 1.5 x target share + 0.7 x air-yards share", f: (v) => fix(v, 2), grp: "o", bar: 0.9 },
-  { k: "rz", h: "RZ", t: "Red-zone targets (inside the 20)", f: int, grp: "o" },
-  { k: "ez", h: "EZ", t: "End-zone targets", f: int, grp: "o" },
+  { k: "rzTgtG", h: "RZ tgt/g", t: RZ_TIPS.rzTgtG, f: (v) => fix(v, 2), grp: "o" },
+  { k: "rzTgtShare", h: "RZ tgt %", t: RZ_TIPS.rzTgtShare, f: (v) => pct(v), grp: "o", bar: 0.5 },
+  { k: "ezG", h: "EZ/g", t: RZ_TIPS.ezG, f: (v) => fix(v, 2), grp: "o" },
   { k: "routePct", h: "Rt %", t: "Route participation: routes / club dropbacks", f: (v) => pct(v, 0), grp: "o", bar: 1 },
   { k: "snapPct", h: "Snap %", t: "Share of his club's offensive snaps (nflverse snap counts)", f: (v) => pct(v, 0), grp: "o", bar: 1 },
   { k: "yprr", h: "YPRR", t: "Receiving yards per route run", f: (v) => fix(v, 2), grp: "e" },
@@ -99,8 +152,11 @@ const COLS = [
   { k: "tdOpp", h: "TD/opp", t: "(Receiving touchdowns + rushing touchdowns) / opportunities (targets + carries)", f: (v) => (v === null || v === undefined ? DASH : pct(v) + "%"), grp: "xp" },
   { k: "ay", h: "AY", t: "Air yards on his targets", f: int, grp: "xp" },
   { k: "adot", h: "aDOT", t: "Average depth of target (air yards per target)", f: (v) => fix(v, 1), grp: "xp" },
+  { k: "depthDeep", h: "Depth", t: DEPTH_TIP, f: (v) => pct(v), grp: "xp", depthBar: true },
   { k: "routes", h: "Routes", t: "Routes run (heatradar, charted; weeks under 8 routes are not listed)", f: int, grp: "xp" },
   { k: "tprr", h: "TPRR", t: "Targets per route run", f: (v) => fix(v, 2), grp: "xp" },
+  { k: "rz", h: "RZ", t: "Red-zone targets (inside the 20), the window's total", f: int, grp: "xp" },
+  { k: "ez", h: "EZ", t: "End-zone targets, the window's total", f: int, grp: "xp" },
 ];
 // [key, label, ancillary tint or ""]. The ancillary label is lighter (CSS: .an-anc) and tinted pass or run.
 const GROUPS = [["p", "Production", ""], ["o", "Opportunity", ""], ["e", "Efficiency", ""], ["xp", "Receiving detail", "pass"]];
@@ -157,6 +213,112 @@ export function toggleMore(cols, st, defaultSort) {
 // an-stick class; the sticky rule itself is the lead's, reported separately (not in this builder's owned files).
 export const moreCell = (open) => `<th colspan="2" class="an-more-cell an-stick"><button type="button" class="an-more" data-more aria-expanded="${open}" title="${open ? "Hide" : "Show"} the detail columns">${open ? "◂ Less" : "More ▸"}</button></th>`;
 
+// ---- D224 increment F: the "Deciding" preset ------------------------------------------------------------------------
+// The Receivers, Running backs and Quarterbacks tables open on about ten columns that answer the weekly question; the
+// full set is one click away and nothing is removed. Three column sets, picked by a segment in the group-header row
+// where the More / Less button sat: Deciding (the opening state), Standard (the columns the tables opened on before:
+// everything outside the lighter ancillary groups) and All (the old More: every group). The Quarterbacks table had no
+// More, so its Standard IS its full set and its control reads Deciding · All. The choice rides in the address as
+// view=deciding|standard|all (a legacy more=1 reads as All) and the reader's last click is kept in localStorage, which a
+// link with no view= opens on, like the games strip's fold (nfl.gamesFolded). A sort the shown set does not draw
+// (a shared link, a tile link) PROMOTES the view, as a hidden ancillary group always opened for its sort: a sort on a
+// column Standard has but Deciding lacks shows Standard, one on an ancillary column also opens that group, one on a
+// Deciding-only column (the last-3 and this-week figures) shows Deciding whatever view= says. The page's own default
+// sort never promotes. Pure and agg_week-free: the figures a Deciding column draws arrive on the rows (deciding.js).
+export const VIEWS = ["deciding", "standard", "all"];
+export const VIEW_LABEL = { deciding: "Deciding", standard: "Standard", all: "All" };
+export const VIEW_TIPS = {
+  deciding: "About ten columns for the weekly call: usage over the club's last 3 games and the season, this week's opponent and what that defense gives up to his position, red-zone share and status",
+  standard: "The columns the table opened on before the Deciding set: production, opportunity and efficiency",
+  all: "Every column, the detail groups included",
+};
+export const VIEW_STORE = "nfl.analyticsView";
+const storage = () => { try { return typeof localStorage !== "undefined" ? localStorage : null; } catch { return null; } };
+export function storedView() { try { const v = storage()?.getItem(VIEW_STORE); return VIEWS.includes(v) ? v : ""; } catch { return ""; } }
+export function storeView(v) { try { if (VIEWS.includes(v)) storage()?.setItem(VIEW_STORE, v); } catch { /* private window: the choice just is not remembered */ } }
+// The chosen view from a hash query: view= wins, then a legacy more=1 (All), then the reader's stored choice, then
+// Deciding. twoWay: a table with no Standard of its own (Quarterbacks) reads Standard as All.
+export function viewFrom(query, { twoWay = false } = {}) {
+  const p = new URLSearchParams(String(query || "").replace(/^\?/, ""));
+  let v = p.get("view");
+  if (!VIEWS.includes(v)) v = p.get("more") === "1" ? "all" : storedView() || "deciding";
+  return twoWay && v === "standard" ? "all" : v;
+}
+// A page's own hash writes the view every time (so a shared link opens as seen), and the legacy more= never.
+// st (optional): the page's state. A Deciding address whose sort is not DK/g names that sort, so a promoted sort (a tile link
+// to Targets, say) survives an opened row or a flipped switch instead of falling back to DK/g on a reload.
+export function withView(q, view, st = null) {
+  const p = new URLSearchParams(String(q || ""));
+  p.delete("more"); p.delete("view");
+  if (VIEWS.includes(view)) p.set("view", view);
+  if (view === "deciding" && st?.sort && st.sort !== DECIDING_SORT) p.set("sort", st.sort);
+  return p.toString();
+}
+// The keys a view draws (before any sort promotion). cols: the table's full list, dec: its Deciding list.
+export function viewKeys(cols, dec, view) {
+  if (view === "deciding") return dec.map((c) => c.k);
+  if (view === "standard") return cols.filter((c) => !c.anc).map((c) => c.k);
+  return cols.map((c) => c.k);
+}
+// A Deciding table opens sorted on DK/g, high first, so the view always has a lit sorted column (the Standard and All
+// default sorts are each page's own and unchanged). defaultSortFor: the sort a view opens on and the rank header returns to.
+export const DECIDING_SORT = "dkG";
+export const defaultSortFor = (view, pageDefault) => (view === "deciding" ? DECIDING_SORT : pageDefault);
+// The state of a page opened on an address: a Deciding view whose address names no sort opens on DK/g.
+export function withViewSort(st, query) {
+  const named = new URLSearchParams(String(query || "").replace(/^\?/, "")).has("sort");
+  return st.view === "deciding" && !named ? { ...st, sort: DECIDING_SORT, dir: "desc" } : st;
+}
+// Keys only the Deciding set draws (the last-3 and this-week columns): a sort on one needs Deciding.
+export const decidingOnly = (cols, dec) => new Set(dec.filter((c) => !cols.some((x) => x.k === c.k)).map((c) => c.k));
+// True when the page should compute the Deciding figures: the chosen view is Deciding, or the sort is on a Deciding-only column.
+export const wantsDeciding = (cols, dec, st) => (VIEWS.includes(st.view) ? st.view : st.more ? "all" : "standard") === "deciding" || decidingOnly(cols, dec).has(st.sort);
+// What the table draws for a state: { view (the effective one, after promotion), cols, groups }.
+export function columnsFor(cols, dec, st, defaultSort, groups, decGroups, { twoWay = false } = {}) {
+  let view = VIEWS.includes(st.view) ? st.view : st.more ? "all" : "standard";
+  if (twoWay && view === "standard") view = "all";
+  const sort = st.sort;
+  if (decidingOnly(cols, dec).has(sort)) view = "deciding";
+  else if (view === "deciding" && sort && sort !== DECIDING_SORT && !new Set(dec.map((c) => c.k)).has(sort) && cols.some((c) => c.k === sort)) view = "standard";
+  if (view === "deciding") return { view, cols: dec, groups: decGroups };
+  return { view, cols: visibleCols(cols, { ...st, more: view === "all" }, defaultSort), groups };
+}
+// The state after a click on a view button: a sort on a column the new view does not draw (that view's own default sort
+// aside) returns to that view's default, as Less always did.
+export function pickView(cols, dec, st, view, defaultSort) {
+  const known = new Set([...cols, ...dec].map((c) => c.k));
+  const shown = new Set(viewKeys(cols, dec, view));
+  const own = defaultSortFor(view, defaultSort);
+  const hidden = st.sort && st.sort !== own && known.has(st.sort) && !shown.has(st.sort);
+  return { ...st, view, ...(hidden ? { sort: own, dir: "desc" } : {}) };
+}
+// The control: one segment in the group-header row's leading cell (over rank and name; span 3 where there is no sticky pair).
+export const viewCell = (view, { views = VIEWS, span = 2, stick = true } = {}) =>
+  `<th colspan="${span}" class="an-view-cell${stick ? " an-stick" : ""}"><span class="an-view" role="group" aria-label="Column set">${views.map((v) => `<button type="button" class="an-view-b" data-view="${v}" aria-pressed="${v === view}" title="${esc(VIEW_TIPS[v])}">${VIEW_LABEL[v]}</button>`).join("")}</span></th>`;
+export const viewFocus = { v: "" };
+// onPick(view) gets the clicked view (a click on the lit one does nothing); the choice is stored, and the next render
+// puts the focus back on the button.
+export function wireView(el, onPick) {
+  el.querySelectorAll("[data-view]").forEach((b) => b.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (b.getAttribute("aria-pressed") === "true") return;
+    viewFocus.v = b.dataset.view; storeView(b.dataset.view); onPick(b.dataset.view);
+  }));
+  if (viewFocus.v) { el.querySelector(`[data-view="${viewFocus.v}"]`)?.focus(); viewFocus.v = ""; }
+}
+// (No Status column: the chip beside the name carries it, its hover has the label, injury and return date.)
+// The columns that arrive pre-built on the rows (deciding.js): the opponent and the vs-usual cell. `html`
+// names the row field holding the cell's markup (a dash when the row has none); `sortRow` is the field the column sorts on.
+export const WK_COLS = {
+  wkOpp: { k: "wkOpp", h: "Next", t: "This week's opponent (vs = home, @ = away), from the published schedule; a club on its bye reads Bye. Current season only. Sorts by club", html: "wkOppHtml" },
+  wkVs: { k: "wkVs", h: "vs usual", t: "What that defense gives up to his position, DK points per game against what the same offenses' men of that position usually get (the allowed table's vs usual), with its rank among the 32 defenses; the same figure as the This-week strip. Colour is his: green = a soft matchup (it gives the position more than usual), red = a tough one. Hover for the words. Sorts by the figure, softest first", html: "wkVsHtml", td: "an-vs1" },
+};
+export const L3_NOTE = "his club's last 3 games this season, the Last 3 window's rule (each club's three most recent games, a bye skipped), whatever the page's window";
+// The games behind a last-3 figure (deciding.js gL3: the games he played of those three), for the cell's hover.
+export const l3Title = (r) => (Number.isFinite(r.gL3) && r.gL3 > 0 ? `over ${r.gL3} of his club's last 3 games` : "he did not play in his club's last 3 games");
+export const DEC_GROUPS = [["dp", "Production", ""], ["dw", "This week", ""], ["du", "Usage", ""], ["dr", "Red zone", ""]];
+const decCol = (cols, k, over = {}) => ({ ...cols.find((c) => c.k === k), ...over });
+
 // TOO WIDE (lead, 7b: the Running backs table with More open at a 1536 laptop, or a long name at 1401-1450px): only
 // when the table is wider than its frame does the frame get .an-over (CSS: overflow-x:auto, header rows static so they
 // do not overlap the body); a table that fits never scrolls and its headers stay sticky. Re-checked on every render and
@@ -174,14 +336,29 @@ if (typeof window !== "undefined") window.addEventListener("resize", () => docum
 
 // The column order, grouped, for tests and the lead (every key the table draws, left to right).
 export const RECEIVERS_ORDER = GROUPS.map(([g, l]) => [l, COLS.filter((c) => c.grp === g).map((c) => c.k)]);
+// D224 F: the Deciding set, left to right (key order exported for the tests and BOARD_KEYS' mirror). Usage reads his club's
+// last 3 games beside the page's window; the L3 columns are tier-coloured and barred by the base figure's own cuts.
+const DEC_COLS = withGroups([
+  decCol(COLS, "dkG", { grp: "dp" }),
+  { ...WK_COLS.wkOpp, grp: "dw" },
+  { ...WK_COLS.wkVs, grp: "dw" },
+  { k: "snapL3", h: "Snap % L3", t: `Share of his club's offensive snaps over ${L3_NOTE}`, f: (v) => pct(v, 0), grp: "du", base: "snapPct", bar: 1 },
+  { k: "routeL3", h: "Rt % L3", t: `Route participation (routes / club dropbacks) over ${L3_NOTE}`, f: (v) => pct(v, 0), grp: "du", base: "routePct", bar: 1 },
+  { k: "tgtL3", h: "Tgt % L3", t: `Target share (his targets / his club's pass attempts in his games) over ${L3_NOTE}`, f: (v) => pct(v), grp: "du", base: "tgtShare", bar: 0.4 },
+  decCol(COLS, "tgtShare", { grp: "du" }),
+  decCol(COLS, "rzTgtShare", { grp: "dr" }),
+], DEC_GROUPS);
+export const RECEIVERS_DECIDING = DEC_COLS.map((c) => c.k);
+export const receiversWantsDeciding = (st) => wantsDeciding(COLS, DEC_COLS, st);
 const BAND = (pos) => (pos === "RB" || pos === "FB" ? "BACKFIELD" : pos);
 
 // D182 (Adam, 2026-09-24): air yards are not relevant for a running back. When the position chips leave only
 // RB visible, the AY, AY %, WOPR and aDOT columns are dropped from the table entirely; in a mixed view they
 // stay (perspective for the WRs and TEs on the same page), but an RB's own row prints a dash in them rather
 // than a real-but-misleading number. Exported (pure) so tests can check both without a DOM.
-const AY_ONLY_KEYS = new Set(["ay", "ayShare", "wopr", "adot"]);
+const AY_ONLY_KEYS = new Set(["ay", "ayShare", "wopr", "adot", "depthDeep"]);
 export const rbOnlyMode = (pos) => Boolean(pos?.RB === "in" && !POSITIONS.some((p) => p !== "RB" && pos[p] === "in"));
+const baseCols = (st) => (rbOnlyMode(st.pos) ? COLS.filter((c) => !AY_ONLY_KEYS.has(c.k)) : COLS);
 
 // ---- inline SVG ----------------------------------------------------------------------------------------
 export function sparkline(series, st) {
@@ -268,12 +445,34 @@ function detailHtml(row, st, q, P, windowName) {
       ${tile("Tgt %", pct(row.tgtShare), t("tgtShare", row.tgtShare), pct(L.tgtShare))}${tile("AY %", pct(row.ayShare), t("ayShare", row.ayShare), pct(L.ayShare))}
       ${tile("WOPR", fix(row.wopr, 2), t("wopr", row.wopr), fix(L.wopr, 2))}${tile("aDOT", fix(row.adot, 1), "", fix(L.adot, 1))}
       ${tile("EPA/Tgt", signed(row.epaTgt, 2), t("epaTgt", row.epaTgt), signed(L.epaTgt, 2))}${tile("YPRR", fix(row.yprr, 2), t("yprr", row.yprr), fix(L.yprr, 2))}
-      <div class="an-dlinks"><a href="#/player/${encodeURIComponent(row.gsis)}${q ? "?" + q : ""}">Player page →</a><a href="${depth}" target="_blank" rel="noopener">Depth chart ↗</a></div>
+      <div class="an-dlinks"><a href="#/player/${encodeURIComponent(row.gsis)}${q ? "?" + q : ""}">Player page →</a><a href="${depth}">Depth chart →</a></div>
     </div></div>`;
 }
 
 // The row the reader just clicked and where it sat on screen, so the re-render that follows can keep it there.
 export const anchor = { id: null, top: null };
+
+// D225b: a player page's ranking link carries `hl=<gsis>` (and `find=1`) into the Receivers, Running backs and
+// Quarterbacks boards (filters.js rankHref). hlOf reads hl from the hash query and withHl puts it back into a page's
+// own rebuilt query (a sort click or filter change keeps the highlight). scrollToHl centres his row ONLY on arrival from
+// a tile: it needs find=1, and strips it from the address with replaceState (no hashchange, no history entry), so a
+// re-render, a Back step or the reader's own changes never re-centre. The row class is the Rankings page's .an-row.is-hl.
+export const hlOf = (query) => { const v = new URLSearchParams(String(query || "").replace(/^\?/, "")).get("hl") || ""; return /^[A-Za-z0-9_.:-]{1,40}$/.test(v) ? v : ""; };
+export function withHl(q, hl) {
+  const p = new URLSearchParams(String(q || ""));
+  p.delete("hl");
+  if (hl) p.set("hl", hl);
+  return p.toString();
+}
+export function scrollToHl(root, hl, query) {
+  if (!hl || new URLSearchParams(String(query || "").replace(/^\?/, "")).get("find") !== "1") return;
+  [...root.querySelectorAll("tr.an-row")].find((t) => t.dataset.id === hl)?.scrollIntoView({ block: "center" });
+  const [path, qs = ""] = location.hash.split("?");
+  const p = new URLSearchParams(qs);
+  if (!p.has("find")) return;
+  p.delete("find");
+  history.replaceState(null, "", location.pathname + location.search + path + (p.toString() ? "?" + p : ""));
+}
 
 // ---- table ---------------------------------------------------------------------------------------------
 // The table's markup as a pure string (no DOM): everything renderTable needs to know to decide what to show,
@@ -289,13 +488,15 @@ export function tableHtml(allRows, st, query, view = {}, status = {}) {
   const teams = view.teams;
   // D182: RB-only views drop the air-yards columns entirely; a mixed view keeps them.
   // The More toggle: the ancillary groups show only when open (or holding the sort column).
-  const cols = visibleCols(rbOnlyMode(st.pos) ? COLS.filter((c) => !AY_ONLY_KEYS.has(c.k)) : COLS, st, DEFAULT_SORT);
+  // D224 F: the chosen column set (Deciding, Standard or All), after any sort promotion.
+  const sel = columnsFor(baseCols(st), DEC_COLS, st, DEFAULT_SORT, GROUPS, DEC_GROUPS);
+  const cols = sel.cols;
   // Player, team and Pos now share one cell (c-name), so the fixed columns are rank/player/games, not four.
   const nCols = 3 + cols.length + 1;
   const th = (k, h, t, cls = "") => `<th class="${cls}${st.sort === k ? " sorted " + st.dir : ""}" data-sort="${k}" title="${esc(t)}">${h}</th>`;
   // The toggle (moreCell) now leads the row, spanning rank+name; a blank cell fills the G spot it used to skip,
   // and the trailing cell over the sparkline is blank in its place (findings 1, 5).
-  const groupRow = `<tr class="an-grp">${moreCell(allOpen(COLS, st, DEFAULT_SORT))}<th></th>${groupCells(cols, GROUPS)}<th class="c-spark"></th></tr>`;
+  const groupRow = `<tr class="an-grp">${viewCell(sel.view)}<th></th>${groupCells(cols, sel.groups)}<th class="c-spark"></th></tr>`;
   // The Tgt header says whether pass-interference targets are in the count (the "PI targets" switch below).
   const colTitle = (c) => (c.k === "tgt" || c.k === "opp" ? `${c.t} (${st.pi === false ? "excludes" : "includes"} pass-interference targets)` : c.t);
   // an-stick on rank/name (header and body below): the lead's CSS pins these two columns to the left edge while
@@ -304,23 +505,30 @@ export function tableHtml(allRows, st, query, view = {}, status = {}) {
   const cell = (c, r) => {
     // D182: a mixed table keeps the air-yards columns for perspective, but an RB's own numbers there are not
     // meaningful, so his cells show a dash instead of the real (but misleading) figure.
+    if (c.html) return `<td class="num ${c.cls}${c.td ? " " + c.td : ""}">${r[c.html] || DASH}</td>`;
     const v = AY_ONLY_KEYS.has(c.k) && r.pos === "RB" ? null : r[c.k];
     const P = view.ref?.at(r.pos);
+    const tk = c.base || c.k; // an L3 column is judged by its base figure's cuts
     // Only the aggregation's tier keys are coloured, and ancillary columns never are, whatever the aggregation tiers
     // (Opp, Opp/g, Opp %, TPRR here).
-    const tier = c.anc || !TIER_KEYS.has(c.k) ? "" : tierOf(c.k, v, P?.cuts);
-    const note = !c.anc && TIER_KEYS.has(c.k) && v !== null && v !== undefined ? tierNote(P?.cuts?.[c.k], r.pos) : "";
+    const tier = c.anc || !TIER_KEYS.has(tk) ? "" : tierOf(tk, v, P?.cuts);
+    const note = !c.anc && TIER_KEYS.has(tk) && v !== null && v !== undefined ? tierNote(P?.cuts?.[tk], r.pos) : "";
     const bar = c.bar && v !== null && v !== undefined ? `<i class="an-bar" style="width:${Math.min(100, (v / c.bar) * 100).toFixed(1)}%"></i>` : "";
-    return `<td class="num ${c.cls}${tier ? " t-" + tier : ""}${bar ? " has-bar" : ""}"${note ? ` title="${esc(note)}"` : ""}>${bar}<span>${c.f(v)}</span></td>`;
+    if (c.depthBar) {
+      const ok = r.pos !== "RB";
+      return `<td class="num ${c.cls} an-depth-td">${ok ? depthBarHtml(r.depth, r.adot) : DASH}</td>`;
+    }
+    const ss = shareSample(c.k, r, st), title = [note, ss.title, c.base ? l3Title(r) : ""].filter(Boolean).join(". ");
+    return `<td class="num ${c.cls}${tier ? " t-" + tier : ""}${bar ? " has-bar" : ""}"${title ? ` title="${esc(title)}"` : ""}>${bar}<span>${c.f(v)}${shareCountHtml(ss.count)}</span></td>`;
   };
   const body = rows.map((r, i) => {
     const open = st.open === r.gsis;
     const depth = `../#/team/${encodeURIComponent(r.team)}/player/${encodeURIComponent(r.gsis)}`;
     const ps = status[r.gsis];
     const chip = statusChip(ps, { season: view.statusSeason }), nameCls = statusNameClass(ps);
-    return `<tr class="an-row${open ? " open" : ""}" data-id="${esc(r.gsis)}" tabindex="0" aria-expanded="${open}">
+    return `<tr class="an-row${open ? " open" : ""}${view.hl && r.gsis === view.hl ? " is-hl" : ""}" data-id="${esc(r.gsis)}" tabindex="0" aria-expanded="${open}">
       <td class="c-rank an-stick">${i + 1}</td>
-      <td class="c-name an-stick"><a class="an-pname${nameCls ? " " + nameCls : ""}" href="#/player/${encodeURIComponent(r.gsis)}${q ? "?" + q : ""}" title="${esc(r.name)}">${esc(r.name)}</a>${teamPill(r.team, teams, q)}<span class="an-pospill" data-band="${BAND(r.pos)}">${esc(r.pos)}</span>${chip}<a class="an-dc" href="${depth}" target="_blank" rel="noopener" title="Open his depth-chart card in a new tab" aria-label="Depth chart">↗</a></td>
+      <td class="c-name an-stick"><a class="an-pname${nameCls ? " " + nameCls : ""}" href="#/player/${encodeURIComponent(r.gsis)}${q ? "?" + q : ""}" title="${esc(r.name)}">${esc(r.name)}</a>${teamPill(r.team, teams, q)}<span class="an-pospill" data-band="${BAND(r.pos)}">${esc(r.pos)}</span>${chip}<a class="an-dc" href="${depth}" title="Open his depth-chart card" aria-label="Depth chart">→</a></td>
       <td class="num">${r.g}</td>
       ${cols.map((c) => cell(c, r)).join("")}
       <td class="c-spark">${sparkline(r.series, st)}</td></tr>`
@@ -342,11 +550,11 @@ export function tableHtml(allRows, st, query, view = {}, status = {}) {
 export function renderTable(el, allRows, st, query, onState, view = {}, status = {}) {
   el.innerHTML = tableHtml(allRows, st, query, view, status);
   fitOpen(el);
-  wireMore(el, () => onState(toggleMore(COLS, st, DEFAULT_SORT)));
+  wireView(el, (v) => onState(pickView(baseCols(st), DEC_COLS, st, v, DEFAULT_SORT)));
 
   el.querySelectorAll("th[data-sort]").forEach((h) => h.addEventListener("click", () => {
-    const k = h.dataset.sort === "rank" ? "tgt" : h.dataset.sort;
-    const textual = ["name", "pos"].includes(k);
+    const k = h.dataset.sort === "rank" ? defaultSortFor(columnsFor(baseCols(st), DEC_COLS, st, DEFAULT_SORT, GROUPS, DEC_GROUPS).view, DEFAULT_SORT) : h.dataset.sort;
+    const textual = ["name", "pos", "wkOpp"].includes(k);
     const dir = st.sort === k ? (st.dir === "desc" ? "asc" : "desc") : textual ? "asc" : "desc";
     onState({ ...st, sort: k, dir });
   }));
