@@ -104,12 +104,6 @@
   color:var(--ink); text-decoration:none; line-height:1.2; min-width:0; }
 .game-chip:hover { border-color:#ffd54a; background:#181d23; }
 .game-chip-kick { grid-column:1 / -1; font-size:10px; font-weight:600; color:var(--muted); white-space:nowrap; text-align:center; }
-/* D224 C: the chip is a box; its Matchup link is an empty anchor stretched over it, the kickoff row a link to the analytics
-   This-week page sitting above that anchor (same size and place as before: no added height). */
-.game-chip { position:relative; }
-.game-chip-open { position:absolute; inset:0; border-radius:inherit; }
-.game-chip-kick { position:relative; z-index:1; text-decoration:none; border-radius:3px; }
-.game-chip-kick:hover { color:#ffd54a; text-decoration:underline; text-underline-offset:2px; }
 .game-chip-note { margin-left:3px; padding:0 3px; border-radius:3px; background:#1f262e; font-size:8.5px; text-transform:uppercase; letter-spacing:.03em; }
 .game-chip-logo { width:14px; height:14px; object-fit:contain; display:block; }
 .game-chip-abbr { font-size:11.5px; font-weight:800; white-space:nowrap; }
@@ -145,7 +139,3 @@
 .game-wx { display:inline-flex; align-items:center; gap:6px; flex-wrap:wrap; }
 .game-wx .game-line-sep { margin:0 2px; }
 .game-line .ico { width:18px; height:18px; flex:none; color:var(--ink); }
-/* The games strip's fold control (gamesbar.js, Adam 2026-09-28): a small label-button before the chips; folded, the bar is one short line. */
-.games-toggle { flex:none; padding:4px 10px; border-radius:999px; border:1px solid #2a323b; background:transparent; color:var(--muted); font-size:11.5px; font-weight:700; cursor:pointer; white-space:nowrap; }
-.games-toggle:hover { color:var(--ink); border-color:#4a5560; }
-.games-row[hidden] { display:none; } /* the row is display:grid, which would beat the hidden attribute */

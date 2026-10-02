@@ -1,5 +1,5 @@
 import { getTeams } from "./api.js";
-import { gamesRowHtml, wireGamesToggle } from "./gamesbar.js";
+import { gamesRowHtml } from "./gamesbar.js";
 
 export const DIVISION_ORDER = ["AFC East", "AFC North", "AFC South", "AFC West", "NFC East", "NFC North", "NFC South", "NFC West"];
 const ESC = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
@@ -82,7 +82,6 @@ export function matchupBarHtml(teams, games) {
 }
 
 export async function renderLanding(root, search) {
-  wireGamesToggle(root); // the games strip's fold/unfold (gamesbar.js), wired once per root
   const { teams, games } = await getTeams();
   root.innerHTML = `${matchupBarHtml(teams, games ?? [])}<div class="divisions">${DIVISION_ORDER.map((d) =>
     `<section class="division"><h2>${d}</h2>${teams.filter((t) => t.division === d).map(tile).join("")}</section>`
