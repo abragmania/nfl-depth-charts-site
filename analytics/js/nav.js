@@ -2,19 +2,17 @@
 // probably go under Players, then there's Teams"). main.js paints the string this returns into #an-nav and wires
 // nothing here - every link is a plain <a href="#/...">, so the nav keeps working with JS off and needs no
 // listeners; it re-renders on every route change with the section's own hash query (D177: every view is a link).
-// D208 (2026-09-27, Adam: "Sounds good, yes to all", to the map): TEAMS is Grid (the front door), Rankings (one
-// page, an Offense | Defense switch on top - #/offense and #/defense keep working as aliases, views/rankings.js)
-// and Clubs (the picker, still the "teams" path and route so every club page keeps lighting this tab).
-// D224 increment C: "This week" (the matchup page, views/week.js) goes ahead of PLAYERS, a group of its own with no
-// label (the tab names itself).
 export const SECTIONS = [
-  { group: "", path: "week", label: "This week" },
   { group: "PLAYERS", path: "qb", label: "Quarterbacks" },
   { group: "PLAYERS", path: "rbs", label: "Running backs" },
   { group: "PLAYERS", path: "receivers", label: "Receivers" },
+  // D198 (Adam, 2026-09-26): "Teams should load that big teams list, Offense should load something that looks
+  // like the defense grid" - the "teams" path used to carry the "Offense" label (it opened the club picker); it
+  // now says what it does (the picker) and a real Offense league table gets its own tab and route.
+  { group: "TEAMS", path: "teams", label: "Teams" },
+  { group: "TEAMS", path: "offense", label: "Offense" },
+  { group: "TEAMS", path: "defense", label: "Defense" },
   { group: "TEAMS", path: "grid", label: "Grid" },
-  { group: "TEAMS", path: "rankings", label: "Rankings" },
-  { group: "TEAMS", path: "teams", label: "Clubs" },
 ];
 
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -38,7 +36,7 @@ function grouped(sections) {
  * the real query string when it reads the href. */
 export function renderNav(active, query, sections = SECTIONS) {
   const q = query ? `?${esc(query)}` : "";
-  return grouped(sections).map((g) => `<div class="an-navgrp">${g.name ? `<span class="an-navlabel">${esc(g.name)}</span>` : ""}${g.items.map((s) =>
+  return grouped(sections).map((g) => `<div class="an-navgrp"><span class="an-navlabel">${esc(g.name)}</span>${g.items.map((s) =>
     `<a class="an-tab${s.path === active ? " on" : ""}" href="#/${s.path}${q}">${esc(s.label)}</a>`).join("")}</div>`).join("");
 }
 
