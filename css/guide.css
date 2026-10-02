@@ -15,9 +15,9 @@
 /* The page: a labelled diagram. The sample card in the centre, leader lines out to labels in wide margins. */
 .guide { max-width:1400px; margin:0 auto; padding:18px 24px 60px; color:var(--ink); }
 .guide h1 { margin:16px 0 8px; font-size:28px; font-weight:800; text-align:center; }
-.guide-back { display:inline-flex; padding:4px 12px; border-radius:999px; border:1px solid #2a323b; background:#14181d;
+.guide-back, .guide-live { display:inline-flex; padding:4px 12px; border-radius:999px; border:1px solid #2a323b; background:#14181d;
   color:var(--ink); text-decoration:none; font-size:12.5px; font-weight:700; }
-.guide-back:hover { border-color:#4a5560; }
+.guide-back:hover, .guide-live:hover { border-color:#4a5560; }
 
 /* The margins are wide enough for the elbows and a 300px label on each side; the script grows the top and bottom
    padding when a label reaches past the card. */
@@ -38,3 +38,4 @@
   font-size:14px; line-height:1.6; color:#c6ccd3; }
 .guide-key b { color:#fff; }
 .guide-key-head { font-weight:800; color:#fff; margin-right:4px; }
+.guide-live { margin-left:8px; } /* D210: the guide leads somewhere too (a club's real chart, else the team picker) */
