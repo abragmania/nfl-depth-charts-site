@@ -111,19 +111,26 @@ function cellTitle(col, c) {
 }
 const ordHtml = (n) => { const o = ordinal(n); return `${n}<small>${esc(o.slice(String(n).length))}</small>`; };
 
-function cellHtml(col, c, mode) {
+// D204: every cell links to the club's page for its side (offense band -> #/team/ABBR, defense band ->
+// #/team/ABBR/defense), carrying the page's filter query the way the row's club pill already does.
+function cellHref(col, abbr, q) {
+  return `#/team/${esc(abbr)}${col.side === "def" ? "/defense" : ""}${q ? "?" + q : ""}`;
+}
+
+function cellHtml(col, c, mode, abbr, q) {
   const first = col === GRID_COLUMNS.find((x) => x.side === "def");
   const cls = `c-gc${first ? " gs" : ""}`;
   const title = esc(cellTitle(col, c));
+  const href = cellHref(col, abbr, q);
   if (!c || c.value === null || c.value === undefined) {
-    return `<td class="${cls}" title="${title}"><div class="gc gc-null"><b>not yet</b></div></td>`;
+    return `<td class="${cls}" title="${title}"><a class="gc-cell" href="${href}"><div class="gc gc-null"><b>not yet</b></div></a></td>`;
   }
   const fig = figText(c.value, col.lead);
   if (mode === "rank") {
     const ramp = c.n > 1 ? (c.n - c.rank) / (c.n - 1) : 1;
-    return `<td class="${cls}" title="${title}"><div class="gc gc-rank" style="--r:${ramp.toFixed(3)}"><b>${ordHtml(c.rank)}</b><span>${esc(fig)} · ${c.rating}</span></div></td>`;
+    return `<td class="${cls}" title="${title}"><a class="gc-cell" href="${href}"><div class="gc gc-rank" style="--r:${ramp.toFixed(3)}"><b>${ordHtml(c.rank)}</b><span>${esc(fig)} · ${c.rating}</span></div></a></td>`;
   }
-  return `<td class="${cls}" title="${title}"><div class="gc" style="--g:${gridStop(c.rating).toFixed(3)};--amt:${tileAmt(gridStop(c.rating)).toFixed(1)}%"><b>${c.rating}</b><span>${esc(fig)} · ${esc(ordinal(c.rank))}</span></div></td>`;
+  return `<td class="${cls}" title="${title}"><a class="gc-cell" href="${href}"><div class="gc" style="--g:${gridStop(c.rating).toFixed(3)};--amt:${tileAmt(gridStop(c.rating)).toFixed(1)}%"><b>${c.rating}</b><span>${esc(fig)} · ${esc(ordinal(c.rank))}</span></div></a></td>`;
 }
 
 // PURE (no DOM): the table's markup. rows = gridRows(); view: { teams (Map abbr -> club), q (the filters' query for
@@ -144,7 +151,7 @@ export function gridTableHtml(rows, view) {
   const body = list.map((r) => {
     const t = view.teams?.get(r.team);
     const nm = t?.nickname || t?.name || "";
-    return `<tr class="an-grow"><td class="c-club">${teamPill(r.team, view.teams, q)}${nm ? `<span class="gc-name">${esc(nm)}</span>` : ""}</td>${GRID_COLUMNS.map((col) => cellHtml(col, cellOf(r, col), mode)).join("")}</tr>`;
+    return `<tr class="an-grow"><td class="c-club">${teamPill(r.team, view.teams, q)}${nm ? `<span class="gc-name">${esc(nm)}</span>` : ""}</td>${GRID_COLUMNS.map((col) => cellHtml(col, cellOf(r, col), mode, r.team, q)).join("")}</tr>`;
   }).join("");
   return `<div class="an-tscroll"><table class="an-table an-grid-table${mode === "rank" ? " rank" : ""}"><thead>${band}${head}</thead><tbody>${body || `<tr><td colspan="${GRID_COLUMNS.length + 1}" class="an-empty">No games in this window.</td></tr>`}</tbody></table></div>`;
 }
