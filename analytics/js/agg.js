@@ -66,7 +66,7 @@ const num = (v) => (v === null || v === undefined || v === "" || !Number.isFinit
 const truthy = (v) => v === true || v === 1 || v === "1" || v === "true";
 const ratio = (a, b) => (b > 0 ? a / b : null);
 // heatradar-style tables may give route % as 0-1 or 0-100; normalise to a fraction.
-export const frac = (p) => { const x = num(p); if (x === null || x <= 0) return null; return x > 1.5 ? x / 100 : x; };
+const frac = (p) => { const x = num(p); if (x === null || x <= 0) return null; return x > 1.5 ? x / 100 : x; };
 
 // Every club-game the blocks hold: [{ key, team, gameId, opp, home }].
 export function clubGames(blocks) {
@@ -236,7 +236,7 @@ export function aggregateUsage(blocks, players, st) {
       team: lastGk ? lastGk.split("|")[1] : "", g: g.length, clubG: lastGk ? clubWin.get(lastGk.split("|")[1]) || 0 : 0,
       tgt: p.tgt, tgtShare, ay: p.air, ayShare, wopr, adot: ratio(p.air, p.adotN),
       rz: p.rz, ez: p.ez, rec: p.rec, yds: p.yds, td: p.td, epaTgt: p.epaN ? p.epa / p.epaN : null,
-      routes, routePct, tprr, yprr, snapPct, series, zones: p.zones, ...depthFields(p.zones),
+      routes, routePct, tprr, yprr, snapPct, series, zones: p.zones,
       recEpa: p.epa, car: p.car, des: p.des, rushYds: p.ryds, rushEpa: p.repa, rushTd: p.rtd, clubAtt: att, clubRuns: runs,
       opp, oppG: ratio(opp, g.length), oppShare: ratio(p.tgt + p.des, att + runs),
       ydsOpp: ratio(p.yds + p.ryds, opp), epaOpp: ratio(p.epa + p.repa, opp), tdOpp: ratio(p.td + p.rtd, opp),
@@ -302,7 +302,7 @@ export const referenceText = (pos, n, unit = "targets") => `${pos}s with ${POOL_
 export const TIER_PCTS = [0.9, 0.7, 0.4, 0.15];
 export const TIER_NAMES = ["elite", "strong", "avg", "weak", "flat"];
 export const MIN_POOL = 8;
-export const USAGE_TIER_KEYS = ["opp", "oppG", "oppShare", "tgtShare", "ayShare", "wopr", "routePct", "snapPct", "tprr", "yprr", "epaTgt", "dkG", "rzTgtShare"];
+export const USAGE_TIER_KEYS = ["opp", "oppG", "oppShare", "tgtShare", "ayShare", "wopr", "routePct", "snapPct", "tprr", "yprr", "epaTgt", "dkG"];
 const finite = (x) => x !== null && x !== undefined && Number.isFinite(+x);
 export function percentileCuts(vals) {
   const v = vals.filter(finite).map(Number).sort((a, b) => a - b);
@@ -376,24 +376,6 @@ export function usagePooled(q) {
     dkTdShare: plainMean(q.map((r) => r.dkTdShare)),
   };
 }
-
-// D224 increment D: the target-depth mix. The ledger cuts each target's air yards into a band (D179: B 0 or less behind the
-// line, S 1-9, I 10-19, D 20+; server/analytics/ledger.js band()), and a man's `zones` totals are keyed band + direction
-// ("SL", "DM"...; a count, or a cell with .n). The mix sums the directions per band. Shares are of the targets that have a
-// depth (about 1.5% have none), so they sum to 1; a man with none has n 0 and every share null.
-export function depthMix(zones) {
-  const c = { B: 0, S: 0, I: 0, D: 0 };
-  for (const [k, v] of Object.entries(zones || {})) {
-    const n = typeof v === "number" ? v : v?.n;
-    if (k[0] in c && Number.isFinite(n)) c[k[0]] += n;
-  }
-  const out = { behind: c.B, short: c.S, inter: c.I, deep: c.D };
-  const n = out.behind + out.short + out.inter + out.deep;
-  const shares = n > 0 ? { behind: out.behind / n, short: out.short / n, inter: out.inter / n, deep: out.deep / n } : { behind: null, short: null, inter: null, deep: null };
-  return { ...out, n, shares };
-}
-// The usage row's two depth fields: the whole mix, and the deep share the Receivers table sorts by (null with no depth).
-const depthFields = (zones) => { const depth = depthMix(zones); return { depth, depthDeep: depth.n ? depth.shares.deep : null }; };
 
 // Sort helper shared by the table: nulls always last, whichever direction.
 export function sortRows(rows, key, dir = "desc") {
