@@ -378,8 +378,12 @@ function recutLayers({ blocks, players, st, gsis, pos, row, uRef, ref, lgEff, ef
     // A back with no carries still has his Receivers row: its scrimmage figures stand in (rushYds, rushTd, yds, td).
     const src = withDerived(rushRow, true) || (row ? { ...row, scrimYds: (row.yds ?? 0) + (row.rushYds ?? 0), totTd: (row.td ?? 0) + (row.rushTd ?? 0) } : null);
     const q = rRef.pool.filter((r) => r.pos === pos).map((r) => withDerived(r, true));
+    // D219 figure 5: his inside-the-5 carry share over every game he played in the window (any club), and the plain
+    // mean over his position's rushing reference pool (the men with a figure).
+    const rz5 = rzI5Shares(blocks, players, st);
     return {
-      kind: "back", rushRow, pool: freezePool(q), fantasy: { ...fantasy, ...pick(src, ["dk", "dkG", "dkTdShare"]) },
+      kind: "back", rushRow,
+      i5: rz5.get(gsis) || null, i5Lg: mean(q.map((r) => rz5.get(r.gsis)?.i5Share ?? null)), pool: freezePool(q), fantasy: { ...fantasy, ...pick(src, ["dk", "dkG", "dkTdShare"]) },
       headline: pick(src, RB_HEADLINE_KEYS), headlineLg: Object.fromEntries(RB_HEADLINE_KEYS.map((k) => [k, meanOf(q, k)])),
       opportunity: pick(rushRow || row, RB_OPP_KEYS), opportunityLg: pick(rr.lg, RB_OPP_KEYS), cuts: withHeadlineCuts(rr.cuts, q, rRef.pool.map((r) => withDerived(r, true)), RB_HEADLINE_KEYS), opportunityRefText: rr.text,
       variance: pick(rushRow, RB_VARIANCE_KEYS), varianceLg: pick(rr.pooled, RB_VARIANCE_KEYS),
@@ -424,7 +428,7 @@ const meanOf = (rows, k) => mean(rows.map((r) => (r[k] === null || r[k] === unde
 //                 charted week has no route %                                                       (both)
 //   rzShare     = (red-zone targets + red-zone designed runs) / (club red-zone pass attempts + club red-zone
 //                 designed runs)                                                                    (back)
-//   rzTgtShare  = red-zone targets / club red-zone pass attempts                                    (receiver)
+//   rzTgtShare  = red-zone targets / club red-zone pass attempts; null under 3 club attempts (RZ_I5_FLOOR) (receiver)
 // A pass-interference target is his target but never a club attempt (agg.js); with "excl. PI targets" the row is
 // skipped outright. Snap and route shares are null under a down or quarter filter, as on the row.
 // Shape (frozen): { kind: "back" | "receiver", keys, games, last3Games, short, last3Weeks: [week keys],
@@ -433,7 +437,7 @@ const meanOf = (rows, k) => mean(rows.map((r) => (r[k] === null || r[k] === unde
 export const RB_TREND_KEYS = ["oppShare", "snapPct", "tgtShare", "rzShare", "routePct"];
 export const REC_TREND_KEYS = ["tgtShare", "ayShare", "snapPct", "routePct", "rzTgtShare"];
 
-function trendFigures(blocks, players, st, gsis, back) {
+export function trendFigures(blocks, players, st, gsis, back) {
   const winSet = gamesInWindow(clubGames(blocks), st);
   const situational = isSituational(st);
   const per = new Map(); // gk -> { club and his counts in that game }
@@ -488,7 +492,8 @@ function trendFigures(blocks, players, st, gsis, back) {
       snapPct: situational ? [null, 0] : [ratio(s.snap, s.snapN), s.snapN],
       routePct: situational ? [null, 0] : [s.pctOk ? ratio(s.routes, s.drop) : null, s.routeN],
       rzShare: [ratio(s.rzTgt + s.rzDes, s.rzAtt + s.rzRuns), gks.length],
-      rzTgtShare: [ratio(s.rzTgt, s.rzAtt), gks.length],
+      // D219 figure 5 (🔵): the same 3-play floor as the club page's Target distribution (rzI5Shares below).
+      rzTgtShare: [s.rzAtt >= RZ_I5_FLOOR ? ratio(s.rzTgt, s.rzAtt) : null, gks.length],
     };
   };
   const keys = back ? RB_TREND_KEYS : REC_TREND_KEYS;
@@ -505,7 +510,70 @@ function trendFigures(blocks, players, st, gsis, back) {
 }
 const routeFrac = (p) => { const x = num(p); if (x === null || x <= 0) return null; return x > 1.5 ? x / 100 : x; };
 
-function lastTeam(meta) {
+// ---- Red-zone target share and inside-the-5 carry share (D219 figure 5) -------------------------------------
+// PURE. One pass over the window's plays; per man, over HIS games (agg.js's rule: a club-game where he is the passer,
+// target or rusher on any play, or took an offensive snap), with `team` set only that club's games:
+//   rzTgtN / rzAttN = his red-zone targets / the club's red-zone pass attempts (the ledger's redzone flag, the
+//     opponent's 20 or closer). A pass-interference target is his target but never a club attempt, as agg.js and the
+//     player page's Trend strip (rzTgtShare) count them; with "excl. PI targets" the row is skipped outright.
+//   i5Des / i5Runs  = his designed runs / the club's designed runs from the opponent's 5 or closer (yardline_100 <= 5).
+//     Scrambles are called passes and sit on neither side (the rush-share rule).
+// The share (rzTgtShare, i5Share) is null when the club ran fewer than RZ_I5_FLOOR such plays in his games; the counts
+// are always kept. No down, quarter, opponent or home/away filter applies (the distributions and the player page
+// strip them). Returns Map(gsis -> frozen { rzTgtN, rzAttN, rzTgtShare, i5Des, i5Runs, i5Share, g }).
+export const RZ_I5_FLOOR = 3;
+export const INSIDE5 = 5;
+export function rzI5Shares(blocks, players, st, team = "") {
+  const inWin = gamesInWindow(clubGames(blocks), st);
+  const ok = (gk) => inWin.has(gk) && (!team || gk.endsWith("|" + team));
+  const club = new Map(); // gk -> { rz, i5 }
+  const his = new Map(); // gsis -> Map(gk -> { rz, i5 })
+  const H = (id, gk) => {
+    if (!his.has(id)) his.set(id, new Map());
+    const m = his.get(id);
+    if (!m.has(gk)) m.set(gk, { rz: 0, i5: 0 });
+    return m.get(gk);
+  };
+  for (const b of blocks) {
+    const C = colIndex(b.cols);
+    for (const r of b.plays || []) {
+      const gk = `${b.key}|${r[C.posteam]}`;
+      if (!ok(gk)) continue;
+      const pi = truthy(r[C.pi]);
+      if (pi && st.pi === false) continue;
+      const type = r[C.type], rz = truthy(r[C.redzone]), yl = num(r[C.yardline_100]);
+      const i5 = yl !== null && yl <= INSIDE5;
+      if (!club.has(gk)) club.set(gk, { rz: 0, i5: 0 });
+      const c = club.get(gk);
+      if (type === "pass" && !pi && rz) c.rz++;
+      if (type === "run" && i5) c.i5++;
+      for (const col of ["passer", "target", "rusher"]) if (C[col] !== undefined && r[C[col]]) H(r[C[col]], gk);
+      if (type === "pass" && rz && r[C.target]) H(r[C.target], gk).rz++;
+      if (type === "run" && i5 && r[C.rusher]) H(r[C.rusher], gk).i5++;
+    }
+    for (const [id, s] of Object.entries(b.snaps || {})) {
+      const off = num(s?.off), t = players?.[id]?.teams?.[b.key];
+      if (!t || off === null || off <= 0) continue;
+      const gk = `${b.key}|${t}`;
+      if (ok(gk)) H(id, gk);
+    }
+  }
+  const out = new Map();
+  for (const [id, m] of his) {
+    let rzTgtN = 0, rzAttN = 0, i5Des = 0, i5Runs = 0;
+    for (const [gk, x] of m) {
+      const c = club.get(gk) || { rz: 0, i5: 0 };
+      rzTgtN += x.rz; i5Des += x.i5; rzAttN += c.rz; i5Runs += c.i5;
+    }
+    out.set(id, Object.freeze({ rzTgtN, rzAttN, rzTgtShare: rzAttN >= RZ_I5_FLOOR ? rzTgtN / rzAttN : null,
+      i5Des, i5Runs, i5Share: i5Runs >= RZ_I5_FLOOR ? i5Des / i5Runs : null, g: m.size }));
+  }
+  return out;
+}
+
+// D209 🔵 fix round: exported so the player pages' loadCard (views/player.js) can look a man up on his
+// CURRENT club rather than whatever club the page's own filter window happens to show him on.
+export function lastTeam(meta) {
   const ks = Object.keys(meta?.teams || {}).sort();
   return ks.length ? meta.teams[ks[ks.length - 1]] : "";
 }
