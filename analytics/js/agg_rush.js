@@ -66,7 +66,7 @@ export const BIN_LABELS = ["0 or less", "1–3", "4–9", "10+"];
 const binOf = (y) => (y <= 0 ? 0 : y <= 3 ? 1 : y <= 9 ? 2 : 3);
 
 // Colour tiers by position. Eff is cut on the negated value (lower is better).
-export const RUSH_TIER_KEYS = ["opp", "oppG", "oppShare", "carG", "rushShare", "ypc", "succPct", "epaCar", "ryoeAtt", "eff", "explPct", "snapPct", "tgtShare", "dkG", "i5Share"];
+export const RUSH_TIER_KEYS = ["opp", "oppG", "oppShare", "carG", "rushShare", "ypc", "succPct", "epaCar", "ryoeAtt", "eff", "explPct", "snapPct", "tgtShare", "dkG"];
 export const RUSH_LOWER_BETTER = new Set(["eff"]);
 export const RUSH_LG_KEYS = ["opp", "oppG", "oppShare", "ydsOpp", "epaOpp", "tdOpp", "car", "carG", "rushShare", "yds", "ypc", "succPct", "epaCar", "ryoeAtt", "eff", "rz", "gl", "td", "long", "explPct", "snapPct", "routes", "tgt", "tgtShare",
   // re-cut increment 3 (B2)
@@ -282,11 +282,7 @@ export function sortRushRows(rows, key, dir = "desc") {
   const s = dir === "asc" ? 1 : -1;
   return [...rows].sort((a, b) => {
     const x = a[key], y = b[key];
-    if (typeof x === "string" || typeof y === "string") {
-      if (x === null || x === undefined) return y === null || y === undefined ? 0 : 1; // a blank (a bye's opponent) sorts last, as the Receivers sort does
-      if (y === null || y === undefined) return -1;
-      return s * String(x).localeCompare(String(y));
-    }
+    if (typeof x === "string" || typeof y === "string") return s * String(x ?? "").localeCompare(String(y ?? ""));
     if (!finite(x)) return !finite(y) ? b.car - a.car : 1;
     if (!finite(y)) return -1;
     return s * (x - y) || b.car - a.car;
