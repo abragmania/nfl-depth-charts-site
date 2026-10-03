@@ -10,8 +10,8 @@
 // is each club's own last three games, on offense and on defense):
 //   play         = a pass attempt, a sack, a scramble or a designed run. A defensive-pass-interference no-play the
 //                  ledger kept (pi=1) is a receiver's target only and is in no team figure (as on the QB views).
-//   dropback     = a pass attempt, a sack or a scramble. Pass rate = dropbacks / plays (plain: the ledger carries no
-//                  score, so no neutral-situation rate).
+//   dropback     = a pass attempt, a sack or a scramble. Pass rate = dropbacks / plays, all situations (the
+//                  neutral-script rate is neutralPassRate below).
 //   EPA/play, Success %  = over plays carrying the figure; EPA/dropback over dropbacks; EPA/carry over designed runs.
 //   YPC (defense, D192)  = rushing yards allowed / designed runs faced (a scramble is not a designed run; summed
 //                  over the window, not a mean of per-game averages). Lower is better.
@@ -54,6 +54,49 @@
 //   Run stop % (runStopPct, defense) = 1 − Run succ %: designed runs faced that were unsuccessful / designed runs faced
 //                  carrying a success value; null when Run succ % is null.
 //   defTargets / defCarries: the men a defense faced (teamTargets / teamCarries with opp = the defense), see below.
+// Play calling (D219 figure 1; additive, no existing figure changes). xpass = nflverse's expected pass rate for the
+// play (0 to 1), sd = the score differential from the offense's side, both on the play rows since increment A.
+//   PROE (proe)  = dropback rate minus mean xpass, both over the plays that CARRY an xpass (a play without one is in
+//                  neither), in PERCENTAGE POINTS (×100, signed: +3.5 = passing 3.5 points more than expected).
+//                  proeN = how many plays that is. Splits, each over its own plays with an xpass: proeEarly (down 1
+//                  or 2), proeNeutral (neutral script: score within 7 either way, |sd| <= 7, in quarters 1-3; a play
+//                  without an sd is not neutral), proeRz (yardline_100 <= 20), proeI5 (yardline_100 <= 5); each with
+//                  its own count (proeEarlyN, ...).
+//   Neutral pass rate (neutralPassRate) = dropbacks / plays in neutral script (every neutral play, xpass or not);
+//                  neutralPlays the count.
+//   On DEFENSE these are what the defense FACED (its opponents' PROE against it). Style, not quality: neither way
+//   is better, so none of these keys is in OFF_TIER/DEF_TIER (uncoloured); the league mean and rank still show, rank
+//   1 = the most pass-happy over expectation (teamRank's high-first default for an untiered key).
+// Pace and shape (D219 figures 2 and 3; additive). secs = seconds to the offense's next snap in the drive (increment
+// A: empty on a drive's last snap and across a quarter); noHuddle and shotgun = the play-by-play's flags (shotgun
+// counts pistol, D219 call (iii)); motion = FTN's charting (a row FTN did not chart carries no value, the PA % rule);
+// pers = nflverse's offense_personnel text ("1 RB, 1 TE, 3 WR"), published after a season, so empty for the current one.
+//   Neutral sec/play (neutralSecs) = mean secs over neutral-script plays (the PROE neutral rule) that carry a secs
+//                  value; neutralSecsN the count. Rank 1 = the FASTEST (fewest seconds; RANK_LOW_FIRST below).
+//   Neutral plays/g (neutralPlaysG) = neutral-script plays / games; null when no play in the window carries an sd.
+//   No-huddle % (noHuddlePct) = plays with noHuddle / plays carrying the flag; noHuddle, noHuddleN the counts.
+//   Shotgun % (shotgunPct) = plays with shotgun / plays carrying the flag; shotgun, shotgunN.
+//   Motion % (motionPct) = FTN-charted plays with motion / FTN-charted plays (every play type, not only dropbacks).
+//   11 personnel % (pers11Pct) = plays whose personnel is 1 RB, 1 TE and 3 WR (isPers11; linemen and extra QBs
+//                  ignored) / plays carrying a personnel value; pers11, persN.
+//   A season compiled before D219 (no such columns) gives null for all six, never NaN. On DEFENSE all are what it
+//   FACED. Style, not quality: none is in OFF_TIER/DEF_TIER (uncoloured); most-first rank except seconds.
+// Drives (D219 figure 7; additive). The week file's `drives` block (increment A: one row per offensive drive, in
+// driveCols order game_id, posteam, drive, result, pts, rz, plays; kneel-only drives already left out by the compile).
+// A club's "drive games" (driveG) are its games in the window whose week carries a drives block; a window with none
+// (a season compiled before D219) gives null figures, never NaN.
+//   Points/drive (ptsDrive) = Σ drive pts / drives. pts = the points the offense actually scored on its own snaps
+//                  (D219 call (ii), the default: 6 plus the try, a field goal 3, a defensive score against it 0).
+//   Drives/g (drivesG) = drives / driveG. Red-zone trips/g (rzTripsG) = drives with rz / driveG. Volume, uncoloured.
+//   Red-zone TD % (rzTdPct) = red-zone drives whose result is "Touchdown" / red-zone drives (a field goal is a trip,
+//                  not a touchdown).
+//   3rd-down % (thirdPct) = down-3 play rows converted / down-3 play rows, over rows that carry the firstDown column;
+//                  pass-interference rows are left out on both sides (teamPlay drops them). Converted = td or
+//                  firstDown; a first down a foul gave the offense counts (D219 call (v), the default) unless
+//                  THIRD_DOWN_PENALTY_FD below is flipped. Penalty no-plays have no row, so this reads a little under
+//                  NFL.com's figure.
+//   On DEFENSE all five are what it FACED (its opponents' drives and third downs against it); points/drive, RZ TD %
+//   and 3rd-down % are higher-is-better on offense and lower-is-better on defense.
 // LEAGUE REFERENCE (Adam's perspective rule, D177): the plain mean over the clubs in the window (32 in a full week;
 // fewer on a week with byes), and colour tiers at the clubs' 90/70/40/15th percentiles (agg.js; under 8 clubs,
 // uncoloured). Lower-is-better keys are cut on the negated value; neutral keys (pass rate, aDOT, blitz %) are not
@@ -62,6 +105,7 @@ import { colIndex, clubGames, percentileCuts, tierFromCuts, MIN_POOL, aggregateU
 import { gamesInWindow } from "./filters.js";
 import { ZONE_KEYS, qbZones } from "./agg_qb.js";
 import { aggregateRush, rushReference, rushTier } from "./agg_rush.js";
+import { rzI5Shares } from "./agg_player.js";
 
 const num = (v) => (v === null || v === undefined || v === "" || !Number.isFinite(+v) ? null : +v);
 const truthy = (v) => v === true || v === 1 || v === "1" || v === "true";
@@ -97,8 +141,57 @@ export function teamPlay(r, C) {
     blitz: db && bl !== null ? bl >= 1 : null,
     expl: type === "run" || type === "scramble" ? yards >= EXPL_RUN : complete && yards >= EXPL_PASS,
     band: r[C.band], dir: r[C.dir],
+    // D219 play calling: the expectation and the situation (null where the row has no such column or value).
+    xpass: num(r[C.xpass]), sd: num(r[C.sd]), qtr: num(r[C.qtr]), down: num(r[C.down]), yl: num(r[C.yardline_100]),
+    // D219 drives: the first-down flag (null where the rows have no such column) and the distance to go.
+    fd: C.firstDown === undefined || r[C.firstDown] === null || r[C.firstDown] === undefined ? null : truthy(r[C.firstDown]), togo: num(r[C.ydstogo]),
+    // D219 pace and shape: null where the row has no such column or value (a flag's null is "not charted").
+    secs: num(r[C.secs]), noHuddle: flagOf(r[C.noHuddle]), shotgun: flagOf(r[C.shotgun]), motion: flagOf(r[C.motion]),
+    pers11: typeof r[C.pers] === "string" && r[C.pers].trim() ? isPers11(r[C.pers]) : null,
   };
 }
+// A 0/1 flag, or null when the row carries none (a missing column or an uncharted play).
+const flagOf = (v) => (v === null || v === undefined || v === "" ? null : truthy(v));
+
+// D219 figure 3: nflverse's offense_personnel text ("1 RB, 1 TE, 3 WR", "6 OL, 1 RB, 1 TE, 2 WR") as { RB, TE, WR, ... }
+// counts, or null for an empty or unreadable value. A position the text leaves out counts 0.
+export function parsePersonnel(s) {
+  if (typeof s !== "string" || !s.trim()) return null;
+  const out = {};
+  for (const part of s.split(",")) {
+    if (!part.trim()) continue;
+    const m = part.trim().match(/^(\d+)\s+([A-Z]+)$/i);
+    if (!m) return null;
+    out[m[2].toUpperCase()] = (out[m[2].toUpperCase()] || 0) + +m[1];
+  }
+  return out;
+}
+// 11 personnel: one back, one tight end and three receivers, whatever the linemen and quarterbacks.
+export function isPers11(s) {
+  const p = parsePersonnel(s);
+  return !!p && (p.RB || 0) === 1 && (p.TE || 0) === 1 && (p.WR || 0) === 3;
+}
+
+// D219 call (v), Adam's open call on a third down converted by a foul: true (the default) counts it, the offense kept
+// the ball, which is what the ledger's firstDown flag already says; false keeps only a first down the play's own
+// yards reached (or a touchdown), close to nflverse's third_down_converted. If this flips, compile.js's
+// THIRD_DOWN_NOTE audit must count the same way (and leave pass-interference rows out, as this page does).
+export const THIRD_DOWN_PENALTY_FD = true;
+export function thirdDownConverted(e, countPenalty = THIRD_DOWN_PENALTY_FD) {
+  if (e.td) return true;
+  if (!e.fd) return false;
+  return countPenalty || (e.togo !== null && e.yards >= e.togo);
+}
+
+// D219: the PROE splits (key, the play's filter). "neutral" is also the neutral pass rate's filter.
+const isNeutral = (e) => e.sd !== null && Math.abs(e.sd) <= 7 && e.qtr !== null && e.qtr >= 1 && e.qtr <= 3;
+export const PROE_SPLITS = Object.freeze([
+  ["proe", () => true],
+  ["proeEarly", (e) => e.down === 1 || e.down === 2],
+  ["proeNeutral", isNeutral],
+  ["proeRz", (e) => e.yl !== null && e.yl <= 20],
+  ["proeI5", (e) => e.yl !== null && e.yl <= 5],
+]);
 
 const emptyCell = () => ({ n: 0, cmp: 0, yds: 0, td: 0, int: 0, epa: 0, epaN: 0 });
 function addCell(c, e) { c.n++; if (e.complete) { c.cmp++; c.yds += e.yards; } if (e.td) c.td++; if (e.int) c.int++; if (e.epa !== null) { c.epa += e.epa; c.epaN++; } }
@@ -113,10 +206,30 @@ const newSide = () => ({ games: new Set(), plays: 0, epa: 0, epaN: 0, succ: 0, s
   covTgt: 0, covCmp: 0, covYds: 0, covTd: 0, covInt: 0, covWeeks: new Set(), ybc: 0, ybcCar: 0, ybcWeeks: new Set(),
   // Line-block additions (D198): PFR hurries on the QB rows (offense own, defense the opposing QBs'), and the
   // defenders' own hurries and hits summed (the pressuresG rule).
-  pfrHurries: 0, qbHurries: 0, defHurries: 0, defHits: 0 });
+  pfrHurries: 0, qbHurries: 0, defHurries: 0, defHits: 0,
+  // D219 play calling: per PROE split { n plays with an xpass, db dropbacks among them, x sum of their xpass }, and
+  // the neutral-script plays and dropbacks (xpass or not).
+  pe: Object.fromEntries(PROE_SPLITS.map(([k]) => [k, { n: 0, db: 0, x: 0 }])), nPlays: 0, nDb: 0,
+  // D219 drives: drives, their points, red-zone drives and red-zone touchdowns, the weeks carrying a drives block;
+  // down-3 rows (with a firstDown column) and the converted ones.
+  drN: 0, drPts: 0, drRz: 0, drRzTd: 0, drWeeks: new Set(), third: 0, thirdConv: 0,
+  // D219 pace and shape: plays carrying an sd; neutral plays' secs sum and count; each flag's hits and carriers.
+  sdN: 0, nSecs: 0, nSecsN: 0, nh: 0, nhN: 0, sg: 0, sgN: 0, mo: 0, moN: 0, p11: 0, pN: 0,
+  // D224 increment G, the line blocks' per-game strips: week key -> that week's PFR pressure sums on the same QB rows
+  // as Pressure % ({ press, db }; offense its own QBs, defense the opposing QBs) and the coverage sums ({ tgt, cmp,
+  // yds, td, int }, defense). A week absent from the map had no PFR row for the club (PFR runs about a week behind).
+  pfrWk: new Map(), qbWk: new Map(), covWk: new Map() });
 
 function addPlay(a, key, e, playRec) {
   a.plays++;
+  if (isNeutral(e)) { a.nPlays++; if (e.db) a.nDb++; if (e.secs !== null) { a.nSecs += e.secs; a.nSecsN++; } }
+  if (e.sd !== null) a.sdN++;
+  if (e.noHuddle !== null) { a.nhN++; if (e.noHuddle) a.nh++; }
+  if (e.shotgun !== null) { a.sgN++; if (e.shotgun) a.sg++; }
+  if (e.motion !== null) { a.moN++; if (e.motion) a.mo++; }
+  if (e.pers11 !== null) { a.pN++; if (e.pers11) a.p11++; }
+  if (e.xpass !== null) for (const [k, ok] of PROE_SPLITS) if (ok(e)) { const c = a.pe[k]; c.n++; c.x += e.xpass; if (e.db) c.db++; }
+  if (e.down === 3 && e.fd !== null) { a.third++; if (thirdDownConverted(e)) a.thirdConv++; }
   const w = a.wk.get(key) || { plays: 0, db: 0, epa: 0, epaN: 0, runs: 0, dbEpa: 0, dbEpaN: 0, runEpa: 0, runEpaN: 0 };
   w.plays++; if (e.db) w.db++;
   if (e.epa !== null) { a.epa += e.epa; a.epaN++; w.epa += e.epa; w.epaN++; }
@@ -129,7 +242,7 @@ function addPlay(a, key, e, playRec) {
     if (e.blitz !== null) { a.blN++; if (e.blitz) a.bl++; }
   } else {
     a.runs++; a.runYds += e.yards; w.runs++;
-    if (e.yards <= 0) a.runStuff++;
+    if (e.yards <= 0) { a.runStuff++; w.stuff = (w.stuff || 0) + 1; } // w.stuff: D224 increment G, the per-game stuffed %
     if (e.epa !== null) { a.runEpa += e.epa; a.runEpaN++; w.runEpa += e.epa; w.runEpaN++; }
     if (e.succ !== null) { a.runSucc += e.succ; a.runSuccN++; }
     if (e.expl) a.runExpl++;
@@ -161,6 +274,17 @@ function sideRates(a, g) {
     ybc: a.ybc, ybcCarries: a.ybcCar, ybcCar: ratio(a.ybc, a.ybcCar), ybcWeeks: a.ybcWeeks.size,
     // Line-block additions (D198), additive. sacksG is play-by-play (D178), never PFR's sack columns.
     sacksG: ratio(a.sacks, g), hurryPctAllowed: ratio(a.pfrHurries, a.pfrDb), pfrHurries: a.pfrHurries,
+    // D219 play calling, additive: PROE in percentage points and its splits, each with its play count; neutral pass rate.
+    ...Object.fromEntries(PROE_SPLITS.flatMap(([k]) => { const c = a.pe[k]; return [[k, c.n > 0 ? ((c.db - c.x) / c.n) * 100 : null], [k + "N", c.n]]; })),
+    neutralPassRate: ratio(a.nDb, a.nPlays), neutralPlays: a.nPlays,
+    // D219 drives, additive: null (never NaN) with no drives block or no down-3 rows carrying firstDown.
+    drives: a.drN, drivePts: a.drPts, driveG: a.drWeeks.size, ptsDrive: ratio(a.drPts, a.drN), drivesG: ratio(a.drN, a.drWeeks.size),
+    rzTrips: a.drRz, rzTripsG: ratio(a.drRz, a.drWeeks.size), rzTd: a.drRzTd, rzTdPct: ratio(a.drRzTd, a.drRz),
+    third: a.third, thirdConv: a.thirdConv, thirdPct: ratio(a.thirdConv, a.third),
+    // D219 pace and shape, additive: null (never NaN) where no play carries the column.
+    neutralSecs: ratio(a.nSecs, a.nSecsN), neutralSecsN: a.nSecsN, neutralPlaysG: a.sdN > 0 ? ratio(a.nPlays, g) : null,
+    noHuddlePct: ratio(a.nh, a.nhN), noHuddle: a.nh, noHuddleN: a.nhN, shotgunPct: ratio(a.sg, a.sgN), shotgun: a.sg, shotgunN: a.sgN,
+    motionPct: ratio(a.mo, a.moN), motion: a.mo, motionN: a.moN, pers11Pct: ratio(a.p11, a.pN), pers11: a.p11, persN: a.pN,
   };
 }
 
@@ -196,18 +320,42 @@ export function aggregateTeams(blocks, players, st, opts = {}) {
       if (okOff && e.att && e.band && e.dir && lgZones[e.band + e.dir]) addCell(lgZones[e.band + e.dir], e);
     }
   }
+  // D219 drives: the offense from its own drives, the defense (its opponent that game) from the drives it faced.
+  for (const b of blocks) {
+    if (!b.drives?.length || !b.driveCols) continue;
+    const D = colIndex(b.driveCols);
+    for (const r of b.drives) {
+      const pt = r[D.posteam];
+      if (!pt) continue;
+      const opp = info.get(`${b.key}|${pt}`)?.opp;
+      const pts = num(r[D.pts]) ?? 0, rz = truthy(r[D.rz]), td = r[D.result] === "Touchdown";
+      const add = (a) => { a.drN++; a.drPts += pts; a.drWeeks.add(b.key); if (rz) { a.drRz++; if (td) a.drRzTd++; } };
+      if (inWin.has(`${b.key}|${pt}`)) add(S(off, pt));
+      if (opp && inWin.has(`${b.key}|${opp}`)) add(S(def, opp));
+    }
+  }
   // PFR: the offense's QB rows, and the defense's defender rows (plus the QB-side check for the defense).
   for (const b of blocks) {
     let any = false;
     for (const [id, p] of Object.entries(b.pfr?.pass || {})) {
       const team = players?.[id]?.teams?.[b.key], db = num(p?.dropbacks);
-      if (!team || db === null || db <= 0 || !inWin.has(`${b.key}|${team}`)) continue;
-      const a = S(off, team); a.pfrPress += num(p.pressures) ?? 0; a.pfrDb += db; a.pfrWeeks.add(b.key); any = true;
-      a.pfrHits += num(p.hits) ?? 0; a.pfrHurries += num(p.hurries) ?? 0;
+      if (!team || db === null || db <= 0) continue;
+      // 🔵 (D224 increment G): the window is judged per club, as the play loop's okOff/okDef do. Under Last 3 a QB's
+      // game can be inside his opponent's last 3 and outside his own club's (an uneven bye), so the offense sums need
+      // the QB's club in the window and the defense sums the opponent's; a row is skipped only when neither is.
       const opp = info.get(`${b.key}|${team}`)?.opp;
-      if (opp && inWin.has(`${b.key}|${opp}`)) {
+      const okOff = inWin.has(`${b.key}|${team}`), okDef = !!opp && inWin.has(`${b.key}|${opp}`);
+      if (!okOff && !okDef) continue;
+      any = true;
+      if (okOff) {
+        const a = S(off, team); a.pfrPress += num(p.pressures) ?? 0; a.pfrDb += db; a.pfrWeeks.add(b.key);
+        a.pfrHits += num(p.hits) ?? 0; a.pfrHurries += num(p.hurries) ?? 0;
+        addWk(a.pfrWk, b.key, { press: num(p.pressures) ?? 0, db });
+      }
+      if (okDef) {
         const d = S(def, opp); d.qbPress += num(p.pressures) ?? 0; d.qbDb += db; d.qbWeeks.add(b.key);
         d.qbHits += num(p.hits) ?? 0; d.qbHurries += num(p.hurries) ?? 0;
+        addWk(d.qbWk, b.key, { press: num(p.pressures) ?? 0, db });
       }
     }
     const defKeys = new Map(); // team -> pressures this week
@@ -225,6 +373,7 @@ export function aggregateTeams(blocks, players, st, opts = {}) {
         const d = S(def, team);
         d.covTgt += tgt; d.covCmp += num(p.covCmp) ?? 0; d.covYds += num(p.covYds) ?? 0; d.covTd += num(p.covTd) ?? 0; d.covInt += num(p.covInt) ?? 0;
         d.covWeeks.add(b.key);
+        addWk(d.covWk, b.key, { tgt, cmp: num(p.covCmp) ?? 0, yds: num(p.covYds) ?? 0, td: num(p.covTd) ?? 0, int: num(p.covInt) ?? 0 });
       }
     }
     // Yards before contact (D195, PFR advanced rushing; the block is {} until the refresh fetches the file): the
@@ -233,9 +382,10 @@ export function aggregateTeams(blocks, players, st, opts = {}) {
     for (const [id, p] of Object.entries(b.pfr?.rush || {})) {
       const team = players?.[id]?.teams?.[b.key], car = num(p?.carries), ybc = num(p?.ybc);
       if (String(players?.[id]?.pos || "").toUpperCase() === "QB") continue;
-      if (!team || car === null || car <= 0 || ybc === null || !inWin.has(`${b.key}|${team}`)) continue;
-      const a = S(off, team); a.ybc += ybc; a.ybcCar += car; a.ybcWeeks.add(b.key);
+      if (!team || car === null || car <= 0 || ybc === null) continue;
+      // The same per-club window rule as the QB rows above (🔵, D224 increment G).
       const opp = info.get(`${b.key}|${team}`)?.opp;
+      if (inWin.has(`${b.key}|${team}`)) { const a = S(off, team); a.ybc += ybc; a.ybcCar += car; a.ybcWeeks.add(b.key); }
       if (opp && inWin.has(`${b.key}|${opp}`)) { const d = S(def, opp); d.ybc += ybc; d.ybcCar += car; d.ybcWeeks.add(b.key); }
     }
     for (const [team, pr] of defKeys) {
@@ -258,7 +408,8 @@ export function aggregateTeams(blocks, players, st, opts = {}) {
       if (!gm || !inWin.has(`${key}|${team}`)) return { key, bye: true, plays: null, db: null, passRate: null, epaPlay: null, epaDb: null, epaCar: null, runs: null };
       const w = a.wk.get(key) || { plays: 0, db: 0, epa: 0, epaN: 0, runs: 0, dbEpa: 0, dbEpaN: 0, runEpa: 0, runEpaN: 0 };
       return { key, opp: gm.opp, home: gm.home, side, plays: w.plays, db: w.db, runs: w.runs, passRate: ratio(w.db, w.plays),
-        epaPlay: ratio(w.epa, w.epaN), epaDb: ratio(w.dbEpa, w.dbEpaN), epaCar: ratio(w.runEpa, w.runEpaN) };
+        epaPlay: ratio(w.epa, w.epaN), epaDb: ratio(w.dbEpa, w.dbEpaN), epaCar: ratio(w.runEpa, w.runEpaN),
+        ...lineWeek(a, side, key, w) };
     });
     // The defense's Pressure % is the QB side; Pressures/g is the defenders' own sum, per game (D178 pairing).
     const dr = { ...sideRates(d, g), pressPct: ratio(d.qbPress, d.qbDb), pfrDb: d.qbDb, pfrWeeks: d.qbWeeks.size, pressuresG: ratio(d.pfrPress, g), pfrPressDef: d.pfrPress, pfrWeeksDef: d.pfrWeeks.size,
@@ -277,10 +428,41 @@ export function aggregateTeams(blocks, players, st, opts = {}) {
   return { rows, weeks, lgZones, pfrThrough, latestKey: weeks[weeks.length - 1] || null, unmapped };
 }
 
+// D224 increment G: one week's figures for the line blocks' per-game strips, each on the window figure's own rows and
+// rule, so the weeks' numerators and denominators sum to the tile's figure over the weeks charted:
+//   prPct  = PFR pressures / PFR dropbacks on the Pressure % QB rows that week (offense: pressPctAllowed, its own QBs;
+//            defense: pressPct, the opposing QBs against it); prN, prDb the sums; pfr = false (prPct null) when PFR
+//            has no such row for the club that week yet.
+//   stuffPct = designed runs gaining 0 or less / designed runs that week (play-by-play, the Stuffed % rule); stuffed.
+//   covRating (defense) = the NFL passer rating on that week's CB and safety coverage rows (the covRating rule);
+//            covTgt, covCmp, covYds, covTd, covInt the sums; cov = false (covRating null) with no such row that week.
+function lineWeek(a, side, key, w) {
+  const p = (side === "def" ? a.qbWk : a.pfrWk).get(key) || null, c = side === "def" ? a.covWk.get(key) || null : null;
+  const out = { pfr: !!p, prN: p ? p.press : null, prDb: p ? p.db : null, prPct: p ? ratio(p.press, p.db) : null,
+    stuffed: w.stuff || 0, stuffPct: ratio(w.stuff || 0, w.runs) };
+  if (side === "def") Object.assign(out, { cov: !!c, covTgt: c ? c.tgt : null, covCmp: c ? c.cmp : null, covYds: c ? c.yds : null, covTd: c ? c.td : null, covInt: c ? c.int : null,
+    covRating: c ? passerRating(c.cmp, c.tgt, c.yds, c.td, c.int) : null });
+  return out;
+}
+function addWk(m, key, add) {
+  const cur = m.get(key) || Object.fromEntries(Object.keys(add).map((k) => [k, 0]));
+  for (const [k, v] of Object.entries(add)) cur[k] += v;
+  m.set(key, cur);
+}
+
 // ---- the league reference among clubs ------------------------------------------------------------------------
 export const TEAM_LG_KEYS = ["plays", "playsG", "dbG", "runsG", "passRate", "epaPlay", "epaDb", "epaCar", "succPct", "adot", "cmpPct", "sackPct", "pressPct", "pressuresG", "paPct", "blitzPct", "explPct", "ypc", "runSuccPct", "runExplPct",
   "rushYdsG", "stuffPct", "pressPctAllowed", "hitPctAllowed", "ybcCar", "covYdsTgt", "covCmpPct", "covRating",
-  "hurryPctAllowed", "hurriesG", "hitsG", "sacksG", "runStopPct"];
+  "hurryPctAllowed", "hurriesG", "hitsG", "sacksG", "runStopPct",
+  // D219 play calling: uncoloured (not in OFF_TIER/DEF_TIER), league mean and rank only.
+  "proe", "proeEarly", "proeNeutral", "proeRz", "proeI5", "neutralPassRate",
+  // D219 drives: points/drive, RZ TD % and 3rd-down % tiered below; drives/g and RZ trips/g are volume, uncoloured.
+  "ptsDrive", "drivesG", "rzTripsG", "rzTdPct", "thirdPct",
+  // D219 pace and shape: uncoloured, league mean and rank only.
+  "neutralSecs", "neutralPlaysG", "noHuddlePct", "shotgunPct", "motionPct", "pers11Pct"];
+// Untiered keys ranked LOWEST first (teamRank, and the Rankings table's first click): the fastest offense has the
+// fewest seconds between snaps.
+export const RANK_LOW_FIRST = new Set(["neutralSecs"]);
 // Direction: 1 = higher is better, -1 = lower is better. The grid additions (D195): on offense more rushing yards,
 // YPC and yards before contact are better, and fewer stuffed runs, pressures and hits allowed; on defense the
 // reverse for the run figures, more stuffed runs forced and more pressure and hits forced, and a lower passer
@@ -288,12 +470,25 @@ export const TEAM_LG_KEYS = ["plays", "playsG", "dbG", "runsG", "passRate", "epa
 export const OFF_TIER = { epaPlay: 1, epaDb: 1, epaCar: 1, succPct: 1, cmpPct: 1, explPct: 1, sackPct: -1, pressPct: -1,
   rushYdsG: 1, ypc: 1, ybcCar: 1, stuffPct: -1, pressPctAllowed: -1, hitPctAllowed: -1,
   // D198: the O-line block and the Offense table's rushing tiles.
-  hurryPctAllowed: -1, runSuccPct: 1, runExplPct: 1, sacksG: -1 };
+  hurryPctAllowed: -1, runSuccPct: 1, runExplPct: 1, sacksG: -1,
+  // D203: more plays per game is better on offense (muted, see SOFT_KEYS below).
+  playsG: 1,
+  // D219 drives: scoring more per drive, finishing red-zone trips and converting third downs are better.
+  ptsDrive: 1, rzTdPct: 1, thirdPct: 1 };
 export const DEF_TIER = { epaPlay: -1, epaDb: -1, epaCar: -1, succPct: -1, cmpPct: -1, explPct: -1, sackPct: 1, pressPct: 1, pressuresG: 1, ypc: -1, runSuccPct: -1, runExplPct: -1,
   rushYdsG: -1, ybcCar: -1, stuffPct: 1, pressPctAllowed: 1, hitPctAllowed: 1, covRating: -1, covYdsTgt: -1, covCmpPct: -1,
   // D198: the D-line block.
-  hurryPctAllowed: 1, hurriesG: 1, hitsG: 1, sacksG: 1, runStopPct: 1 };
+  hurryPctAllowed: 1, hurriesG: 1, hitsG: 1, sacksG: 1, runStopPct: 1,
+  // D203: more plays FACED per game is worse on defense (muted, see SOFT_KEYS below).
+  playsG: -1,
+  // D219 drives: fewer points per drive, red-zone touchdowns and third-down conversions allowed are better.
+  ptsDrive: -1, rzTdPct: -1, thirdPct: -1 };
 const dirOf = (side) => (side === "def" ? DEF_TIER : OFF_TIER);
+// D203 (Adam, 2026-09-27): keys that ARE tiered (a real lean exists) but should read as a lean, not a verdict - the
+// UI (a tile or table cell) adds a `t-soft` class alongside its `t-<tier>` class; analytics.css's `.t-soft.t-<tier>`
+// rule then halves the colour's strength by mixing it toward the ink colour. One mechanism, so a new soft figure
+// never needs a new set of muted colours - just add its key here.
+export const SOFT_KEYS = ["playsG"];
 
 // { n (clubs), lg: { off: {k: mean}, def: {k: mean} }, cuts: { off: {k: {cuts, n}}, def } , text }.
 export function teamReference(rows) {
@@ -314,9 +509,9 @@ export function teamTier(side, k, v, cuts) {
   if (!sgn || !finite(v)) return "";
   return tierFromCuts(sgn * v, cuts?.[side]?.[k]?.cuts);
 }
-// A club's rank among the clubs with a value, 1 = best ("" direction keys rank high-first).
+// A club's rank among the clubs with a value, 1 = best ("" direction keys rank high-first, RANK_LOW_FIRST low-first).
 export function teamRank(rows, side, k, team) {
-  const sgn = dirOf(side)[k] || 1;
+  const sgn = dirOf(side)[k] || (RANK_LOW_FIRST.has(k) ? -1 : 1);
   const list = rows.filter((r) => finite(r[side][k])).sort((a, b) => sgn * (b[side][k] - a[side][k]));
   const i = list.findIndex((r) => r.team === team);
   return i < 0 ? null : { rank: i + 1, of: list.length };
@@ -329,12 +524,17 @@ export const teamZones = (side, lgZones) => qbZones(side?.zones, lgZones);
 // target share at his position (agg.js's reference pool and cuts over the whole league, the same window) and his
 // share of the club's targets in the window (`clubShare`: targets / every target the club threw, pi included when
 // the switch counts them). Sorted by targets.
+const rzPick = (x, kind) => (kind === "rz"
+  ? { rzTgtN: x?.rzTgtN ?? 0, rzAttN: x?.rzAttN ?? 0, rzTgtShare: x?.rzTgtShare ?? null }
+  : { i5Des: x?.i5Des ?? 0, i5Runs: x?.i5Runs ?? 0, i5Share: x?.i5Share ?? null });
 export function teamTargets(blocks, players, st, team) {
   const base = { ...st, opp: "", ha: "", downs: [], qtrs: [], pos: {} };
   const rows = aggregateUsage(blocks, players, { ...base, team }).rows.filter((r) => r.tgt > 0);
   const ref = usageReference(aggregateUsage(blocks, players, { ...base, team: "" }).rows);
   const total = rows.reduce((s, r) => s + r.tgt, 0);
-  return rows.map((r) => ({ ...r, clubShare: ratio(r.tgt, total), tier: tierFromCuts(r.tgtShare, ref.at(r.pos).cuts?.tgtShare?.cuts), lgShare: ref.at(r.pos).lg?.overall?.tgtShare ?? null }))
+  // D219 figure 5: rzTgtN, rzAttN, rzTgtShare (null under agg_player.js's 3-play floor) over his games for this club.
+  const rz = rzI5Shares(blocks, players, base, team);
+  return rows.map((r) => ({ ...r, ...rzPick(rz.get(r.gsis), "rz"), clubShare: ratio(r.tgt, total), tier: tierFromCuts(r.tgtShare, ref.at(r.pos).cuts?.tgtShare?.cuts), lgShare: ref.at(r.pos).lg?.overall?.tgtShare ?? null }))
     .sort((a, b) => b.tgt - a.tgt || String(a.name).localeCompare(String(b.name)));
 }
 // Ball carriers: agg_rush.js's rows for the club, tier on rush share at his position; `clubShare` = his carries /
@@ -344,7 +544,9 @@ export function teamCarries(blocks, players, st, team) {
   const rows = aggregateRush(blocks, players, { ...base, team }).rows.filter((r) => r.car > 0);
   const ref = rushReference(aggregateRush(blocks, players, { ...base, team: "" }).rows);
   const total = rows.reduce((s, r) => s + r.car, 0);
-  return rows.map((r) => { const P = ref.at(r.pos); return { ...r, clubShare: ratio(r.car, total), tier: rushTier("rushShare", r.rushShare, P.cuts), epaTier: rushTier("epaCar", r.epaCar, P.cuts), lgShare: P.lg?.rushShare ?? null }; })
+  // D219 figure 5: i5Des, i5Runs, i5Share (null under the 3-play floor) over his games for this club.
+  const rz = rzI5Shares(blocks, players, base, team);
+  return rows.map((r) => { const P = ref.at(r.pos); return { ...r, ...rzPick(rz.get(r.gsis), "i5"), clubShare: ratio(r.car, total), tier: rushTier("rushShare", r.rushShare, P.cuts), epaTier: rushTier("epaCar", r.epaCar, P.cuts), lgShare: P.lg?.rushShare ?? null }; })
     .sort((a, b) => b.car - a.car || String(a.name).localeCompare(String(b.name)));
 }
 
