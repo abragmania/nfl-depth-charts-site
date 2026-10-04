@@ -31,7 +31,7 @@
 //                  (play-by-play) in the weeks PFR lists its opponent's QBs, one pressure per dropback at most.
 //   Pressures/g (defense) = the club's defenders' PFR pressures summed (pfr.def is keyed by defender gsis; his club
 //                  that week comes from players.json teams[week]) / the window weeks those defenders have PFR rows
-//                  (pfrWeeksDef; null when none), so an unpublished or uncharted week is out of both parts. A throw two men
+//                  (pfrWeeksDef; null when none), so an unpublished week, or an uncharted one the patch does not cover, is out of both parts. A throw two men
 //                  pressured counts twice here, by design: it is a volume figure, not a rate, so it never conflicts
 //                  with Pressure % above (Adam's pairing, 2026-09-24, resolving D178: two figures, no double-count
 //                  tooltip). A defender the players file cannot place is in `unmapped`.
@@ -431,7 +431,7 @@ export function aggregateTeams(blocks, players, st, opts = {}) {
     // the QB side's denominator is the dropbacks this defense faced (play-by-play) in the weeks PFR lists its opponent.
     const qDb = wkDb(d, d.qbWeeks);
     // The per-game divisor is the weeks the club's defenders have PFR rows (pfrWeeksDef), not every window game: a
-    // week PFR has not published (or did not chart, data/static/pfr_uncharted.json) is out of both parts; null at 0.
+    // week PFR has not published (or did not chart and data/static/pfr_patch.json does not cover) is out of both parts; null at 0.
     const dW = d.pfrWeeks.size;
     const dr = { ...sideRates(d, g), pressPct: ratio(d.qbPress, qDb), pfrDb: qDb, pfrWeeks: d.qbWeeks.size, pressuresG: ratio(d.pfrPress, dW), pfrPressDef: d.pfrPress, pfrWeeksDef: dW,
       // Grid additions (D195): pressure and hits from the opposing QBs' rows (the Press % rule), and coverage.
