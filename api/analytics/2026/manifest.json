@@ -36,26 +36,43 @@
   "pressure",
   "pi",
   "fumbler",
-  "fumLost"
+  "fumLost",
+  "sd",
+  "xpass",
+  "drive",
+  "firstDown",
+  "secs",
+  "noHuddle",
+  "shotgun",
+  "pers"
+ ],
+ "driveCols": [
+  "game_id",
+  "posteam",
+  "drive",
+  "result",
+  "pts",
+  "rz",
+  "plays"
  ],
  "weeks": [
   {
    "week": 1,
-   "hash": "2df2931aa433be5f",
+   "hash": "27dc46d7ea4df879",
    "plays": 1924,
-   "builtAt": "2026-10-02T22:00:54.990Z"
+   "builtAt": "2026-10-04T00:01:01.401Z"
   },
   {
    "week": 2,
-   "hash": "b5b8ed9509d20acf",
+   "hash": "49cf8240ec67bb6c",
    "plays": 1936,
-   "builtAt": "2026-10-02T22:00:54.990Z"
+   "builtAt": "2026-10-04T00:01:01.401Z"
   },
   {
    "week": 3,
-   "hash": "0f13e3b2d275435d",
+   "hash": "d54263599a992b0c",
    "plays": 2000,
-   "builtAt": "2026-10-02T22:00:54.990Z"
+   "builtAt": "2026-10-04T00:01:01.401Z"
   }
  ],
  "throughWeek": 3,
@@ -63,16 +80,16 @@
  "heldUntil": "2026-10-06T09:00:00.000Z",
  "sources": {
   "pbp": {
-   "fetchedAt": "2026-10-02T22:00:34.557Z",
-   "sha": "884a3fa90f43f3de5a7a374eb732238d540e38a5834a4c4818dc751efd63ef22"
+   "fetchedAt": "2026-10-04T00:00:43.477Z",
+   "sha": "b9a7a318547970a7ddaf14fad0a1b909997eccd4c0c6b84ae21554879099445d"
   },
   "ftn": {
-   "fetchedAt": "2026-10-02T22:00:35.262Z",
-   "sha": "f805065157e4ae1aab63f7ba55cad23ca66449d17502bb54871b14c57a5ca301"
+   "fetchedAt": "2026-10-04T00:00:44.157Z",
+   "sha": "e3251098b6fcfd30367e41dfafb7d1afe6377871c0a3d4ac58370b214044a4b0"
   },
   "ngs": {
-   "fetchedAt": "2026-10-02T22:00:35.986Z",
-   "sha": "2e6c9e68bd663019"
+   "fetchedAt": "2026-10-04T00:00:44.892Z",
+   "sha": "606ad8ae8ca4535c"
   },
   "pfr": {
    "fetchedAt": "2026-09-30T10:04:53.934Z",
