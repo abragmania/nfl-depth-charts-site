@@ -10,6 +10,7 @@ import { clubGames, tierNote, TIER_NAMES, MIN_POOL, POOL_PER_GAME, POOL_FLOOR } 
 import { aggregateRush, rushReference, rushTier, sortRushRows, rushOpts, rushQueryFrom, samePos, RUSH_DEFAULT_POS, RUSH_MIN_CAR, RUSH_TIER_KEYS, BIN_LABELS, GOAL_LINE } from "../agg_rush.js";
 import { renderFilterBar } from "../filterbar.js";
 import { decorateDeciding } from "../deciding.js";
+import { involvementSignals, signalHtml } from "../agg_signal.js";
 import { esc, NA, isNum, pct, fix, signed, int, teamPill, qbStrips, seasonLabel } from "./qb.js";
 import { DK_TIPS, CATCH_TIP, withGroups, RZ_TIPS, withRzFigures, shareSample, shareCountHtml, groupCells, viewFrom, withView, columnsFor, pickView, viewCell, wantsDeciding, withViewSort, defaultSortFor, l3Title, WK_COLS, DEC_GROUPS, L3_NOTE, fitOpen, wireView, statusChip, statusNameClass, statusApplies, hlOf, withHl, scrollToHl } from "../table.js";
 
@@ -160,7 +161,7 @@ function detailHtml(r, st, q, P, wn) {
 
 export const rushAnchor = { id: null, top: null };
 
-// PURE (no DOM): the table's markup. view: { ref (rushReference), windowName, teams, minCar }.
+// PURE (no DOM): the table's markup. view: { ref (rushReference), windowName, teams, minCar, signal (true: D230's ▲/▼ marker) }.
 // `status`: D196's injury-status map (gsis -> status), already season-gated by the caller (table.js's
 // statusApplies) - pass {} to draw no badges. Never fetched here.
 export function rushTableHtml(allRows, st, query, view = {}, status = {}) {
@@ -171,6 +172,8 @@ export function rushTableHtml(allRows, st, query, view = {}, status = {}) {
   // D224 F: the chosen column set (Deciding, Standard or All), after any sort promotion (table.js columnsFor).
   const sel = columnsFor(COLS, DEC_COLS, { ...st, sort: sortKey }, "car", GROUPS, DEC_GROUPS);
   const cols = sel.cols;
+  // D230: the involved-vs-producing marker after the name, only when the caller opts in (view.signal); the pool is these rows.
+  const sig = view.signal ? involvementSignals(rows, "rb") : null;
   const nCols = 3 + cols.length + 1;
   // A sort on a total that is not a column (carries, opportunities) lights the per-game column that stands for it.
   const th = (k, h, t, cls = "") => {
@@ -201,9 +204,10 @@ export function rushTableHtml(allRows, st, query, view = {}, status = {}) {
     const depth = `../#/team/${encodeURIComponent(r.team)}/player/${encodeURIComponent(r.gsis)}`;
     const ps = status[r.gsis];
     const chip = statusChip(ps, { season: view.statusSeason }), nameCls = statusNameClass(ps);
+    const mark = sig ? signalHtml("rb", sig, r.gsis) : "";
     return `<tr class="an-row${open ? " open" : ""}${view.hl && r.gsis === view.hl ? " is-hl" : ""}" data-id="${esc(r.gsis)}" tabindex="0" aria-expanded="${open}">
       <td class="c-rank an-stick">${i + 1}</td>
-      <td class="c-name an-stick"><a class="an-pname${nameCls ? " " + nameCls : ""}" href="#/player/${encodeURIComponent(r.gsis)}${q ? "?" + q : ""}" title="${esc(r.name)}">${esc(r.name)}</a>${teamPill(r.team, view.teams, q)}<span class="an-pospill" data-band="${BAND(r.pos)}">${esc(r.pos)}</span>${chip}<a class="an-dc" href="${depth}" title="Open his depth-chart card" aria-label="Depth chart">→</a></td>
+      <td class="c-name an-stick"><a class="an-pname${nameCls ? " " + nameCls : ""}" href="#/player/${encodeURIComponent(r.gsis)}${q ? "?" + q : ""}" title="${esc(r.name)}">${esc(r.name)}</a>${mark}${teamPill(r.team, view.teams, q)}<span class="an-pospill" data-band="${BAND(r.pos)}">${esc(r.pos)}</span>${chip}<a class="an-dc" href="${depth}" title="Open his depth-chart card" aria-label="Depth chart">→</a></td>
       <td class="num">${r.g}</td>
       ${cols.map((c) => cell(c, r)).join("")}
       <td class="c-spark">${carrySpark(r.series, st, ref?.at(r.pos)?.lg?.carG)}</td></tr>`
@@ -299,7 +303,7 @@ export async function renderRushing(ctx, query) {
   const status = statusApplies(st, statusFeed.season) ? statusFeed.players : {};
   // D224 F: the Deciding set's last-3, this-week and status figures, only when that set is (or a sort needs it) on screen.
   if (rbWantsDeciding(st)) { try { decorateDeciding(agg.rows, "rb", { blocks: data.blocks, players: data.players, st, payload }); } catch (e) { console.warn("Deciding figures unavailable:", e); } }
-  el.innerHTML = rushTableHtml(agg.rows, st, qs, { ref, windowName, teams: teamsByAbbr, minCar, statusSeason: statusFeed.season, hl }, status);
+  el.innerHTML = rushTableHtml(agg.rows, st, qs, { ref, windowName, teams: teamsByAbbr, minCar, statusSeason: statusFeed.season, hl, signal: true }, status);
   fitOpen(el);
   wireView(el, (v) => go(pickView(COLS, DEC_COLS, { ...st, sort: SORTABLE.has(st.sort) ? st.sort : "car" }, v, "car")));
   el.querySelectorAll("th[data-sort]").forEach((h) => h.addEventListener("click", () => {

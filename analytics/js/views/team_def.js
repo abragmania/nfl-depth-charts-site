@@ -16,6 +16,7 @@ import { esc, NA, isNum, pct, fix, signed, int, teamPill, qbStrips, pfrNote, sea
 import { windowName } from "./qbplayer.js";
 import { lostCardHtml } from "./lost.js";
 import { lineBlock } from "./kit.js";
+import { nameOf } from "../names.js";
 import { teamPageState, teamSideSeg, clubZoneField, clubZoneLegend, zonePlaysHtml, TEAM_ZONE_MODES, distList, ordinal, clubGridRowHtml, TGT_COLS, CAR_COLS, RANKINGS_DEF_KEYS, rankingsHref, gridTileHref, lineStripHtml, lineStripSpec } from "./team.js";
 
 const P = (v, d = 1) => (isNum(v) ? pct(v, d) + "%" : NA);
@@ -51,18 +52,18 @@ export function defTilesHtml(D, L, ref, win, abbr, qs = "") {
     return RANKINGS_DEF_KEYS.has(linkKey) ? `<a class="an-tile-link" href="${rankingsHref("def", linkKey, abbr, qs)}">${body}</a>` : body;
   };
   return [
-    tile("Plays/g", fix(D.playsG, 1), "playsG", fix(L.playsG, 1), "Plays faced per game: pass attempts, sacks, scrambles and designed runs"),
-    tile("EPA/play", signed(D.epaPlay, 3), "epaPlay", signed(L.epaPlay, 3), "Expected points added per play allowed"),
-    tile("EPA/db", signed(D.epaDb, 3), "epaDb", signed(L.epaDb, 3), "EPA per dropback allowed (sacks and scrambles included)"),
-    tile("EPA/carry", signed(D.epaCar, 3), "epaCar", signed(L.epaCar, 3), "EPA per designed run allowed"),
-    tile("Success %", P(D.succPct, 1), "succPct", P(L.succPct, 1), "Share of plays faced that were successful for the offense (lower is better)"),
-    tile("Explosive %", P(D.explPct, 1), "explPct", P(L.explPct, 1), "Runs of 10+ yards and completions of 20+ allowed / plays faced"),
-    tile("Comp %", P(D.cmpPct), "cmpPct", P(L.cmpPct), "Completions allowed / attempts"),
-    tile("aDOT", fix(D.adot, 1), "", fix(L.adot, 1), "Air yards per attempt faced (neutral: not coloured)", "adot"),
-    tile("Sack %", P(D.sackPct), "sackPct", P(L.sackPct), "Sacks / dropbacks faced"),
-    tile("Press %", P(D.pressPct), "pressPct", P(L.pressPct), `PFR: the opposing quarterbacks' pressured dropbacks / their dropbacks against this defense${D.pfrWeeks ? ` over ${D.pfrWeeks} week${D.pfrWeeks === 1 ? "" : "s"}` : ""}`),
-    tile("Blitz %", P(D.blitzPct, 0), "", P(L.blitzPct, 0), "FTN: dropbacks faced with 1+ blitzers / dropbacks charted", "blitzPct"),
-    tile("YPC", fix(D.ypc, 1), "ypc", fix(L.ypc, 1), "Yards per designed run allowed"),
+    tile(nameOf("playsG"), fix(D.playsG, 1), "playsG", fix(L.playsG, 1), "Plays faced per game: pass attempts, sacks, scrambles and designed runs"),
+    tile(nameOf("epaPlay"), signed(D.epaPlay, 3), "epaPlay", signed(L.epaPlay, 3), "Expected points added per play allowed"),
+    tile(nameOf("epaDb"), signed(D.epaDb, 3), "epaDb", signed(L.epaDb, 3), "EPA per dropback allowed (sacks and scrambles included)"),
+    tile(nameOf("epaCar"), signed(D.epaCar, 3), "epaCar", signed(L.epaCar, 3), "EPA per designed run allowed"),
+    tile(nameOf("succPct"), P(D.succPct, 1), "succPct", P(L.succPct, 1), "Share of plays faced that were successful for the offense (lower is better)"),
+    tile(nameOf("explPct"), P(D.explPct, 1), "explPct", P(L.explPct, 1), "Runs of 10+ yards and completions of 20+ allowed / plays faced"),
+    tile(nameOf("cmpPct"), P(D.cmpPct), "cmpPct", P(L.cmpPct), "Completions allowed / attempts"),
+    tile(nameOf("adot"), fix(D.adot, 1), "", fix(L.adot, 1), "Air yards per attempt faced (neutral: not coloured)", "adot"),
+    tile(nameOf("sackPct"), P(D.sackPct), "sackPct", P(L.sackPct), "Sacks / dropbacks faced"),
+    tile(nameOf("pressPct"), P(D.pressPct), "pressPct", P(L.pressPct), `PFR: the opposing quarterbacks' pressured dropbacks / their dropbacks against this defense${D.pfrWeeks ? ` over ${D.pfrWeeks} week${D.pfrWeeks === 1 ? "" : "s"}` : ""}`),
+    tile(nameOf("blitzPct"), P(D.blitzPct, 0), "", P(L.blitzPct, 0), "FTN: dropbacks faced with 1+ blitzers / dropbacks charted", "blitzPct"),
+    tile(nameOf("ypc"), fix(D.ypc, 1), "ypc", fix(L.ypc, 1), "Yards per designed run allowed"),
   ].join("");
 }
 
@@ -99,33 +100,33 @@ export function dlineBlockHtml({ D = {}, L = {}, rows = [], abbr = "", qs = "", 
       { label: "Run stuff", rating: runStuffCell?.rating ?? null, rank: isNum(runStuffCell?.rank) ? ordinal(runStuffCell.rank) : null, of: runStuffCell ? String(runStuffCell.n) : null, title: "Ranks on stuffed % forced (play-by-play); the grid's own rating (50 = league average)" },
     ],
     tiles: [
-      dlTile("Press %", "pressPct", `${isNum(D.pressuresG) ? D.pressuresG.toFixed(1) : "–"}/g pressures`),
-      dlTile("Hit %", "hitPctAllowed", `${isNum(D.hitsG) ? D.hitsG.toFixed(1) : "–"}/g hits`),
-      dlTile("Hurry %", "hurryPctAllowed", `${isNum(D.hurriesG) ? D.hurriesG.toFixed(1) : "–"}/g hurries`),
-      dlTile("Sack %", "sackPct", `${isNum(D.sacksG) ? D.sacksG.toFixed(1) : "–"}/g sacks`),
-      dlTile("Stuffed % forced", "stuffPct", `${D.stuffed ?? 0} stuffed`),
-      dlTile("Run-stop %", "runStopPct", ""),
-      dlTile("YBC/carry allowed", "ybcCar", `${D.ybcCarries ?? 0} carries`, 2),
+      dlTile(nameOf("pressPct"), "pressPct", `${isNum(D.pressuresG) ? D.pressuresG.toFixed(1) : "–"}/g pressures`),
+      dlTile(nameOf("hitPctAllowed"), "hitPctAllowed", `${isNum(D.hitsG) ? D.hitsG.toFixed(1) : "–"}/g hits`),
+      dlTile(nameOf("hurryPctAllowed"), "hurryPctAllowed", `${isNum(D.hurriesG) ? D.hurriesG.toFixed(1) : "–"}/g hurries`),
+      dlTile(nameOf("sackPct"), "sackPct", `${isNum(D.sacksG) ? D.sacksG.toFixed(1) : "–"}/g sacks`),
+      dlTile(nameOf("stuffPct", "forced"), "stuffPct", `${D.stuffed ?? 0} stuffed`),
+      dlTile(nameOf("runStopPct"), "runStopPct", ""),
+      dlTile(nameOf("ybcCar", "allowed"), "ybcCar", `${D.ybcCarries ?? 0} carries`, 2),
     ],
     foot: pnote ? esc(pnote) : "",
     strip,
   });
 }
 
-// D224 increment G (team.js lineStripHtml): the D-line block's strips, pressure % forced (PFR, the opposing QBs' rows
-// against this defense: the Press % tile's rule) and stuffed % forced (play-by-play) by game; and the coverage strip,
+// D224 increment G (team.js lineStripHtml): the D-line block's strips, pressure % (PFR, the opposing QBs' rows
+// against this defense: the Pressure % tile's rule) and stuffed % forced (play-by-play) by game; and the coverage strip,
 // the passer rating allowed on the club's CB and safety coverage rows (PFR) by game. series: aggregateTeams' series.def.
 export function dlineStripHtml({ series = [], D = {}, L = {}, cuts = null, wn = "", season, activeKey = null, hit = true, href = "", pfrThrough = null } = {}) {
   const a = { side: "def", T: D, L, cuts, wn, series };
   return lineStripHtml(series, [
-    lineStripSpec({ ...a, k: "prPct", tk: "pressPct", label: "Pressure % forced", floor: 0.3, pfrKey: "pfr",
+    lineStripSpec({ ...a, k: "prPct", tk: "pressPct", label: nameOf("pressPct"), floor: 0.3, pfrKey: "pfr",
       hover: "the opposing QBs' rows, the same rows as the tile; a two-man pressure counts once" }),
-    lineStripSpec({ ...a, k: "stuffPct", tk: "stuffPct", label: "Stuffed % forced", floor: 0.15 }),
+    lineStripSpec({ ...a, k: "stuffPct", tk: "stuffPct", label: nameOf("stuffPct", "forced"), floor: 0.15 }),
   ], { season, activeKey, hit, href, pfrThrough });
 }
 export function coverageStripHtml({ series = [], D = {}, L = {}, cuts = null, wn = "", season, activeKey = null, hit = true, href = "", pfrThrough = null } = {}) {
   return lineStripHtml(series, [
-    lineStripSpec({ side: "def", T: D, L, cuts, wn, series, k: "covRating", tk: "covRating", label: "Rating allowed", rate: false, digits: 1, floor: 100, pfrKey: "cov" }),
+    lineStripSpec({ side: "def", T: D, L, cuts, wn, series, k: "covRating", tk: "covRating", label: nameOf("covRating"), rate: false, digits: 1, floor: 100, pfrKey: "cov" }),
   ], { season, activeKey, hit, href, pfrThrough });
 }
 
@@ -145,9 +146,9 @@ export function coverageTilesHtml({ D = {}, L = {}, cuts = null, qs = "" } = {})
   // of the "Week by week" row at 1536px). The throws list drops into the same column, under the tiles, when a zone
   // is clicked - see .an-tm-covwrap in analytics.css.
   return `<div class="an-tm-covtiles">${[
-    covTile("Rating allowed", fix(D.covRating, 1), "covRating", fix(L.covRating, 1), "PFR coverage charting: the NFL passer rating on throws at this club's cornerbacks and safeties"),
-    covTile("Yds/target", fix(D.covYdsTgt, 1), "covYdsTgt", fix(L.covYdsTgt, 1), "PFR coverage charting: yards allowed per covered target"),
-    covTile("Cmp % allowed", P(D.covCmpPct), "covCmpPct", P(L.covCmpPct), "PFR coverage charting: completions / covered targets"),
+    covTile(nameOf("covRating"), fix(D.covRating, 1), "covRating", fix(L.covRating, 1), "PFR coverage charting: the NFL passer rating on throws at this club's cornerbacks and safeties"),
+    covTile(nameOf("covYdsTgt"), fix(D.covYdsTgt, 1), "covYdsTgt", fix(L.covYdsTgt, 1), "PFR coverage charting: yards allowed per covered target"),
+    covTile(nameOf("covCmpPct", "allowed"), P(D.covCmpPct), "covCmpPct", P(L.covCmpPct), "PFR coverage charting: completions / covered targets"),
     covTile("Targets covered", int(D.covTgt), "", int(L.covTgt), "PFR coverage charting: covered targets in the window"),
   ].join("")}</div>`;
 }
@@ -228,9 +229,9 @@ export async function renderTeamDefense(ctx, params, query) {
   const covStrip = coverageStripHtml(stripArgs);
   const maxPlays = Math.max(70, ...series.map((s) => s.plays || 0));
   const strips = [
-    { k: "epaPlay", label: "EPA/play allowed", signed: true, span: 0.4, fmt: (v) => signed(v, 3), short: (v) => signed(v, 2).replace(/^([+−])0/, "$1"), total: D.epaPlay, totalText: `${wn} ${isNum(D.epaPlay) ? signed(D.epaPlay, 3) : "–"}`, avg: L.epaPlay, avgText: `lg ${isNum(L.epaPlay) ? signed(L.epaPlay, 3) : "–"}`, tier: (v) => teamTier("def", "epaPlay", v, ref.cuts) },
-    { k: "epaDb", label: "EPA/dropback allowed", signed: true, span: 0.6, fmt: (v) => signed(v, 3), short: (v) => signed(v, 2).replace(/^([+−])0/, "$1"), total: D.epaDb, totalText: `${wn} ${isNum(D.epaDb) ? signed(D.epaDb, 3) : "–"}`, avg: L.epaDb, avgText: `lg ${isNum(L.epaDb) ? signed(L.epaDb, 3) : "–"}`, tier: (v) => teamTier("def", "epaDb", v, ref.cuts) },
-    { k: "epaCar", label: "EPA/carry allowed", signed: true, span: 0.6, fmt: (v) => signed(v, 3), short: (v) => signed(v, 2).replace(/^([+−])0/, "$1"), total: D.epaCar, totalText: `${wn} ${isNum(D.epaCar) ? signed(D.epaCar, 3) : "–"}`, avg: L.epaCar, avgText: `lg ${isNum(L.epaCar) ? signed(L.epaCar, 3) : "–"}`, tier: (v) => teamTier("def", "epaCar", v, ref.cuts) },
+    { k: "epaPlay", label: nameOf("epaPlay", "allowed"), signed: true, span: 0.4, fmt: (v) => signed(v, 3), short: (v) => signed(v, 2).replace(/^([+−])0/, "$1"), total: D.epaPlay, totalText: `${wn} ${isNum(D.epaPlay) ? signed(D.epaPlay, 3) : "–"}`, avg: L.epaPlay, avgText: `lg ${isNum(L.epaPlay) ? signed(L.epaPlay, 3) : "–"}`, tier: (v) => teamTier("def", "epaPlay", v, ref.cuts) },
+    { k: "epaDb", label: nameOf("epaDb", "allowed"), signed: true, span: 0.6, fmt: (v) => signed(v, 3), short: (v) => signed(v, 2).replace(/^([+−])0/, "$1"), total: D.epaDb, totalText: `${wn} ${isNum(D.epaDb) ? signed(D.epaDb, 3) : "–"}`, avg: L.epaDb, avgText: `lg ${isNum(L.epaDb) ? signed(L.epaDb, 3) : "–"}`, tier: (v) => teamTier("def", "epaDb", v, ref.cuts) },
+    { k: "epaCar", label: nameOf("epaCar", "allowed"), signed: true, span: 0.6, fmt: (v) => signed(v, 3), short: (v) => signed(v, 2).replace(/^([+−])0/, "$1"), total: D.epaCar, totalText: `${wn} ${isNum(D.epaCar) ? signed(D.epaCar, 3) : "–"}`, avg: L.epaCar, avgText: `lg ${isNum(L.epaCar) ? signed(L.epaCar, 3) : "–"}`, tier: (v) => teamTier("def", "epaCar", v, ref.cuts) },
     { k: "db", label: "Dropbacks faced", signed: false, span: maxPlays * 1.05, fmt: (v) => `${v} dropbacks`, short: (v) => String(v), total: D.db, totalText: `${wn} ${D.db}`, avg: L.dbG, avgText: `lg ${isNum(L.dbG) ? L.dbG.toFixed(1) : "–"}/g` },
     { k: "runs", label: "Runs faced", signed: false, span: maxPlays * 1.05, fmt: (v) => `${v} runs`, short: (v) => String(v), total: D.runs, totalText: `${wn} ${D.runs}`, avg: L.runsG, avgText: `lg ${isNum(L.runsG) ? L.runsG.toFixed(1) : "–"}/g` },
   ];

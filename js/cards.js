@@ -639,7 +639,11 @@ export function nameLadder({ giveUps = ROW_GIVE_UPS, hasShort = false } = {}) {
 // Walks that ladder against one live row, stopping at the first rung whose name fits. A row whose name
 // already fits is left in the state it is already in — no class write at all — so a page with no cut names
 // costs one measurement per row and wakes nothing that observes the field.
-function fitOneName(row, el) {
+// D233: `forceShort` is the field-wide switch viewfit.js writes (`data-names="short"` on `.field-outer`) while the
+// player card is open and the canvas would otherwise shrink the names under the readable floor. Every row then
+// starts at the SHORT name and the ladder runs only its short rungs; a man with no separate first and last has
+// no short form and keeps his one name.
+function fitOneName(row, el, forceShort = false) {
   // An emptied wrapper still costs the row a flex gap, so it goes with the last thing inside it.
   const dropEmptyWrappers = () => {
     for (const w of row.querySelectorAll(".prow-signals, .prow-badges")) {
@@ -682,6 +686,7 @@ function fitOneName(row, el) {
   const hasShort = !!(el.dataset.short && el.dataset.short !== el.dataset.full);
   let measured = false;
   for (const rung of nameLadder({ hasShort })) {
+    if (forceShort && hasShort && rung.name === "full") continue;
     const moved = applyRung(rung);
     // The first rung is always measured (it is the question "does this row need anything at all?"); after
     // that only a rung that actually moved something is worth a measurement.
@@ -694,10 +699,11 @@ function fitOneName(row, el) {
 // `.row-name` (the 40px compactRow the side, group and matchup card views draw) is fitted by the same pass —
 // it draws the full name too, so without this a badge row would simply ellipsise.
 export function fitNames(root) {
+  const forceShort = root.dataset?.names === "short"; // D233: see fitOneName
   for (const el of root.querySelectorAll(".prow-name[data-short], .row-name[data-short]")) {
     el.dataset.full = el.dataset.full ?? el.textContent;
     const row = el.closest(".prow, .row");
-    if (row) fitOneName(row, el);
+    if (row) fitOneName(row, el, forceShort);
   }
 }
 

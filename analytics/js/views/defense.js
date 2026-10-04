@@ -11,6 +11,7 @@ import { TIER_NAMES } from "../agg.js";
 import { renderFilterBar } from "../filterbar.js";
 import { esc, NA, isNum, pct, fix, signed, teamPill, qbStrips, pfrNote, seasonLabel } from "./qb.js";
 import { windowName } from "./qbplayer.js";
+import { nameOf, headerOf } from "../names.js";
 import { teamPageState, clubZoneField, clubZoneLegend, zonePlaysHtml, TEAM_ZONE_MODES } from "./team.js";
 
 const P = (v, d = 1) => (isNum(v) ? pct(v, d) : NA);
@@ -18,19 +19,19 @@ const P = (v, d = 1) => (isNum(v) ? pct(v, d) : NA);
 // (signed, centred on zero — a defense can be above or below the league); the rest split into pass and run defense.
 const EPA_BAR_SPAN = 0.4;
 export const DEF_COLS = [
-  { k: "epaPlay", h: "EPA/play", t: "EPA per play allowed (lower is better)", f: (v) => signed(v, 3), grp: "ov", bar: EPA_BAR_SPAN, signed: true },
-  { k: "succPct", h: "Succ %", t: "Share of plays faced that were successful for the offense (lower is better)", f: (v) => P(v, 1), grp: "ov" },
-  { k: "explPct", h: "Expl %", t: "Explosive plays allowed: runs of 10+ yards and completions of 20+ / plays faced (lower is better)", f: (v) => P(v, 1), grp: "ov" },
-  { k: "playsG", h: "Plays/g", t: "Plays faced per game: pass attempts, sacks, scrambles and designed runs", f: (v) => fix(v, 1), grp: "ov" },
-  { k: "epaDb", h: "EPA/db", t: "EPA per dropback allowed (sacks and scrambles included; lower is better)", f: (v) => signed(v, 3), grp: "pd" },
-  { k: "cmpPct", h: "Cmp %", t: "Completion % allowed (lower is better)", f: (v) => P(v, 1), grp: "pd" },
-  { k: "adot", h: "aDOT", t: "Air yards per attempt faced", f: (v) => fix(v, 1), grp: "pd" },
-  { k: "sackPct", h: "Sack %", t: "Sacks / dropbacks faced", f: (v) => P(v, 1), grp: "pd" },
-  { k: "pressPct", h: "Press %", t: "PFR: the opposing quarterbacks' pressured dropbacks / their dropbacks against this defense, one pressure per throw at most (a week behind)", f: (v) => P(v, 1), grp: "pd" },
-  { k: "pressuresG", h: "Press/g", t: "PFR: the club's defenders' pressures summed / games in the window — a throw two men pressured counts twice here (a week behind)", f: (v) => fix(v, 1), grp: "pd" },
-  { k: "blitzPct", h: "Blitz %", t: "FTN: dropbacks faced with 1+ blitzers / dropbacks faced charted", f: (v) => P(v, 0), grp: "pd" },
-  { k: "epaCar", h: "EPA/car", t: "EPA per designed run allowed (lower is better)", f: (v) => signed(v, 3), grp: "rd" },
-  { k: "ypc", h: "YPC", t: "Yards per designed run allowed (lower is better)", f: (v) => fix(v, 1), grp: "rd" },
+  { k: "epaPlay", h: headerOf("epaPlay"), t: "EPA per play allowed (lower is better)", f: (v) => signed(v, 3), grp: "ov", bar: EPA_BAR_SPAN, signed: true },
+  { k: "succPct", h: headerOf("succPct"), t: "Share of plays faced that were successful for the offense (lower is better)", f: (v) => P(v, 1), grp: "ov" },
+  { k: "explPct", h: headerOf("explPct"), t: "Explosive plays allowed: runs of 10+ yards and completions of 20+ / plays faced (lower is better)", f: (v) => P(v, 1), grp: "ov" },
+  { k: "playsG", h: headerOf("playsG"), t: "Plays faced per game: pass attempts, sacks, scrambles and designed runs", f: (v) => fix(v, 1), grp: "ov" },
+  { k: "epaDb", h: headerOf("epaDb"), t: "EPA per dropback allowed (sacks and scrambles included; lower is better)", f: (v) => signed(v, 3), grp: "pd" },
+  { k: "cmpPct", h: headerOf("cmpPct"), t: "Completion % allowed (lower is better)", f: (v) => P(v, 1), grp: "pd" },
+  { k: "adot", h: headerOf("adot"), t: "Air yards per attempt faced", f: (v) => fix(v, 1), grp: "pd" },
+  { k: "sackPct", h: headerOf("sackPct"), t: "Sacks / dropbacks faced", f: (v) => P(v, 1), grp: "pd" },
+  { k: "pressPct", h: headerOf("pressPct"), t: "PFR: the opposing quarterbacks' pressured dropbacks / their dropbacks against this defense, one pressure per throw at most (a week behind)", f: (v) => P(v, 1), grp: "pd" },
+  { k: "pressuresG", h: headerOf("pressuresG"), t: "PFR: the club's defenders' pressures summed / games in the window — a throw two men pressured counts twice here (a week behind)", f: (v) => fix(v, 1), grp: "pd" },
+  { k: "blitzPct", h: headerOf("blitzPct"), t: "FTN: dropbacks faced with 1+ blitzers / dropbacks faced charted", f: (v) => P(v, 0), grp: "pd" },
+  { k: "epaCar", h: headerOf("epaCar"), t: "EPA per designed run allowed (lower is better)", f: (v) => signed(v, 3), grp: "rd" },
+  { k: "ypc", h: headerOf("ypc"), t: "Yards per designed run allowed (lower is better)", f: (v) => fix(v, 1), grp: "rd" },
 ];
 const GROUPS = [["ov", "Overall"], ["pd", "Pass defense"], ["rd", "Run defense"]];
 DEF_COLS.forEach((c, i) => { c.gs = i === 0 || DEF_COLS[i - 1].grp !== c.grp; });
@@ -56,7 +57,7 @@ function defSpark(series) {
     }).join("") + `</svg>`;
 }
 
-// Two pressure figures, no conflict (Adam's pairing, 2026-09-24, D178): Press % is the QB side, one pressure per
+// Two pressure figures, no conflict (Adam's pairing, 2026-09-24, D178): Pressure % is the QB side, one pressure per
 // throw at most; Pressures/g is the defenders' own sum per game, so a throw two men pressured counts twice there.
 export const pressPctTip = (D) => `Opposing quarterbacks' PFR pressures / their dropbacks against this defense, one pressure per throw at most, over ${D.pfrWeeks} week${D.pfrWeeks === 1 ? "" : "s"}.`;
 export const pressGTip = (D) => `The club's defenders' PFR pressures summed / games in the window, over ${D.pfrWeeksDef} week${D.pfrWeeksDef === 1 ? "" : "s"} — a throw two men pressured counts twice here.`;
@@ -68,9 +69,9 @@ function detailHtml(r, st, q, ref, wn, lgZones, players) {
   const maxDb = Math.max(45, ...r.series.def.map((s) => s.db || 0));
   const maxRuns = Math.max(25, ...r.series.def.map((s) => s.runs || 0));
   const strips = [
-    { k: "epaPlay", label: "EPA/play allowed", signed: true, span: 0.4, fmt: (v) => signed(v, 3), short: (v) => signed(v, 2).replace(/^([+−])0/, "$1"), total: D.epaPlay, totalText: `${wn} ${isNum(D.epaPlay) ? signed(D.epaPlay, 3) : "–"}`, avg: L.epaPlay, avgText: `lg ${isNum(L.epaPlay) ? signed(L.epaPlay, 3) : "–"}`, tier: (v) => teamTier("def", "epaPlay", v, ref.cuts) },
-    { k: "epaDb", label: "EPA/dropback allowed", signed: true, span: 0.6, fmt: (v) => signed(v, 3), short: (v) => signed(v, 2).replace(/^([+−])0/, "$1"), total: D.epaDb, totalText: `${wn} ${isNum(D.epaDb) ? signed(D.epaDb, 3) : "–"}`, avg: L.epaDb, avgText: `lg ${isNum(L.epaDb) ? signed(L.epaDb, 3) : "–"}`, tier: (v) => teamTier("def", "epaDb", v, ref.cuts) },
-    { k: "epaCar", label: "EPA/carry allowed", signed: true, span: 0.6, fmt: (v) => signed(v, 3), short: (v) => signed(v, 2).replace(/^([+−])0/, "$1"), total: D.epaCar, totalText: `${wn} ${isNum(D.epaCar) ? signed(D.epaCar, 3) : "–"}`, avg: L.epaCar, avgText: `lg ${isNum(L.epaCar) ? signed(L.epaCar, 3) : "–"}`, tier: (v) => teamTier("def", "epaCar", v, ref.cuts) },
+    { k: "epaPlay", label: nameOf("epaPlay", "allowed"), signed: true, span: 0.4, fmt: (v) => signed(v, 3), short: (v) => signed(v, 2).replace(/^([+−])0/, "$1"), total: D.epaPlay, totalText: `${wn} ${isNum(D.epaPlay) ? signed(D.epaPlay, 3) : "–"}`, avg: L.epaPlay, avgText: `lg ${isNum(L.epaPlay) ? signed(L.epaPlay, 3) : "–"}`, tier: (v) => teamTier("def", "epaPlay", v, ref.cuts) },
+    { k: "epaDb", label: nameOf("epaDb", "allowed"), signed: true, span: 0.6, fmt: (v) => signed(v, 3), short: (v) => signed(v, 2).replace(/^([+−])0/, "$1"), total: D.epaDb, totalText: `${wn} ${isNum(D.epaDb) ? signed(D.epaDb, 3) : "–"}`, avg: L.epaDb, avgText: `lg ${isNum(L.epaDb) ? signed(L.epaDb, 3) : "–"}`, tier: (v) => teamTier("def", "epaDb", v, ref.cuts) },
+    { k: "epaCar", label: nameOf("epaCar", "allowed"), signed: true, span: 0.6, fmt: (v) => signed(v, 3), short: (v) => signed(v, 2).replace(/^([+−])0/, "$1"), total: D.epaCar, totalText: `${wn} ${isNum(D.epaCar) ? signed(D.epaCar, 3) : "–"}`, avg: L.epaCar, avgText: `lg ${isNum(L.epaCar) ? signed(L.epaCar, 3) : "–"}`, tier: (v) => teamTier("def", "epaCar", v, ref.cuts) },
     { k: "db", label: "Dropbacks faced", signed: false, span: maxDb * 1.05, fmt: (v) => `${v} dropbacks`, short: (v) => String(v), total: D.db, totalText: `${wn} ${D.db}`, avg: L.dbG, avgText: `lg ${isNum(L.dbG) ? L.dbG.toFixed(1) : "–"}/g` },
     { k: "runs", label: "Runs faced", signed: false, span: maxRuns * 1.05, fmt: (v) => `${v} runs`, short: (v) => String(v), total: D.runs, totalText: `${wn} ${D.runs}`, avg: L.runsG, avgText: `lg ${isNum(L.runsG) ? L.runsG.toFixed(1) : "–"}/g` },
   ];
@@ -86,17 +87,17 @@ function detailHtml(r, st, q, ref, wn, lgZones, players) {
       <div data-zones>${zoneBlock(zones, st, players, q)}</div></div>
     <div class="an-dcol an-def-rush">
       <div class="an-dblk"><div class="an-dh">Pass rush</div><div class="an-dtiles">
-        ${tile("Sack %", PP(D.sackPct), "sackPct", PP(L.sackPct), "Sacks / dropbacks faced")}
-        ${tile("Press %", PP(D.pressPct), "pressPct", PP(L.pressPct), pressPctTip(D))}
-        ${tile("Press/g", isNum(D.pressuresG) ? D.pressuresG.toFixed(1) : NA, "pressuresG", isNum(L.pressuresG) ? L.pressuresG.toFixed(1) : NA, pressGTip(D))}
-        ${tile("Blitz %", PP(D.blitzPct, 0), "", PP(L.blitzPct, 0), "FTN: 1+ blitzers")}
-        ${tile("Expl %", PP(D.explPct), "explPct", PP(L.explPct), "Runs of 10+ and completions of 20+ allowed / plays faced")}
+        ${tile(nameOf("sackPct"), PP(D.sackPct), "sackPct", PP(L.sackPct), "Sacks / dropbacks faced")}
+        ${tile(nameOf("pressPct"), PP(D.pressPct), "pressPct", PP(L.pressPct), pressPctTip(D))}
+        ${tile(nameOf("pressuresG"), isNum(D.pressuresG) ? D.pressuresG.toFixed(1) : NA, "pressuresG", isNum(L.pressuresG) ? L.pressuresG.toFixed(1) : NA, pressGTip(D))}
+        ${tile(nameOf("blitzPct"), PP(D.blitzPct, 0), "", PP(L.blitzPct, 0), "FTN: 1+ blitzers")}
+        ${tile(nameOf("explPct"), PP(D.explPct), "explPct", PP(L.explPct), "Runs of 10+ and completions of 20+ allowed / plays faced")}
       </div></div>
       <div class="an-dblk"><div class="an-dh">Run defense</div><div class="an-dtiles">
-        ${tile("EPA/car", signed(D.epaCar, 3), "epaCar", signed(L.epaCar, 3), "EPA per designed run allowed")}
-        ${tile("YPC", isNum(D.ypc) ? D.ypc.toFixed(1) : NA, "ypc", isNum(L.ypc) ? L.ypc.toFixed(1) : NA, "Yards per designed run allowed")}
-        ${tile("Run succ %", PP(D.runSuccPct), "runSuccPct", PP(L.runSuccPct), "Share of designed runs faced that were successful for the offense")}
-        ${tile("Expl run %", PP(D.runExplPct), "runExplPct", PP(L.runExplPct), "Designed runs of 10+ yards allowed / designed runs faced")}
+        ${tile(nameOf("epaCar"), signed(D.epaCar, 3), "epaCar", signed(L.epaCar, 3), "EPA per designed run allowed")}
+        ${tile(nameOf("ypc"), isNum(D.ypc) ? D.ypc.toFixed(1) : NA, "ypc", isNum(L.ypc) ? L.ypc.toFixed(1) : NA, "Yards per designed run allowed")}
+        ${tile(nameOf("runSuccPct"), PP(D.runSuccPct), "runSuccPct", PP(L.runSuccPct), "Share of designed runs faced that were successful for the offense")}
+        ${tile(nameOf("runExplPct"), PP(D.runExplPct), "runExplPct", PP(L.runExplPct), "Designed runs of 10+ yards allowed / designed runs faced")}
       </div></div>
       <div class="an-dlinks"><a href="#/team/${encodeURIComponent(r.team)}${q ? "?" + q : ""}">Offense →</a><a href="#/team/${encodeURIComponent(r.team)}/defense${q ? "?" + q : ""}">Defense page →</a><a href="#/grid${q ? "?" + q : ""}">Grid →</a><a href="../#/team/${encodeURIComponent(r.team)}">Depth chart →</a></div>
     </div></div>`;

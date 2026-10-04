@@ -11,6 +11,7 @@
 // A club with no value is null everywhere (value, rating, rank, n) and is not counted in anyone's mean, deviation,
 // rank or n.
 import { OFF_TIER, DEF_TIER } from "./agg_team.js";
+import { nameOf } from "./names.js";
 
 // Frozen all the way down (the table is shared by every page that draws the grid).
 const deepFreeze = (o) => { if (o && typeof o === "object" && !Object.isFrozen(o)) { Object.values(o).forEach(deepFreeze); Object.freeze(o); } return o; };
@@ -36,42 +37,42 @@ export const GRID_CATEGORIES = deepFreeze([
   {
     key: "overall", label: "Overall", offLabel: "Overall", defLabel: "Overall", source: PBP,
     note: "Expected points added per play (pass attempts, sacks, scrambles and designed runs).",
-    off: [fig("off", "epaPlay", "EPA/play", 3, { signed: true, lead: true, source: PBP })],
-    def: [fig("def", "epaPlay", "EPA/play allowed", 3, { signed: true, lead: true, source: PBP })],
+    off: [fig("off", "epaPlay", nameOf("epaPlay"), 3, { signed: true, lead: true, source: PBP })],
+    def: [fig("def", "epaPlay", nameOf("epaPlay", "allowed"), 3, { signed: true, lead: true, source: PBP })],
   },
   {
     key: "passEff", label: "Pass efficiency", offLabel: "Pass efficiency", defLabel: "Pass defense", source: PBP,
     note: "EPA per dropback (sacks and scrambles included).",
-    off: [fig("off", "epaDb", "EPA/dropback", 3, { signed: true, lead: true, source: PBP })],
-    def: [fig("def", "epaDb", "EPA/dropback allowed", 3, { signed: true, lead: true, source: PBP })],
+    off: [fig("off", "epaDb", nameOf("epaDb"), 3, { signed: true, lead: true, source: PBP })],
+    def: [fig("def", "epaDb", nameOf("epaDb", "allowed"), 3, { signed: true, lead: true, source: PBP })],
   },
   {
     key: "runEff", label: "Run efficiency", offLabel: "Run game", defLabel: "Run defense", source: PBP,
     note: "Production first (Adam, 2026-09-25): rushing yards per game on designed runs leads; yards per carry and EPA per designed run beside it. Scrambles are not designed runs.",
     off: [
-      fig("off", "rushYdsG", "Rush yds/g", 1, { lead: true, source: PBP }),
-      fig("off", "ypc", "YPC", 1, { source: PBP }),
-      fig("off", "epaCar", "EPA/carry", 3, { signed: true, source: PBP }),
+      fig("off", "rushYdsG", nameOf("rushYdsG"), 1, { lead: true, source: PBP }),
+      fig("off", "ypc", nameOf("ypc"), 1, { source: PBP }),
+      fig("off", "epaCar", nameOf("epaCar"), 3, { signed: true, source: PBP }),
     ],
     def: [
-      fig("def", "rushYdsG", "Rush yds/g allowed", 1, { lead: true, source: PBP }),
-      fig("def", "ypc", "YPC allowed", 1, { source: PBP }),
-      fig("def", "epaCar", "EPA/carry allowed", 3, { signed: true, source: PBP }),
+      fig("def", "rushYdsG", nameOf("rushYdsG", "allowed"), 1, { lead: true, source: PBP }),
+      fig("def", "ypc", nameOf("ypc", "allowed"), 1, { source: PBP }),
+      fig("def", "epaCar", nameOf("epaCar", "allowed"), 3, { signed: true, source: PBP }),
     ],
   },
   {
     key: "passPro", label: "Pass protection vs pass rush", offLabel: "Pass protection", defLabel: "Pass rush",
-    source: `pressure % and hits %: ${PFR_PASS}; sack %: ${PBP}`,
+    source: `pressure % and hit %: ${PFR_PASS}; sack %: ${PBP}`,
     note: "Ranks on pressure % (share of dropbacks with any pressure, the quarterbacks' own PFR counts, one per throw); sack % and QB hits per dropback beside it. Pressure over sacks because sacks depend on how long the quarterback holds the ball. The offense side is a proxy for the line: the quarterback, backs and tight ends share the blame.",
     off: [
-      fig("off", "pressPctAllowed", "Pressure % allowed", 1, { pct: true, lead: true, proxy: true, source: PFR_PASS }),
-      fig("off", "sackPct", "Sack % allowed", 1, { pct: true, proxy: true, source: PBP }),
-      fig("off", "hitPctAllowed", "Hits % allowed", 1, { pct: true, proxy: true, source: PFR_PASS }),
+      fig("off", "pressPctAllowed", nameOf("pressPctAllowed", "allowed"), 1, { pct: true, lead: true, proxy: true, source: PFR_PASS }),
+      fig("off", "sackPct", nameOf("sackPct", "allowed"), 1, { pct: true, proxy: true, source: PBP }),
+      fig("off", "hitPctAllowed", nameOf("hitPctAllowed", "allowed"), 1, { pct: true, proxy: true, source: PFR_PASS }),
     ],
     def: [
-      fig("def", "pressPctAllowed", "Pressure %", 1, { pct: true, lead: true, source: PFR_PASS }),
-      fig("def", "sackPct", "Sack %", 1, { pct: true, source: PBP }),
-      fig("def", "hitPctAllowed", "Hits %", 1, { pct: true, source: PFR_PASS }),
+      fig("def", "pressPctAllowed", nameOf("pressPctAllowed"), 1, { pct: true, lead: true, source: PFR_PASS }),
+      fig("def", "sackPct", nameOf("sackPct"), 1, { pct: true, source: PBP }),
+      fig("def", "hitPctAllowed", nameOf("hitPctAllowed"), 1, { pct: true, source: PFR_PASS }),
     ],
   },
   {
@@ -79,12 +80,12 @@ export const GRID_CATEGORIES = deepFreeze([
     source: `yards before contact: ${PFR_RUSH}; stuffed %: ${PBP}`,
     note: "Offense: yards before contact per carry leads (the only free figure for the space before the back is touched; quarterbacks left out, since PFR's carries include their scrambles and kneels); stuffed % (designed runs for 0 or less) beside it as the footnote figure. The offense side is a proxy for the line: the back's vision is in it. Defense: stuffed % forced leads (play-by-play, no lag), yards before contact allowed beside it.",
     off: [
-      fig("off", "ybcCar", "YBC/carry", 2, { lead: true, proxy: true, source: PFR_RUSH }),
-      fig("off", "stuffPct", "Stuffed %", 1, { pct: true, proxy: true, source: PBP }),
+      fig("off", "ybcCar", nameOf("ybcCar"), 2, { lead: true, proxy: true, source: PFR_RUSH }),
+      fig("off", "stuffPct", nameOf("stuffPct"), 1, { pct: true, proxy: true, source: PBP }),
     ],
     def: [
-      fig("def", "stuffPct", "Stuffed % forced", 1, { pct: true, lead: true, source: PBP }),
-      fig("def", "ybcCar", "YBC/carry allowed", 2, { source: PFR_RUSH }),
+      fig("def", "stuffPct", nameOf("stuffPct", "forced"), 1, { pct: true, lead: true, source: PBP }),
+      fig("def", "ybcCar", nameOf("ybcCar", "allowed"), 2, { source: PFR_RUSH }),
     ],
   },
   {
@@ -92,16 +93,16 @@ export const GRID_CATEGORIES = deepFreeze([
     note: "Defense only: passer rating allowed on throws at the club's cornerbacks and safeties, computed from PFR's coverage counts (completions, targets as attempts, yards, TDs, interceptions); yards per coverage target and completion % allowed beside it.",
     off: null,
     def: [
-      fig("def", "covRating", "Rating allowed", 1, { lead: true, source: PFR_COV }),
-      fig("def", "covYdsTgt", "Yds/target", 1, { source: PFR_COV }),
-      fig("def", "covCmpPct", "Cmp % allowed", 1, { pct: true, source: PFR_COV }),
+      fig("def", "covRating", nameOf("covRating"), 1, { lead: true, source: PFR_COV }),
+      fig("def", "covYdsTgt", nameOf("covYdsTgt"), 1, { source: PFR_COV }),
+      fig("def", "covCmpPct", nameOf("covCmpPct", "allowed"), 1, { pct: true, source: PFR_COV }),
     ],
   },
   {
     key: "explosive", label: "Explosive plays", offLabel: "Explosive plays", defLabel: "Explosive plays allowed", source: PBP,
     note: "Plays gaining 10+ yards on the ground or 20+ on a completed pass, over plays.",
-    off: [fig("off", "explPct", "Explosive %", 1, { pct: true, lead: true, source: PBP })],
-    def: [fig("def", "explPct", "Explosive % allowed", 1, { pct: true, lead: true, source: PBP })],
+    off: [fig("off", "explPct", nameOf("explPct"), 1, { pct: true, lead: true, source: PBP })],
+    def: [fig("def", "explPct", nameOf("explPct", "allowed"), 1, { pct: true, lead: true, source: PBP })],
   },
 ]);
 

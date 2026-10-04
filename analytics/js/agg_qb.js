@@ -3,8 +3,9 @@
 //   play-by-play (nflverse): dropbacks, attempts, completions, yards, TD, INT, air yards (aDOT), EPA, success,
 //     CPOE, sacks, scrambles and designed runs, zones (D179 lines);
 //   FTN charting (on the play rows): play action, screens, blitz % (1+ blitzers) and the blitz split;
-//   PFR advanced stats (pfr.pass, per QB per week, about a week behind the games): pressure % only (its job:
-//     pressures, hurries, hits, sacks; blitz belongs to FTN, the lead's ruling of 2026-09-24 under D178);
+//   PFR advanced stats (pfr.pass, per QB per week, about a week behind the games): pressure % (its job: pressures,
+//     hurries, hits, sacks; blitz belongs to FTN, the lead's ruling of 2026-09-24 under D178) and his receivers'
+//     drops (dropPer100, below);
 //   Next Gen Stats (ngs.passing, tracking only): time to throw, expected completion %.
 //
 // Definitions:
@@ -17,7 +18,9 @@
 //   EPA/db       = EPA summed over dropbacks / dropbacks with an EPA; Success % likewise.
 //   CPOE         = the mean of the play-by-play cpoe over attempts that carry one.
 //   Sack %       = sacks / dropbacks. PA % = play-action dropbacks / dropbacks FTN charted (pa not null).
-//   Pressure %   = PFR pressures / PFR dropbacks over the weeks PFR lists him (weighted, never a mean of weekly %).
+//   Pressure %   = PFR pressures / his play-by-play dropbacks, both over the weeks PFR lists him (weighted, never a
+//                  mean of weekly %; D231: PFR's derived dropbacks are null for a never-pressured week). pfrDb is
+//                  that denominator. Null under a down or quarter filter (PFR charts the whole game).
 //   TTT, xComp % = NGS weekly figures weighted by his dropbacks (TTT) or attempts (xComp) that week.
 //   Rushing      = designed runs (type run, he is the rusher) + scrambles: carries, yards, TD, EPA; per game over
 //                  his games; scramble rate = scrambles / dropbacks.
@@ -204,12 +207,17 @@ export function aggregateQb(blocks, players, st, opts = {}) {
     for (const [id, p] of Object.entries(b.pfr?.pass || {})) {
       const gk = acc.get(id)?.keyGk.get(b.key);
       if (!gk) continue;
-      const a = acc.get(id), db = num(p.dropbacks);
+      const a = acc.get(id);
       // Re-cut: his receivers' drops over his attempts that week (its own condition; the pressure rule below is unchanged).
       const dr = num(p.drops);
       if (dr !== null && !situational) { a.pfrDrops += dr; a.pfrDropAtt += a.wk.get(b.key)?.att || 0; a.pfrDropWeeks++; }
-      if (db === null || db <= 0) continue;
-      a.pfrDb += db; a.pfrPress += num(p.pressures) ?? 0; a.pfrKeys.add(b.key);
+      // D231: his PFR pressures over HIS play-by-play dropbacks that week (the Sack % dropbacks). A never-pressured
+      // week (pressures 0, so the compile's derived dropbacks are null) counts; only an uncharted row (pressures null)
+      // is skipped. Under a down or quarter filter his dropbacks are a slice of the game PFR charted whole, so no
+      // pressure figure (the drops rule above).
+      const pr = num(p.pressures);
+      if (pr === null || situational) continue;
+      a.pfrDb += a.wk.get(b.key)?.db || 0; a.pfrPress += pr; a.pfrKeys.add(b.key);
     }
     // Re-cut snapPct: the snap table, his club's window game that week (the Usage page's rule).
     if (!situational) for (const [id, s] of Object.entries(b.snaps || {})) {

@@ -166,6 +166,13 @@
 /* The name cell is as wide as the longest name in the filter; cap it so a long name cannot push the open table past the
    column (🔵 on 7b); the link carries the full name in its title. */
 .an-usage .an-table .an-pname, .an-rush .an-table .an-pname { display:inline-block; max-width:170px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; vertical-align:bottom; }
+/* D230: the involved-vs-producing marker right after the name (agg_signal.js). A quiet cue, not a badge: small, softened,
+   the tier tokens (elite teal-green ▲ used more than scored, weak amber ▼ scoring beyond his usage), 2px after the name
+   and 3px before the team pill; the pills keep the 6px spacing of every other row. Negative margins hold the marker's
+   footprint to about 6px, so the column can grow by that much only when its widest row is a marked one. */
+.an-sig { flex:none; font-size:8px; line-height:1; margin:0 -3px 0 -4px; position:relative; top:3px; opacity:.8; cursor:help; } /* top: sits on the name's baseline */
+.an-sig-up { color:var(--tier-elite); }
+.an-sig-down { color:var(--tier-weak); }
 .an-table .an-anc.gs { border-left-color:#1d232a; }
 /* The More / Less toggle in the group-header row, over the sparkline column. */
 .an-table thead tr.an-grp th.an-more-cell { text-align:right; padding:3px 6px 2px; }

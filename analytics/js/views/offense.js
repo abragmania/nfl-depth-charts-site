@@ -15,6 +15,7 @@ import { renderFilterBar } from "../filterbar.js";
 import { esc, NA, isNum, pct, fix, signed, teamPill, qbStrips, pfrNote, seasonLabel } from "./qb.js";
 import { windowName } from "./qbplayer.js";
 import { moreFrom, visibleCols, allOpen, toggleMore, moreCell, fitOpen, wireMore } from "../table.js";
+import { nameOf, headerOf } from "../names.js";
 import { teamPageState, clubZoneField, clubZoneLegend, zonePlaysHtml, TEAM_ZONE_MODES } from "./team.js";
 
 const P = (v, d = 1) => (isNum(v) ? pct(v, d) : NA);
@@ -22,32 +23,32 @@ const P = (v, d = 1) => (isNum(v) ? pct(v, d) : NA);
 // rest split into passing and rushing. Higher is better throughout offense, the mirror of defense.js's "allowed".
 const EPA_BAR_SPAN = 0.4;
 export const OFF_COLS = [
-  { k: "epaPlay", h: "EPA/play", t: "EPA per play (higher is better)", f: (v) => signed(v, 3), grp: "ov", bar: EPA_BAR_SPAN, signed: true },
-  { k: "succPct", h: "Succ %", t: "Share of plays that were successful (higher is better)", f: (v) => P(v, 1), grp: "ov" },
-  { k: "explPct", h: "Expl %", t: "Explosive plays: runs of 10+ yards and completions of 20+ / plays (higher is better)", f: (v) => P(v, 1), grp: "ov" },
-  { k: "playsG", h: "Plays/g", t: "Plays per game: pass attempts, sacks, scrambles and designed runs", f: (v) => fix(v, 1), grp: "ov" },
-  { k: "passRate", h: "Pass %", t: "Dropbacks / plays, all situations (the neutral-script figure is Neutral PROE, under Passing)", f: (v) => P(v, 1), grp: "ov" },
-  { k: "epaDb", h: "EPA/db", t: "EPA per dropback (sacks and scrambles included; higher is better)", f: (v) => signed(v, 3), grp: "pd" },
-  { k: "cmpPct", h: "Cmp %", t: "Completion % (higher is better)", f: (v) => P(v, 1), grp: "pd" },
-  { k: "adot", h: "aDOT", t: "Air yards per attempt", f: (v) => fix(v, 1), grp: "pd" },
-  { k: "sackPct", h: "Sack %", t: "Sacks / dropbacks (lower is better)", f: (v) => P(v, 1), grp: "pd" },
-  { k: "pressPct", h: "Press %", t: "PFR: the club's quarterbacks' pressured dropbacks / their dropbacks, about a week behind (lower is better)", f: (v) => P(v, 1), grp: "pd" },
-  { k: "paPct", h: "PA %", t: "FTN: play-action dropbacks / dropbacks charted", f: (v) => P(v, 0), grp: "pd" },
+  { k: "epaPlay", h: headerOf("epaPlay"), t: "EPA per play (higher is better)", f: (v) => signed(v, 3), grp: "ov", bar: EPA_BAR_SPAN, signed: true },
+  { k: "succPct", h: headerOf("succPct"), t: "Share of plays that were successful (higher is better)", f: (v) => P(v, 1), grp: "ov" },
+  { k: "explPct", h: headerOf("explPct"), t: "Explosive plays: runs of 10+ yards and completions of 20+ / plays (higher is better)", f: (v) => P(v, 1), grp: "ov" },
+  { k: "playsG", h: headerOf("playsG"), t: "Plays per game: pass attempts, sacks, scrambles and designed runs", f: (v) => fix(v, 1), grp: "ov" },
+  { k: "passRate", h: headerOf("passRate"), t: "Dropbacks / plays, all situations (the neutral-script figure is Neutral PROE, under Passing)", f: (v) => P(v, 1), grp: "ov" },
+  { k: "epaDb", h: headerOf("epaDb"), t: "EPA per dropback (sacks and scrambles included; higher is better)", f: (v) => signed(v, 3), grp: "pd" },
+  { k: "cmpPct", h: headerOf("cmpPct"), t: "Completion % (higher is better)", f: (v) => P(v, 1), grp: "pd" },
+  { k: "adot", h: headerOf("adot"), t: "Air yards per attempt", f: (v) => fix(v, 1), grp: "pd" },
+  { k: "sackPct", h: headerOf("sackPct"), t: "Sacks / dropbacks (lower is better)", f: (v) => P(v, 1), grp: "pd" },
+  { k: "pressPct", h: headerOf("pressPct"), t: "PFR: the club's quarterbacks' pressured dropbacks / their dropbacks, about a week behind (lower is better)", f: (v) => P(v, 1), grp: "pd" },
+  { k: "paPct", h: headerOf("paPct"), t: "FTN: play-action dropbacks / dropbacks charted", f: (v) => P(v, 0), grp: "pd" },
   // D219 figure 1: pass rate over expectation, in percentage points; style, not quality, so uncoloured (not in OFF_TIER).
   { k: "proe", h: "PROE", t: "Pass rate over expectation: the dropback rate minus the expected pass rate (nflverse xpass) on the same plays, in percentage points, over the plays with an expectation. Style, not quality: not coloured. 1st = most pass-happy over expectation.", f: (v) => signed(v, 1), grp: "pd" },
   { k: "proeNeutral", h: "Neutral PROE", t: "Pass rate over expectation in neutral script (score within 7, quarters 1-3): the dropback rate minus the expected pass rate (nflverse xpass) on the same plays, in percentage points. Style, not quality: not coloured. 1st = most pass-happy over expectation.", f: (v) => signed(v, 1), grp: "pd" },
-  { k: "epaCar", h: "EPA/car", t: "EPA per designed run (higher is better)", f: (v) => signed(v, 3), grp: "rd" },
-  { k: "ypc", h: "YPC", t: "Yards per designed run (higher is better)", f: (v) => fix(v, 1), grp: "rd" },
-  { k: "rushYdsG", h: "Yds/g", t: "Rushing yards per game (designed runs)", f: (v) => fix(v, 1), grp: "rd" },
-  { k: "stuffPct", h: "Stuff %", t: "Designed runs gaining 0 or less / designed runs (lower is better)", f: (v) => P(v, 1), grp: "rd" },
-  { k: "ybcCar", h: "YBC/car", t: "PFR: yards before contact per carry (higher is better)", f: (v) => fix(v, 1), grp: "rd" },
+  { k: "epaCar", h: headerOf("epaCar"), t: "EPA per designed run (higher is better)", f: (v) => signed(v, 3), grp: "rd" },
+  { k: "ypc", h: headerOf("ypc"), t: "Yards per designed run (higher is better)", f: (v) => fix(v, 1), grp: "rd" },
+  { k: "rushYdsG", h: headerOf("rushYdsG", { inGroup: true }), t: "Rushing yards per game (designed runs)", f: (v) => fix(v, 1), grp: "rd" },
+  { k: "stuffPct", h: headerOf("stuffPct"), t: "Designed runs gaining 0 or less / designed runs (lower is better)", f: (v) => P(v, 1), grp: "rd" },
+  { k: "ybcCar", h: headerOf("ybcCar"), t: "PFR: yards before contact per carry (higher is better)", f: (v) => fix(v, 1), grp: "rd" },
   // D219 figure 7: a Drives group on the end (nothing before it moves), tiered higher-is-better (OFF_TIER).
-  { k: "ptsDrive", h: "Pts/dr", t: "Points per drive: the points the offense actually scored on its own snaps (a touchdown 6 plus the try, a field goal 3) / its drives, kneel-only drives left out (higher is better)", f: (v) => fix(v, 2), grp: "dr" },
-  { k: "rzTdPct", h: "RZ TD %", t: "Red-zone touchdown rate: drives that reached the opponent's 20 and ended in a touchdown / drives that reached it (a field goal is a trip, not a touchdown; higher is better)", f: (v) => P(v, 1), grp: "dr" },
-  { k: "thirdPct", h: "3rd %", t: "Third-down conversion: third-down plays that gained a first down or scored / third-down plays, pass-interference plays left out; a first down a foul gave counts; reads a little under NFL.com's because penalty no-plays are not in the rows (higher is better)", f: (v) => P(v, 1), grp: "dr" },
+  { k: "ptsDrive", h: headerOf("ptsDrive"), t: "Points per drive: the points the offense actually scored on its own snaps (a touchdown 6 plus the try, a field goal 3) / its drives, kneel-only drives left out (higher is better)", f: (v) => fix(v, 2), grp: "dr" },
+  { k: "rzTdPct", h: headerOf("rzTdPct"), t: "Red-zone touchdown rate: drives that reached the opponent's 20 and ended in a touchdown / drives that reached it (a field goal is a trip, not a touchdown; higher is better)", f: (v) => P(v, 1), grp: "dr" },
+  { k: "thirdPct", h: headerOf("thirdPct"), t: "Third-down conversion: third-down plays that gained a first down or scored / third-down plays, pass-interference plays left out; a first down a foul gave counts; reads a little under NFL.com's because penalty no-plays are not in the rows (higher is better)", f: (v) => P(v, 1), grp: "dr" },
   // D219 figures 2 and 3: a Pace group on the end (nothing before it moves); style, not quality, so uncoloured (not in
   // OFF_TIER). Seconds per play sorts fastest first (RANK_LOW_FIRST), the rest most first.
-  { k: "neutralSecs", h: "Sec/play", t: "Seconds per play in neutral script (score within 7, quarters 1-3): the mean time from a snap to the offense's next snap in the same drive. Pace, not quality: not coloured. Fastest first.", f: (v) => fix(v, 1), grp: "pc" },
+  { k: "neutralSecs", h: headerOf("neutralSecs"), t: "Seconds per play in neutral script (score within 7, quarters 1-3): the mean time from a snap to the offense's next snap in the same drive. Pace, not quality: not coloured. Fastest first.", f: (v) => fix(v, 1), grp: "pc" },
   { k: "noHuddlePct", h: "No-huddle %", t: "No-huddle plays / plays, the play-by-play's flag. Style, not quality: not coloured.", f: (v) => P(v, 1), grp: "pc" },
   { k: "shotgunPct", h: "Shotgun %", t: "Shotgun plays / plays, the play-by-play's flag with pistol counted as shotgun (FTN's charting disagrees on a small share; the audit logs them). Style, not quality: not coloured.", f: (v) => P(v, 1), grp: "pc" },
   { k: "motionPct", h: "Motion %", t: "FTN: plays with pre-snap motion / plays charted. Style, not quality: not coloured.", f: (v) => P(v, 1), grp: "pc" },
@@ -96,9 +97,9 @@ function detailHtml(r, st, q, ref, wn, lgZones, players) {
   const maxDb = Math.max(45, ...r.series.off.map((s) => s.db || 0));
   const maxRuns = Math.max(25, ...r.series.off.map((s) => s.runs || 0));
   const strips = [
-    { k: "epaPlay", label: "EPA/play", signed: true, span: 0.4, fmt: (v) => signed(v, 3), short: (v) => signed(v, 2).replace(/^([+−])0/, "$1"), total: O.epaPlay, totalText: `${wn} ${isNum(O.epaPlay) ? signed(O.epaPlay, 3) : "–"}`, avg: L.epaPlay, avgText: `lg ${isNum(L.epaPlay) ? signed(L.epaPlay, 3) : "–"}`, tier: (v) => teamTier("off", "epaPlay", v, ref.cuts) },
-    { k: "epaDb", label: "EPA/dropback", signed: true, span: 0.6, fmt: (v) => signed(v, 3), short: (v) => signed(v, 2).replace(/^([+−])0/, "$1"), total: O.epaDb, totalText: `${wn} ${isNum(O.epaDb) ? signed(O.epaDb, 3) : "–"}`, avg: L.epaDb, avgText: `lg ${isNum(L.epaDb) ? signed(L.epaDb, 3) : "–"}`, tier: (v) => teamTier("off", "epaDb", v, ref.cuts) },
-    { k: "epaCar", label: "EPA/carry", signed: true, span: 0.6, fmt: (v) => signed(v, 3), short: (v) => signed(v, 2).replace(/^([+−])0/, "$1"), total: O.epaCar, totalText: `${wn} ${isNum(O.epaCar) ? signed(O.epaCar, 3) : "–"}`, avg: L.epaCar, avgText: `lg ${isNum(L.epaCar) ? signed(L.epaCar, 3) : "–"}`, tier: (v) => teamTier("off", "epaCar", v, ref.cuts) },
+    { k: "epaPlay", label: nameOf("epaPlay"), signed: true, span: 0.4, fmt: (v) => signed(v, 3), short: (v) => signed(v, 2).replace(/^([+−])0/, "$1"), total: O.epaPlay, totalText: `${wn} ${isNum(O.epaPlay) ? signed(O.epaPlay, 3) : "–"}`, avg: L.epaPlay, avgText: `lg ${isNum(L.epaPlay) ? signed(L.epaPlay, 3) : "–"}`, tier: (v) => teamTier("off", "epaPlay", v, ref.cuts) },
+    { k: "epaDb", label: nameOf("epaDb"), signed: true, span: 0.6, fmt: (v) => signed(v, 3), short: (v) => signed(v, 2).replace(/^([+−])0/, "$1"), total: O.epaDb, totalText: `${wn} ${isNum(O.epaDb) ? signed(O.epaDb, 3) : "–"}`, avg: L.epaDb, avgText: `lg ${isNum(L.epaDb) ? signed(L.epaDb, 3) : "–"}`, tier: (v) => teamTier("off", "epaDb", v, ref.cuts) },
+    { k: "epaCar", label: nameOf("epaCar"), signed: true, span: 0.6, fmt: (v) => signed(v, 3), short: (v) => signed(v, 2).replace(/^([+−])0/, "$1"), total: O.epaCar, totalText: `${wn} ${isNum(O.epaCar) ? signed(O.epaCar, 3) : "–"}`, avg: L.epaCar, avgText: `lg ${isNum(L.epaCar) ? signed(L.epaCar, 3) : "–"}`, tier: (v) => teamTier("off", "epaCar", v, ref.cuts) },
     { k: "db", label: "Dropbacks", signed: false, span: maxDb * 1.05, fmt: (v) => `${v} dropbacks`, short: (v) => String(v), total: O.db, totalText: `${wn} ${O.db}`, avg: L.dbG, avgText: `lg ${isNum(L.dbG) ? L.dbG.toFixed(1) : "–"}/g` },
     { k: "runs", label: "Runs", signed: false, span: maxRuns * 1.05, fmt: (v) => `${v} runs`, short: (v) => String(v), total: O.runs, totalText: `${wn} ${O.runs}`, avg: L.runsG, avgText: `lg ${isNum(L.runsG) ? L.runsG.toFixed(1) : "–"}/g` },
   ];
@@ -114,18 +115,18 @@ function detailHtml(r, st, q, ref, wn, lgZones, players) {
       <div data-zones>${zoneBlock(zones, st, players, q)}</div></div>
     <div class="an-dcol an-def-rush">
       <div class="an-dblk"><div class="an-dh">Passing</div><div class="an-dtiles">
-        ${tile("Sack %", PP(O.sackPct), "sackPct", PP(L.sackPct), "Sacks / dropbacks")}
-        ${tile("Press %", PP(O.pressPct), "pressPct", PP(L.pressPct), "PFR: the club's quarterbacks' pressures / their dropbacks (lower is better)")}
-        ${tile("PA %", PP(O.paPct, 0), "", PP(L.paPct, 0), "FTN: play-action dropbacks / dropbacks charted")}
-        ${tile("aDOT", isNum(O.adot) ? O.adot.toFixed(1) : NA, "", isNum(L.adot) ? L.adot.toFixed(1) : NA, "Air yards per attempt")}
-        ${tile("Expl %", PP(O.explPct), "explPct", PP(L.explPct), "Runs of 10+ and completions of 20+ / plays")}
+        ${tile(nameOf("sackPct"), PP(O.sackPct), "sackPct", PP(L.sackPct), "Sacks / dropbacks")}
+        ${tile(nameOf("pressPct"), PP(O.pressPct), "pressPct", PP(L.pressPct), "PFR: the club's quarterbacks' pressures / their dropbacks (lower is better)")}
+        ${tile(nameOf("paPct"), PP(O.paPct, 0), "", PP(L.paPct, 0), "FTN: play-action dropbacks / dropbacks charted")}
+        ${tile(nameOf("adot"), isNum(O.adot) ? O.adot.toFixed(1) : NA, "", isNum(L.adot) ? L.adot.toFixed(1) : NA, "Air yards per attempt")}
+        ${tile(nameOf("explPct"), PP(O.explPct), "explPct", PP(L.explPct), "Runs of 10+ and completions of 20+ / plays")}
       </div></div>
       <div class="an-dblk"><div class="an-dh">Rushing</div><div class="an-dtiles">
-        ${tile("EPA/car", signed(O.epaCar, 3), "epaCar", signed(L.epaCar, 3), "EPA per designed run")}
-        ${tile("YPC", isNum(O.ypc) ? O.ypc.toFixed(1) : NA, "ypc", isNum(L.ypc) ? L.ypc.toFixed(1) : NA, "Yards per designed run")}
-        ${tile("Run succ %", PP(O.runSuccPct), "runSuccPct", PP(L.runSuccPct), "Share of designed runs that were successful")}
-        ${tile("Expl run %", PP(O.runExplPct), "runExplPct", PP(L.runExplPct), "Designed runs of 10+ yards / designed runs")}
-        ${tile("Stuffed %", PP(O.stuffPct), "stuffPct", PP(L.stuffPct), "Designed runs gaining 0 or less / designed runs (lower is better)")}
+        ${tile(nameOf("epaCar"), signed(O.epaCar, 3), "epaCar", signed(L.epaCar, 3), "EPA per designed run")}
+        ${tile(nameOf("ypc"), isNum(O.ypc) ? O.ypc.toFixed(1) : NA, "ypc", isNum(L.ypc) ? L.ypc.toFixed(1) : NA, "Yards per designed run")}
+        ${tile(nameOf("runSuccPct"), PP(O.runSuccPct), "runSuccPct", PP(L.runSuccPct), "Share of designed runs that were successful")}
+        ${tile(nameOf("runExplPct"), PP(O.runExplPct), "runExplPct", PP(L.runExplPct), "Designed runs of 10+ yards / designed runs")}
+        ${tile(nameOf("stuffPct"), PP(O.stuffPct), "stuffPct", PP(L.stuffPct), "Designed runs gaining 0 or less / designed runs (lower is better)")}
       </div></div>
       <div class="an-dlinks"><a href="#/team/${encodeURIComponent(r.team)}${q ? "?" + q : ""}">Team page →</a><a href="#/team/${encodeURIComponent(r.team)}/defense${q ? "?" + q : ""}">Defense page →</a><a href="#/grid${q ? "?" + q : ""}">Grid →</a><a href="../#/team/${encodeURIComponent(r.team)}">Depth chart →</a></div>
     </div></div>`;

@@ -17,6 +17,7 @@ import { lostCardHtml } from "./lost.js";
 import { lineBlock } from "./kit.js";
 import { RZ_I5_FLOOR } from "../agg_player.js";
 import { depthBarHtml } from "../table.js";
+import { nameOf } from "../names.js";
 
 const P = (v, d = 1) => (isNum(v) ? pct(v, d) + "%" : NA);
 // A missing figure on a kit.js lineBlock tile. lineBlock escapes every value, so the NA placeholder (HTML markup, for
@@ -160,7 +161,7 @@ function paceShapeTiles({ O, L, rankOf, href, plays, side }) {
   };
   const persSub = O.persN > 0 ? of(O.pers11, O.persN, "plays") : O.shotgunN > 0 ? "published after the season" : NONE;
   return [
-    tile("Neutral sec/play", "neutralSecs", sec, O.neutralSecsN > 0 ? plays(O.neutralSecsN) : NONE,
+    tile(nameOf("neutralSecs"), "neutralSecs", sec, O.neutralSecsN > 0 ? plays(O.neutralSecsN) : NONE,
       `Seconds per play${faced} in neutral script (score within 7, quarters 1-3): the mean time from a snap to the offense's next snap in the same drive, over ${plays(O.neutralSecsN)} with a next snap (a drive's last snap and a snap before a quarter break have none). Pace, not quality: not coloured. Ranked fastest first: 1st = the fewest seconds.`),
     tile("Neutral plays/g", "neutralPlaysG", f1, isNum(O.neutralPlaysG) ? `${plays(O.neutralPlays)} in ${O.g ?? 0} game${O.g === 1 ? "" : "s"}` : NONE,
       `Neutral-script plays per game${faced} (score within 7, quarters 1-3): pass attempts, sacks, scrambles and designed runs. Volume, not quality: not coloured. 1st = the most.`),
@@ -197,15 +198,15 @@ export function drivesHtml({ O = {}, L = {}, rows = [], abbr = "", qs = "", side
   const NO_DRIVES = "no drive data in this window's files", NO_THIRD = "no third-down data in this window's files";
   const dSub = (s) => (noDrives ? NO_DRIVES : s);
   const tiles = [
-    tile("Points/drive", "ptsDrive", f2, dSub(n(O.drives, "drive", "drives")),
+    tile(nameOf("ptsDrive"), "ptsDrive", f2, dSub(n(O.drives, "drive", "drives")),
       `Points per drive${faced}: the points the offense actually scored on its own snaps (a touchdown 6 plus the try, a field goal 3, a defensive score against it 0) / its drives, over ${n(O.drives, "drive", "drives")}. Kneel-only drives are left out.`),
     tile("Drives/g", "drivesG", f1, dSub(`${n(O.drives, "drive", "drives")} in ${n(O.driveG, "game", "games")}`),
       `Drives per game${faced}: offensive drives / games, kneel-only drives left out. Volume, not quality: not coloured. 1st = the most drives.`),
     tile("Red-zone trips/g", "rzTripsG", f1, dSub(n(O.rzTrips, "trip", "trips")),
       `Red-zone trips per game${faced}: drives that ran a play from the opponent's 20 or closer / games. Volume, not quality: not coloured. 1st = the most trips.`),
-    tile("Red-zone TD %", "rzTdPct", pc, dSub(`${O.rzTd ?? 0} TD of ${n(O.rzTrips, "trip", "trips")}`),
+    tile(nameOf("rzTdPct"), "rzTdPct", pc, dSub(`${O.rzTd ?? 0} TD of ${n(O.rzTrips, "trip", "trips")}`),
       `Red-zone touchdown rate${faced}: red-zone drives that ended in a touchdown / red-zone drives (a field goal is a trip, not a touchdown), over ${n(O.rzTrips, "trip", "trips")}.`),
-    tile("3rd-down %", "thirdPct", pc, noThird ? NO_THIRD : `${O.thirdConv ?? 0} of ${n(O.third, "3rd down", "3rd downs")}`,
+    tile(nameOf("thirdPct"), "thirdPct", pc, noThird ? NO_THIRD : `${O.thirdConv ?? 0} of ${n(O.third, "3rd down", "3rd downs")}`,
       `Third-down conversion${faced}: third-down plays that gained a first down or scored / third-down plays, over ${n(O.third, "play", "plays")}. Defensive pass-interference plays are left out on both sides; a first down a foul gave the offense counts.`),
   ];
   return lineBlock({
@@ -247,12 +248,12 @@ export function olineBlockHtml({ O = {}, L = {}, rows = [], abbr = "", qs = "", 
       { label: "Run blocking", rating: runBlockCell?.rating ?? null, rank: isNum(runBlockCell?.rank) ? ordinal(runBlockCell.rank) : null, of: runBlockCell ? String(runBlockCell.n) : null, title: "Ranks on yards before contact per carry (PFR); the grid's own rating (50 = league average)" },
     ],
     tiles: [
-      olTile("Pressure % allowed", "pressPctAllowed", `${O.pfrPress ?? 0} pressures`),
-      olTile("Hit % allowed", "hitPctAllowed", `${O.pfrHits ?? 0} hits`),
-      olTile("Hurry % allowed", "hurryPctAllowed", `${O.pfrHurries ?? 0} hurries`),
-      olTile("Sack % allowed", "sackPct", `${O.sacks ?? 0} sacks`),
-      olTile("Stuffed %", "stuffPct", `${O.stuffed ?? 0} stuffed`),
-      olTile("YBC/carry", "ybcCar", `${O.ybcCarries ?? 0} carries`, 2),
+      olTile(nameOf("pressPctAllowed", "allowed"), "pressPctAllowed", `${O.pfrPress ?? 0} pressures`),
+      olTile(nameOf("hitPctAllowed", "allowed"), "hitPctAllowed", `${O.pfrHits ?? 0} hits`),
+      olTile(nameOf("hurryPctAllowed", "allowed"), "hurryPctAllowed", `${O.pfrHurries ?? 0} hurries`),
+      olTile(nameOf("sackPct", "allowed"), "sackPct", `${O.sacks ?? 0} sacks`),
+      olTile(nameOf("stuffPct"), "stuffPct", `${O.stuffed ?? 0} stuffed`),
+      olTile(nameOf("ybcCar"), "ybcCar", `${O.ybcCarries ?? 0} carries`, 2),
     ],
     foot: esc([OLINE_PASS_PROXY, OLINE_RUN_PROXY, pnote].filter(Boolean).join(" ")),
     strip,
@@ -311,8 +312,8 @@ export function lineStripSpec({ k, tk, label, side, T = {}, L = {}, cuts = null,
 export function olineStripHtml({ series = [], O = {}, L = {}, cuts = null, wn = "", season, activeKey = null, hit = true, href = "", pfrThrough = null } = {}) {
   const a = { side: "off", T: O, L, cuts, wn, series };
   return lineStripHtml(series, [
-    lineStripSpec({ ...a, k: "prPct", tk: "pressPctAllowed", label: "Pressure % allowed", floor: 0.3, pfrKey: "pfr" }),
-    lineStripSpec({ ...a, k: "stuffPct", tk: "stuffPct", label: "Stuffed %", floor: 0.15 }),
+    lineStripSpec({ ...a, k: "prPct", tk: "pressPctAllowed", label: nameOf("pressPctAllowed", "allowed"), floor: 0.3, pfrKey: "pfr" }),
+    lineStripSpec({ ...a, k: "stuffPct", tk: "stuffPct", label: nameOf("stuffPct"), floor: 0.15 }),
   ], { season, activeKey, hit, href, pfrThrough });
 }
 
@@ -447,18 +448,18 @@ export async function renderTeam(ctx, params, query) {
     return RANKINGS_OFF_KEYS.has(k) ? `<a class="an-tile-link" href="${rankingsHref("off", k, abbr, qs)}">${body}</a>` : body;
   };
   const tiles = [
-    tile("Plays/g", fix(O.playsG, 1), "playsG", fix(L.playsG, 1), "Plays per game: pass attempts, sacks, scrambles and designed runs (no penalties, kneels or spikes)"),
-    tile("Pass rate", P(O.passRate), "passRate", P(L.passRate), "Dropbacks / plays, all situations (the neutral-script rate and pass rate over expectation are in Play calling below)"),
-    tile("EPA/play", signed(O.epaPlay, 3), "epaPlay", signed(L.epaPlay, 3), "Expected points added per play"),
-    tile("EPA/db", signed(O.epaDb, 3), "epaDb", signed(L.epaDb, 3), "EPA per dropback (sacks and scrambles included)"),
-    tile("EPA/carry", signed(O.epaCar, 3), "epaCar", signed(L.epaCar, 3), "EPA per designed run"),
-    tile("Success %", P(O.succPct, 1), "succPct", P(L.succPct, 1), "Share of plays that were successful (nflverse success)"),
-    tile("aDOT", fix(O.adot, 1), "adot", fix(L.adot, 1), "Air yards per attempt"),
-    tile("Comp %", P(O.cmpPct), "cmpPct", P(L.cmpPct), "Completions / attempts"),
-    tile("Sack %", P(O.sackPct), "sackPct", P(L.sackPct), "Sacks allowed / dropbacks (lower is better)"),
-    tile("Pressure %", P(O.pressPct), "pressPct", P(L.pressPct), `PFR: the club's QBs' pressures / their dropbacks${O.pfrWeeks ? ` over ${O.pfrWeeks} week${O.pfrWeeks === 1 ? "" : "s"}` : ""}${win.pfrThrough ? `, through ${weekLabel(win.pfrThrough, st.season)}` : ""} (lower is better)`),
-    tile("PA %", P(O.paPct), "paPct", P(L.paPct), "FTN: play-action dropbacks / dropbacks charted"),
-    tile("Explosive %", P(O.explPct), "explPct", P(L.explPct), "Runs of 10+ yards and completions of 20+ / plays"),
+    tile(nameOf("playsG"), fix(O.playsG, 1), "playsG", fix(L.playsG, 1), "Plays per game: pass attempts, sacks, scrambles and designed runs (no penalties, kneels or spikes)"),
+    tile(nameOf("passRate"), P(O.passRate), "passRate", P(L.passRate), "Dropbacks / plays, all situations (the neutral-script rate and pass rate over expectation are in Play calling below)"),
+    tile(nameOf("epaPlay"), signed(O.epaPlay, 3), "epaPlay", signed(L.epaPlay, 3), "Expected points added per play"),
+    tile(nameOf("epaDb"), signed(O.epaDb, 3), "epaDb", signed(L.epaDb, 3), "EPA per dropback (sacks and scrambles included)"),
+    tile(nameOf("epaCar"), signed(O.epaCar, 3), "epaCar", signed(L.epaCar, 3), "EPA per designed run"),
+    tile(nameOf("succPct"), P(O.succPct, 1), "succPct", P(L.succPct, 1), "Share of plays that were successful (nflverse success)"),
+    tile(nameOf("adot"), fix(O.adot, 1), "adot", fix(L.adot, 1), "Air yards per attempt"),
+    tile(nameOf("cmpPct"), P(O.cmpPct), "cmpPct", P(L.cmpPct), "Completions / attempts"),
+    tile(nameOf("sackPct"), P(O.sackPct), "sackPct", P(L.sackPct), "Sacks allowed / dropbacks (lower is better)"),
+    tile(nameOf("pressPct"), P(O.pressPct), "pressPct", P(L.pressPct), `PFR: the club's QBs' pressures / their dropbacks${O.pfrWeeks ? ` over ${O.pfrWeeks} week${O.pfrWeeks === 1 ? "" : "s"}` : ""}${win.pfrThrough ? `, through ${weekLabel(win.pfrThrough, st.season)}` : ""} (lower is better)`),
+    tile(nameOf("paPct"), P(O.paPct), "paPct", P(L.paPct), "FTN: play-action dropbacks / dropbacks charted"),
+    tile(nameOf("explPct"), P(O.explPct), "explPct", P(L.explPct), "Runs of 10+ yards and completions of 20+ / plays"),
   ].join("");
 
   // D198: the O-line block, after the tiles and before Week by week (olineBlockHtml, shared with the This-week page).
@@ -471,8 +472,8 @@ export async function renderTeam(ctx, params, query) {
     strip: olineStripHtml({ series, O, L, cuts: ref.cuts, wn, season: st.season, activeKey, pfrThrough: full.pfrThrough }) });
   const maxPlays = Math.max(70, ...series.map((s) => s.plays || 0));
   const strips = [
-    { k: "epaPlay", label: "EPA/play", signed: true, span: 0.4, fmt: (v) => signed(v, 3), short: (v) => signed(v, 2).replace(/^([+−])0/, "$1"), total: O.epaPlay, totalText: `${wn} ${isNum(O.epaPlay) ? signed(O.epaPlay, 3) : "–"}`, avg: L.epaPlay, avgText: `lg ${isNum(L.epaPlay) ? signed(L.epaPlay, 3) : "–"}`, tier: (v) => teamTier("off", "epaPlay", v, ref.cuts) },
-    { k: "passRate", label: "Pass rate", signed: false, span: 0.85, fmt: (v) => `${(v * 100).toFixed(1)}%`, short: (v) => String(Math.round(v * 100)), total: O.passRate, totalText: `${wn} ${isNum(O.passRate) ? (O.passRate * 100).toFixed(1) + "%" : "–"}`, avg: L.passRate, avgText: `lg ${isNum(L.passRate) ? Math.round(L.passRate * 100) + "%" : "–"}` },
+    { k: "epaPlay", label: nameOf("epaPlay"), signed: true, span: 0.4, fmt: (v) => signed(v, 3), short: (v) => signed(v, 2).replace(/^([+−])0/, "$1"), total: O.epaPlay, totalText: `${wn} ${isNum(O.epaPlay) ? signed(O.epaPlay, 3) : "–"}`, avg: L.epaPlay, avgText: `lg ${isNum(L.epaPlay) ? signed(L.epaPlay, 3) : "–"}`, tier: (v) => teamTier("off", "epaPlay", v, ref.cuts) },
+    { k: "passRate", label: nameOf("passRate"), signed: false, span: 0.85, fmt: (v) => `${(v * 100).toFixed(1)}%`, short: (v) => String(Math.round(v * 100)), total: O.passRate, totalText: `${wn} ${isNum(O.passRate) ? (O.passRate * 100).toFixed(1) + "%" : "–"}`, avg: L.passRate, avgText: `lg ${isNum(L.passRate) ? Math.round(L.passRate * 100) + "%" : "–"}` },
     { k: "plays", label: "Plays", signed: false, span: maxPlays * 1.05, fmt: (v) => `${v} plays`, short: (v) => String(v), total: O.plays, totalText: `${wn} ${O.plays ?? 0}`, avg: L.playsG, avgText: `lg ${isNum(L.playsG) ? L.playsG.toFixed(1) : "–"}/g` },
   ];
   const weekly = series.length ? qbStrips(series, strips, { season: st.season, activeKey, hit: true, big: true, bw: 38, gap: 9, lw: 140, sh: 64 }) : `<div class="an-note">No weeks loaded.</div>`;

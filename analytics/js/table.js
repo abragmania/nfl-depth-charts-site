@@ -16,6 +16,7 @@ import { rzI5Shares, RZ_I5_FLOOR } from "./agg_player.js";
 // exact same badge, in the exact same CSS (.an-stchip/.an-st-*, already in analytics_recut.css), as the player
 // pages, rather than keeping a second parallel implementation.
 import { statusChip, statusNameClass } from "./views/kit.js";
+import { involvementSignals, signalHtml } from "./agg_signal.js";
 export { statusChip, statusNameClass };
 
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -478,7 +479,7 @@ export function scrollToHl(root, hl, query) {
 // The table's markup as a pure string (no DOM): everything renderTable needs to know to decide what to show,
 // split out so tests can check column visibility and RB dashing without a document. `view`: { ref
 // (agg.usageReference over the league-wide rows: each row's league reference and tier cuts come from
-// ref.at(row.pos)), windowName ("Season", "Last 3", "W1–W2"), teams }.
+// ref.at(row.pos)), windowName ("Season", "Last 3", "W1–W2"), teams, signal (true: D230's ▲/▼ marker, agg_signal.js) }.
 // `status`: D196's injury-status players map (gsis -> status), already gated by season by the caller (statusApplies)
 // - pass {} for a window that does not include the current season, or when the feed could not be had. Never
 // fetched here: pure string builders take their data, never reach for it themselves.
@@ -491,6 +492,8 @@ export function tableHtml(allRows, st, query, view = {}, status = {}) {
   // D224 F: the chosen column set (Deciding, Standard or All), after any sort promotion.
   const sel = columnsFor(baseCols(st), DEC_COLS, st, DEFAULT_SORT, GROUPS, DEC_GROUPS);
   const cols = sel.cols;
+  // D230: the involved-vs-producing marker after the name, only when the caller opts in (view.signal); the pool is these rows.
+  const sig = view.signal ? involvementSignals(rows, "rec") : null;
   // Player, team and Pos now share one cell (c-name), so the fixed columns are rank/player/games, not four.
   const nCols = 3 + cols.length + 1;
   const th = (k, h, t, cls = "") => `<th class="${cls}${st.sort === k ? " sorted " + st.dir : ""}" data-sort="${k}" title="${esc(t)}">${h}</th>`;
@@ -526,9 +529,10 @@ export function tableHtml(allRows, st, query, view = {}, status = {}) {
     const depth = `../#/team/${encodeURIComponent(r.team)}/player/${encodeURIComponent(r.gsis)}`;
     const ps = status[r.gsis];
     const chip = statusChip(ps, { season: view.statusSeason }), nameCls = statusNameClass(ps);
+    const mark = sig ? signalHtml("rec", sig, r.gsis) : "";
     return `<tr class="an-row${open ? " open" : ""}${view.hl && r.gsis === view.hl ? " is-hl" : ""}" data-id="${esc(r.gsis)}" tabindex="0" aria-expanded="${open}">
       <td class="c-rank an-stick">${i + 1}</td>
-      <td class="c-name an-stick"><a class="an-pname${nameCls ? " " + nameCls : ""}" href="#/player/${encodeURIComponent(r.gsis)}${q ? "?" + q : ""}" title="${esc(r.name)}">${esc(r.name)}</a>${teamPill(r.team, teams, q)}<span class="an-pospill" data-band="${BAND(r.pos)}">${esc(r.pos)}</span>${chip}<a class="an-dc" href="${depth}" title="Open his depth-chart card" aria-label="Depth chart">→</a></td>
+      <td class="c-name an-stick"><a class="an-pname${nameCls ? " " + nameCls : ""}" href="#/player/${encodeURIComponent(r.gsis)}${q ? "?" + q : ""}" title="${esc(r.name)}">${esc(r.name)}</a>${mark}${teamPill(r.team, teams, q)}<span class="an-pospill" data-band="${BAND(r.pos)}">${esc(r.pos)}</span>${chip}<a class="an-dc" href="${depth}" title="Open his depth-chart card" aria-label="Depth chart">→</a></td>
       <td class="num">${r.g}</td>
       ${cols.map((c) => cell(c, r)).join("")}
       <td class="c-spark">${sparkline(r.series, st)}</td></tr>`

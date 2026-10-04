@@ -23,10 +23,12 @@
 //                  over plays.
 //   PA %         = FTN: play-action dropbacks / dropbacks FTN charted. Blitz % = FTN: dropbacks faced with 1+
 //                  blitzers / dropbacks faced FTN charted.
-//   Pressure % (offense, allowed) = the club's QBs' PFR pressures / their PFR dropbacks, over the weeks PFR lists them
-//                  (pfr.pass is keyed by QB; his club that week comes from the players file).
-//   Pressure % (defense) = the QB SIDE: the opposing QBs' PFR pressures / their PFR dropbacks against this defense,
-//                  one pressure per dropback at most.
+//   Pressure % (offense, allowed) = the club's QBs' PFR pressures / the club's play-by-play dropbacks, both over the
+//                  weeks PFR lists any of its QBs (pfr.pass is keyed by QB; his club that week comes from the players
+//                  file). D231: never PFR's derived dropbacks, which are null for a passer never pressured. pfrDb is
+//                  that play-by-play denominator.
+//   Pressure % (defense) = the QB SIDE: the opposing QBs' PFR pressures / the dropbacks this defense faced
+//                  (play-by-play) in the weeks PFR lists its opponent's QBs, one pressure per dropback at most.
 //   Pressures/g (defense) = the club's defenders' PFR pressures summed (pfr.def is keyed by defender gsis; his club
 //                  that week comes from players.json teams[week]) / the club's games in the window. A throw two men
 //                  pressured counts twice here, by design: it is a volume figure, not a rate, so it never conflicts
@@ -35,7 +37,7 @@
 // Team grid additions (D195; additive, no existing figure changes):
 //   Rush yds/g   = rushing yards on designed runs / the club's games (offense gained, defense allowed).
 //   Stuffed %    = designed runs gaining 0 or less / designed runs (offense suffered, defense forced).
-//   Pressure % allowed / Hits % (PFR) = the club's QBs' PFR pressures (hits) / their PFR dropbacks on offense; on
+//   Pressure % allowed / Hits % (PFR) = the club's QBs' PFR pressures (hits) / the Pressure % denominator on offense; on
 //                  defense the opposing QBs' rows (the Press % rule), so pressPctAllowed always equals pressPct. Sack %
 //                  stays the play-by-play sackPct above (D178: one source per figure).
 //   Coverage (defense, PFR charting) = the club's CB and safety rows (COVER_POS by players.json position) summed:
@@ -46,8 +48,8 @@
 //                  or its opponents' rushers' rows (defense), quarterbacks left out (PFR's carries include their
 //                  scrambles and kneels, which are not designed runs); null while the week files' rush block is empty.
 // Line-block additions (D198; additive, no existing figure changes). PFR's pressures = hurries + hits + sacked.
-//   Hurry % allowed (hurryPctAllowed, both sides; pfrHurries the count) = PFR hurries / PFR dropbacks on the same QB
-//                  rows as Pressure % (offense: its own QBs; defense: the opposing QBs).
+//   Hurry % allowed (hurryPctAllowed, both sides; pfrHurries the count) = PFR hurries on the same QB rows as
+//                  Pressure % (offense: its own QBs; defense: the opposing QBs) / the Pressure % denominator (D231).
 //   Hurries/g, Hits/g (defense) = the club's defenders' PFR hurries (hits) summed / games, the Pressures/g rule
 //                  (a week counts only when the defense faced a dropback that week); counts in pfrHurriesDef, pfrHitsDef.
 //   Sacks/g (sacksG, both sides) = play-by-play sacks / games (D178: never PFR's sack columns).
@@ -128,6 +130,12 @@ export function passerRating(cmp, att, yds, td, int) {
   return ((c((cmp / att - 0.3) * 5) + c((yds / att - 3) * 0.25) + c((td / att) * 20) + c(2.375 - (int / att) * 25)) / 6) * 100;
 }
 
+// D231: the play-by-play dropbacks (the D178 dropback, a.wk's db) over the given week keys, the club-weeks PFR
+// covers for a side. PFR's own dropbacks are never a rate's denominator: the compile derives them as pressures /
+// pressure rate, so a passer never pressured has none, and a trick-play passer has no row; a week PFR has not
+// published is in neither the count nor this sum.
+const wkDb = (a, keys) => { let n = 0; for (const k of keys) n += a.wk.get(k)?.db || 0; return n; };
+
 // One play row as a team play, or null (a pi row, or a type the ledger uses for nothing else).
 export function teamPlay(r, C) {
   const type = r[C.type];
@@ -199,7 +207,7 @@ const newSide = () => ({ games: new Set(), plays: 0, epa: 0, epaN: 0, succ: 0, s
   runSucc: 0, runSuccN: 0, runExpl: 0,
   att: 0, cmp: 0, yds: 0, air: 0, airN: 0, sacks: 0, pa: 0, paN: 0, bl: 0, blN: 0, expl: 0,
   zones: Object.fromEntries(ZONE_KEYS.map((k) => [k, emptyCell()])), wk: new Map(),
-  pfrPress: 0, pfrDb: 0, pfrWeeks: new Set(), qbPress: 0, qbDb: 0, qbWeeks: new Set(),
+  pfrPress: 0, pfrWeeks: new Set(), qbPress: 0, qbWeeks: new Set(),
   // Grid additions (D195): stuffed designed runs; PFR QB hits on the same QB rows as pressure; PFR coverage
   // charting (defense); PFR yards before contact.
   runStuff: 0, pfrHits: 0, qbHits: 0,
@@ -216,8 +224,8 @@ const newSide = () => ({ games: new Set(), plays: 0, epa: 0, epaN: 0, succ: 0, s
   // D219 pace and shape: plays carrying an sd; neutral plays' secs sum and count; each flag's hits and carriers.
   sdN: 0, nSecs: 0, nSecsN: 0, nh: 0, nhN: 0, sg: 0, sgN: 0, mo: 0, moN: 0, p11: 0, pN: 0,
   // D224 increment G, the line blocks' per-game strips: week key -> that week's PFR pressure sums on the same QB rows
-  // as Pressure % ({ press, db }; offense its own QBs, defense the opposing QBs) and the coverage sums ({ tgt, cmp,
-  // yds, td, int }, defense). A week absent from the map had no PFR row for the club (PFR runs about a week behind).
+  // as Pressure % ({ press }; offense its own QBs, defense the opposing QBs) and the coverage sums ({ tgt, cmp, yds,
+  // td, int }, defense). A week absent from the map had no PFR row for the club (PFR runs about a week behind).
   pfrWk: new Map(), qbWk: new Map(), covWk: new Map() });
 
 function addPlay(a, key, e, playRec) {
@@ -260,20 +268,21 @@ function addPlay(a, key, e, playRec) {
 
 // { plays, playsG, passRate, epaPlay, ... } for one side of one club.
 function sideRates(a, g) {
+  const pDb = wkDb(a, a.pfrWeeks); // D231: the PFR rates' denominator, play-by-play dropbacks in the PFR weeks
   return {
     g, plays: a.plays, playsG: ratio(a.plays, g), db: a.db, dbG: ratio(a.db, g), runs: a.runs, runsG: ratio(a.runs, g), att: a.att, cmp: a.cmp, sacks: a.sacks,
     passRate: ratio(a.db, a.plays), epaPlay: ratio(a.epa, a.epaN), epaDb: ratio(a.dbEpa, a.dbEpaN), epaCar: ratio(a.runEpa, a.runEpaN), ypc: ratio(a.runYds, a.runs),
     succPct: ratio(a.succ, a.succN), adot: ratio(a.air, a.airN), cmpPct: ratio(a.cmp, a.att), sackPct: ratio(a.sacks, a.db),
     paPct: ratio(a.pa, a.paN), blitzPct: ratio(a.bl, a.blN), explPct: ratio(a.expl, a.plays), expl: a.expl,
     runSuccPct: ratio(a.runSucc, a.runSuccN), runExplPct: ratio(a.runExpl, a.runs),
-    pressPct: ratio(a.pfrPress, a.pfrDb), pfrPress: a.pfrPress, pfrDb: a.pfrDb, pfrWeeks: a.pfrWeeks.size,
+    pressPct: ratio(a.pfrPress, pDb), pfrPress: a.pfrPress, pfrDb: pDb, pfrWeeks: a.pfrWeeks.size,
     zones: a.zones,
     // Grid additions (D195), additive.
     rushYds: a.runYds, rushYdsG: ratio(a.runYds, g), stuffed: a.runStuff, stuffPct: ratio(a.runStuff, a.runs),
-    pressPctAllowed: ratio(a.pfrPress, a.pfrDb), hitPctAllowed: ratio(a.pfrHits, a.pfrDb), pfrHits: a.pfrHits,
+    pressPctAllowed: ratio(a.pfrPress, pDb), hitPctAllowed: ratio(a.pfrHits, pDb), pfrHits: a.pfrHits,
     ybc: a.ybc, ybcCarries: a.ybcCar, ybcCar: ratio(a.ybc, a.ybcCar), ybcWeeks: a.ybcWeeks.size,
     // Line-block additions (D198), additive. sacksG is play-by-play (D178), never PFR's sack columns.
-    sacksG: ratio(a.sacks, g), hurryPctAllowed: ratio(a.pfrHurries, a.pfrDb), pfrHurries: a.pfrHurries,
+    sacksG: ratio(a.sacks, g), hurryPctAllowed: ratio(a.pfrHurries, pDb), pfrHurries: a.pfrHurries,
     // D219 play calling, additive: PROE in percentage points and its splits, each with its play count; neutral pass rate.
     ...Object.fromEntries(PROE_SPLITS.flatMap(([k]) => { const c = a.pe[k]; return [[k, c.n > 0 ? ((c.db - c.x) / c.n) * 100 : null], [k + "N", c.n]]; })),
     neutralPassRate: ratio(a.nDb, a.nPlays), neutralPlays: a.nPlays,
@@ -290,7 +299,8 @@ function sideRates(a, g) {
 
 // Every club's offense and defense in the window. Returns { rows: [{ team, g, off, def, series: { off, def } }],
 // weeks (window week keys, sorted), lgZones (pooled over every attempt), pfrThrough (latest window week with any PFR
-// row), latestKey, unmapped ([{ key, gsis }] PFR defender rows the players file cannot place) }.
+// row), latestKey, unmapped ([{ key, gsis }] PFR defender rows the players file cannot place, and { key, gsis,
+// src: "pass" } passing rows the same) }.
 // `opts.playsFor`: a club whose zone cells (both sides) also keep the play list.
 export function aggregateTeams(blocks, players, st, opts = {}) {
   const games = clubGames(blocks);
@@ -338,8 +348,13 @@ export function aggregateTeams(blocks, players, st, opts = {}) {
   for (const b of blocks) {
     let any = false;
     for (const [id, p] of Object.entries(b.pfr?.pass || {})) {
-      const team = players?.[id]?.teams?.[b.key], db = num(p?.dropbacks);
-      if (!team || db === null || db <= 0) continue;
+      // D231: a row counts when PFR charted his pressures, even 0. PFR keeps a never-pressured passer's row (pressures
+      // 0), but the compile's dropbacks (pressures / pressure rate) are null for him, and the old rule dropped the row
+      // on that null; the row now marks the club-week as covered and adds 0, the rates dividing by the play-by-play
+      // dropbacks. A passer the players file cannot place that week is listed in `unmapped` (src "pass").
+      const team = players?.[id]?.teams?.[b.key];
+      if (!team) { unmapped.push({ key: b.key, gsis: id, src: "pass" }); continue; }
+      if (num(p?.pressures) === null) continue;
       // 🔵 (D224 increment G): the window is judged per club, as the play loop's okOff/okDef do. Under Last 3 a QB's
       // game can be inside his opponent's last 3 and outside his own club's (an uneven bye), so the offense sums need
       // the QB's club in the window and the defense sums the opponent's; a row is skipped only when neither is.
@@ -348,14 +363,14 @@ export function aggregateTeams(blocks, players, st, opts = {}) {
       if (!okOff && !okDef) continue;
       any = true;
       if (okOff) {
-        const a = S(off, team); a.pfrPress += num(p.pressures) ?? 0; a.pfrDb += db; a.pfrWeeks.add(b.key);
+        const a = S(off, team); a.pfrPress += num(p.pressures) ?? 0; a.pfrWeeks.add(b.key);
         a.pfrHits += num(p.hits) ?? 0; a.pfrHurries += num(p.hurries) ?? 0;
-        addWk(a.pfrWk, b.key, { press: num(p.pressures) ?? 0, db });
+        addWk(a.pfrWk, b.key, { press: num(p.pressures) ?? 0 });
       }
       if (okDef) {
-        const d = S(def, opp); d.qbPress += num(p.pressures) ?? 0; d.qbDb += db; d.qbWeeks.add(b.key);
+        const d = S(def, opp); d.qbPress += num(p.pressures) ?? 0; d.qbWeeks.add(b.key);
         d.qbHits += num(p.hits) ?? 0; d.qbHurries += num(p.hurries) ?? 0;
-        addWk(d.qbWk, b.key, { press: num(p.pressures) ?? 0, db });
+        addWk(d.qbWk, b.key, { press: num(p.pressures) ?? 0 });
       }
     }
     const defKeys = new Map(); // team -> pressures this week
@@ -391,7 +406,7 @@ export function aggregateTeams(blocks, players, st, opts = {}) {
     for (const [team, pr] of defKeys) {
       const d = S(def, team), faced = d.wk.get(b.key)?.db || 0;
       if (!faced) continue;
-      d.pfrPress += pr; d.pfrDb += faced; d.pfrWeeks.add(b.key); any = true;
+      d.pfrPress += pr; d.pfrWeeks.add(b.key); any = true;
       const hh = defHH.get(team); d.defHurries += hh?.hu ?? 0; d.defHits += hh?.hi ?? 0;
     }
     const inWinKey = [...inWin].some((gk) => gk.startsWith(b.key + "|"));
@@ -411,16 +426,18 @@ export function aggregateTeams(blocks, players, st, opts = {}) {
         epaPlay: ratio(w.epa, w.epaN), epaDb: ratio(w.dbEpa, w.dbEpaN), epaCar: ratio(w.runEpa, w.runEpaN),
         ...lineWeek(a, side, key, w) };
     });
-    // The defense's Pressure % is the QB side; Pressures/g is the defenders' own sum, per game (D178 pairing).
-    const dr = { ...sideRates(d, g), pressPct: ratio(d.qbPress, d.qbDb), pfrDb: d.qbDb, pfrWeeks: d.qbWeeks.size, pressuresG: ratio(d.pfrPress, g), pfrPressDef: d.pfrPress, pfrWeeksDef: d.pfrWeeks.size,
+    // The defense's Pressure % is the QB side; Pressures/g is the defenders' own sum, per game (D178 pairing). D231:
+    // the QB side's denominator is the dropbacks this defense faced (play-by-play) in the weeks PFR lists its opponent.
+    const qDb = wkDb(d, d.qbWeeks);
+    const dr = { ...sideRates(d, g), pressPct: ratio(d.qbPress, qDb), pfrDb: qDb, pfrWeeks: d.qbWeeks.size, pressuresG: ratio(d.pfrPress, g), pfrPressDef: d.pfrPress, pfrWeeksDef: d.pfrWeeks.size,
       // Grid additions (D195): pressure and hits from the opposing QBs' rows (the Press % rule), and coverage.
-      pressPctAllowed: ratio(d.qbPress, d.qbDb), hitPctAllowed: ratio(d.qbHits, d.qbDb), pfrHits: d.qbHits,
+      pressPctAllowed: ratio(d.qbPress, qDb), hitPctAllowed: ratio(d.qbHits, qDb), pfrHits: d.qbHits,
       covTgt: d.covTgt, covCmp: d.covCmp, covYds: d.covYds, covTd: d.covTd, covInt: d.covInt, covWeeks: d.covWeeks.size,
       covYdsTgt: ratio(d.covYds, d.covTgt), covCmpPct: ratio(d.covCmp, d.covTgt), covRating: passerRating(d.covCmp, d.covTgt, d.covYds, d.covTd, d.covInt) };
     // Line-block additions (D198): hurries on the opposing QBs' rows (the Press % rule); the defenders' hurries and
     // hits per game (the pressuresG rule); run stop % = designed runs faced that failed / those carrying a success value.
     const rsp = ratio(d.runSucc, d.runSuccN);
-    Object.assign(dr, { hurryPctAllowed: ratio(d.qbHurries, d.qbDb), pfrHurries: d.qbHurries,
+    Object.assign(dr, { hurryPctAllowed: ratio(d.qbHurries, qDb), pfrHurries: d.qbHurries,
       hurriesG: ratio(d.defHurries, g), hitsG: ratio(d.defHits, g), pfrHurriesDef: d.defHurries, pfrHitsDef: d.defHits,
       runStopPct: rsp === null ? null : 1 - rsp });
     return { team, g, off: sideRates(o, g), def: dr, series: { off: series(o, "off"), def: series(d, "def") } };
@@ -430,15 +447,16 @@ export function aggregateTeams(blocks, players, st, opts = {}) {
 
 // D224 increment G: one week's figures for the line blocks' per-game strips, each on the window figure's own rows and
 // rule, so the weeks' numerators and denominators sum to the tile's figure over the weeks charted:
-//   prPct  = PFR pressures / PFR dropbacks on the Pressure % QB rows that week (offense: pressPctAllowed, its own QBs;
-//            defense: pressPct, the opposing QBs against it); prN, prDb the sums; pfr = false (prPct null) when PFR
-//            has no such row for the club that week yet.
+//   prPct  = PFR pressures on the Pressure % QB rows that week (offense: pressPctAllowed, its own QBs; defense:
+//            pressPct, the opposing QBs against it) / the play-by-play dropbacks that week (D231, the tile's
+//            denominator); prN, prDb the two; pfr = false (prPct, prN, prDb null) when PFR has no such row for the
+//            club that week yet.
 //   stuffPct = designed runs gaining 0 or less / designed runs that week (play-by-play, the Stuffed % rule); stuffed.
 //   covRating (defense) = the NFL passer rating on that week's CB and safety coverage rows (the covRating rule);
 //            covTgt, covCmp, covYds, covTd, covInt the sums; cov = false (covRating null) with no such row that week.
 function lineWeek(a, side, key, w) {
   const p = (side === "def" ? a.qbWk : a.pfrWk).get(key) || null, c = side === "def" ? a.covWk.get(key) || null : null;
-  const out = { pfr: !!p, prN: p ? p.press : null, prDb: p ? p.db : null, prPct: p ? ratio(p.press, p.db) : null,
+  const out = { pfr: !!p, prN: p ? p.press : null, prDb: p ? w.db : null, prPct: p ? ratio(p.press, w.db) : null,
     stuffed: w.stuff || 0, stuffPct: ratio(w.stuff || 0, w.runs) };
   if (side === "def") Object.assign(out, { cov: !!c, covTgt: c ? c.tgt : null, covCmp: c ? c.cmp : null, covYds: c ? c.yds : null, covTd: c ? c.td : null, covInt: c ? c.int : null,
     covRating: c ? passerRating(c.cmp, c.tgt, c.yds, c.td, c.int) : null });

@@ -18,7 +18,7 @@
 // Interactivity (D177): a weekly column (strips or the fantasy chart) sets the window to that week and back; a zone
 // cell lists the plays behind it; the header has a Back button (router.js backLink: the page he came from, else
 // Quarterbacks) and links to his depth-chart card (new tab) and his team page.
-import { fromQuery, seasonsOf, weekLabel, splitKey, gamesInWindow, rankHref } from "../filters.js";
+import { fromQuery, seasonsOf, weekLabel, splitKey, gamesInWindow, rankHref, isSituational } from "../filters.js";
 import { backLink } from "../router.js";
 import { loadFor, loadTeams, displayName, loadStatusFeed } from "../data.js";
 import { isStatic } from "../../../js/api.js";
@@ -211,7 +211,7 @@ export function qbPassTiles(R, ref, pnote = "") {
   ];
   const side = [
     { key: "adot", label: "aDOT", value: tFix(R.adot, 1), title: `Air yards per attempt.${lgT(tFix(L.adot, 1))} Source: nflverse play-by-play` },
-    { key: "pressPct", label: "Pressure %", value: tPct(R.pressPct, 0), tier: tier("pressPct"), title: `PFR pressures / PFR dropbacks${R.pfrWeeks ? ` over ${R.pfrWeeks} week${R.pfrWeeks === 1 ? "" : "s"}` : ""}.${lgT(tPct(L.pressPct, 0))}${pnote ? " " + pnote + "." : ""} Source: PFR advanced stats` },
+    { key: "pressPct", label: "Pressure %", value: tPct(R.pressPct, 0), tier: tier("pressPct"), title: `PFR pressures / his play-by-play dropbacks in the weeks PFR lists him${R.pfrWeeks ? ` (${R.pfrWeeks} week${R.pfrWeeks === 1 ? "" : "s"})` : ""}; blank under a down or quarter filter (PFR charts the whole game).${lgT(tPct(L.pressPct, 0))}${pnote ? " " + pnote + "." : ""} Source: PFR advanced stats` },
     { key: "paPct", label: "Play action %", value: tPct(R.paPct, 0), title: `Share of his dropbacks with play action.${lgT(tPct(L.paPct, 0))} Source: FTN charting` },
     { key: "blitzPct", label: "Blitzed %", value: tPct(R.blitzPct, 0), title: `Share of his dropbacks with 1+ blitzers.${lgT(tPct(L.blitzPct, 0))} Source: FTN charting` },
     { key: "ttt", label: "Time to throw", value: isNum(R.ttt) ? R.ttt.toFixed(2) + "s" : DASH, title: `Average time to throw, weighted by his dropbacks each week.${lgT(isNum(L.ttt) ? L.ttt.toFixed(2) + "s" : "")} Source: Next Gen Stats` },
@@ -398,7 +398,7 @@ export async function renderQbPlayer(ctx, params, query) {
   const mq = maddenQb(madden, gsis, st.season);
   const wn = windowName(st, win.weeks);
   const activeKey = st.window === "range" && st.from && st.from === st.to ? st.from : null;
-  const pnote = pfrNote(win.pfrThrough, win.latestKey, st.season);
+  const pnote = isSituational(st) ? "" : pfrNote(win.pfrThrough, win.latestKey, st.season); // no note beside a blank Pressure %
 
   // The whole timeline, the window's weeks bright, with the opponent under each week.
   const games = new Map(clubGames(data.blocks).map((g) => [`${g.key}|${g.team}`, g]));

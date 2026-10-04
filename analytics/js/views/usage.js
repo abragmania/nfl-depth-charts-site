@@ -85,7 +85,7 @@ export async function renderUsage(ctx, query) {
   const status = statusApplies(st, statusFeed.season) ? statusFeed.players : {};
   // D224 F: the Deciding set's last-3, this-week and status figures, only when that set is (or a sort needs it) on screen.
   if (receiversWantsDeciding(st)) { try { decorateDeciding(rows, "rec", { blocks: data.blocks, players: data.players, st, payload }); } catch (e) { console.warn("Deciding figures unavailable:", e); } }
-  renderTable(root.querySelector(".an-tablewrap"), rows, st, qs, go, { ref, windowName, teams: teamsByAbbr, statusSeason: statusFeed.season, hl }, status);
+  renderTable(root.querySelector(".an-tablewrap"), rows, st, qs, go, { ref, windowName, teams: teamsByAbbr, statusSeason: statusFeed.season, hl, signal: true }, status);
   // Keep the clicked row where the reader clicked it rather than letting the re-render jump the page.
   if (anchor.id) {
     const tr = [...root.querySelectorAll("tr.an-row")].find((t) => t.dataset.id === anchor.id);

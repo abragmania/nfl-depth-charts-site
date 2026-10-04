@@ -5,7 +5,7 @@
 // pocket passers sit quiet; the expanded row gives passing the dominant block and rushing its own block beside it.
 // Every figure comes from agg_qb.js (pure); this file draws, sorts and wires clicks. The chart helpers below
 // (signed weekly strips, the QB zone field, the team pill) are shared with the QB player page (qbplayer.js).
-import { fromQuery, toQuery, seasonsOf, weekLabel, splitKey } from "../filters.js";
+import { fromQuery, toQuery, seasonsOf, weekLabel, splitKey, isSituational } from "../filters.js";
 import { loadFor, loadTeams, loadStatusFeed, displayName } from "../data.js";
 import { clubGames } from "../agg.js";
 import { aggregateQb, qbReference, qbTier, qbZones, sortQbRows, QB_MIN_DB } from "../agg_qb.js";
@@ -181,7 +181,7 @@ const COLS = [
   { k: "cmpPct", h: "Cmp %", t: "Completions / attempts", f: (v) => pct(v), grp: "b" },
   { k: "adot", h: "aDOT", t: "Average depth of target: air yards per attempt", f: (v) => fix(v, 1), grp: "b" },
   { k: "sackPct", h: "Sack %", t: "Sacks / dropbacks", f: (v) => pct(v), grp: "b" },
-  { k: "pressPct", h: "Press %", t: "PFR: pressures / dropbacks over the weeks PFR lists him (PFR runs about a week behind)", f: (v) => pct(v, 0), grp: "b" },
+  { k: "pressPct", h: "Press %", t: "PFR: pressures / dropbacks over the weeks PFR lists him (PFR runs about a week behind); blank under a down or quarter filter (PFR charts the whole game)", f: (v) => pct(v, 0), grp: "b" },
   { k: "paPct", h: "PA %", t: "FTN: share of his dropbacks with play action", f: (v) => pct(v, 0), grp: "b" },
   { k: "blitzPct", h: "Blitz %", t: "FTN: share of his dropbacks with 1+ blitzers", f: (v) => pct(v, 0), grp: "b" },
   { k: "ttt", h: "TTT", t: "NGS: average time to throw, seconds (weighted by his dropbacks each week)", f: (v) => fix(v, 2), grp: "b" },
@@ -376,7 +376,7 @@ export async function renderQb(ctx, query) {
   const windowName = st.window === "last3" ? "Last 3" : st.window === "range" && agg.weeks.length ? `${weekLabel(agg.weeks[0], st.season)}–${weekLabel(agg.weeks[agg.weeks.length - 1], st.season)}` : "Season";
   const clubTeams = [...new Set(clubGames(data.blocks).map((g) => g.team))].sort();
   const teamsByAbbr = new Map(teams.map((t) => [t.abbr, t]));
-  const pnote = pfrNote(lgAgg.pfrThrough, lgAgg.latestKey, st.season);
+  const pnote = isSituational(st) ? "" : pfrNote(lgAgg.pfrThrough, lgAgg.latestKey, st.season); // no note beside a blank Press %
   const qs = qbQuery({ ...st, open: "", view: "" }, minDb);
   root.innerHTML = `<section class="an-qb">
     <div class="an-head">
