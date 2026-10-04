@@ -210,37 +210,6 @@ export function headerFoldsAt(width, foldWidth = HEADER_FOLD_WIDTH, folded = fal
 // its key (`justify-content: safe flex-end`) or ellipsises its own name rather than growing the header and
 // moving the field. D107 therefore holds even if this number goes stale.
 
-// ---- D233: SHORT NAMES WITH THE PLAYER CARD OPEN ------------------------------------------------
-//
-// D233 (Adam, 2026-10-03: "for the names can we just do first initial + last name?"). Opening the 440px card
-// takes that width off the field, which makes the page WIDTH-bound: the 1800-unit canvas is scaled to fit what is
-// left, and on a 1536 laptop that drew the backup names at 7.3px. So, BEFORE any shrinking, the canvas is built
-// narrower (field.js's own spreadLayout, a factor under 1: cards and gaps shrink with it, heights untouched) and
-// every name prints as "F. Last" (cards.js's fitNames reads `data-names="short"` off `.field-outer`).
-// The narrower canvas is field.js's compressRows: the rows' outer columns move in toward the centre while every card
-// keeps its width and the 26-unit gaps (uniformly narrowing the cards ellipsised about 30 of 53 names, and a short
-// name alone needs nearly the same card, so it buys no size by itself).
-// THE TRIGGER IS THE FIT MATH, never a window width: the width fit of the full-name canvas has to be under this
-// page's own readable floor (floor = 9px / the page's backup-name size, so "under the floor" IS "names under
-// 9px") with the card open. A big screen with the card open clears the floor and keeps its full names; a closed
-// card never asks. Once on, it stays on until the width fit clears the floor by FIT_HYSTERESIS, as every step does.
-// THE SWITCH (D233's undo): false restores today's behaviour exactly — the card narrows the field and the names
-// shrink — and nothing else in this file or field.js changes. tests/viewfit.test.mjs pins both states.
-export const SHORT_NAMES_WITH_CARD = true;
-export function shortNamesRule({ panelOpen, kWidth, floor, on = false }) {
-  if (!SHORT_NAMES_WITH_CARD || !panelOpen || !(floor > 0)) return false;
-  return kWidth < (on ? floor * FIT_HYSTERESIS : floor / FIT_STEP_MARGIN);
-}
-// How far the canvas may be asked to narrow (a fraction of 1800 units). field.js's compressRows never goes under the
-// widest row's own width plus margins, so this is only the ceiling on the request.
-export const SHORT_NAMES_MIN_SPREAD = 0.7;
-// The spread the short-name canvas is built at: the one that makes it exactly fill the width at the height fit
-// (what the card-closed page draws at), never wider than the full canvas and never narrower than the floor above.
-export function shortNamesSpread(kWidth, kHeight, min = SHORT_NAMES_MIN_SPREAD) {
-  if (!(kHeight > 0) || !(kWidth > 0)) return 1;
-  return Math.min(Math.max(kWidth / kHeight, min), 1);
-}
-
 // D138: about 1320 — the widest window that still cannot draw the field readably when held upright.
 export const LIST_PORTRAIT_WIDTH = Math.round(LAYOUT_WIDTH * MIN_READABLE_SCALE) + 24;
 const STEP_RANK = { none: 0, header: 1, depth: 2, scroll: 3 };
@@ -512,10 +481,6 @@ export function mountScaledField({ root, probe, build, onDraw, onText, panel = n
   let expandedFullDepth = false;
   // D140: whether the canvas being drawn is this club's own natural height (the scrolling state only).
   let ownOn = false;
-  // D233: whether the card is open on a window too narrow for full names (decided in chooseStep), and whether
-  // the canvas on screen was last drawn that way — refit redraws whenever the two disagree.
-  let shortOn = false;
-  let drawnShort = false;
 
   // The single guard every entry point starts with. `document.contains` is what makes an orphaned
   // callback harmless rather than destructive: a disposer that was somehow missed can no longer find its
@@ -541,8 +506,6 @@ export function mountScaledField({ root, probe, build, onDraw, onText, panel = n
     // D140: an own-height canvas is drawn at the floor exactly, even when its own height fit is larger.
     const kH = ownOn ? floor : (scrolls ? Math.max(height / p.layoutHeight, floor) : height / p.layoutHeight);
     const kW = width / p.layoutWidth;
-    // D233: with the card open on a narrow window the canvas is built NARROWER than the full one (a factor under 1).
-    if (shortOn) return shortNamesSpread(kW, kH);
     return kW > kH ? Math.min(kW / kH, MAX_SPREAD) : 1;
   };
 
@@ -554,8 +517,7 @@ export function mountScaledField({ root, probe, build, onDraw, onText, panel = n
     if (!fillHeight) return 0;
     const { width, height } = boxOf(node);
     const p = activeProbe();
-    // D233: the short-name canvas is narrower, so its width fit is correspondingly larger.
-    const kW = width / (p.layoutWidth * (shortOn ? idealSpread(node) : 1));
+    const kW = width / p.layoutWidth;
     const want = kW > 0 ? height / kW : 0;
     // 0 unless the fill would actually do something. field.js ignores a minHeight at or under
     // the canvas's natural height (that is a HEIGHT-bound page, where the spread lever has the job instead),
@@ -653,8 +615,6 @@ export function mountScaledField({ root, probe, build, onDraw, onText, panel = n
         setTimeout(() => { if (!dead) cascade.setList(); }, 0);
         return { changed: false, redraw: false };
       }
-      // D233: the short-name state, decided from the same measured box (the full-name canvas's own width fit).
-      shortOn = shortNamesRule({ panelOpen: !!(panel && !panel.hidden), kWidth: box.width / probe.layoutWidth, floor, on: shortOn });
       // What folding the header away is worth is MEASURED, not remembered, on every fresh decision: it is
       // folded once, measured for real, and the decision then made on that number. Remembering it across
       // loads is what let one cold load decide on a stale zero and take a step further down the cascade than
@@ -690,9 +650,6 @@ export function mountScaledField({ root, probe, build, onDraw, onText, panel = n
     if (!el) return;
     scaleEl = el.querySelector(".field-scale");
     lastK = null;
-    drawnShort = shortOn;
-    if (shortOn) el.dataset.names = "short"; // D233: cards.js's fitNames reads this off the field
-
     // A rebuild must not replay the field's entrance animation (styles.css's `field-in` fade/scale):
     // replacing the element restarts it, which flashed the whole chart dark a beat after it appeared.
     // Counted per DRAW, not per spread rebuild (D134): a cascade step redraws too, and an entrance
@@ -765,8 +722,6 @@ export function mountScaledField({ root, probe, build, onDraw, onText, panel = n
     // tolerance, so the page lands on one number whatever order the settle passes and the step happened in
     // — two renders of the same window have to come out identical.
     if (cascadeReady && chooseStep(fresh, memoryless).changed) redrawAtIdealSpread();
-    // D233: a card opened or closed (or a window crossing the floor) changes which canvas and which names are drawn.
-    else if (shortOn !== drawnShort) redrawAtIdealSpread();
     if (rebuilds < MAX_REBUILDS) {
       const ideal = idealSpread(el);
       const idealMin = idealMinHeight(el);
@@ -838,7 +793,7 @@ export function mountScaledField({ root, probe, build, onDraw, onText, panel = n
   const finalTimer = floor ? setTimeout(() => keepScroll(() => {
     if (dead || !alive()) return;
     const { changed } = chooseStep(true, true);
-    if (!changed && step === "none" && shortOn === drawnShort) { refitText(); return; }
+    if (!changed && step === "none") { refitText(); return; }
     redrawAtIdealSpread();
     apply();
   }), SETTLE_DELAYS[SETTLE_DELAYS.length - 1] + 60) : null;

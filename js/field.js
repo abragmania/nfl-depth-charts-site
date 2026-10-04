@@ -980,11 +980,6 @@ export function computeLayout(teamView, opts = {}) {
     buildRow(key, bands, "OFF", OFF_ROW_LEVEL[key], offRowCols[key])
   ).filter((row) => row.cols.length);
 
-  // D233: a spread UNDER 1 (viewfit.js writes one only while the player card is open on a window too narrow for full
-  // names) pulls the rows' outer columns in toward the centre; cards and gaps keep their size. Every other call
-  // (spread 1 or more, or none) skips this and draws exactly as it always did.
-  const compressedWidth = opts.spread > 0 && opts.spread < 1 ? compressRows([...defRowsTopDown, ...offRowsTopDown], opts.spread) : null;
-
   planTrays([...defRowsTopDown, ...offRowsTopDown], unlisted);
 
   // D72: a line of scrimmage is the boundary BETWEEN two units, so a single-unit page has none — no yellow
@@ -1123,39 +1118,14 @@ export function computeLayout(teamView, opts = {}) {
   const levels = [...summarizeLevels(defRowsTopDown, DEF_LEVEL_LABEL), ...summarizeLevels(offRowsTopDown, OFF_LEVEL_LABEL, bothSides ? losY + 3 : -Infinity)];
   const trays = allRows.flatMap((row) => row.trays.map((t, i) => {
     const top = row.trayTop + i * (TRAY_H + TRAY_STACK_GAP);
-    return { ...t, top, bottom: top + TRAY_H, ...fitTrayWidth(trayBounds(row, t.band), trayNaturalWidth(t), compressedWidth ?? LAYOUT_WIDTH) };
+    return { ...t, top, bottom: top + TRAY_H, ...fitTrayWidth(trayBounds(row, t.band), trayNaturalWidth(t)) };
   }));
 
   // D72: the caption the field SVG prints when there is no line of scrimmage to divide two halves.
   const caption = bothSides ? null : offRowsTopDown.length ? "OFFENSE" : defRowsTopDown.length ? "DEFENSE" : null;
-  const layout = { layoutWidth: compressedWidth ?? LAYOUT_WIDTH, layoutHeight, losY, caption, columns, trays, levels, halves, cardWidth: style.cardWidth, fieldMarginX: FIELD_MARGIN_X };
+  const layout = { layoutWidth: LAYOUT_WIDTH, layoutHeight, losY, caption, columns, trays, levels, halves, cardWidth: style.cardWidth, fieldMarginX: FIELD_MARGIN_X };
   if (opts.crop) cropLayout(layout);
-  return opts.spread > 1 ? spreadLayout(layout, opts.spread) : layout;
-}
-
-// D233: the narrower canvas the player card asks for. Every row's x's are pulled toward the canvas centre by `S`
-// (the corners, which sit nearest the sidelines, move the most), then the same no-overlap rule every row already
-// obeys pushes any pair that came closer than a card plus its gap back out to MIN_PITCH — so the OL line, which is
-// already at the minimum pitch, does not move, and card widths and heights are untouched. The canvas is then
-// the larger of 1800 * S and the widest row plus the left label gutter (LABEL_CLEAR_X, so the level labels and the
-// tray strips under them never collide, as on today's canvas) and a small right margin, with the columns shifted to
-// sit inside it. Returns that width. Columns are changed in place, before the trays and levels are measured off them.
-const COMPRESS_MARGIN = 40;
-function compressRows(rows, S) {
-  const centre = LAYOUT_WIDTH / 2;
-  const cols = rows.flatMap((r) => r.cols);
-  if (!cols.length) return LAYOUT_WIDTH * S;
-  for (const row of rows) {
-    for (const c of row.cols) c.x = centre + (c.x - centre) * S;
-    enforceNoOverlap(row.cols);
-  }
-  const left = Math.min(...cols.map((c) => c.x - c.width / 2));
-  const right = Math.max(...cols.map((c) => c.x + c.width / 2));
-  const needed = right - left + LABEL_CLEAR_X + COMPRESS_MARGIN;
-  const width = Math.max(LAYOUT_WIDTH * S, needed);
-  const shift = LABEL_CLEAR_X + (width - needed) / 2 - left;
-  for (const c of cols) c.x += shift;
-  return width;
+  return opts.spread && opts.spread !== 1 ? spreadLayout(layout, opts.spread) : layout;
 }
 
 // D72: shrink-wraps the canvas around the columns actually on it. The full-width canvas exists because the
@@ -1306,9 +1276,9 @@ function trayNaturalWidth(tray) {
 // Grows a tray's box to its natural width without letting it leave the canvas — .field-outer clips, so a
 // tray hanging under the outermost column (D63 put a receiver at each end of the line row) would simply
 // disappear off the sideline if it were allowed to grow rightwards unchecked.
-function fitTrayWidth({ left, right }, natural, canvasWidth = LAYOUT_WIDTH) {
-  const width = Math.min(Math.max(right - left, natural), canvasWidth);
-  const l = Math.min(Math.max(left, 0), canvasWidth - width);
+function fitTrayWidth({ left, right }, natural) {
+  const width = Math.min(Math.max(right - left, natural), LAYOUT_WIDTH);
+  const l = Math.min(Math.max(left, 0), LAYOUT_WIDTH - width);
   return { left: l, right: l + width };
 }
 

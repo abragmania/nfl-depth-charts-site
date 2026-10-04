@@ -30,7 +30,8 @@
 //   Pressure % (defense) = the QB SIDE: the opposing QBs' PFR pressures / the dropbacks this defense faced
 //                  (play-by-play) in the weeks PFR lists its opponent's QBs, one pressure per dropback at most.
 //   Pressures/g (defense) = the club's defenders' PFR pressures summed (pfr.def is keyed by defender gsis; his club
-//                  that week comes from players.json teams[week]) / the club's games in the window. A throw two men
+//                  that week comes from players.json teams[week]) / the window weeks those defenders have PFR rows
+//                  (pfrWeeksDef; null when none), so an unpublished or uncharted week is out of both parts. A throw two men
 //                  pressured counts twice here, by design: it is a volume figure, not a rate, so it never conflicts
 //                  with Pressure % above (Adam's pairing, 2026-09-24, resolving D178: two figures, no double-count
 //                  tooltip). A defender the players file cannot place is in `unmapped`.
@@ -50,7 +51,7 @@
 // Line-block additions (D198; additive, no existing figure changes). PFR's pressures = hurries + hits + sacked.
 //   Hurry % allowed (hurryPctAllowed, both sides; pfrHurries the count) = PFR hurries on the same QB rows as
 //                  Pressure % (offense: its own QBs; defense: the opposing QBs) / the Pressure % denominator (D231).
-//   Hurries/g, Hits/g (defense) = the club's defenders' PFR hurries (hits) summed / games, the Pressures/g rule
+//   Hurries/g, Hits/g (defense) = the club's defenders' PFR hurries (hits) summed / pfrWeeksDef, the Pressures/g rule
 //                  (a week counts only when the defense faced a dropback that week); counts in pfrHurriesDef, pfrHitsDef.
 //   Sacks/g (sacksG, both sides) = play-by-play sacks / games (D178: never PFR's sack columns).
 //   Run stop % (runStopPct, defense) = 1 − Run succ %: designed runs faced that were unsuccessful / designed runs faced
@@ -429,7 +430,10 @@ export function aggregateTeams(blocks, players, st, opts = {}) {
     // The defense's Pressure % is the QB side; Pressures/g is the defenders' own sum, per game (D178 pairing). D231:
     // the QB side's denominator is the dropbacks this defense faced (play-by-play) in the weeks PFR lists its opponent.
     const qDb = wkDb(d, d.qbWeeks);
-    const dr = { ...sideRates(d, g), pressPct: ratio(d.qbPress, qDb), pfrDb: qDb, pfrWeeks: d.qbWeeks.size, pressuresG: ratio(d.pfrPress, g), pfrPressDef: d.pfrPress, pfrWeeksDef: d.pfrWeeks.size,
+    // The per-game divisor is the weeks the club's defenders have PFR rows (pfrWeeksDef), not every window game: a
+    // week PFR has not published (or did not chart, data/static/pfr_uncharted.json) is out of both parts; null at 0.
+    const dW = d.pfrWeeks.size;
+    const dr = { ...sideRates(d, g), pressPct: ratio(d.qbPress, qDb), pfrDb: qDb, pfrWeeks: d.qbWeeks.size, pressuresG: ratio(d.pfrPress, dW), pfrPressDef: d.pfrPress, pfrWeeksDef: dW,
       // Grid additions (D195): pressure and hits from the opposing QBs' rows (the Press % rule), and coverage.
       pressPctAllowed: ratio(d.qbPress, qDb), hitPctAllowed: ratio(d.qbHits, qDb), pfrHits: d.qbHits,
       covTgt: d.covTgt, covCmp: d.covCmp, covYds: d.covYds, covTd: d.covTd, covInt: d.covInt, covWeeks: d.covWeeks.size,
@@ -438,7 +442,7 @@ export function aggregateTeams(blocks, players, st, opts = {}) {
     // hits per game (the pressuresG rule); run stop % = designed runs faced that failed / those carrying a success value.
     const rsp = ratio(d.runSucc, d.runSuccN);
     Object.assign(dr, { hurryPctAllowed: ratio(d.qbHurries, qDb), pfrHurries: d.qbHurries,
-      hurriesG: ratio(d.defHurries, g), hitsG: ratio(d.defHits, g), pfrHurriesDef: d.defHurries, pfrHitsDef: d.defHits,
+      hurriesG: ratio(d.defHurries, dW), hitsG: ratio(d.defHits, dW), pfrHurriesDef: d.defHurries, pfrHitsDef: d.defHits,
       runStopPct: rsp === null ? null : 1 - rsp });
     return { team, g, off: sideRates(o, g), def: dr, series: { off: series(o, "off"), def: series(d, "def") } };
   });
