@@ -1,0 +1,164 @@
+/* D138 step 1 (Adam, 2026-09-17): the phone/tablet-upright LIST. public/js/phonelist.js draws the same
+   columns the field draws — cards.js's renderColumn, unchanged — so this file's job is only to take those
+   columns OUT of the field's absolute canvas and set them as ordinary, full-width rows of real CSS type.
+
+   Two things every rule here obeys:
+   1. It is scoped to `.phone-list`. Nothing in this file can reach a desktop page, and the list itself
+      never goes through the canvas transform, so every size below is a real CSS pixel.
+   2. It DECIDES nothing, and it reaches nothing outside the list: every selector here is under
+      `.phone-list`, so while D138 is parked (viewfit.js's PHONE_LIST_ENABLED) this whole file is inert. */
+
+.phone-list { display: block; }
+
+/* ---- the page's own chrome ------------------------------------------------------------------------ */
+
+/* The club header keeps every fact it carries on the desktop page (crest, record, next opponent, bye,
+   scheme, Refresh, as of) — it just WRAPS into three bands instead of insisting on one line. The compact
+   state D134 gives a short window is deliberately `flex-wrap:nowrap` and drops the "as of" chip to save a
+   line of field height; there is no field to save it for here, so this puts both back. */
+.phone-list .teamhead, .phone-list .teamhead-compact { flex-wrap: wrap; gap: 6px 10px; padding: 8px 10px; border-radius: 10px; }
+.phone-list .teamhead img { width: 32px; height: 32px; }
+.phone-list .teamhead-main, .phone-list .teamhead-compact .teamhead-main { flex: 1 1 180px; min-width: 0; flex-wrap: wrap; gap: 2px 10px; }
+.phone-list .teamhead h1 { flex: 1 1 100%; font-size: 17px; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.phone-list .teamhead .meta, .phone-list .teamhead-compact .meta { flex: 1 1 100%; font-size: 11.5px; gap: 2px 10px; flex-wrap: wrap; }
+.phone-list .teamhead-controls { flex: 1 1 100%; margin-left: 0; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.phone-list .chip-row { flex-wrap: wrap; justify-content: flex-end; }
+.phone-list .refresh-btn, .phone-list .legend-chip { min-height: 44px; padding: 0 14px; font-size: 13px; }
+.phone-list .teamhead-compact .asof-chip { display: inline-flex; align-items: center; font-size: 11px; }
+/* The header row wraps rather than squeezing: the club block takes the full width and the key's chip sits
+   under it, right-aligned, instead of pushing the club's name into a 2px overflow at 390. */
+.phone-list .phone-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; }
+.phone-list .phone-head > .teamhead { flex: 1 1 100%; min-width: 0; }
+.phone-list .phone-head > .legend { margin: 0 0 0 auto; flex: none; }
+
+/* The key's popover is anchored to the chip, which sits at the right edge of a 390px screen — it opens to
+   the LEFT of it and stays inside the page instead of running off the sideline. */
+.phone-list .legend-collapsed .legend-items { max-width: calc(100vw - 24px); font-size: 11px; }
+
+/* The shared nav strip (D59) keeps its links, at thumb size. The desktop strip is one clipped 34px line
+   (`height:34px; flex-wrap:nowrap; overflow:hidden`), which simply cut the Team/Offense/Defense/Matchup
+   pills off the right edge of a 390px screen — here it wraps to as many lines as it needs. */
+.phone-list .nav-strip { height: auto; overflow: visible; flex-wrap: wrap; gap: 6px 8px; padding: 6px 8px; }
+.phone-list .nav-strip-pills { flex: 1 1 100%; flex-wrap: wrap; gap: 6px; }
+.phone-list .nav-strip-pills .zoom-pill { flex: 1 1 auto; justify-content: center; }
+.phone-list .nav-strip-all, .phone-list .nav-pill, .phone-list .nav-switcher {
+  min-height: 44px; display: inline-flex; align-items: center; font-size: 13px; padding: 0 12px; }
+.phone-list .nav-switcher { max-width: 44vw; }
+
+/* ---- the pinned Offense / Defense toggle ----------------------------------------------------------- */
+
+/* Pinned under the app bar so the man reading the secondary can switch sides without scrolling back up.
+   `top` clears the sticky topbar; the safe-area inset below adds a notch's worth on an iPhone. */
+.phone-list .phone-toggle { position: sticky; top: 52px; z-index: 6; display: flex; gap: 6px;
+  margin: 8px 0; padding: 6px; border-radius: 12px; background: #11151a; border: 1px solid #242b33;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, .45); }
+.phone-list .phone-seg { flex: 1 1 0; min-height: 44px; border-radius: 9px; border: 1px solid transparent;
+  background: transparent; color: var(--muted); font: inherit; font-size: 14px; font-weight: 700;
+  letter-spacing: .04em; text-transform: uppercase; cursor: pointer; }
+.phone-list .phone-seg.is-on { color: #fff; border-color: color-mix(in srgb, var(--team-secondary, #777) 55%, #2a323b);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--team-primary, #333) 80%, #11151a) 0%,
+    color-mix(in srgb, var(--team-primary, #333) 55%, #11151a) 100%); }
+
+/* ---- the groups and their columns ------------------------------------------------------------------ */
+
+.phone-list .phone-group { margin: 0 0 14px; }
+/* The level heading is the field's own level label (LINE, PASS CATCHERS…), set as a quiet rule across the
+   page so the groups read as sections rather than as more pills. */
+.phone-list .phone-group-head { margin: 0 0 6px; font-size: 11px; font-weight: 900; letter-spacing: .14em;
+  text-transform: uppercase; color: rgba(255, 255, 255, .6); display: flex; align-items: center; gap: 8px; }
+.phone-list .phone-group-head::after { content: ""; flex: 1 1 auto; height: 1px;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--team-secondary, #777) 55%, transparent), transparent); }
+.phone-list .phone-cols { display: flex; flex-direction: column; gap: 10px; }
+
+/* THE ONE OVERRIDE THAT MATTERS: a column is an absolutely-placed box on the field's canvas, with its x,
+   y, width and height written into the element's own style attribute by cards.js. In the list it is an
+   ordinary block in the page's flow, so those four are switched off here (an inline style can only be
+   beaten by !important) and nothing else about the column is touched. */
+.phone-list .column { position: static !important; width: auto !important; height: auto !important; }
+.phone-list .column-stack { gap: 4px; }
+
+/* The column pill is a tap target now (it opens the "why is this column numbered WR2" popover), so it gets
+   the full 44px and reads left-aligned like a heading rather than centred like a chip. */
+.phone-list .column-label { min-height: 44px; display: flex; align-items: center; text-align: left;
+  font-size: 12.5px; letter-spacing: .08em; padding: 0 12px; border-radius: 10px 10px 4px 4px; }
+
+/* ---- the rows -------------------------------------------------------------------------------------- */
+
+/* 44px of hit area on every row, line one and depth alike (the inline min-height cards.js writes is the
+   LAYOUT's reserved height in canvas units, which means nothing here). Real type: 15px names, 12px meta. */
+.phone-list .prow { min-height: 44px !important; border-radius: 10px; }
+.phone-list .prow-line { gap: 8px; padding: 0 10px; }
+.phone-list .prow-name { font-size: 15px; }
+.phone-list .prow-one .prow-name { font-size: 15px; font-weight: 700; }
+.phone-list .prow-num { font-size: 12px; min-width: 22px; }
+.phone-list .prow-ovr { font-size: 12px; min-width: 26px; padding: 2px 6px; }
+.phone-list .prow-one .prow-ovr { font-size: 13px; min-width: 28px; }
+/* The snap trio stays INLINE after the rating pill on every row. styles.css turns a photo row's row into a
+   two-line stack (the trio under the pill) to buy a long name its full width on the offense/defense pages;
+   at 390 that left a 44px row with a lone number floating under the name, and the phone list's photo rows
+   are the few 90+ men rather than every starter. `display:contents` is the base rule for every other row,
+   so this puts the photo rows back onto the same one-line shape. */
+.phone-list .prow-one:has(.prow-head) .prow-info, .phone-list .prow-one:has(.prow-head) .prow-main { display: contents; }
+.phone-list .snaps, .phone-list .prow-one .snaps, .phone-list .prow-one:not(:has(.prow-head)) .snaps,
+.phone-list .prow-one:has(.prow-head) .snaps { font-size: 12px; align-self: auto; line-height: inherit; margin-left: 2px; }
+.phone-list .prow-badges { max-width: none; gap: 3px; }
+/* The desktop rows scale their badges and banners down to fit a 15-unit line on a canvas that is then
+   shrunk again; here the row is 44 real pixels, so both come back up to something a phone can read. The
+   selectors match the specificity of the compact-family rules they override (styles.css). */
+.phone-list .column-compact .prow .badge, .phone-list .prow .badge,
+.phone-list .column-compact .prow .chip, .phone-list .prow .chip { font-size: 11px; padding: 2px 5px; }
+.phone-list .column-compact .prow-one .card-banner,
+.phone-list .column-compact .prow-outrail .card-banner,
+.phone-list .field-scale .column .prow-one .card-banner { height: 18px; line-height: 18px; font-size: 11px; }
+/* D138(4): the photo is only ever drawn for a man rated 90 or more (cards.js's headshotHtml minRating), so
+   this rule styles the few that exist rather than reserving a gutter on every row. */
+.phone-list .prow-one .prow-head { margin-right: 2px; }
+.phone-list .card-banner { font-size: 10.5px; letter-spacing: .05em; }
+
+/* The "+N more" chip and the rows behind it. The desktop chip is pinned to a 15-unit line inside the
+   column's reserved box (`.column .prow-more.depth-more`), which is what this has to out-specify. */
+.phone-list .column .prow-more.depth-more { min-height: 44px; height: auto; width: 100%; font-size: 13px; padding: 0 12px; }
+.phone-list .depth-extra { display: none; flex-direction: column; gap: 4px; }
+.phone-list .depth-extra.is-open { display: flex; }
+
+/* ---- the "not on chart" disclosure ------------------------------------------------------------------ */
+
+.phone-list .phone-tray { margin: 6px 0 18px; border: 1px solid #242b33; border-radius: 10px; background: #11151a; }
+.phone-list .phone-tray > summary { min-height: 44px; display: flex; align-items: center; padding: 0 12px;
+  color: var(--muted); font-size: 12.5px; letter-spacing: .04em; cursor: pointer; }
+.phone-list .phone-tray-body { padding: 0 8px 8px; display: flex; flex-direction: column; gap: 6px; }
+/* Same override as the columns: a tray is an absolutely-placed strip on the canvas and an ordinary block
+   here. It may wrap onto as many lines as its chips need, which the field's one-line strip cannot. */
+.phone-list .phone-tray .tray { position: static !important; width: auto !important; height: auto !important;
+  flex-wrap: wrap; row-gap: 6px; }
+.phone-list .tray-chip { min-height: 36px; display: inline-flex; align-items: center; font-size: 12px; }
+
+/* ---- the column pill's popover (B4: hover-only facts become a tap) ---------------------------------- */
+
+.phone-list .phone-pop { margin: 4px 0 2px; padding: 10px 12px; border-radius: 10px; background: #12161b;
+  border: 1px solid #2a323b; box-shadow: 0 8px 20px rgba(0, 0, 0, .55); color: var(--ink); font-size: 12.5px;
+  line-height: 1.4; display: flex; flex-direction: column; gap: 8px; }
+.phone-list .phone-pop-link { min-height: 44px; display: flex; align-items: center; color: #8fd3ff;
+  text-decoration: none; font-weight: 700; }
+
+/* ---- the player panel at phone width ---------------------------------------------------------------- */
+
+/* Step 2 turns this into a proper full-screen sheet. For now it must simply open and close usably: a
+   full-width sheet at the foot of the screen with its own scroll, OVER the list rather than beside it.
+   Scoped to `.phone-list` rather than to a width, because the aside is the last thing in the list's own
+   markup — left sticky, a tablet's panel opened a page and a half below the fold, where a tap on a player
+   looked like nothing happening at all. */
+.phone-list .player-panel { position: fixed; left: 0; right: 0; bottom: 0; top: auto; z-index: 30;
+  width: 100%; max-height: 86vh; border-radius: 14px 14px 0 0; border-bottom: none;
+  padding-bottom: env(safe-area-inset-bottom, 0px); box-shadow: 0 -10px 30px rgba(0, 0, 0, .6); }
+.phone-list .panel-inner { padding: 16px 14px 24px; }
+.phone-list .panel-close { width: 44px; height: 44px; font-size: 22px; }
+
+/* B3: the notch/home-indicator insets. `viewport-fit=cover` (index.html) lets the page use the whole
+   screen, so the list pays the notch back itself. Every rule here is scoped to `.phone-list` — the app
+   bar's own inset is part of the parked step-1 work and is deliberately NOT applied while the list is
+   switched off (viewfit.js's PHONE_LIST_ENABLED), because a media query would reach the desktop page.
+   Every inset is 0 wherever there is no notch. */
+.phone-list { padding-left: env(safe-area-inset-left, 0px); padding-right: env(safe-area-inset-right, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px); }
+.phone-list .phone-toggle { top: calc(52px + env(safe-area-inset-top, 0px)); }

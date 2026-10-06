@@ -1,0 +1,228 @@
+{
+ "season": 2025,
+ "cols": [
+  "game_id",
+  "posteam",
+  "defteam",
+  "homeOff",
+  "qtr",
+  "down",
+  "ydstogo",
+  "yardline_100",
+  "type",
+  "passer",
+  "target",
+  "rusher",
+  "band",
+  "dir",
+  "air",
+  "yac",
+  "yards",
+  "complete",
+  "td",
+  "int",
+  "epa",
+  "success",
+  "cpoe",
+  "pa",
+  "screen",
+  "motion",
+  "rpo",
+  "blitzers",
+  "rushers",
+  "redzone",
+  "ezTarget",
+  "route",
+  "pressure",
+  "pi",
+  "fumbler",
+  "fumLost",
+  "sd",
+  "xpass",
+  "drive",
+  "firstDown",
+  "secs",
+  "noHuddle",
+  "shotgun",
+  "pers"
+ ],
+ "driveCols": [
+  "game_id",
+  "posteam",
+  "drive",
+  "result",
+  "pts",
+  "rz",
+  "plays"
+ ],
+ "weeks": [
+  {
+   "week": 1,
+   "hash": "08402ece7f46d60d",
+   "plays": 1924,
+   "builtAt": "2026-10-04T03:00:36.905Z"
+  },
+  {
+   "week": 2,
+   "hash": "482d5d6f3a873739",
+   "plays": 1957,
+   "builtAt": "2026-10-04T02:47:42.741Z"
+  },
+  {
+   "week": 3,
+   "hash": "50dce2b51e3f40d4",
+   "plays": 1944,
+   "builtAt": "2026-10-04T02:47:42.741Z"
+  },
+  {
+   "week": 4,
+   "hash": "40bb531d2a9ba9b3",
+   "plays": 1939,
+   "builtAt": "2026-10-04T02:47:42.741Z"
+  },
+  {
+   "week": 5,
+   "hash": "2d655bb9ed84a681",
+   "plays": 1720,
+   "builtAt": "2026-10-04T02:47:42.741Z"
+  },
+  {
+   "week": 6,
+   "hash": "fbcfb48ceb974bb7",
+   "plays": 1775,
+   "builtAt": "2026-10-04T02:47:42.741Z"
+  },
+  {
+   "week": 7,
+   "hash": "9b653e64863354d3",
+   "plays": 1872,
+   "builtAt": "2026-10-04T02:47:42.741Z"
+  },
+  {
+   "week": 8,
+   "hash": "83da0cb7a55a6900",
+   "plays": 1548,
+   "builtAt": "2026-10-04T02:47:42.741Z"
+  },
+  {
+   "week": 9,
+   "hash": "113ef9854390a650",
+   "plays": 1717,
+   "builtAt": "2026-10-04T02:47:42.741Z"
+  },
+  {
+   "week": 10,
+   "hash": "6499c022a843812e",
+   "plays": 1725,
+   "builtAt": "2026-10-04T02:47:42.741Z"
+  },
+  {
+   "week": 11,
+   "hash": "0c49502f12100f74",
+   "plays": 1836,
+   "builtAt": "2026-10-04T02:47:42.741Z"
+  },
+  {
+   "week": 12,
+   "hash": "6d2c664a15d8dc0d",
+   "plays": 1750,
+   "builtAt": "2026-10-04T02:47:42.741Z"
+  },
+  {
+   "week": 13,
+   "hash": "4df7b7d4f877b187",
+   "plays": 1956,
+   "builtAt": "2026-10-04T02:47:42.741Z"
+  },
+  {
+   "week": 14,
+   "hash": "51bdc0f587d87207",
+   "plays": 1725,
+   "builtAt": "2026-10-04T02:47:42.741Z"
+  },
+  {
+   "week": 15,
+   "hash": "c79fb595aaee9279",
+   "plays": 1915,
+   "builtAt": "2026-10-04T02:47:42.741Z"
+  },
+  {
+   "week": 16,
+   "hash": "eb92701354579cdf",
+   "plays": 1970,
+   "builtAt": "2026-10-04T02:47:42.741Z"
+  },
+  {
+   "week": 17,
+   "hash": "a160bb2e739a5f49",
+   "plays": 1915,
+   "builtAt": "2026-10-04T02:47:42.741Z"
+  },
+  {
+   "week": 18,
+   "hash": "c6f9c8f58d8b7a99",
+   "plays": 1901,
+   "builtAt": "2026-10-04T02:47:42.741Z"
+  },
+  {
+   "week": 19,
+   "hash": "362db11f4593d905",
+   "plays": 768,
+   "builtAt": "2026-10-04T02:47:42.741Z"
+  },
+  {
+   "week": 20,
+   "hash": "34daef6f979c26c3",
+   "plays": 553,
+   "builtAt": "2026-10-04T02:47:42.741Z"
+  },
+  {
+   "week": 21,
+   "hash": "c395d284fb429e46",
+   "plays": 241,
+   "builtAt": "2026-10-04T02:47:42.741Z"
+  },
+  {
+   "week": 22,
+   "hash": "82546aae92a88d02",
+   "plays": 137,
+   "builtAt": "2026-10-04T02:47:42.741Z"
+  }
+ ],
+ "pfrUncharted": "e435e4a2f1ef0bd0",
+ "sources": {
+  "pbp": {
+   "fetchedAt": "2026-09-24T20:38:00.403Z",
+   "sha": "8ce0001826f0f7b895b7a1068e4db7f43696c699db7064ccb1201855768fd06c"
+  },
+  "ftn": {
+   "fetchedAt": "2026-09-24T20:38:01.418Z",
+   "sha": "62a66416043ff08d43303bf5f3af5390e3fe0f29461a1fc6e295a15cac6ea994"
+  },
+  "ngs": {
+   "fetchedAt": "2026-09-24T20:37:59.637Z",
+   "sha": "3cd03db87af80863"
+  },
+  "pfr": {
+   "fetchedAt": "2026-09-24T20:38:02.564Z",
+   "sha": "9ebf83e7490017ca"
+  },
+  "pfrRush": {
+   "fetchedAt": "2026-09-25T20:21:17.327Z",
+   "sha": "a348586c1d392b64fa3c0947d652fb5f0ecab76a04ed3035d59834a99183027b"
+  },
+  "pfrRec": {
+   "fetchedAt": "2026-09-25T20:21:17.564Z",
+   "sha": "78542d5c7b0df65c5c4a7ead0af14835d0680a50f9b8eed2175ac647f531e91d"
+  },
+  "routes": null,
+  "participation": {
+   "fetchedAt": "2026-09-24T20:38:01.648Z",
+   "sha": "59069adfee7b0f464befba8a5e8be331e523633cc6a7ab403d37bcbcdfbe66ac"
+  },
+  "snaps": {
+   "fetchedAt": "2026-09-24T20:38:03.095Z",
+   "sha": "3fc2deb0e9ad86d34d4578cb80bb21c95253e088ee22ca028adf46f7485eff1f"
+  }
+ }
+}

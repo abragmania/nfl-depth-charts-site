@@ -1,0 +1,612 @@
+// PURE (no DOM, no fetch): everything the pass-catcher player page (#/player/:gsis, D182) shows, computed from
+// the same compiled week blocks the usage leaderboard reads, through agg.js's aggregateUsage() so a figure on
+// this page is the same figure the leaderboard prints for him (D178: the play-by-play is canonical).
+//
+// PERSPECTIVE (D177): every rate carries a league reference for HIS POSITION GROUP over the SAME WINDOW. Tile
+// references are the plain mean over his position's reference pool (agg.js: 2+ targets per club game in the window,
+// floor 5; carries likewise for rushing) and tile colours are that pool's percentile tiers (agg.js tierCuts;
+// under 8 men, the league-wide cuts). Zone and route references are POOLED over every target
+// to his position group in the window (a cell's catch % is all their catches / all their targets there), because
+// a per-player mean of a four-target cell is noise.
+// TOTALS (D181): the weekly strips print the window's figure; a share totals as total over total, never a mean
+// of weekly percentages (the window row from aggregateUsage already is).
+// The weekly chart always spans every loaded week (the whole timeline, both seasons when Include 2025 is on) so a
+// one-week window can be seen in context; the window's weeks are flagged `inWin` and drawn bright.
+import { aggregateUsage, clubGames, colIndex, usageReference, inPool, tierCuts, referenceText } from "./agg.js";
+import { gamesInWindow, splitKey, isSituational } from "./filters.js";
+import { aggregateRush, rushReference } from "./agg_rush.js";
+import { fantasyByPlayer } from "./agg_fantasy.js";
+
+const num = (v) => (v === null || v === undefined || v === "" || !Number.isFinite(+v) ? null : +v);
+const truthy = (v) => v === true || v === 1 || v === "1" || v === "true";
+const ratio = (a, b) => (b > 0 ? a / b : null);
+const mean = (vals) => { const v = vals.filter((x) => x !== null && x !== undefined && Number.isFinite(x)); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
+export const median = (vals) => {
+  const v = vals.filter((x) => x !== null && x !== undefined && Number.isFinite(+x)).map(Number).sort((a, b) => a - b);
+  if (!v.length) return null;
+  const m = v.length >> 1;
+  return v.length % 2 ? v[m] : (v[m - 1] + v[m]) / 2;
+};
+
+export const CATCHER_POS = new Set(["WR", "TE", "RB", "FB"]);
+export const RUSHER_POS = new Set(["RB", "FB"]);
+export const RUSH_TIER_KEYS = ["ypc", "epaCar", "succPct", "rushShare", "ryoeAtt"];
+// D191: a back's opportunity tiles are coloured against the rushing pool (as on the Rushing table); WR/TE use the usage pool.
+export const OPP_TIER_KEYS = ["opp", "oppG", "oppShare"];
+const OPP_KEYS = ["opp", "oppG", "oppShare", "ydsOpp", "epaOpp", "tdOpp"];
+// Which page a position gets: the pass-catcher page for WR/TE/RB/FB; QBs and everyone else a "coming next" stub.
+export function pageKind(pos) {
+  const p = String(pos || "").toUpperCase();
+  if (CATCHER_POS.has(p)) return "catcher";
+  if (p === "QB") return "qb";
+  return "other";
+}
+// The player page ignores team, opponent and the position chips (it is one man; his reference is his position).
+export const pageState = (st) => ({ ...st, team: "", opp: "", ha: "", downs: [], qtrs: [], pos: {} });
+
+const ZONE_BANDS = ["D", "I", "S", "B"];
+const ZONE_DIRS = ["L", "M", "R"];
+export const ZONE_KEYS = ZONE_BANDS.flatMap((b) => ZONE_DIRS.map((d) => b + d));
+
+function emptyCell() { return { n: 0, pi: 0, rec: 0, yds: 0, epa: 0, epaN: 0 }; }
+function addTarget(c, t) {
+  c.n++; if (t.pi) c.pi++;
+  if (t.complete) { c.rec++; c.yds += t.yards; }
+  if (t.epa !== null) { c.epa += t.epa; c.epaN++; }
+}
+// The four zone measures for a cell (or a route): targets, catch % (catches / targets that were real passes: a
+// pass-interference target is never a catch or an incompletion), yards per target, EPA per target.
+export function cellRates(c) {
+  if (!c || !c.n) return { n: 0, catchPct: null, ydsTgt: null, epaTgt: null };
+  return { n: c.n, catchPct: ratio(c.rec, c.n - c.pi), ydsTgt: c.yds / c.n, epaTgt: c.epaN ? c.epa / c.epaN : null };
+}
+
+function resultText(t) {
+  if (t.pi) return "DPI";
+  if (t.int) return "INT";
+  if (t.complete && t.td) return "TD";
+  return t.complete ? "Catch" : "Incomplete";
+}
+
+// ---- the page ------------------------------------------------------------------------------------------
+// `blocks` must hold every week the page's timeline shows (data.loadFor with window "season"); `st` is the page
+// filter state (its window picks the weeks every total and tile uses). Returns null for an unknown gsis.
+export function playerView(blocks, players, stIn, gsis) {
+  const meta = players?.[gsis];
+  if (!meta) return null;
+  const st = pageState(stIn);
+  const pos = String(meta.pos || "").toUpperCase();
+  const kind = pageKind(pos);
+  const out = { gsis, name: meta.name || gsis, pos, kind, espnId: meta.espnId ?? null };
+  if (kind !== "catcher") { out.team = lastTeam(meta); return out; }
+
+  const group = { [pos]: "in" };
+  // Window rows for the whole league (every position: the tier cuts fall back to the league-wide pool when his
+  // position's is small): his row, and his position's reference and tier cuts.
+  const win = aggregateUsage(blocks, players, st);
+  const row = win.rows.find((r) => r.gsis === gsis) || null;
+  const uRef = usageReference(win.rows);
+  const ref = uRef.at(pos);
+  const lg = ref.lg;
+
+  // The whole timeline: every loaded week, window or not.
+  const fullSt = { ...st, pos: group, window: "season", from: null, to: null };
+  const full = aggregateUsage(blocks, players, fullSt);
+  const frow = full.rows.find((r) => r.gsis === gsis) || null;
+  const games = clubGames(blocks);
+  const oppOf = new Map(games.map((g) => [`${g.key}|${g.team}`, g]));
+  const winSet = gamesInWindow(games, st);
+  const winKeys = new Set(win.weeks);
+
+  // One pass over the plays: his targets and carries (whole timeline, flagged in/out of the window), and the
+  // position group's per-player and pooled figures inside the window.
+  const grp = new Map(); // id -> per-player window accumulators for the group
+  const G = (id) => {
+    if (!grp.has(id)) grp.set(id, { tgt: 0, pi: 0, rec: 0, yac: 0, succ: 0, succN: 0, car: 0, ryds: 0, repa: 0, repaN: 0, rsucc: 0, rsuccN: 0, games: new Set(), wkTgt: new Map(), wkRec: new Map(), wkCar: new Map() });
+    return grp.get(id);
+  };
+  const posOf = (id) => String(players?.[id]?.pos || "").toUpperCase();
+  const inGroup = (id) => id && posOf(id) === pos;
+  // Per-player accumulators run for every pass-catching position (the league-wide fallback pool needs them);
+  // the pooled zone and route references stay his position's only.
+  const tracked = (id) => id && CATCHER_POS.has(posOf(id));
+  const clubWin = new Map(); // team -> the club's games in the window (the reference pool's per-game rule)
+  for (const gk of winSet) { const t = gk.split("|")[1]; clubWin.set(t, (clubWin.get(t) || 0) + 1); }
+  const clubGOf = (a) => { const last = [...a.games].sort().pop(); return last ? clubWin.get(last.split("|")[1]) || 0 : 0; };
+  const lgZone = Object.fromEntries(ZONE_KEYS.map((k) => [k, emptyCell()]));
+  const myZone = Object.fromEntries(ZONE_KEYS.map((k) => [k, { ...emptyCell(), plays: [] }]));
+  const lgRoute = new Map(), myRoute = new Map();
+  let lgZoned = 0, lgRouted = 0;
+  const clubRuns = new Map(); // gk -> designed runs
+  const clubAtt = new Map(); // gk -> pass attempts (agg.js's rule: a pass-interference target is not one)
+  const clubAir = new Map(); // gk -> air yards on those attempts (agg.js's teamAir rule)
+  const myWeek = new Map(); // key -> { car, ryds, gk }
+  const myRoutes = new Map(); // key -> his charted routes that week
+  const my = { ryds: 0, rz: 0, rtd: 0 }; // his window rushing counts the per-player accumulator does not keep
+  let has2025Routes = false;
+
+  for (const b of blocks) {
+    const C = colIndex(b.cols);
+    for (const r of b.plays || []) {
+      const team = r[C.posteam];
+      const gk = `${b.key}|${team}`;
+      const inW = winSet.has(gk);
+      const type = r[C.type];
+      if (type === "run") clubRuns.set(gk, (clubRuns.get(gk) || 0) + 1);
+      if (type === "pass" && !truthy(r[C.pi])) { clubAtt.set(gk, (clubAtt.get(gk) || 0) + 1); clubAir.set(gk, (clubAir.get(gk) || 0) + (num(r[C.air]) ?? 0)); }
+      // A pass-interference target with "excl. PI targets" is as if the ledger had dropped it: not even a game played.
+      const piOff = truthy(r[C.pi]) && st.pi === false;
+      if (!piOff) for (const col of ["passer", "target", "rusher"]) { const id = r[C[col]]; if (inW && tracked(id)) G(id).games.add(gk); }
+      if (type === "pass" && r[C.target]) {
+        const pi = truthy(r[C.pi]);
+        if (pi && st.pi === false) continue;
+        const id = r[C.target];
+        const t = {
+          pi, complete: !pi && truthy(r[C.complete]), yards: pi ? 0 : num(r[C.yards]) ?? 0, epa: num(r[C.epa]),
+          yac: num(r[C.yac]), succ: num(r[C.success]), td: truthy(r[C.td]), int: truthy(r[C.int]),
+          band: r[C.band], dir: r[C.dir], route: C.route !== undefined ? r[C.route] : null,
+        };
+        const zk = t.band && t.dir ? t.band + t.dir : null;
+        if (inW && tracked(id)) {
+          const a = G(id);
+          a.tgt++; if (pi) a.pi++;
+          a.wkTgt.set(gk, (a.wkTgt.get(gk) || 0) + 1);
+          if (t.complete) { a.rec++; a.yac += t.yac ?? 0; a.wkRec.set(gk, (a.wkRec.get(gk) || 0) + 1); }
+          if (t.succ !== null) { a.succ += t.succ; a.succN++; }
+        }
+        if (inW && inGroup(id)) {
+          if (zk && lgZone[zk]) { addTarget(lgZone[zk], t); lgZoned++; }
+          if (b.season === 2025 && t.route) {
+            if (!lgRoute.has(t.route)) lgRoute.set(t.route, emptyCell());
+            addTarget(lgRoute.get(t.route), t); lgRouted++;
+          }
+        }
+        if (id === gsis && inW) {
+          if (zk && myZone[zk]) {
+            addTarget(myZone[zk], t);
+            myZone[zk].plays.push({ key: b.key, opp: r[C.defteam], down: num(r[C.down]), togo: num(r[C.ydstogo]), yl: num(r[C.yardline_100]),
+              qtr: num(r[C.qtr]), result: resultText(t), yards: t.yards, air: num(r[C.air]), epa: t.epa });
+          }
+          if (b.season === 2025 && t.route) {
+            has2025Routes = true;
+            if (!myRoute.has(t.route)) myRoute.set(t.route, emptyCell());
+            addTarget(myRoute.get(t.route), t);
+          }
+        }
+      } else if (type === "run" && r[C.rusher]) {
+        const id = r[C.rusher];
+        const yds = num(r[C.yards]) ?? 0, epa = num(r[C.epa]), succ = num(r[C.success]);
+        if (inW && tracked(id)) {
+          const a = G(id);
+          a.car++; a.ryds += yds; a.wkCar.set(gk, (a.wkCar.get(gk) || 0) + 1);
+          if (epa !== null) { a.repa += epa; a.repaN++; }
+          if (succ !== null) { a.rsucc += succ; a.rsuccN++; }
+        }
+        if (id === gsis) {
+          const w = myWeek.get(b.key) || { car: 0, ryds: 0, gk };
+          w.car++; w.ryds += yds; myWeek.set(b.key, w);
+          if (inW) {
+            my.ryds += yds;
+            if (truthy(r[C.redzone])) my.rz++;
+            if (truthy(r[C.td])) my.rtd++;
+          }
+        }
+      }
+    }
+    // Snaps count a game as played (a back who only blocked still played).
+    for (const [id, s] of Object.entries(b.snaps || {})) {
+      if (!tracked(id)) continue;
+      const team = players?.[id]?.teams?.[b.key];
+      const gk = `${b.key}|${team}`;
+      if (team && winSet.has(gk) && (num(s?.off) ?? 0) > 0) G(id).games.add(gk);
+    }
+    // His charted routes that week (increment 7a's game log: the Routes and YPRR columns); absent = not charted.
+    const rt = num(b.routes?.[gsis]?.routes);
+    if (rt !== null) myRoutes.set(b.key, rt);
+  }
+
+  // ---- NGS (tracking only, D178): weekly values, weighted by his targets (separation, cushion) or catches
+  // (YAC over expected) that week; rushing yards over expected summed and divided by his carries those weeks.
+  const ngsFor = (id, a) => {
+    let sepW = 0, sep = 0, cushW = 0, cush = 0, yoeW = 0, yoe = 0, ryoe = 0, ryoeCar = 0;
+    for (const b of blocks) {
+      const team = players?.[id]?.teams?.[b.key];
+      const gk = `${b.key}|${team}`;
+      if (!team || !winSet.has(gk)) continue;
+      const rc = b.ngs?.receiving?.[id];
+      const w = a.wkTgt.get(gk) || 0, wr = a.wkRec.get(gk) || 0;
+      if (rc && w > 0) {
+        if (num(rc.separation) !== null) { sep += rc.separation * w; sepW += w; }
+        if (num(rc.cushion) !== null) { cush += rc.cushion * w; cushW += w; }
+      }
+      if (rc && wr > 0 && num(rc.yacOverExp) !== null) { yoe += rc.yacOverExp * wr; yoeW += wr; }
+      const ru = b.ngs?.rushing?.[id];
+      const car = a.wkCar.get(gk) || 0;
+      if (ru && car > 0 && num(ru.ryoe) !== null) { ryoe += ru.ryoe; ryoeCar += car; }
+    }
+    return { sep: ratio(sep, sepW), cushion: ratio(cush, cushW), yacOE: ratio(yoe, yoeW), ryoeAtt: ratio(ryoe, ryoeCar) };
+  };
+  const effFor = (id) => {
+    const a = grp.get(id) || G(id);
+    const n = ngsFor(id, a);
+    return { catchPct: ratio(a.rec, a.tgt - a.pi), yacRec: ratio(a.yac, a.rec), succPct: ratio(a.succ, a.succN), sep: n.sep, cushion: n.cushion, yacOE: n.yacOE };
+  };
+  // D191 opportunities for any man: his Usage row's figures (targets + carries, the Rushing page's count), or, with
+  // no Usage row (no targets, no routes), his window carries from this page's rushing count (designed runs) with 0
+  // targets over the same denominators (the club's designed runs + pass attempts in his games). Null when he has
+  // neither.
+  const usageById = new Map(win.rows.map((x) => [x.gsis, x]));
+  const oppFor = (id) => {
+    const u = usageById.get(id);
+    if (u) return Object.fromEntries(OPP_KEYS.map((k) => [k, u[k]]));
+    const a = grp.get(id);
+    if (!a || !a.car) return Object.fromEntries(OPP_KEYS.map((k) => [k, null]));
+    const den = [...a.games].reduce((s, gk) => s + (clubRuns.get(gk) || 0) + (clubAtt.get(gk) || 0), 0);
+    const rtd = id === gsis ? my.rtd : null; // touchdowns are only kept for him (tdOpp is not in any pool)
+    return { opp: a.car, oppG: ratio(a.car, a.games.size), oppShare: ratio(a.car, den), ydsOpp: ratio(a.ryds, a.car), epaOpp: ratio(a.repa, a.car), tdOpp: rtd === null ? null : ratio(rtd, a.car) };
+  };
+  const rushFor = (id) => {
+    const a = grp.get(id);
+    if (!a) return null;
+    const runs = [...a.games].reduce((s, gk) => s + (clubRuns.get(gk) || 0), 0);
+    return { car: a.car, ypc: ratio(a.ryds, a.car), epaCar: ratio(a.repa, a.repaN), succPct: ratio(a.rsucc, a.rsuccN),
+      rushShare: ratio(a.car, runs), carG: ratio(a.car, a.games.size), ryoeAtt: ngsFor(id, a).ryoeAtt, ...oppFor(id) };
+  };
+
+  // His efficiency and the group's (per-player means over his position's reference pool).
+  const qIds = [...grp.entries()].filter(([id, a]) => posOf(id) === pos && inPool(a.tgt, clubGOf(a))).map(([id]) => id);
+  const effs = qIds.map(effFor);
+  const mine = effFor(gsis);
+  const eff = { epaTgt: row?.epaTgt ?? null, ...mine };
+  const lgEff = { epaTgt: lg.overall.epaTgt };
+  for (const k of ["catchPct", "yacRec", "succPct", "sep", "cushion", "yacOE"]) lgEff[k] = mean(effs.map((e) => e[k]));
+
+  // Zones: his cells and the group's pooled cells, with each cell's share of all zoned targets.
+  const myZoned = ZONE_KEYS.reduce((s, k) => s + myZone[k].n, 0);
+  const zones = {};
+  for (const k of ZONE_KEYS) {
+    zones[k] = { ...cellRates(myZone[k]), share: ratio(myZone[k].n, myZoned), plays: myZone[k].plays.sort((x, y) => (x.key < y.key ? -1 : x.key > y.key ? 1 : 0)),
+      lg: { ...cellRates(lgZone[k]), share: ratio(lgZone[k].n, lgZoned) } };
+  }
+
+  // Weekly timeline: target share, air-yards share, snap share (from the whole-timeline row) with the opponent.
+  // His club for a week comes from players.json teams[week]; a week with no entry there (he had no rows) falls
+  // back to his nearest known week, so a week the club played still resolves its opponent instead of reading "bye".
+  const weekNum = (key) => { const { season, week } = splitKey(key); return season * 100 + week; };
+  const teamOf = (key) => {
+    if (meta.teams?.[key]) return meta.teams[key];
+    let best = null, bestDist = Infinity;
+    for (const k of Object.keys(meta.teams || {})) {
+      const d = Math.abs(weekNum(k) - weekNum(key));
+      if (d < bestDist) { bestDist = d; best = k; }
+    }
+    return best ? meta.teams[best] : null;
+  };
+  const series = (frow?.series || full.weeks.map((key) => ({ key, v: null, ay: null, snap: null, tgt: 0 }))).map((s) => {
+    const team = teamOf(s.key);
+    const g = team ? oppOf.get(`${s.key}|${team}`) : null;
+    const w = myWeek.get(s.key);
+    const runs = g ? clubRuns.get(`${s.key}|${team}`) || 0 : 0;
+    const played = s.v !== null || s.snap !== null || !!w;
+    // His club had a game that week (g) but he has no rows in it: a DNP, not a bye.
+    return { ...s, opp: g?.opp || null, home: g?.home ?? null, inWin: winKeys.has(s.key), dnp: !!g && !played,
+      car: played ? w?.car || 0 : null, rushShare: played ? ratio(w?.car || 0, runs) : null,
+      // D191 opportunities that week: the Usage row's targets + carries; with no Usage row, 0 targets + his carries.
+      // (named oppN: a series entry's "opp" is the opponent).
+      oppN: played ? s.oppN ?? (s.tgt || 0) + (w?.car || 0) : null,
+      // Increment 7a (the game log and the back's opportunity-share line): his charted routes that week (null when
+      // not charted), and his club's pass attempts (a PI target is not one) and designed runs in that game (null
+      // when his club had no game that week).
+      routes: myRoutes.has(s.key) ? myRoutes.get(s.key) : null,
+      att: g ? clubAtt.get(`${s.key}|${team}`) || 0 : null, runs: g ? runs : null,
+      // and his club's air yards that game (non-PI attempts), so a season's AY % totals as air over air (D181).
+      clubAy: g ? clubAir.get(`${s.key}|${team}`) || 0 : null,
+      // Whether HIS club's game that week is inside the window (null on a bye). `inWin` is the league's window
+      // weeks, which under Last 3 are the union of every club's last three, so another club's bye can put a week
+      // in `inWin` that is outside his own window (increment 7a, from the QB review).
+      inMyWin: g ? winSet.has(`${s.key}|${team}`) : null };
+  });
+
+  // D191 opportunities for the tile row and the Opportunities strip's window total (oppFor above).
+  const opps = oppFor(gsis);
+
+  const result = {
+    ...out, team: row?.team || frow?.team || lastTeam(meta), row, lg, cuts: ref.cuts, refText: ref.text, weeks: win.weeks, series, zones, zoned: myZoned,
+    eff, lgEff, rush: null, routes: null, has2025Routes, opps,
+  };
+
+  if (RUSHER_POS.has(pos)) {
+    const mineR = rushFor(gsis) || { car: 0, ypc: null, epaCar: null, succPct: null, rushShare: null, carG: null, ryoeAtt: null };
+    // The rushing pool: 2+ carries per club game in the window (floor 5); league-wide = every tracked position.
+    const allR = [...grp.entries()].filter(([, a]) => inPool(a.car, clubGOf(a))).map(([id]) => ({ pos: posOf(id), ...rushFor(id) }));
+    const qR = allR.filter((x) => x.pos === pos);
+    const lgR = {};
+    for (const k of ["car", "ypc", "epaCar", "succPct", "rushShare", "carG", "ryoeAtt", "opp", "oppG", "oppShare", "ydsOpp", "epaOpp"]) lgR[k] = mean(qR.map((x) => x[k]));
+    lgR.rz = null;
+    result.rush = { ...mineR, yds: my.ryds, rz: my.rz, td: my.rtd, lg: lgR, n: qR.length, cuts: tierCuts(qR, allR, [...RUSH_TIER_KEYS, ...OPP_TIER_KEYS]), refText: referenceText(pos, qR.length, "carries") };
+  }
+
+  result.recut = recutLayers({ blocks, players, st, gsis, pos, row, uRef, ref, lgEff, eff });
+  result.recut.trend = trendFigures(blocks, players, st, gsis, RUSHER_POS.has(pos));
+
+  if (has2025Routes) {
+    const list = [...myRoute.entries()].map(([route, c]) => ({ route, ...cellRates(c), lgShare: ratio(lgRoute.get(route)?.n || 0, lgRouted), lg: cellRates(lgRoute.get(route)) }));
+    const tot = list.reduce((s, x) => s + x.n, 0);
+    for (const x of list) x.share = ratio(x.n, tot);
+    result.routes = list.sort((a, b) => b.n - a.n || a.route.localeCompare(b.route));
+  }
+  return result;
+}
+
+// ---- the re-cut's five layers (increment 3, PROJECT.md Part 4 A and B2) ------------------------------------
+// Plain values for the headline, opportunity and variance layers, each beside its league figure; the passing and
+// rushing blocks read the existing `row`, `eff` and `rush` plus `recut.rushRow`. A back (RB, FB) reads his Running
+// backs table row (agg_rush.js) and its reference, so his headline, DK and opportunity tiles are the table's figures
+// and colours (D191's rushing-pool rule, now for DK too); a WR or TE reads his Receivers (Usage) row and reference.
+//   headline, back:     dkG, dk, scrimYds (rush yds + rec yds), totTd (rush td + rec td), ydsOpp, epaOpp
+//   headline, receiver: dkG, dk, rec, yds, ydsG (yds / g), td, yprr, epaTgt
+//   opportunity, back:  oppG, oppShare, car, rushShare, tgt, tgtShare, rzOpp, gl, snapPct, routePct
+//   opportunity, rec.:  tgtG, tgtShare, tprr, ayShare, adot, wopr, rz, ez, routePct, snapPct
+//   variance, back:     rzOppTdRate, in10TdRate, yds20Share, ybcCar, flRate, dkTdShare (league: rushReference pooled)
+//   variance, receiver: tdTgt, rzTdRate, cpoeTgt, yacOE, dropPer100, flRate, dkTdShare (league: usageReference pooled;
+//                       yacOE's league is the NGS mean the efficiency tiles already use)
+// headlineLg and opportunityLg are plain means over his position's reference pool (the row keys' own references).
+// `recut.cuts` (the name is RECUT_CUTS) is his position pool's tier cuts for both the headline and opportunity tiles:
+// a back's are the Running backs table's (rushReference), a receiver's the Receivers table's (usageReference).
+export const RECUT_CUTS = "cuts";
+// `rushRow` is his Running backs row (any position, null with no carries: "Rushing block only when he has carries").
+export const RB_HEADLINE_KEYS = ["dkG", "dk", "scrimYds", "totTd", "ydsOpp", "epaOpp"];
+export const REC_HEADLINE_KEYS = ["dkG", "dk", "rec", "yds", "ydsG", "td", "yprr", "epaTgt"];
+export const RB_OPP_KEYS = ["oppG", "oppShare", "car", "rushShare", "tgt", "tgtShare", "rzOpp", "gl", "snapPct", "routePct"];
+export const REC_OPP_KEYS = ["tgtG", "tgtShare", "tprr", "ayShare", "adot", "wopr", "rz", "ez", "routePct", "snapPct"];
+export const RB_VARIANCE_KEYS = ["rzOppTdRate", "in10TdRate", "yds20Share", "ybcCar", "flRate", "dkTdShare"];
+export const REC_VARIANCE_KEYS = ["tdTgt", "rzTdRate", "cpoeTgt", "yacOE", "dropPer100", "flRate", "dkTdShare"];
+const withDerived = (r, back) => (r ? (back
+  ? { ...r, scrimYds: (r.yds ?? 0) + (r.recYds ?? 0), totTd: (r.td ?? 0) + (r.recTd ?? 0) }
+  : { ...r, ydsG: ratio(r.yds, r.g) }) : null);
+const pick = (r, keys) => Object.fromEntries(keys.map((k) => [k, r?.[k] ?? null]));
+
+function recutLayers({ blocks, players, st, gsis, pos, row, uRef, ref, lgEff, eff }) {
+  const back = RUSHER_POS.has(pos);
+  const rush = aggregateRush(blocks, players, st);
+  const rRef = rushReference(rush.rows);
+  const rr = rRef.at(pos);
+  const rushRow = rush.rows.find((r) => r.gsis === gsis) || null;
+  const f = fantasyByPlayer(blocks, players, st).get(gsis) || null;
+  const fantasy = { parts: f?.parts ?? null, games: f?.games ?? [] };
+  if (back) {
+    // A back with no carries still has his Receivers row: its scrimmage figures stand in (rushYds, rushTd, yds, td).
+    const src = withDerived(rushRow, true) || (row ? { ...row, scrimYds: (row.yds ?? 0) + (row.rushYds ?? 0), totTd: (row.td ?? 0) + (row.rushTd ?? 0) } : null);
+    const q = rRef.pool.filter((r) => r.pos === pos).map((r) => withDerived(r, true));
+    // D219 figure 5: his inside-the-5 carry share over every game he played in the window (any club), and the plain
+    // mean over his position's rushing reference pool (the men with a figure).
+    const rz5 = rzI5Shares(blocks, players, st);
+    return {
+      kind: "back", rushRow,
+      i5: rz5.get(gsis) || null, i5Lg: mean(q.map((r) => rz5.get(r.gsis)?.i5Share ?? null)), pool: freezePool(q), fantasy: { ...fantasy, ...pick(src, ["dk", "dkG", "dkTdShare"]) },
+      headline: pick(src, RB_HEADLINE_KEYS), headlineLg: Object.fromEntries(RB_HEADLINE_KEYS.map((k) => [k, meanOf(q, k)])),
+      opportunity: pick(rushRow || row, RB_OPP_KEYS), opportunityLg: pick(rr.lg, RB_OPP_KEYS), cuts: withHeadlineCuts(rr.cuts, q, rRef.pool.map((r) => withDerived(r, true)), RB_HEADLINE_KEYS), opportunityRefText: rr.text,
+      variance: pick(rushRow, RB_VARIANCE_KEYS), varianceLg: pick(rr.pooled, RB_VARIANCE_KEYS),
+      rushRef: { lg: rr.lg, cuts: rr.cuts, n: rr.n, text: rr.text, pooled: rr.pooled },
+    };
+  }
+  const src = withDerived(row, false);
+  const q = uRef.pool.filter((r) => r.pos === pos).map((r) => withDerived(r, false));
+  return {
+    kind: "receiver", rushRow, pool: freezePool(q), fantasy: { ...fantasy, ...pick(src, ["dk", "dkG", "dkTdShare"]) },
+    headline: pick(src, REC_HEADLINE_KEYS), headlineLg: Object.fromEntries(REC_HEADLINE_KEYS.map((k) => [k, meanOf(q, k)])),
+    opportunity: pick(row, REC_OPP_KEYS), opportunityLg: Object.fromEntries(REC_OPP_KEYS.map((k) => [k, meanOf(q, k)])), cuts: withHeadlineCuts(ref.cuts, q, uRef.pool.map((r) => withDerived(r, false)), REC_HEADLINE_KEYS), opportunityRefText: ref.text,
+    variance: { ...pick(row, REC_VARIANCE_KEYS), yacOE: eff?.yacOE ?? null }, varianceLg: { ...pick(ref.pooled, REC_VARIANCE_KEYS), yacOE: lgEff?.yacOE ?? null },
+    rushRef: rushRow ? { lg: rr.lg, cuts: rr.cuts, n: rr.n, text: rr.text, pooled: rr.pooled } : null,
+  };
+}
+// `recut.pool` (increment 7a): his position's reference-pool rows (the ones headlineLg averages, derived keys
+// included) so the page can rank him inside the same pool; frozen, rows and list, so a page cannot corrupt them.
+// `recut.cuts` (increment 7a, the lead's ruling): the table's cuts plus cuts for every headline key the table does not
+// tier (scrimmage yards, total TD, Yds/opp, EPA/opp for a back; receptions, yards, TD for a receiver), from the same
+// pool with the same percentiles (agg.js tierCuts). A key the table already cuts keeps its cuts untouched.
+function withHeadlineCuts(cuts, q, league, keys) {
+  const missing = keys.filter((k) => !(k in (cuts || {})));
+  return missing.length ? { ...cuts, ...tierCuts(q, league, missing) } : cuts;
+}
+const freezePool = (q) => Object.freeze(q.map((r) => Object.freeze(r)));
+const meanOf = (rows, k) => mean(rows.map((r) => (r[k] === null || r[k] === undefined ? null : +r[k])));
+
+// ---- the Trend strip (D196, Adam's answer B) --------------------------------------------------------------
+// `recut.trend`: each involvement share over his LAST 3 GAMES PLAYED inside the window beside the same share over
+// every game he played inside the window. A game his club played that he did not (no snap, no target, carry or pass)
+// is left out, never a zero. Under 3 games played, the last-3 figure covers what he has (`last3Games` says how many,
+// `short` is true). The window is the page's own (st.window over the loaded weeks), so the previous season is in only
+// when Include-previous loaded it and the window reaches it. Every share is total over total in the counted games,
+// with the row's definitions (agg.js, agg_rush.js), except snap share, which the row too takes as the mean of his
+// weekly snap percentages (the snap table has no club snap counts):
+//   oppShare    = (targets + designed runs) / (club pass attempts + club designed runs)            (back)
+//   tgtShare    = targets / club pass attempts                                                      (both)
+//   ayShare     = air yards on his targets / club air yards on pass attempts                        (receiver)
+//   snapPct     = mean of his weekly offensive snap % over the counted games with a snap figure     (both)
+//   routePct    = routes / the club dropbacks each charted week's route % implies; charted games only, null when a
+//                 charted week has no route %                                                       (both)
+//   rzShare     = (red-zone targets + red-zone designed runs) / (club red-zone pass attempts + club red-zone
+//                 designed runs)                                                                    (back)
+//   rzTgtShare  = red-zone targets / club red-zone pass attempts; null under 3 club attempts (RZ_I5_FLOOR) (receiver)
+// A pass-interference target is his target but never a club attempt (agg.js); with "excl. PI targets" the row is
+// skipped outright. Snap and route shares are null under a down or quarter filter, as on the row.
+// Shape (frozen): { kind: "back" | "receiver", keys, games, last3Games, short, last3Weeks: [week keys],
+//   figures: { [key]: { last3, season, pts (last3 - season, in percentage points), n3, n } } } where n3 and n are the
+//   games that fed the figure (fewer than the games counted when snaps or routes are missing that week).
+export const RB_TREND_KEYS = ["oppShare", "snapPct", "tgtShare", "rzShare", "routePct"];
+export const REC_TREND_KEYS = ["tgtShare", "ayShare", "snapPct", "routePct", "rzTgtShare"];
+
+export function trendFigures(blocks, players, st, gsis, back) {
+  const winSet = gamesInWindow(clubGames(blocks), st);
+  const situational = isSituational(st);
+  const per = new Map(); // gk -> { club and his counts in that game }
+  const club = new Map(); // gk -> { att, air, runs, rzAtt, rzRuns }
+  const C0 = () => ({ att: 0, air: 0, runs: 0, rzAtt: 0, rzRuns: 0 });
+  const M = (gk) => {
+    if (!per.has(gk)) per.set(gk, { tgt: 0, air: 0, des: 0, rzTgt: 0, rzDes: 0, snap: null, routes: null, pct: null });
+    return per.get(gk);
+  };
+  for (const b of blocks) {
+    const C = colIndex(b.cols);
+    for (const r of b.plays || []) {
+      const gk = `${b.key}|${r[C.posteam]}`;
+      if (!winSet.has(gk)) continue;
+      const pi = truthy(r[C.pi]);
+      if (pi && st.pi === false) continue;
+      const type = r[C.type], rz = truthy(r[C.redzone]);
+      if (!club.has(gk)) club.set(gk, C0());
+      const c = club.get(gk);
+      if (type === "run") { c.runs++; if (rz) c.rzRuns++; }
+      if (type === "pass" && !pi) { c.att++; c.air += num(r[C.air]) ?? 0; if (rz) c.rzAtt++; }
+      if (![C.passer, C.target, C.rusher].some((i) => i !== undefined && r[i] === gsis)) continue;
+      const m = M(gk);
+      if (type === "pass" && r[C.target] === gsis) { m.tgt++; m.air += num(r[C.air]) ?? 0; if (rz) m.rzTgt++; }
+      if (type === "run" && r[C.rusher] === gsis) { m.des++; if (rz) m.rzDes++; }
+    }
+    const team = players?.[gsis]?.teams?.[b.key];
+    const gk = `${b.key}|${team}`;
+    if (!team || !winSet.has(gk)) continue;
+    const off = num(b.snaps?.[gsis]?.off);
+    if (off !== null && off > 0) M(gk).snap = off / 100;
+    const rt = b.routes?.[gsis];
+    const n = num(rt?.routes);
+    // Routes alone never make a game his (agg.js's rule: a game is a snap or a play); they join a game he played.
+    if (n !== null && per.has(gk)) { const m = per.get(gk); m.routes = n; m.pct = routeFrac(rt.routePct); }
+  }
+  const played = [...per.keys()].sort();
+  const last3 = played.slice(-3);
+  const fig = (gks) => {
+    const s = { tgt: 0, air: 0, des: 0, rzTgt: 0, rzDes: 0, att: 0, cAir: 0, runs: 0, rzAtt: 0, rzRuns: 0, snap: 0, snapN: 0, routes: 0, drop: 0, routeN: 0, pctOk: true };
+    for (const gk of gks) {
+      const m = per.get(gk), c = club.get(gk) || C0();
+      s.tgt += m.tgt; s.air += m.air; s.des += m.des; s.rzTgt += m.rzTgt; s.rzDes += m.rzDes;
+      s.att += c.att; s.cAir += c.air; s.runs += c.runs; s.rzAtt += c.rzAtt; s.rzRuns += c.rzRuns;
+      if (m.snap !== null) { s.snap += m.snap; s.snapN++; }
+      if (m.routes !== null) { s.routes += m.routes; s.routeN++; if (m.pct) s.drop += m.routes / m.pct; else if (m.routes > 0) s.pctOk = false; }
+    }
+    return {
+      oppShare: [ratio(s.tgt + s.des, s.att + s.runs), gks.length],
+      tgtShare: [ratio(s.tgt, s.att), gks.length],
+      ayShare: [ratio(s.air, s.cAir), gks.length],
+      snapPct: situational ? [null, 0] : [ratio(s.snap, s.snapN), s.snapN],
+      routePct: situational ? [null, 0] : [s.pctOk ? ratio(s.routes, s.drop) : null, s.routeN],
+      rzShare: [ratio(s.rzTgt + s.rzDes, s.rzAtt + s.rzRuns), gks.length],
+      // D219 figure 5 (🔵): the same 3-play floor as the club page's Target distribution (rzI5Shares below).
+      rzTgtShare: [s.rzAtt >= RZ_I5_FLOOR ? ratio(s.rzTgt, s.rzAtt) : null, gks.length],
+    };
+  };
+  const keys = back ? RB_TREND_KEYS : REC_TREND_KEYS;
+  const a = fig(last3), w = fig(played);
+  const figures = {};
+  for (const k of keys) {
+    const [l3, n3] = a[k], [season, n] = w[k];
+    figures[k] = Object.freeze({ last3: l3, season, pts: l3 === null || season === null ? null : (l3 - season) * 100, n3, n });
+  }
+  return Object.freeze({
+    kind: back ? "back" : "receiver", keys: Object.freeze([...keys]), games: played.length, last3Games: last3.length,
+    short: last3.length < 3, last3Weeks: Object.freeze(last3.map((gk) => gk.split("|")[0])), figures: Object.freeze(figures),
+  });
+}
+const routeFrac = (p) => { const x = num(p); if (x === null || x <= 0) return null; return x > 1.5 ? x / 100 : x; };
+
+// ---- Red-zone target share and inside-the-5 carry share (D219 figure 5) -------------------------------------
+// PURE. One pass over the window's plays; per man, over HIS games (agg.js's rule: a club-game where he is the passer,
+// target or rusher on any play, or took an offensive snap), with `team` set only that club's games:
+//   rzTgtN / rzAttN = his red-zone targets / the club's red-zone pass attempts (the ledger's redzone flag, the
+//     opponent's 20 or closer). A pass-interference target is his target but never a club attempt, as agg.js and the
+//     player page's Trend strip (rzTgtShare) count them; with "excl. PI targets" the row is skipped outright.
+//   i5Des / i5Runs  = his designed runs / the club's designed runs from the opponent's 5 or closer (yardline_100 <= 5).
+//     Scrambles are called passes and sit on neither side (the rush-share rule).
+// The share (rzTgtShare, i5Share) is null when the club ran fewer than RZ_I5_FLOOR such plays in his games; the counts
+// are always kept. No down, quarter, opponent or home/away filter applies (the distributions and the player page
+// strip them). Returns Map(gsis -> frozen { rzTgtN, rzAttN, rzTgtShare, i5Des, i5Runs, i5Share, g }).
+export const RZ_I5_FLOOR = 3;
+export const INSIDE5 = 5;
+export function rzI5Shares(blocks, players, st, team = "") {
+  const inWin = gamesInWindow(clubGames(blocks), st);
+  const ok = (gk) => inWin.has(gk) && (!team || gk.endsWith("|" + team));
+  const club = new Map(); // gk -> { rz, i5 }
+  const his = new Map(); // gsis -> Map(gk -> { rz, i5 })
+  const H = (id, gk) => {
+    if (!his.has(id)) his.set(id, new Map());
+    const m = his.get(id);
+    if (!m.has(gk)) m.set(gk, { rz: 0, i5: 0 });
+    return m.get(gk);
+  };
+  for (const b of blocks) {
+    const C = colIndex(b.cols);
+    for (const r of b.plays || []) {
+      const gk = `${b.key}|${r[C.posteam]}`;
+      if (!ok(gk)) continue;
+      const pi = truthy(r[C.pi]);
+      if (pi && st.pi === false) continue;
+      const type = r[C.type], rz = truthy(r[C.redzone]), yl = num(r[C.yardline_100]);
+      const i5 = yl !== null && yl <= INSIDE5;
+      if (!club.has(gk)) club.set(gk, { rz: 0, i5: 0 });
+      const c = club.get(gk);
+      if (type === "pass" && !pi && rz) c.rz++;
+      if (type === "run" && i5) c.i5++;
+      for (const col of ["passer", "target", "rusher"]) if (C[col] !== undefined && r[C[col]]) H(r[C[col]], gk);
+      if (type === "pass" && rz && r[C.target]) H(r[C.target], gk).rz++;
+      if (type === "run" && i5 && r[C.rusher]) H(r[C.rusher], gk).i5++;
+    }
+    for (const [id, s] of Object.entries(b.snaps || {})) {
+      const off = num(s?.off), t = players?.[id]?.teams?.[b.key];
+      if (!t || off === null || off <= 0) continue;
+      const gk = `${b.key}|${t}`;
+      if (ok(gk)) H(id, gk);
+    }
+  }
+  const out = new Map();
+  for (const [id, m] of his) {
+    let rzTgtN = 0, rzAttN = 0, i5Des = 0, i5Runs = 0;
+    for (const [gk, x] of m) {
+      const c = club.get(gk) || { rz: 0, i5: 0 };
+      rzTgtN += x.rz; i5Des += x.i5; rzAttN += c.rz; i5Runs += c.i5;
+    }
+    out.set(id, Object.freeze({ rzTgtN, rzAttN, rzTgtShare: rzAttN >= RZ_I5_FLOOR ? rzTgtN / rzAttN : null,
+      i5Des, i5Runs, i5Share: i5Runs >= RZ_I5_FLOOR ? i5Des / i5Runs : null, g: m.size }));
+  }
+  return out;
+}
+
+// D209 🔵 fix round: exported so the player pages' loadCard (views/player.js) can look a man up on his
+// CURRENT club rather than whatever club the page's own filter window happens to show him on.
+export function lastTeam(meta) {
+  const ks = Object.keys(meta?.teams || {}).sort();
+  return ks.length ? meta.teams[ks[ks.length - 1]] : "";
+}
+
+// ---- Madden blocking (D182) ------------------------------------------------------------------------------
+export const BLOCK_ATTRS = [["runBlock", "Run Block"], ["passBlock", "Pass Block"], ["impactBlocking", "Impact Blocking"], ["leadBlock", "Lead Block"]];
+const normPos = (p) => { const x = String(p || "").toUpperCase(); return x === "HB" ? "RB" : x; };
+// The depth charts' rating tiers (public/js/cards.js ratingTier): 90 elite, 80 strong, 70 avg, 60 weak, else flat.
+export function ratingTier(v) {
+  if (v === null || v === undefined || !Number.isFinite(+v)) return "flat";
+  return v >= 90 ? "elite" : v >= 80 ? "strong" : v >= 70 ? "avg" : v >= 60 ? "weak" : "flat";
+}
+// "1-base" -> "Launch ratings"; "week-3" / 3 -> "Week 3 ratings".
+export function iterationLabel(it) {
+  const s = String(it?.label ?? it?.id ?? it ?? "").trim();
+  if (!s) return "ratings";
+  if (/base|launch/i.test(s)) return "Launch ratings";
+  const m = s.match(/(\d+)/);
+  return m ? `Week ${+m[1]} ratings` : `${s} ratings`;
+}
+export const maddenEdition = (season) => `Madden NFL ${String(+season + 1).slice(-2)}`;
+
+// { status: "absent" (no file) | "unrated" (no entry for him) | "ok", title, ovr, bars: [{ k, label, v, median, tier }] }
+export function maddenBlocking(madden, gsis, pos, season) {
+  if (!madden || !madden.players) return { status: "absent", title: null, ovr: null, bars: [] };
+  const title = `${maddenEdition(madden.season ?? season)} · ${iterationLabel(madden.iteration)}`;
+  const me = madden.players[gsis];
+  if (!me) return { status: "unrated", title, ovr: null, bars: [] };
+  const myPos = normPos(me.pos || pos);
+  const peers = Object.values(madden.players).filter((p) => normPos(p.pos) === myPos);
+  const bars = BLOCK_ATTRS.map(([k, label]) => {
+    const v = num(me.attrs?.[k]);
+    return { k, label, v, median: median(peers.map((p) => p.attrs?.[k])), tier: ratingTier(v) };
+  });
+  return { status: "ok", title, ovr: num(me.ovr), pos: myPos, peers: peers.length, bars };
+}

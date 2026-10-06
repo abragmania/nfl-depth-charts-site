@@ -1,0 +1,665 @@
+/* NFL Analytics (D177). A separate app with the depth charts' look: the same dark surfaces, Segoe UI type,
+   app-bar treatment, the five rating-tier colours (D102) and the position-group hues (D70). The tokens below
+   are copied from public/css/styles.css's :root rather than importing that file, which carries the whole
+   depth-chart layout; keep the two in step if a tier or band colour ever changes there. */
+:root { --bg:#0b0d10; --panel:#14181d; --panel2:#11151a; --line:#22282f; --ink:#e8ebef; --muted:#8a94a0; --dim:#5d6671;
+  --tier-elite:#2fbd8c; --tier-elite-ink:#052015;
+  --tier-strong:#1f9760; --tier-strong-ink:#eafff5;
+  --tier-avg:#b8a24f; --tier-avg-ink:#211c08;
+  --tier-weak:#d99a3d; --tier-weak-ink:#271902;
+  --tier-flat:#c04944; --tier-flat-ink:#fff;
+  --r-chip:6px; --r-row:8px; --r-card:12px;
+  --band-QB:#8b6dd1; --band-BACKFIELD:#caa053; --band-WR:#5ea8d8; --band-TE:#4fada0;
+  --accent:#ffd54a; --bar-h:51px; /* the sticky app bar's height: the table header sticks just under it */
+}
+[data-band="QB"] { --band-color: var(--band-QB); }
+[data-band="BACKFIELD"] { --band-color: var(--band-BACKFIELD); }
+[data-band="WR"] { --band-color: var(--band-WR); }
+[data-band="TE"] { --band-color: var(--band-TE); }
+* { box-sizing:border-box; }
+html,body { margin:0; background:var(--bg); color:var(--ink); font:14px/1.4 "Segoe UI", system-ui, sans-serif; }
+a { color:inherit; }
+
+/* App bar: the depth charts' .topbar, with section tabs in place of the team filter. */
+/* One centred column on a big screen (Adam, 2026-09-24: "pushed very far to the left of my large screen ... just more
+   centered, still normal on a laptop"). --col caps the content column; the side padding grows from the laptop's 28px
+   only once the window is wider than the column, so a 1536-wide laptop is untouched and a 2560 screen gets the same
+   layout parked in the middle. The app bar's contents share the padding so the brand and tabs line up with the page. */
+:root { --col:1760px; --gutter:max(28px, calc((100% - var(--col)) / 2)); }
+.an-top { display:flex; flex-wrap:wrap; align-items:center; gap:8px 28px; padding:10px 28px; /* 👁 D209: a fixed 28px gutter like the depth-chart topbar, so the strip sits in the same place in both apps (the PLAYERS/TEAMS row below keeps the centred gutter) */ background:var(--panel); border-bottom:1px solid var(--line); position:sticky; top:0; z-index:5; }
+/* D209 part (1): the shared site strip (public/js/sitebar.js), painted into #sitebar, the .an-top's first
+   child. These two rules are copied from public/css/styles.css's .sitebar-brand/.sitebar-tabs so the strip
+   reads identically on both apps (that app's older, settled topbar look is the one the strip uses) — same
+   convention this file already follows for the tokens copied from that file's :root. Replaces the old
+   .an-brand "NFL ANALYTICS" brand. */
+.sitebar-brand { color:var(--ink); text-decoration:none; font-weight:800; letter-spacing:.12em; font-size:18px; white-space:nowrap; }
+#sitebar { display:flex; align-items:center; gap:18px; } /* 👁 D209: brand and tabs on ONE line, same rule as styles.css */
+.sitebar-tabs { display:flex; align-items:center; gap:4px; margin-left:6px; }
+.sitebar-tab { color:var(--muted); text-decoration:none; font-weight:600; font-size:13.5px; padding:6px 12px; border-radius:999px; white-space:nowrap; }
+.sitebar-tab:hover { color:var(--ink); background:rgba(255,255,255,.06); }
+.sitebar-tab.on { color:#0b0d10; background:var(--ink); }
+.an-asof { margin-left:auto; color:var(--muted); font-size:12.5px; white-space:nowrap; }
+/* Adam, 2026-09-28: the PLAYERS / TEAMS nav sits on the strip line after the Analytics tab (a thin divider before
+   it), and the stamp keeps the right end; .an-top wraps, so on a window too narrow for the whole line the nav
+   drops under the strip on its own. */
+.an-top > .an-nav { padding-left:24px; border-left:1px solid var(--line); }
+/* D193 (2026-09-25): two labelled, always-visible groups - PLAYERS (Quarterbacks, Running backs, Receivers) and
+   TEAMS (Offense, Defense, Grid) - in place of the old flat tab row; nav.js builds the HTML, this only styles it. */
+.an-nav { display:flex; align-items:center; gap:18px; min-width:0; }
+.an-navgrp { display:flex; align-items:center; gap:2px; flex:none; }
+.an-navlabel { color:var(--muted); font-size:10px; font-weight:800; letter-spacing:.1em; text-transform:uppercase; margin-right:6px; white-space:nowrap; }
+.an-tab { color:var(--muted); text-decoration:none; font-weight:600; font-size:13.5px; padding:6px 12px; border-radius:999px; white-space:nowrap; }
+.an-tab:hover { color:var(--ink); background:rgba(255,255,255,.06); }
+.an-tab.on { color:#0b0d10; background:var(--ink); }
+
+.an-main { padding:14px var(--gutter) 28px; }
+/* The leaderboard pages hug their table (the widest thing on them is the filter bar or the table) and sit in the middle
+   of the column; the detail pages (player, QB, team) fill the column, whose grids already size themselves to it. On a
+   laptop the block is as wide as the column and nothing moves. */
+.an-usage, .an-qb, .an-rush, .an-def { width:max-content; max-width:100%; margin:0 auto; }
+.an-msg { max-width:640px; margin:60px auto; padding:22px 26px; background:var(--panel); border:1px solid var(--line); border-radius:var(--r-card); color:var(--muted); }
+.an-msg-title { color:var(--ink); font-size:17px; font-weight:700; margin-bottom:6px; }
+.an-msg-err { border-color:#6b2a27; }
+.an-msg a { color:var(--accent); }
+
+.an-head { display:flex; align-items:baseline; flex-wrap:wrap; gap:6px 16px; margin-bottom:10px; }
+.an-head h1 { margin:0; font-size:21px; font-weight:800; letter-spacing:.01em; }
+.an-sub { color:var(--muted); font-size:13px; }
+.an-warn { flex-basis:100%; color:#ffd98a; font-size:12.5px; }
+
+/* ---- filter bar ---- */
+.an-fbar { display:flex; flex-wrap:wrap; align-items:center; gap:8px 18px; padding:9px 14px; background:var(--panel); border:1px solid var(--line); border-radius:var(--r-card); }
+.an-fgroup { display:flex; align-items:center; gap:7px; }
+.an-flabel { color:var(--dim); font-size:10.5px; font-weight:800; letter-spacing:.1em; text-transform:uppercase; }
+.an-season { font-weight:800; font-size:13.5px; }
+.an-switch { display:inline-flex; align-items:center; gap:6px; color:var(--muted); font-size:12.5px; cursor:pointer; }
+.an-switch input { accent-color:var(--tier-elite); margin:0; }
+.an-seg { display:inline-flex; background:#0f1317; border:1px solid #2a323b; border-radius:var(--r-chip); padding:2px; gap:2px; }
+.an-seg button, .an-pos, .an-reset { font:inherit; font-size:12px; font-weight:600; color:var(--muted); background:none; border:0; border-radius:4px; padding:3px 9px; cursor:pointer; }
+.an-seg button:hover { color:var(--ink); }
+.an-seg button.on { background:#2a323b; color:var(--ink); }
+.an-multi button { min-width:26px; padding:3px 6px; }
+.an-poses { display:flex; gap:4px; }
+.an-pos { border:1px solid #2f3740; padding:2px 9px; font-weight:700; }
+.an-pos.in { background:color-mix(in srgb, var(--band-color) 30%, transparent); border-color:var(--band-color); color:var(--ink); }
+.an-pos.out { border-color:#6b2a27; color:#e38a86; text-decoration:line-through; }
+.an-fbar select { font:inherit; font-size:12.5px; color:var(--ink); background:#0f1317; border:1px solid #2a323b; border-radius:var(--r-chip); padding:3px 6px; }
+/* Two-handle week slider: two transparent range inputs stacked on one track; only their thumbs take the mouse. */
+.an-range { position:relative; width:150px; height:22px; }
+.an-range-track { position:absolute; left:7px; right:7px; top:9px; height:4px; border-radius:2px;
+  background:linear-gradient(90deg, #2a323b var(--lo), var(--tier-elite) var(--lo), var(--tier-elite) var(--hi), #2a323b var(--hi)); }
+.an-range input { position:absolute; inset:0; width:100%; margin:0; background:none; pointer-events:none; -webkit-appearance:none; appearance:none; }
+.an-range input::-webkit-slider-runnable-track { background:none; height:22px; }
+.an-range input::-webkit-slider-thumb { -webkit-appearance:none; pointer-events:auto; width:14px; height:14px; margin-top:4px; border-radius:50%; background:var(--ink); border:2px solid var(--tier-elite); cursor:grab; }
+.an-range input::-moz-range-thumb { pointer-events:auto; width:12px; height:12px; border-radius:50%; background:var(--ink); border:2px solid var(--tier-elite); cursor:grab; }
+.an-range-lab { color:var(--ink); font-size:12.5px; font-weight:700; min-width:64px; white-space:nowrap; }
+.an-reset { color:var(--accent); margin-left:auto; }
+.an-reset:hover { text-decoration:underline; }
+
+/* ---- table toolbar ---- */
+.an-tbar { display:flex; align-items:center; gap:18px; margin:12px 2px 6px; color:var(--muted); font-size:12.5px; }
+.an-min input { width:52px; margin-left:6px; font:inherit; color:var(--ink); background:#0f1317; border:1px solid #2a323b; border-radius:var(--r-chip); padding:2px 6px; }
+.an-count { color:var(--ink); font-weight:600; }
+.an-legend { display:inline-flex; align-items:center; gap:3px; }
+.an-legend i { width:14px; height:8px; border-radius:2px; }
+.an-legend span { margin-left:5px; }
+.an-hint { margin-left:auto; color:var(--dim); }
+.t-elite { --t:var(--tier-elite); } .t-strong { --t:var(--tier-strong); } .t-avg { --t:var(--tier-avg); } .t-weak { --t:var(--tier-weak); } .t-flat { --t:var(--tier-flat); }
+/* D203: a "soft" figure (agg_team.js's SOFT_KEYS, e.g. Plays/g) reads as a lean, not a verdict - half the tier's
+   strength, one mechanism rather than five new muted colours. `.t-soft { --t:color-mix(in srgb, var(--t) 50%, ...) }`
+   alone would have --t read its OWN cascaded value (the same custom property on the same element can't reference
+   itself - it computes invalid), so each combined selector below mixes the underlying --tier-* variable directly;
+   paired with the plain .t-elite etc. rule its higher specificity (two classes) wins. */
+.t-soft.t-elite { --t:color-mix(in srgb, var(--tier-elite) 50%, var(--ink)); }
+.t-soft.t-strong { --t:color-mix(in srgb, var(--tier-strong) 50%, var(--ink)); }
+.t-soft.t-avg { --t:color-mix(in srgb, var(--tier-avg) 50%, var(--ink)); }
+.t-soft.t-weak { --t:color-mix(in srgb, var(--tier-weak) 50%, var(--ink)); }
+.t-soft.t-flat { --t:color-mix(in srgb, var(--tier-flat) 50%, var(--ink)); }
+.an-legend i { background:var(--t); }
+
+/* ---- table ---- */
+/* clip (not auto) so the header rows stay sticky against the page scroll; narrower windows scroll sideways. */
+/* D177: the table sizes to its own content and stops there — a wide monitor doesn't mean a table stretched
+   to fill it. width:max-content hugs the columns; max-width caps it at the available page width so it never
+   overflows the .an-main padding; on a big screen the whole leaderboard block sits in the middle of the column
+   (D190, the .an-usage rule above), and inside the block the table centres under the filter bar when the bar is
+   the wider of the two (👁 on the re-cut: the Receivers table sat 300px short of its bar's right edge). */
+.an-tscroll { overflow-x:clip; border:1px solid var(--line); border-radius:var(--r-card); background:var(--panel2); width:max-content; max-width:100%; margin:0 auto; }
+@media (max-width:1400px) { .an-tscroll { overflow-x:auto; } }
+.an-table { width:auto; border-collapse:separate; border-spacing:0; font-variant-numeric:tabular-nums; }
+.an-table th { position:sticky; top:0; background:var(--panel); color:var(--muted); font-size:11.5px; font-weight:700; text-align:right; padding:6px 7px; white-space:nowrap; cursor:pointer; user-select:none; border-bottom:1px solid var(--line); }
+.an-table thead tr.an-grp th { top:var(--bar-h); cursor:default; font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--dim); text-align:center; padding:6px 7px 2px; border-bottom:0; }
+.an-table thead tr.an-grp th[class^="g-"] { border-bottom:2px solid #2a323b; }
+.an-table thead tr:not(.an-grp) th { top:calc(var(--bar-h) + 24px); }
+.an-table th:hover { color:var(--ink); }
+.an-table th.sorted { color:var(--accent); }
+.an-table th.sorted.desc::after { content:" ▾"; } .an-table th.sorted.asc::after { content:" ▴"; }
+.an-table th.c-name, .an-table td.c-name { text-align:left; }
+.an-table th.c-spark { text-align:center; }
+.an-table td { padding:4px 7px; border-bottom:1px solid #1a1f25; white-space:nowrap; text-align:right; }
+.an-table td.num { position:relative; }
+.an-table td.num > span { position:relative; }
+.an-table .gs { border-left:1px solid #232a31; }
+.an-row { cursor:pointer; transition:background .12s; }
+.an-row:hover { background:rgba(255,255,255,.035); }
+.an-row:focus-visible { outline:1px solid var(--accent); outline-offset:-1px; }
+.an-row.open { background:rgba(255,213,74,.06); }
+.an-row.open td { border-bottom-color:transparent; }
+.c-rank { color:var(--dim); width:34px; font-size:12px; }
+/* Name, team pill and Pos chip sit in one cell now (D177 readability fix): a tight flex row with normal
+   word gaps, sized to its content rather than a fixed min-width, so the column no longer spreads out just
+   because the monitor is wide. */
+.c-name { display:flex; align-items:center; gap:6px; }
+.an-pname { color:var(--ink); font-weight:700; text-decoration:none; }
+.an-pname:hover { color:var(--accent); }
+.an-teampill { display:inline-block; padding:1px 6px; border-radius:var(--r-chip); font-size:11px; font-weight:800; letter-spacing:.03em;
+  background:var(--team-bg, #2a323b); color:var(--team-ink, var(--muted)); text-decoration:none; }
+.an-teampill:hover { filter:brightness(1.12); text-decoration:underline; }
+.an-dc { color:var(--dim); font-size:11px; text-decoration:none; opacity:0; transition:opacity .12s; }
+.an-row:hover .an-dc, .an-row.open .an-dc, .an-dc:focus { opacity:1; }
+.an-dc:hover { color:var(--accent); }
+.an-pospill { display:inline-block; min-width:30px; padding:1px 6px; border-radius:var(--r-chip); font-size:11px; font-weight:800; color:var(--band-color); background:color-mix(in srgb, var(--band-color) 16%, transparent); text-align:center; }
+.an-na { color:var(--dim); }
+/* Tier colour on the number; share columns also get a faint magnitude bar in the same colour. */
+td[class*=" t-"] > span { color:var(--t); font-weight:700; }
+.an-bar { position:absolute; left:3px; top:5px; bottom:5px; border-radius:3px; background:color-mix(in srgb, var(--t, #4a535d) 22%, transparent); max-width:calc(100% - 6px); }
+.an-empty { text-align:center !important; color:var(--muted); padding:30px !important; }
+
+/* Sparkline */
+.c-spark { width:96px; }
+.an-spark { display:block; margin:0 auto; overflow:visible; }
+.an-spark path { fill:none; stroke:var(--band-WR); stroke-width:1.6; stroke-linejoin:round; stroke-linecap:round; }
+.an-spark circle { fill:var(--band-WR); }
+.an-spark .an-sp-ref { stroke:#2a323b; stroke-dasharray:2 2; }
+.an-sp-pt:hover circle { fill:var(--accent); r:3; }
+.an-sp-pt:hover rect { fill:rgba(255,255,255,.06); }
+
+/* ---- expanded row ---- */
+.an-detail > td { padding:0; border-bottom:1px solid var(--line); background:rgba(255,213,74,.035); }
+.an-detail-wrap { display:grid; grid-template-rows:1fr; animation:an-open .22s ease-out; }
+.an-detail-wrap.closing { animation:an-close .17s ease-in forwards; }
+.an-detail-wrap > .an-detail-in { overflow:hidden; min-height:0; }
+@keyframes an-open { from { grid-template-rows:0fr; opacity:0; } to { grid-template-rows:1fr; opacity:1; } }
+@keyframes an-close { from { grid-template-rows:1fr; opacity:1; } to { grid-template-rows:0fr; opacity:0; } }
+.an-detail-in { display:flex; gap:34px; padding:12px 18px 16px 46px; text-align:left; white-space:normal; }
+.an-dcol { flex:none; }
+.an-dh { color:var(--muted); font-size:10.5px; font-weight:800; letter-spacing:.1em; text-transform:uppercase; margin-bottom:6px; }
+.an-dsub { color:var(--dim); font-weight:600; letter-spacing:0; text-transform:none; margin-left:6px; }
+.an-wbars text { font-size:10.5px; fill:var(--muted); font-family:inherit; }
+.an-wbars .an-wb-lab { fill:var(--muted); font-weight:600; }
+.an-wbars .an-wb-val { fill:var(--ink); text-anchor:middle; font-weight:700; font-size:10px; }
+.an-wbars .an-wb-wk, .an-wbars .an-wb-na { text-anchor:middle; fill:var(--dim); }
+.an-wbars .an-wb-dnp { text-anchor:middle; fill:var(--dim); font-size:8.5px; font-weight:800; letter-spacing:.03em; opacity:.75; }
+.an-wbars .an-wb-base { stroke:#2a323b; }
+.an-wb-bar { fill:var(--t, #4a535d); }
+.an-wbars .an-wb-tot { font-size:12px; font-weight:800; fill:var(--t, var(--ink)); }
+.an-wbars .an-wb-avg { stroke:#c9d1da; stroke-width:1.2; stroke-dasharray:4 3; opacity:.75; }
+.an-wbars .an-wb-avglab { fill:#aab3bd; font-size:10px; font-weight:600; }
+.an-tile em { font-style:normal; color:var(--dim); font-size:11px; font-weight:600; margin-left:2px; }
+.an-zone { display:grid; grid-template-columns:78px repeat(3, 58px); gap:3px; }
+.an-zone-h { color:var(--dim); font-size:10.5px; text-align:center; }
+.an-zone-r { color:var(--muted); font-size:11px; display:flex; align-items:center; }
+.an-zone-r.los { border-top:1px dashed #3a434d; }
+.an-zc { height:36px; border-radius:5px; display:flex; flex-direction:column; align-items:center; justify-content:center; line-height:1.05;
+  background:color-mix(in srgb, var(--tier-elite) calc(var(--heat) * 70%), #161b21); border:1px solid #20262d; }
+.an-zc b { font-size:13px; }
+.an-zc small { font-size:9.5px; color:rgba(232,235,239,.7); }
+.an-dtiles { display:grid; grid-template-columns:repeat(2, 128px); gap:6px; align-content:start; }
+.an-tile { background:#161b21; border:1px solid #232a31; border-radius:var(--r-row); padding:5px 9px; }
+.an-tile span { display:block; color:var(--dim); font-size:10.5px; font-weight:700; }
+.an-tile b { font-size:17px; color:var(--t, var(--ink)); }
+/* D206: a figure tile that links to the Rankings table sorted by its own column. display:contents drops the <a> out
+   of the box tree so the tile div is still the direct grid/flex item exactly as an unlinked tile would be (an-tm-tiles'
+   grid, an-line-tiles' flex) - wrapping it changes nothing about layout. The link shows only on hover: a cursor, the
+   label underlined, a faint brightness lift (the same "hover slightly brightens" the Grid's own cells already use) -
+   never a colour or border change to the tile's resting look. */
+.an-tile-link { display:contents; }
+.an-tile-link .an-tile { cursor:pointer; }
+.an-tile-link:hover .an-tile { filter:brightness(1.08); }
+.an-tile-link:hover .an-tile span:first-child { text-decoration:underline; text-underline-offset:2px; }
+/* D225b: the player pages' ranking links reuse the same wrapper on the headline, opportunity and side tiles. */
+.an-tile-link .an-rc-htile, .an-tile-link .an-rc-otile, .an-tile-link .an-rc-sideitem { cursor:pointer; }
+.an-tile-link:hover .an-rc-htile, .an-tile-link:hover .an-rc-otile { filter:brightness(1.08); }
+.an-tile-link:hover .an-rc-label, .an-tile-link:hover .an-rc-olabel, .an-tile-link:hover .an-rc-sideitem span { text-decoration:underline; text-underline-offset:2px; }
+.an-dlinks { grid-column:1 / -1; display:flex; gap:14px; margin-top:4px; font-size:12.5px; }
+.an-dlinks a { color:var(--accent); text-decoration:none; font-weight:600; }
+.an-dlinks a:hover { text-decoration:underline; }
+.an-note { color:var(--dim); font-size:12px; margin-top:6px; }
+
+.an-foot { color:var(--dim); font-size:11.5px; margin:10px 2px 0; max-width:1100px; }
+
+/* ---- player page (#/player/:gsis, D182) ---- */
+.an-pl { display:flex; flex-direction:column; gap:12px; }
+.an-pl-head { display:flex; align-items:center; flex-wrap:wrap; gap:8px 12px; }
+.an-pl-head h1 { margin:0; font-size:24px; font-weight:800; }
+.an-pl-pill { font-size:13px; padding:2px 8px; }
+.an-pl-head .an-pospill { font-size:12.5px; padding:2px 8px; }
+/* Back button on the detail pages (player, QB, team): the page the reader came from, with its name underneath. */
+.an-back { display:inline-flex; flex-direction:column; align-items:flex-start; padding:4px 12px 4px 10px; margin-right:4px; border-radius:var(--r-chip); border:1px solid var(--line); background:var(--panel); color:var(--ink); text-decoration:none; font-size:13px; font-weight:700; line-height:1.15; white-space:nowrap; }
+.an-back small { font-size:10.5px; font-weight:600; color:var(--muted); letter-spacing:.04em; }
+.an-back:hover { border-color:var(--accent); color:var(--accent); }
+.an-pl-links { display:flex; gap:16px; margin-left:auto; font-size:13px; }
+.an-pl-links a { color:var(--accent); text-decoration:none; font-weight:600; }
+.an-pl-links a:hover { text-decoration:underline; }
+/* D209 part (2): the depth-chart card block (public/js/panel.js's markup, public/css/styles.css's ".panel-"
+   classes, loaded alongside this file — see analytics/index.html) at the top of every player page. Capped
+   near its own natural width (the depth-chart app's own aside is 440px) so it reads as a card, not a
+   stretched full-width bar, and sits left-aligned like every other block this page draws. */
+.an-pl-card { max-width:480px; background:var(--panel); border:1px solid var(--line); border-radius:12px; } /* 👁 D209: the card gets the panel look the depth-chart aside gives it, so its 18px inner padding reads as a box, not an indent */
+.an-pl-cardslot { display:inline-block; margin-bottom:8px; font-size:12.5px; font-weight:700; color:var(--ink); text-decoration:none; padding:3px 10px; border-radius:999px; background:rgba(255,255,255,.06); border:1px solid color-mix(in srgb, var(--team-secondary,#777) 45%, #3a424b 55%); }
+.an-pl-cardslot:hover { background:rgba(255,255,255,.1); }
+/* Adam, 2026-09-28: at a real window the single-column card left the rest of the row empty (the "don't cram
+   content into a small portion of the window" rule) — three columns instead, same panel.js markup, CSS-only
+   (the depth-chart panel's own aside is untouched: none of this reaches outside .an-pl-card). Column 1 is
+   identity (the slot pill, headshot/grade/name, bio row, snap share, status, ESPN note) at its own natural
+   width; column 2 is the rating-history block (the position line plus season rows); column 3, which gets the
+   most room, is the Season stats / Game log tabs. Placement is by explicit grid-row so it does not depend on
+   which of the optional pieces (snap share, the ESPN note) are actually present. Under ~1100px there isn't
+   room for three columns, so it drops back to the single stacked column above. */
+@media (min-width:1101px) {
+  .an-pl-card { max-width:none; display:grid; grid-template-columns:minmax(300px,400px) minmax(340px,420px) minmax(420px,760px); column-gap:20px; align-items:start; } /* 👁 D209: capped columns, a table stops where it reads well; leftover width stays after the block */
+  .an-pl-card > .panel-position-line, .an-pl-card > .panel-stats-box { margin-top:0; } /* the three column tops line up */
+  .an-pl-card > .an-pl-cardslot { grid-column:1; grid-row:1; margin-bottom:0; justify-self:start; } /* a pill, not a stretched field */
+  .an-pl-card > .panel-head { grid-column:1; grid-row:2; }
+  .an-pl-card > .panel-bio-row { grid-column:1; grid-row:3; }
+  .an-pl-card > .panel-snaps { grid-column:1; grid-row:4; }
+  .an-pl-card > .panel-status { grid-column:1; grid-row:5; }
+  .an-pl-card > .panel-espn-note { grid-column:1; grid-row:6; }
+  .an-pl-card > .panel-position-line { grid-column:2; grid-row:1 / span 6; }
+  .an-pl-card > .panel-stats-box { grid-column:3; grid-row:1 / span 6; }
+}
+.an-pl-bar { display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
+/* Team, opponent and the position chips do not apply to one man: hidden on this page only. */
+.an-pl .an-fgroup:has(.an-poses), .an-pl .an-fgroup:has(select) { display:none; }
+.an-pl-sub { margin-top:-4px; }
+.an-pl-tiles { display:grid; gap:6px; }
+.an-pl-usage { grid-template-columns:repeat(12, minmax(0, 1fr)); max-width:1860px; }
+@media (max-width:1760px) { .an-pl-usage { grid-template-columns:repeat(6, minmax(0, 1fr)); max-width:1100px; } }
+.an-pl-tiles-4 { grid-template-columns:repeat(4, minmax(118px, 1fr)); }
+.an-pl .an-tile b { font-size:19px; }
+.an-pl .an-tile em { white-space:nowrap; }
+.an-pl-row { display:flex; flex-wrap:wrap; gap:12px; align-items:flex-start; }
+.an-card { background:var(--panel2); border:1px solid var(--line); border-radius:var(--r-card); padding:12px 14px 14px; min-width:0; }
+.an-pl-scroll { overflow-x:auto; }
+.an-pl-weeks { flex:0 1 auto; max-width:100%; }
+
+/* Weekly strips, page size */
+.an-wbars-lg text { font-size:11px; }
+.an-wbars-lg .an-wb-lab { font-size:12px; }
+.an-wbars-lg .an-wb-tot { font-size:13.5px; }
+.an-wbars-lg .an-wb-val { font-size:11px; }
+.an-wbars .dim { opacity:.32; }
+.an-wbars .an-wb-wk.on { fill:var(--accent); font-weight:800; }
+.an-wbars .an-wb-opp { text-anchor:middle; fill:var(--dim); font-size:10px; }
+.an-wbars .an-wb-season { fill:var(--muted); font-size:11px; font-weight:800; letter-spacing:.08em; }
+.an-wbars .an-wb-div { stroke:#3a434d; stroke-dasharray:3 3; }
+.an-wb-hit { fill:transparent; cursor:pointer; }
+.an-wb-hit:hover { fill:rgba(255,255,255,.05); }
+.an-wb-hit.on { fill:rgba(255,213,74,.07); stroke:rgba(255,213,74,.35); }
+
+/* Target-zone field: one grid, his figure against his position's (see charts/zonefield.js) */
+.an-pl-zones { flex:0 0 auto; }
+.an-pl-zhead { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:8px; }
+.an-zf-leg { display:inline-flex; align-items:center; gap:3px; color:var(--dim); font-size:11px; }
+.an-zf-leg i { width:14px; height:10px; border-radius:2px; border:1px solid #20262d; }
+.an-zf-leg i:last-of-type { margin-right:5px; }
+.an-pl-zbody { display:flex; gap:14px; align-items:flex-start; }
+.an-zf { display:grid; grid-template-columns:62px repeat(3, 104px); gap:4px; }
+.an-zf-h { color:var(--dim); font-size:11px; text-align:center; }
+.an-zf-r { display:flex; flex-direction:column; justify-content:center; color:var(--muted); font-size:12px; font-weight:600; line-height:1.15; }
+.an-zf-r small { color:var(--dim); font-size:10.5px; font-weight:500; }
+.an-zf-r.los, .an-zf-r.los ~ .an-zf-c { margin-top:6px; }
+.an-zf-r.los { border-top:2px dashed #4a535d; padding-top:4px; }
+.an-zf-c { font:inherit; color:var(--ink); height:62px; border-radius:6px; border:1px solid #20262d; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1px; cursor:pointer; line-height:1.1; padding:0 4px; }
+.an-zf-c:disabled { cursor:default; }
+.an-zf-c b { font-size:17px; }
+.an-zf-c small { font-size:10.5px; color:rgba(232,235,239,.78); white-space:nowrap; }
+.an-zf-c small em { font-style:normal; color:rgba(232,235,239,.55); }
+.an-zf-c:not(:disabled):hover { outline:1px solid rgba(255,255,255,.35); }
+.an-zf-c.sel { outline:2px solid var(--accent); outline-offset:-1px; }
+.an-zf-c.heat, .an-zf-leg i.heat { background:color-mix(in srgb, var(--tier-elite) calc(var(--heat) * 70%), #161b21); }
+.an-zf-c.up, .an-zf-leg i.up { background:color-mix(in srgb, var(--tier-elite) calc(var(--d) * 72% + 8%), #161b21); }
+.an-zf-c.down, .an-zf-leg i.down { background:color-mix(in srgb, var(--tier-flat) calc(var(--d) * 72% + 8%), #161b21); }
+.an-zf-c.few, .an-zf-leg i.few { background:#1b2027; }
+.an-zf-c.few b { color:var(--muted); }
+.an-pl-plays { width:360px; min-height:100px; }
+.an-pl-plhead { display:flex; align-items:baseline; gap:8px; margin-bottom:4px; font-size:12.5px; }
+.an-pl-plhead span { color:var(--dim); }
+.an-pl-plhead button { margin-left:auto; font:inherit; font-size:16px; line-height:1; color:var(--muted); background:none; border:0; cursor:pointer; }
+.an-pl-plhead button:hover { color:var(--ink); }
+.an-pl-pltable { max-height:268px; overflow-y:auto; }
+.an-pl-pltable table { border-collapse:collapse; width:100%; font-size:12px; font-variant-numeric:tabular-nums; }
+.an-pl-pltable th { color:var(--dim); font-weight:700; font-size:10.5px; text-align:left; padding:2px 6px; position:sticky; top:0; background:var(--panel2); }
+.an-pl-pltable td { padding:3px 6px; border-top:1px solid #1a1f25; white-space:nowrap; }
+.an-pl-pltable td small { color:var(--dim); }
+.an-pl-pltable .num { text-align:right; }
+.an-pl-pltable tr.res-catch td:nth-child(4), .an-pl-pltable tr.res-td td:nth-child(4) { color:var(--tier-elite); font-weight:700; }
+.an-pl-pltable tr.res-incomplete td:nth-child(4) { color:var(--muted); }
+.an-pl-pltable tr.res-int td:nth-child(4) { color:var(--tier-flat); font-weight:700; }
+.an-pl-pltable tr.res-dpi td:nth-child(4) { color:var(--accent); font-weight:700; }
+
+/* Efficiency, rushing, blocking, routes */
+.an-pl-eff { flex:0 0 auto; }
+.an-pl-rush { flex:0 1 auto; max-width:100%; }
+.an-pl-rush .an-pl-tiles { margin-bottom:10px; max-width:560px; }
+.an-pl-rush .an-wb-bar { fill:var(--band-BACKFIELD); }
+.an-pl-block { flex:0 0 420px; }
+.an-rb { display:flex; flex-direction:column; gap:8px; }
+.an-rb-row { display:grid; grid-template-columns:112px 1fr 30px 70px; align-items:center; gap:8px; }
+.an-rb-lab { color:var(--muted); font-size:12.5px; font-weight:600; }
+.an-rb-track { position:relative; height:14px; border-radius:4px; background:#1b2027; }
+.an-rb-fill { position:absolute; left:0; top:0; bottom:0; border-radius:4px; background:var(--t); }
+.an-rb-med { position:absolute; top:-3px; bottom:-3px; width:2px; margin-left:-1px; background:#e8ebef; opacity:.85; border-radius:1px; }
+.an-rb-v { font-size:15px; color:var(--t); text-align:right; }
+.an-rb-m { font-style:normal; color:var(--dim); font-size:11px; }
+.an-pl-routes { flex:0 0 auto; }
+.an-rl { display:grid; grid-template-columns:150px 240px 96px 36px 60px 60px; gap:5px 10px; align-items:center; font-size:12.5px; font-variant-numeric:tabular-nums; }
+.an-rl-h, .an-rl-row { display:contents; }
+.an-rl-h span { color:var(--dim); font-size:10.5px; font-weight:700; }
+.an-rl-h em { font-style:normal; font-weight:500; }
+.an-rl-name { color:var(--ink); font-weight:600; }
+.an-rl-track { position:relative; height:16px; }
+.an-rl-lg { position:absolute; left:0; top:0; bottom:0; border-radius:3px; background:rgba(232,235,239,.16); }
+.an-rl-me { position:absolute; left:0; top:4px; bottom:4px; border-radius:3px; background:var(--band-color, var(--band-WR)); }
+.an-rl-pct { color:var(--ink); font-size:12px; white-space:nowrap; }
+.an-rl-pct em { font-style:normal; color:var(--dim); font-size:11px; }
+.an-rl-row > b, .an-rl-row > span:nth-child(n+4) { text-align:right; }
+.an-rl-h span:nth-child(n+4) { text-align:right; }
+/* ---- Quarterbacks (#/qb) and the QB player page (D182: QBs are their own thing) ---- */
+/* Adam (2026-09-24): passing vs running must be obvious. Passing is the dominant block (about 63% of the width);
+   rushing is its own separate block beside it with a headline that lights up (tier colours) for runners and sits
+   grey for pocket passers. */
+.an-qb .an-fgroup:has(.an-poses) { display:none; }
+.an-qb-table .g-r { background:rgba(202,160,83,.035); }
+.an-qb-table thead tr.an-grp th.g-r { color:var(--band-BACKFIELD); }
+.an-qb-spark path { stroke:var(--band-QB); }
+.an-qb-spark circle.up { fill:var(--tier-elite); } .an-qb-spark circle.down { fill:var(--tier-flat); }
+.an-wb-bar.an-qb-bar.up { fill:var(--tier-strong); }
+.an-wb-bar.an-qb-bar.down { fill:var(--tier-flat); }
+.an-wb-bar.an-qb-bar.plain { fill:var(--band-QB); }
+.an-wbars .an-wb-base.zero { stroke:#4a535d; }
+.an-qb-tip { fill:transparent; }
+.an-qb-tip:hover { fill:rgba(255,255,255,.04); }
+.an-detail-in.an-qb-din { display:grid; grid-template-columns:minmax(0, 65fr) minmax(280px, 35fr); gap:16px; padding:12px 18px 16px 46px; align-items:start; }
+.an-qb-din .an-dtiles { grid-template-columns:repeat(2, 124px); }
+.an-qb-din .an-qb-passrow { gap:14px 22px; flex-wrap:nowrap; }
+.an-qb-pass, .an-qb-rush, .an-qb-blk { border-radius:var(--r-card); padding:10px 14px 12px; min-width:0; }
+.an-qb-pass { background:rgba(139,109,209,.05); border:1px solid color-mix(in srgb, var(--band-QB) 38%, transparent); }
+.an-qb-rush { background:rgba(202,160,83,.045); border:1px solid color-mix(in srgb, var(--band-BACKFIELD) 36%, transparent); }
+.an-qb-blockh { font-size:12px; font-weight:800; letter-spacing:.12em; text-transform:uppercase; margin-bottom:8px; }
+.an-qb-pass > .an-qb-blockh { color:var(--band-QB); }
+.an-qb-rush > .an-qb-blockh { color:var(--band-BACKFIELD); }
+.an-qb-passrow { display:flex; flex-wrap:wrap; gap:14px 26px; align-items:flex-start; }
+.an-qb-rhs { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:8px; margin-bottom:6px; }
+.an-qb-rh { background:#161b21; border:1px solid #232a31; border-radius:var(--r-row); padding:7px 10px 8px; display:flex; flex-direction:column; }
+.an-qb-rh[class*=" t-"] { background:color-mix(in srgb, var(--t) 13%, #161b21); border-color:color-mix(in srgb, var(--t) 45%, #232a31); }
+.an-qb-rh b { font-size:24px; line-height:1.1; color:var(--t, var(--muted)); font-variant-numeric:tabular-nums; }
+.an-qb-rh span { color:var(--muted); font-size:11px; font-weight:700; }
+.an-qb-rh em { font-style:normal; color:var(--dim); font-size:11px; font-weight:600; }
+.an-zf.an-zf-sm { grid-template-columns:50px repeat(3, 74px); gap:3px; }
+.an-zf-sm .an-zf-c { height:44px; }
+.an-zf-sm .an-zf-c b { font-size:14px; }
+.an-zf-sm .an-zf-c small { font-size:9.5px; }
+.an-zf-sm .an-zf-r { font-size:11px; }
+/* the QB player page: Passing (about 63%) and a side column with Rushing and Madden; they stack under 1500px. */
+.an-qbp-split { display:grid; grid-template-columns:minmax(0, 63fr) minmax(360px, 37fr); gap:14px; align-items:start; max-width:2200px; }
+@media (max-width:1500px) { .an-qbp-split { grid-template-columns:minmax(0, 1fr); } }
+.an-qbp-pass, .an-qbp-rush { padding:12px 16px 14px; }
+.an-qbp .an-qb-blockh { font-size:13.5px; }
+.an-qbp-tiles { grid-template-columns:repeat(8, minmax(0, 1fr)); margin-bottom:12px; }
+@media (max-width:1760px) { .an-qbp-tiles { grid-template-columns:repeat(5, minmax(0, 1fr)); } }
+.an-qbp-row { display:flex; flex-wrap:wrap; gap:12px; align-items:flex-start; }
+.an-qbp-weeks { flex:0 1 auto; max-width:100%; }
+.an-qbp-zones { flex:0 0 auto; }
+.an-qbp-splitsc { flex:0 1 auto; }
+.an-qbp-side { display:flex; flex-direction:column; gap:12px; min-width:0; }
+.an-qbp-rush .an-qb-rh b { font-size:30px; }
+.an-qbp-rtiles { grid-template-columns:repeat(3, minmax(0, 1fr)); margin:8px 0 10px; }
+.an-qbp .an-tile b small { font-size:11px; color:var(--muted); font-weight:600; }
+.an-qbp-rush .an-wb-bar.an-qb-bar.plain { fill:var(--band-BACKFIELD); }
+.an-qbp-scr { margin-left:12px; text-transform:none; letter-spacing:0; font-weight:600; }
+.an-qbp-splits { border-collapse:collapse; font-size:12.5px; font-variant-numeric:tabular-nums; }
+.an-qbp-splits th { text-align:left; color:var(--muted); font-weight:600; padding:3px 10px 3px 0; white-space:nowrap; }
+.an-qbp-splits thead th { color:var(--dim); font-size:10.5px; font-weight:700; }
+.an-qbp-splits th.num, .an-qbp-splits td.num { text-align:right; }
+.an-qbp-splits td { padding:3px 0 3px 14px; white-space:nowrap; color:var(--ink); font-weight:600; }
+.an-qbp-splits td em { font-style:normal; color:var(--dim); font-size:10.5px; font-weight:500; margin-left:4px; }
+.an-qbp-splits td.up { color:var(--tier-elite); } .an-qbp-splits td.down { color:var(--tier-flat); }
+.an-qbp-splits tr.an-qbp-sfirst th, .an-qbp-splits tr.an-qbp-sfirst td, .an-qbp-splits tr.an-qbp-sgap th, .an-qbp-splits tr.an-qbp-sgap td { border-top:1px solid #232a31; }
+.an-qbp-splits .an-note { white-space:normal; max-width:380px; font-weight:500; }
+.an-qbp .an-pl-plays { width:440px; }
+.an-qbp-tgt { max-width:110px; overflow:hidden; text-overflow:ellipsis; }
+.an-qbp-madden { min-width:0; }
+.an-qbp-madden .an-rb-row { grid-template-columns:120px 1fr 30px 70px; }
+
+/* ---- rushing leaderboard (#/rushing) ---- */
+.an-rush-table .g-v { background:rgba(202,160,83,.035); }
+.an-rush-table thead tr.an-grp th.g-v { color:var(--band-BACKFIELD); }
+.an-rush-table .g-i { background:rgba(94,168,216,.03); }
+.an-rush-table thead tr.an-grp th.g-i { color:var(--band-WR); }
+.an-rush-spark path { stroke:var(--band-BACKFIELD); }
+.an-rush-spark circle { fill:var(--band-BACKFIELD); }
+.an-rush .an-wb-bar.an-qb-bar.plain { fill:var(--band-BACKFIELD); }
+.an-rush-din { gap:28px; flex-wrap:wrap; }
+.an-rush-din .an-dtiles { grid-template-columns:repeat(2, 118px); }
+.an-rush-mid { width:300px; }
+.an-rbins { --b0:var(--tier-flat); --b1:#6b7480; --b2:var(--tier-strong); --b3:var(--tier-elite); }
+.an-rbins-me, .an-rbins-lg { display:flex; border-radius:4px; overflow:hidden; background:#161b21; }
+.an-rbins-me { height:22px; }
+.an-rbins-lg { height:6px; margin-top:3px; opacity:.55; }
+.an-rbins i { display:block; height:100%; }
+.an-rbins .b0 { --c:var(--b0); } .an-rbins .b1 { --c:var(--b1); } .an-rbins .b2 { --c:var(--b2); } .an-rbins .b3 { --c:var(--b3); }
+.an-rbins-me i, .an-rbins-lg i { background:var(--c); }
+.an-rbins-me i + i { box-shadow:inset 1px 0 0 #0f1317; }
+.an-rbins-leg { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:4px 12px; margin-top:8px; font-size:11.5px; color:var(--muted); }
+.an-rbins-leg span { display:flex; align-items:center; gap:5px; white-space:nowrap; }
+.an-rbins-leg span > i { width:9px; height:9px; border-radius:2px; background:var(--c); flex:none; }
+.an-rbins-leg b { color:var(--ink); margin-left:auto; }
+.an-rbins-leg em { font-style:normal; color:var(--dim); font-size:10.5px; min-width:44px; text-align:right; }
+.an-rush-zone { display:flex; gap:8px; margin-top:12px; }
+.an-rush-zone span { flex:1; background:#161b21; border:1px solid #232a31; border-radius:var(--r-row); padding:4px 8px; color:var(--dim); font-size:10.5px; font-weight:700; text-align:center; }
+.an-rush-zone b { display:block; color:var(--ink); font-size:16px; }
+
+/* ---- teams picker (#/teams) and the team page (#/team/:abbr, the offense) ---- */
+.an-tm-grid { display:grid; grid-template-columns:repeat(4, minmax(220px, 280px)); gap:14px 18px; margin-top:6px; }
+@media (max-width:1100px) { .an-tm-grid { grid-template-columns:repeat(2, minmax(200px, 1fr)); } }
+.an-tm-div { background:var(--panel2); border:1px solid var(--line); border-radius:var(--r-card); padding:10px 12px; }
+.an-tm-pick { display:flex; align-items:center; gap:9px; padding:4px 2px; }
+.an-tm-pick > a:last-child { color:var(--ink); text-decoration:none; font-weight:600; font-size:13px; }
+.an-tm-pick > a:last-child:hover { color:var(--accent); }
+.an-tm-pill { min-width:40px; text-align:center; font-size:12px; padding:2px 7px; }
+.an-teams .an-sub a { color:var(--accent); }
+.an-tm-headpill { font-size:15px; padding:3px 10px; }
+/* D198: the header's Offense | Defense segment (team.js/team_def.js teamSideSeg), in place of the old plain side
+   label - the same look as the filter bar's an-seg buttons, but as two links rather than a button pair. */
+.an-tm-seg { display:inline-flex; background:#0f1317; border:1px solid #2a323b; border-radius:var(--r-chip); padding:2px; gap:2px; }
+.an-tm-segbtn { font-size:12px; font-weight:700; color:var(--muted); text-decoration:none; border-radius:4px; padding:3px 11px; }
+.an-tm-segbtn:hover { color:var(--ink); }
+.an-tm-segbtn.on { background:#2a323b; color:var(--ink); }
+.an-tm-tiles { grid-template-columns:repeat(12, minmax(0, 1fr)); max-width:1860px; }
+@media (max-width:1760px) { .an-tm-tiles { grid-template-columns:repeat(6, minmax(0, 1fr)); max-width:1100px; } }
+.an-tm-row { display:flex; flex-wrap:wrap; gap:12px; align-items:flex-start; }
+.an-tm-weeks { flex:0 1 auto; max-width:100%; }
+.an-tm-zones { flex:0 0 auto; }
+.an-tm .an-pl-plays { width:470px; }
+/* D199 fix: the defense sub-page's coverage card - a 2x2 tile grid directly beside the zone field, in a column sized
+   to the SAME width budget as the offense zone card's plays list (field 386px + 14px gap + 470px column = 870px
+   content, 900px card), so Coverage is no wider than the offense page's zone card and sits beside "Week by week" at
+   1536px instead of wrapping under it. The throws list (zonePlaysHtml), when a zone is clicked, drops into the same
+   column under the tiles rather than a separate far-edge column. */
+.an-tm-covwrap { display:flex; flex-direction:column; gap:8px; width:470px; }
+.an-tm-covtiles { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:6px; }
+.an-tm-covwrap .an-pl-plays { width:auto; }
+.an-tm-distc { flex:0 1 610px; min-width:420px; } /* 👁 D219: the row's columns need 578px plus the card's padding; 560 clipped the sub column */
+.an-tm-distc-t { flex-basis:672px; } /* D224 D: the Target Share card gains a 56px Depth column (+62px with its gap), the Carry Share card stays 610 */
+/* D224 D: the target-depth mix bar, four muted parts shallow to deep (behind the line, short, intermediate, deep). */
+.an-depth { display:inline-flex; width:52px; height:10px; border-radius:3px; overflow:hidden; vertical-align:middle; background:#20262d; }
+.an-depth > i { display:block; flex-basis:0; min-width:2px; }
+.an-depth-behind { background:#5f6b78; } .an-depth-short { background:#4c7f9e; } .an-depth-inter { background:#b08d4a; } .an-depth-deep { background:#a9615b; }
+.an-table td.an-depth-td { text-align:center; }
+/* Distribution bars: one line per man, name + position, a bar of his share in his tier colour, the figure, then the detail. */
+.an-tm-dist { display:flex; flex-direction:column; gap:5px; }
+.an-tm-drow { display:grid; grid-template-columns:140px 34px minmax(120px, 1fr) 52px var(--dcols, 190px); align-items:center; gap:6px; font-size:12.5px; }
+.an-tm-dname { color:var(--ink); font-weight:700; text-decoration:none; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.an-tm-dname:hover { color:var(--accent); }
+.an-tm-track { position:relative; height:14px; background:#161b21; border:1px solid #20262d; border-radius:4px; }
+.an-tm-fill { position:absolute; left:0; top:0; bottom:0; border-radius:3px; background:var(--t, #4a535d); opacity:.85; }
+.an-tm-lg { position:absolute; top:-3px; bottom:-3px; width:0; border-left:2px dashed #c9d1da; opacity:.7; }
+.an-tm-v { text-align:right; color:var(--t, var(--ink)); font-size:13.5px; }
+.an-tm-sub { color:var(--muted); font-size:11.5px; white-space:nowrap; text-align:right; font-variant-numeric:tabular-nums; }
+.an-tm-dhead { color:var(--muted); font-size:10.5px; font-weight:700; text-align:right; white-space:nowrap; padding-bottom:3px; border-bottom:1px solid #20262d; }
+.an-tm-epa { font-weight:700; color:var(--t, var(--ink)); }
+/* D205: the club page's own Grid row - the same .gc cell views/grid.js draws (an-line already carries the --gp-*
+   colour variables from analytics_grid.css, so nothing here needs to redefine them), with a short label above each
+   cell, sized to sit in one flowing row rather than a table column. */
+.an-card.an-line.an-tm-gridrow { margin-bottom:2px; width:100%; max-width:1860px; } /* 👁 2026-09-27: unlike the O-line block (an-line hugs its content), the Grid row spans the tile band below it (three classes: analytics_recut.css's .an-line width:fit-content loads later and would win otherwise) */
+.an-tm-gridcells { display:flex; flex-wrap:wrap; gap:10px; }
+.an-tm-gc { display:flex; flex-direction:column; align-items:center; gap:5px; flex:1 1 112px; max-width:260px; }
+.an-tm-gc-label { color:var(--muted); font-size:11px; font-weight:700; text-align:center; white-space:nowrap; }
+.an-tm-gc .gc { width:100%; min-width:112px; height:48px; }
+.an-tm-gc .gc b { font-size:19px; }
+@media (max-width:1760px) { .an-card.an-line.an-tm-gridrow { max-width:1100px; } } /* after the base rule, so it wins at the narrower band */
+/* D219: a line block with no headline chips (the club page's Play calling block) drops the empty chip row and its gap. */
+.an-line-head:empty { display:none; }
+/* D219 increment E: the Play calling block's twelve tiles as two even rows of six (pass rate, then pace and shape) on a
+   desktop window, not ten and two; narrower windows keep analytics_recut.css's flex wrap. */
+@media (min-width:900px) { .an-card.an-line.an-pc .an-line-tiles { display:grid; grid-template-columns:repeat(6, minmax(134px, auto)); } }
+/* D219 increment E fix: the Rankings offense table with More open (Drives and Pace showing) on a window it does not fit:
+   table.js fitOpen marks the frame .an-over and it scrolls sideways instead of clipping (the RB table's rule). */
+.an-off .an-tscroll.an-over { overflow-x:auto; }
+.an-off .an-tscroll.an-over .an-table thead th { position:static; }
+
+/* ---- defense leaderboard (#/defense) ---- */
+.an-def-name { color:var(--ink); font-weight:700; }
+/* D192: EPA/play's headline bar is signed and centred on zero (an-bar-ctr sets left/width inline); a hairline
+   marks the zero point so a positive (worse) or negative (better) lean reads without checking the number. */
+.an-def-table td.c-signed { overflow:hidden; }
+.an-def-table td.c-signed::before { content:""; position:absolute; left:50%; top:4px; bottom:4px; width:1px; background:#2a323b; }
+/* Pass rush and Run defense stack in one column (an-def-rush) so the expanded row stays three columns at every
+   width instead of the fourth wrapping onto its own orphaned line at 1536/2560. */
+.an-def-rush { display:flex; flex-direction:column; gap:14px; }
+.an-def-spark line { stroke:#2a323b; }
+.an-def-spark rect.bad { fill:var(--tier-flat); }
+.an-def-spark rect.good { fill:var(--tier-strong); }
+.an-detail-in.an-def-din { flex-wrap:wrap; }
+/* Allowed EPA: above zero is bad for a defense, so the signed bars swap colours here. */
+.an-def-w .an-wb-bar.an-qb-bar.up { fill:var(--tier-flat); }
+.an-def-w .an-wb-bar.an-qb-bar.down { fill:var(--tier-strong); }
+.an-def-w .an-wb-bar.an-qb-bar.plain { fill:#5d6671; }
+/* The zone field faced: a cell above the league there is bad for the defense, so green and red swap. */
+.an-zf-inv .an-zf-c.up { background:color-mix(in srgb, var(--tier-flat) calc(var(--d) * 72% + 8%), #161b21); }
+.an-zf-inv .an-zf-c.down { background:color-mix(in srgb, var(--tier-elite) calc(var(--d) * 72% + 8%), #161b21); }
+.an-def .an-pl-zbody { flex-wrap:wrap; }
+.an-def-plays { width:520px !important; }
+/* The body cells are positioned (for their bars), so the sticky header rows need their own layer to stay on top. */
+.an-def-table thead th { z-index:2; }
+/* .c-name is a flex row for the body cells; the header cell must stay a table cell to stick and cover the rows. */
+.an-def-table th.c-name { display:table-cell; }
+
+/* ---- Rankings (#/rankings, D208): the hl= query key highlights one club's row on either side's table. An inset
+   accent stripe rather than a background tint alone, so it still reads next to an expanded (.open) row's own
+   faint tint instead of blending into it. */
+.an-row.is-hl { box-shadow: inset 3px 0 0 var(--accent); }
+.an-row.is-hl td { background: color-mix(in srgb, var(--accent) 8%, transparent); } /* 👁 2026-09-27: a faint wash across the row, the stripe alone was too easy to miss */
+.an-row.is-hl td:first-child { padding-left:9px; }
+
+/* ---- D224 increment B: the This-week strip under the player page's card (kit.js thisWeekStrip) ---- */
+/* One quiet line, never a tile (D196): no box, muted text, the parts split by thin rules; it clips rather than wraps. */
+.an-wk { display:flex; align-items:center; gap:12px; flex-wrap:nowrap; overflow:hidden; white-space:nowrap; margin:0 2px; padding:2px 0;
+  color:var(--muted); font-size:12.5px; line-height:1.6; font-variant-numeric:tabular-nums; }
+.an-wk > * { flex:none; }
+.an-wk-head { color:var(--dim); font-size:10.5px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; }
+.an-wk-game { color:var(--ink); font-weight:600; }
+.an-wk-sep { width:1px; height:14px; background:var(--line); }
+.an-wk-vs, .an-wk-trend, .an-wk-tr { cursor:default; }
+.an-wk-v { font-weight:700; color:var(--t, var(--ink)); }
+.an-wk-rk { color:var(--dim); }
+.an-wk-lab { color:var(--dim); font-weight:700; }
+.an-wk-fig, .an-wk-tr { margin-left:12px; }
+.an-wk-arrow { font-style:normal; font-size:9.5px; color:var(--muted); } /* neutral, as the Trend strip's */
+.an-wk-health { display:inline-flex; align-items:center; gap:10px; }
+.an-wk-chip { display:inline-flex; align-items:center; gap:4px; cursor:default; }
+.an-wk-chip.ok { color:var(--muted); }
+.an-wk-more { color:var(--dim); font-weight:700; cursor:default; }
+
+/* ---- D224 increment C: the This-week matchup page (views/week.js) ---------------------------------------------- */
+.an-wv { display:flex; flex-direction:column; gap:12px; }
+/* 👁: the games strip runs the full window as on the depth-chart pages; everything else keeps the app's 1760 column. */
+.an-main:has(> .an-wv) { padding-inline:28px; }
+.an-wv > :not(.games-bar) { width:100%; max-width:var(--col); margin-inline:auto; box-sizing:border-box; }
+/* The week's games strip is the depth-chart pages' own (gamesbar.js gamesBarHtml, styled by ../css/matchup.css). */
+.an-wv .games-bar { margin-bottom:0; }
+/* The Play calling tiles are narrower here than on the club page: a tile's small print wraps rather than clipping. */
+.an-wv .an-line-tiles .an-rc-sub { white-space:normal; }
+/* (1) the game block: five tiles in one row. */
+.an-wv-game { display:grid; grid-template-columns:repeat(5, minmax(120px, max-content)); gap:6px; }
+.an-wv-game .an-tile b { font-size:19px; }
+/* (2) a half: offence beside defence, wrapping only when the window is too narrow for both. */
+.an-wv-half { display:flex; flex-direction:column; gap:8px; padding-top:6px; border-top:1px solid var(--line); }
+.an-wv-hh { display:flex; align-items:center; gap:10px; font-size:15px; font-weight:800; }
+.an-wv-side { display:inline-flex; align-items:center; gap:6px; }
+.an-wv-against { color:var(--dim); font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; }
+/* Offence and defence share the width half and half; the club pages' blocks fill their column here (their own pages
+   keep them hugging their content) and the Play calling tiles take six even columns of whatever width there is. */
+.an-wv-cols { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:12px; align-items:start; }
+.an-wv-col { display:flex; flex-direction:column; gap:12px; min-width:0; }
+.an-wv-col .an-card.an-line { width:auto; max-width:none; }
+/* 👁: Play calling and O-line share six even columns so their tiles line up column for column; the D-line takes a
+   deliberate 4+3 in a 1536 window and one row of seven on a big screen; below 1500 the offence's blocks step to four
+   columns. Tiles drop their 134px floor here and their figure prints at the base tile size so it fits. */
+.an-wv .an-wv-col .an-card.an-line .an-line-tiles { display:grid; gap:8px; grid-template-columns:repeat(6, minmax(0, 1fr)); }
+.an-wv .an-wv-col .an-wv-dl .an-card.an-line .an-line-tiles { grid-template-columns:repeat(4, minmax(0, 1fr)); }
+@media (min-width:1900px) { .an-wv .an-wv-col .an-wv-dl .an-card.an-line .an-line-tiles { grid-template-columns:repeat(7, minmax(0, 1fr)); } }
+@media (max-width:1500px) { .an-wv .an-wv-col .an-card.an-line .an-line-tiles { grid-template-columns:repeat(4, minmax(0, 1fr)); } }
+.an-wv .an-wv-col .an-line-tiles .an-tile { min-width:0; }
+.an-wv .an-wv-col .an-line-tiles .an-tile b { font-size:17px; white-space:nowrap; }
+@media (max-width:1200px) { .an-wv-cols { grid-template-columns:minmax(0, 1fr); } }
+.an-wv-cov .an-tm-covtiles { grid-template-columns:repeat(4, minmax(110px, auto)); }
+/* (3) the starters table: hugs its columns, never stretched. */
+.an-wv-starters { width:fit-content; max-width:100%; }
+.an-wv-table { border-collapse:collapse; font-variant-numeric:tabular-nums; font-size:12.5px; }
+.an-wv-table th { color:var(--dim); font-size:10.5px; font-weight:700; text-align:right; padding:3px 8px; white-space:nowrap; border-bottom:1px solid var(--line); }
+.an-wv-table th.an-wv-slot, .an-wv-table th:nth-child(2), .an-wv-table th.an-wv-tr, .an-wv-table th.an-wv-vs { text-align:left; }
+.an-wv-table td { padding:4px 8px; white-space:nowrap; border-bottom:1px solid #1a2026; }
+.an-wv-table td.num { text-align:right; }
+.an-wv-slot { color:var(--muted); font-weight:700; font-size:11px; }
+.an-wv-name a { font-weight:700; text-decoration:none; }
+.an-wv-name a:not(.an-st-name-out) { color:var(--ink); } /* an out man keeps the red name (analytics_recut.css) */
+.an-wv-table td.an-wv-name { min-width:170px; } /* both halves' tables line up whatever the longest name */
+.an-wv-name a:hover { text-decoration:underline; }
+.an-wv-name .an-stchip { margin-left:6px; }
+.an-wv-fillrow td { border-bottom-color:#1a2026; }
+.an-wv-fill { color:var(--dim); padding-left:8px; }
+.an-wv-extra .an-wv-slot { font-style:italic; }
+.an-wv-qbline { color:var(--muted); font-size:12px; }
+.an-wv-qbline b { color:var(--ink); font-weight:700; }
+.an-wv-tr .an-wk-tr:first-child { margin-left:0; }
+.an-wv-cell .an-wk-fig { margin-left:10px; }
+
+/* ---- D224 F: the Deciding preset on the Receivers, Running backs and Quarterbacks tables ---- */
+/* The Deciding · Standard · All segment, where the More button sat (the group-header row's leading cell). */
+.an-table thead tr.an-grp th.an-view-cell { text-align:left; padding:3px 6px 2px; }
+.an-view { display:inline-flex; border:1px solid #2a323b; border-radius:var(--r-chip); overflow:hidden; background:#161b21; vertical-align:middle; }
+.an-view-b { font:inherit; font-size:10.5px; font-weight:700; letter-spacing:.04em; text-transform:none; color:var(--muted); background:transparent; border:0; border-left:1px solid #2a323b; padding:1px 9px; cursor:pointer; white-space:nowrap; }
+.an-view-b:first-child { border-left:0; }
+.an-view-b:hover { color:var(--ink); }
+.an-view-b[aria-pressed="true"] { color:var(--ink); background:color-mix(in srgb, var(--accent) 18%, #161b21); cursor:default; }
+/* Deciding cells built on the rows (deciding.js): the opponent and the vs-usual figure (its small second figure shows on the Quarterbacks table only; the hover carries it everywhere). */
+.an-table td .an-wk-game { color:var(--ink); font-weight:600; }
+.an-table td.an-vs1 .an-wk-fig { display:none; }
+.an-wv-note { padding:10px 14px; }
+
+/* ---- D224 E: With and without a teammate, under the Variance strip (the variance box's own panel look) ---- */
+.an-pl-ww { align-self:flex-start; max-width:100%; }
+.an-pl-wwbody { display:flex; flex-wrap:wrap; align-items:flex-start; gap:12px 28px; background:var(--panel2); border:1px solid var(--line); border-radius:var(--r-card); padding:13px 14px; }
+.an-pl-wwpick { flex-wrap:wrap; }
+.an-pl-wwpick small { color:var(--dim); font-size:10px; font-weight:700; margin-left:2px; }
+.an-pl-wwpick button.on small { color:var(--muted); }
+.an-pl-wwtab { border-collapse:collapse; font-size:12.5px; font-variant-numeric:tabular-nums; }
+.an-pl-wwtab th { color:var(--dim); font-size:10.5px; font-weight:700; text-align:left; padding:0 18px 4px 0; white-space:nowrap; }
+.an-pl-wwtab thead th:not(:first-child) { text-align:right; padding:0 0 4px 18px; }
+.an-pl-wwtab thead th a { color:var(--ink); text-decoration:none; }
+.an-pl-wwtab thead th a:hover { text-decoration:underline; }
+.an-pl-wwtab tbody th { padding-top:3px; padding-bottom:3px; }
+.an-pl-wwtab td { color:var(--ink); font-weight:700; text-align:right; padding:3px 0 3px 18px; min-width:96px; border-top:1px solid var(--line); cursor:default; }
+.an-pl-wwtab tbody th { border-top:1px solid var(--line); }

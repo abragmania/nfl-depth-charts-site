@@ -1,0 +1,151 @@
+/* D46 matchup view (public/js/matchup.js). Layout only lives here — cards/rows/badges/tiers reuse the
+   same class names styles.css and zoom.css already define, so a card looks identical wherever it's
+   drawn. The one thing this file owns outright (D49, lead ruling) is SIZE: every matchup card/row is
+   rendered compact and namespaced under `.matchup` so none of it ever leaks into the main field or the
+   D45 zoom pages, which keep their own (larger) sizing untouched. */
+
+.matchup { width:100%; }
+
+/* ---- header: both teams, records, swap ---- */
+
+.matchup-head { display:flex; align-items:center; gap:18px; padding:16px 22px; border-radius:12px; color:#fff; flex-wrap:wrap; }
+.matchup-team { display:flex; align-items:center; gap:14px; flex:1 1 320px; min-width:0; padding:10px 16px; border-radius:10px;
+  background:linear-gradient(110deg, var(--team-primary) 0 60%, var(--team-secondary) 160%); }
+.matchup-team-b { flex-direction:row-reverse; text-align:right; }
+/* soft light plate behind every logo (matches the landing tile treatment) so a dark mark never
+   disappears into its own team-colour background */
+.matchup-logo { width:60px; height:60px; padding:6px; object-fit:contain; flex:none; border-radius:50%;
+  background:radial-gradient(circle at 50% 45%, rgba(255,255,255,.55) 0%, rgba(255,255,255,.25) 55%, rgba(255,255,255,0) 72%);
+  filter:drop-shadow(0 2px 4px rgba(0,0,0,.5)); }
+.matchup-logo-fallback { display:flex; align-items:center; justify-content:center; font-weight:900; font-size:18px; background:rgba(0,0,0,.3); }
+.matchup-team-info { min-width:0; }
+.matchup-team-info-right { text-align:right; }
+/* Full-strength ink with a dark shadow under it, so the team name and record read on every club's colour
+   (even a mid-tone wash like Tennessee's blue) without dulling the wash itself, which D48 wants bright;
+   a genuinely PALE primary flips to dark ink instead (.matchup-team-light, from the same luminance rule
+   the landing tiles use — matchup.js's isLightWash import). */
+.matchup-team-name { font-size:18px; font-weight:800; line-height:1.15; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  text-shadow:0 1px 3px rgba(0,0,0,.55); }
+.matchup-team-sub { font-size:12.5px; color:#fff; margin-top:2px; text-shadow:0 1px 3px rgba(0,0,0,.6); }
+.matchup-team-light .matchup-team-name, .matchup-team-light .matchup-team-sub, .matchup-team-light .matchup-team-heat {
+  color:#14181d; text-shadow:0 1px 2px rgba(255,255,255,.45); }
+/* The heat-summary line only renders for whichever team actually has an injury signal (view.heat.summary).
+   min-height reserves its space on every team block, present or not, so a summary on only one side never
+   throws the two teams' text blocks (and therefore their logos) off a shared vertical centre.
+   D146 (1), belt and braces for MATCHUP_FOLD_WIDTH: this sentence is the one thing in the unfolded header
+   that can grow it, and a taller header moves the field's top and the height-bound scale with it. nowrap
+   plus an ellipsis means a club whose injury news outgrows the fold width loses the tail of its sentence
+   instead — the same trade `.teamhead h1` makes for a long club name, and the reason the rule holds even
+   if the constant goes stale. */
+.matchup-team-heat { font-size:11.5px; color:rgba(255,255,255,.95); margin-top:3px; font-style:italic; min-height:14px;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  text-shadow:0 1px 3px rgba(0,0,0,.6); }
+
+.matchup-vs { display:flex; flex-direction:column; align-items:center; gap:6px; flex:0 0 auto; padding:0 8px; color:var(--ink); }
+.matchup-title { font-size:15px; font-weight:800; letter-spacing:.02em; text-align:center; white-space:nowrap; }
+.matchup-title-unit { color:var(--muted); font-weight:700; text-transform:lowercase; }
+.matchup-swap { font-size:12px; font-weight:700; color:var(--ink); background:#1c2128; border:1px solid #2a323b; border-radius:16px; padding:4px 12px; text-decoration:none; white-space:nowrap; }
+.matchup-swap:hover { border-color:#4a5560; color:#ffd54a; }
+
+/* ---- picker (bye week: A has no game this week) ---- */
+
+.matchup-picker { max-width:640px; margin:24px auto; text-align:center; }
+.matchup-picker h1 { font-size:24px; margin:0 0 8px; }
+.matchup-picker-note { color:var(--muted); font-size:13.5px; margin:0 0 16px; }
+.matchup-picker-form { display:flex; align-items:center; justify-content:center; gap:10px; flex-wrap:wrap; }
+.matchup-picker-fixed { font-weight:700; }
+.matchup-picker-form select { padding:7px 10px; border-radius:6px; border:1px solid #2a323b; background:#0f1317; color:var(--ink); font-size:13px; }
+.matchup-picker-form button { padding:7px 18px; border-radius:6px; border:1px solid #2a323b; background:var(--ink); color:var(--bg); font-weight:800; font-size:13px; cursor:pointer; }
+.matchup-picker-form button:hover { background:#ffd54a; border-color:#ffd54a; }
+
+/* The matchup is built on the shared compact overview (field.js's computeLayout + cards.js's renderColumn),
+   so its cards, rows, heat tints and band grouping are the SAME ones the whole-team page uses and are
+   styled once, in styles.css, rather than described a second time here and kept in step by hand. What
+   remains below is only what is genuinely particular to this view: the two-team header, the bye-week
+   picker, and the field wrapper's own two-team wash.
+
+   The field is one canvas carrying two teams, so --team-primary/--team-secondary are set per COLUMN
+   (matchup.js passes each one its own colours) rather than once on the wrapper. The wrapper still gets
+   B's colours so the turf watermark, level stripes and line-of-scrimmage dressing read as the defense's
+   half of the field. */
+.matchup-field .level-stripe { opacity:.85; }
+
+/* ---- quiet ~180ms fade/scale-in on render (D49) ---- */
+
+@keyframes matchup-pop { from { opacity:0; transform:scale(.97); } to { opacity:1; transform:scale(1); } }
+/* `forwards`, never `both`: `both` also applies the FROM keyframe before the animation starts, which holds
+   the header at opacity 0 — and an animation only advances once the page is actually being composited, so
+   a hidden tab or a headless screenshot would capture the whole team-colour header as a black hole. Every
+   other entrance in the app (.zoom-page, .field-outer) already animates without a backwards fill. */
+.matchup-head, .matchup-picker { animation:matchup-pop .18s ease-out forwards; }
+@media (prefers-reduced-motion: reduce) {
+  .matchup-head, .matchup-picker { animation:none; }
+}
+
+@media (max-width:1400px) {
+  .matchup-title { font-size:13.5px; }
+  .matchup-team-name { font-size:16px; }
+}
+
+/* ---- landing page top bar: this week's games (public/js/landing.js, D172) ---- */
+
+/* Every pixel here comes out of the landing grid's own height budget. */
+.matchup-bar { display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding:8px 12px; margin-bottom:8px;
+  background:var(--panel); border:1px solid #22282f; border-radius:10px; }
+
+/* One row of 16 chips at 1920 wide (D172 as redrawn by Adam, after ESPN's scoreboard strip). A grid of equal
+   cells, each never narrower than its own content: narrower windows wrap to a second row of the same cells
+   (Adam: acceptable at 1536) rather than squeezing or stretching a lone chip across the bar. */
+.games-row { display:grid; grid-template-columns:repeat(auto-fit, minmax(96px, 1fr)); gap:4px; flex:1 1 0; min-width:0; }
+/* A small cell: kickoff across the top, then two rows (away, home) of logo | abbreviation | game data. The grid's
+   three columns are shared by both rows, so the data column lines up and never runs into the names. */
+.game-chip { display:grid; grid-template-columns:14px auto auto; column-gap:4px; row-gap:1px; align-items:center;
+  justify-content:center; padding:3px 3px 4px; border-radius:7px; border:1px solid #2a323b; background:#0f1317;
+  color:var(--ink); text-decoration:none; line-height:1.2; min-width:0; }
+.game-chip:hover { border-color:#ffd54a; background:#181d23; }
+.game-chip-kick { grid-column:1 / -1; font-size:10px; font-weight:600; color:var(--muted); white-space:nowrap; text-align:center; }
+/* D224 C: the chip is a box; its Matchup link is an empty anchor stretched over it, the kickoff row a link to the analytics
+   This-week page sitting above that anchor (same size and place as before: no added height). */
+.game-chip { position:relative; }
+.game-chip-open { position:absolute; inset:0; border-radius:inherit; }
+.game-chip-kick { position:relative; z-index:1; text-decoration:none; border-radius:3px; }
+.game-chip-kick:hover { color:#ffd54a; text-decoration:underline; text-underline-offset:2px; }
+.game-chip-note { margin-left:3px; padding:0 3px; border-radius:3px; background:#1f262e; font-size:8.5px; text-transform:uppercase; letter-spacing:.03em; }
+.game-chip-logo { width:14px; height:14px; object-fit:contain; display:block; }
+.game-chip-abbr { font-size:11.5px; font-weight:800; white-space:nowrap; }
+.game-chip-data { font-size:11px; font-weight:700; white-space:nowrap; text-align:right; padding-left:2px; font-variant-numeric:tabular-nums; }
+.game-chip-data-line { color:#ffd54a; }
+.game-chip-data-total, .game-chip-data-pk { color:var(--ink); font-weight:600; }
+.game-chip-ou { color:var(--muted); font-size:8.5px; font-weight:700; }
+
+.matchup-bar-any { padding:6px 12px; border-radius:6px; border:1px solid #2a323b; background:transparent;
+  color:var(--muted); font-size:12px; font-weight:700; cursor:pointer; flex:none; white-space:nowrap; }
+.matchup-bar-any:hover { color:var(--ink); border-color:#4a5560; }
+
+.matchup-bar-form { display:flex; align-items:center; gap:8px; flex-wrap:wrap; flex:1 1 100%; }
+.matchup-bar-form[hidden] { display:none; }
+.matchup-bar-form select { padding:6px 10px; border-radius:6px; border:1px solid #2a323b; background:#0f1317; color:var(--ink); font-size:13px; max-width:220px; }
+.matchup-bar-vs { font-size:12px; color:var(--muted); flex:none; }
+.matchup-bar-form button { padding:6px 16px; border-radius:6px; border:1px solid #2a323b; background:var(--ink); color:var(--bg); font-weight:800; font-size:13px; cursor:pointer; flex:none; }
+.matchup-bar-form button:hover { background:#ffd54a; border-color:#ffd54a; }
+
+/* ---- Matchup page: the week's games strip and the game line (public/js/gamesbar.js, D173) ---- */
+
+/* The same chip row as the landing bar, a touch tighter: every pixel here comes out of the field's height. */
+.games-bar { padding:5px 8px; margin-bottom:6px; }
+/* The game being viewed: accent border and a warm wash, so it reads as "you are here" at a glance. */
+.game-chip.is-active { border-color:#ffd54a; background:rgba(255,213,74,.16); box-shadow:inset 0 0 0 1px #ffd54a; }
+.game-chip.is-active .game-chip-kick { color:#ffe9a8; }
+
+.game-line { display:flex; align-items:center; justify-content:center; gap:4px 10px; flex-wrap:wrap; margin-top:6px;
+  padding:4px 12px; font-size:13px; font-weight:600; line-height:1.3; color:var(--ink);
+  background:var(--panel); border:1px solid #22282f; border-radius:8px; }
+.game-line-when { white-space:nowrap; }
+.game-line-sep { color:var(--muted); font-weight:400; }
+.game-wx { display:inline-flex; align-items:center; gap:6px; flex-wrap:wrap; }
+.game-wx .game-line-sep { margin:0 2px; }
+.game-line .ico { width:18px; height:18px; flex:none; color:var(--ink); }
+/* The games strip's fold control (gamesbar.js, Adam 2026-09-28): a small label-button before the chips; folded, the bar is one short line. */
+.games-toggle { flex:none; padding:4px 10px; border-radius:999px; border:1px solid #2a323b; background:transparent; color:var(--muted); font-size:11.5px; font-weight:700; cursor:pointer; white-space:nowrap; }
+.games-toggle:hover { color:var(--ink); border-color:#4a5560; }
+.games-row[hidden] { display:none; } /* the row is display:grid, which would beat the hidden attribute */

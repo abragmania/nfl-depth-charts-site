@@ -1,0 +1,132 @@
+/* Step-6 player detail panel (public/js/panel.js). Reuses styles.css's own theme variables
+   (--panel/--ink/--muted/--team-primary/--team-secondary) and its existing .badge/.badge-* classes for
+   status pills — no badge colours are redefined here (styles.css already has the full set: Q/D/OUT/IR/
+   PUP/NFI/SUSP/INACTIVE/ACTIVE/PS). Loaded after styles.css (see public/index.html); the two files don't
+   define the same property on the same selector, so cascade order between them doesn't matter here.
+   The base .player-panel { flex:0 0 440px; } sizing stays in styles.css — this file only adds the
+   panel's own sticky/scroll/internal-layout rules. */
+
+.player-panel {
+  position: sticky;
+  top: 78px; /* clears the sticky 58px-ish topbar plus a little breathing room */
+  max-height: calc(100vh - 96px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  background: var(--panel);
+  border: 1px solid #22282f;
+  border-radius: 12px;
+}
+
+.panel-inner { position: relative; padding: 18px 18px 26px; }
+
+.panel-close {
+  position: absolute; top: 10px; right: 10px; width: 28px; height: 28px;
+  border-radius: 50%; border: 1px solid #2a323b; background: #1c2228; color: var(--ink);
+  font-size: 18px; line-height: 1; cursor: pointer;
+}
+.panel-close:hover { background: #2a323b; border-color: #444; }
+
+.panel-head { display: flex; gap: 12px; align-items: center; padding-right: 34px; }
+/* PFF-inspired (Adam, 2026-09-11): "headshot on a team-colour backdrop". */
+.panel-headshot-backdrop { display: flex; flex: none; padding: 4px; border-radius: 50%;
+  background: linear-gradient(145deg, var(--team-primary,#333), var(--team-secondary,#777)); }
+.panel-headshot, .panel-headshot-fallback { border-radius: 50%; object-fit: cover; background: #0c0f12; flex: none; }
+.panel-headshot-fallback { display: flex; align-items: center; justify-content: center; font-weight: 800; background: #2a323b; color: #cfd6dd; }
+.panel-head-main { min-width: 0; }
+
+/* PFF-inspired (Adam, 2026-09-11): "a big rating number in a colour-scaled box (tier colours), with
+   '#4 of 119 at RB' directly under it and the launch rating as a small delta" — the shared tier-colour
+   scale (styles.css :root) as a solid fill instead of the old flat team-colour bar. */
+/* D102: same moulded-chip gloss as every other tier-filled pill on the app (styles.css's .rating-pill/
+   .prow-one .prow-ovr) so the panel's big grade box reads as one family with the cards it was clicked from. */
+.panel-grade { flex: none; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  min-width: 68px; width: auto; padding: 8px 9px 7px; /* Adam 2026-09-18: the tile grows to fit "#144 of 191 CB" instead of clipping it */ border-radius: var(--r-card, 12px); text-align: center;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.25), inset 0 -1px 2px rgba(0,0,0,.15); }
+.panel-grade-num { font-size: 26px; font-weight: 900; line-height: 1; font-variant-numeric: tabular-nums; }
+.panel-grade-rank { font-size: 10px; font-weight: 700; letter-spacing: .02em; opacity: .82; margin-top: 3px; white-space: nowrap; }
+.panel-grade-snaps-label { font-size: 9px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; opacity: .7; margin-top: 5px; white-space: nowrap; }
+.panel-grade-delta { font-size: 9px; font-weight: 600; opacity: .68; margin-top: 2px; white-space: nowrap; }
+.panel-grade.tier-elite { background: var(--tier-elite); color: var(--tier-elite-ink); }
+.panel-grade.tier-strong { background: var(--tier-strong); color: var(--tier-strong-ink); }
+.panel-grade.tier-avg { background: var(--tier-avg); color: var(--tier-avg-ink); }
+.panel-grade.tier-weak { background: var(--tier-weak); color: var(--tier-weak-ink); }
+.panel-grade.tier-flat { background: var(--tier-flat); color: var(--tier-flat-ink); }
+.panel-name { font-size: 20px; font-weight: 800; line-height: 1.2; }
+.panel-number { color: var(--muted); font-weight: 600; font-variant-numeric: tabular-nums; }
+.panel-label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin-top: 3px; }
+/* Job 2: "Stats ↗" to the separate analytics app — hidden by default (panel.js's panelShellHtml) and shown
+   only once the season's players file confirms this man has analytics data (patchStatsLink). Same muted,
+   underline-on-hover voice as the app bar's own "Analytics ↗" (public/index.html's .topbar-analytics). */
+.panel-stats-link { display: inline-block; margin-top: 4px; font-size: 11px; font-weight: 600; color: var(--muted); text-decoration: none; }
+.panel-stats-link:hover { color: var(--ink); text-decoration: underline; }
+.panel-stats-link[hidden] { display: none; }
+/* The wordmark PNG is the club's own dark colour on a transparent background, so on a dark club (WAS
+   burgundy, BAL purple, CHI navy, PIT/LV/NO/JAX) it would nearly vanish against the panel's own dark fill
+   (--panel). Same fix as the landing tile's crest backdrop (styles.css's .tile img): an opaque light chip
+   behind the mark so it reads regardless of the club's own colours. */
+.panel-wordmark { display: block; max-width: 130px; max-height: 26px; margin-top: 8px; object-fit: contain;
+  padding: 4px 8px; border-radius: 6px; background: rgba(255,255,255,.92); }
+
+.panel-bio-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px 10px; margin-top: 18px; font-size: 12.5px; }
+.panel-bio-row span { background: #1a1f25; border-radius: 6px; padding: 6px 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* D115: games/starts chip — a seventh cell that spans the grid's full width as its own row (see panel.js's
+   bioRowHtml comment on why it isn't sharing the draft cell's "—"), bold and centered so it reads as the
+   one line in this grid meant to be scanned first, per Adam's "show game experience prominently" ruling. */
+.panel-bio-games { grid-column: 1 / -1; font-weight: 700; text-align: center; letter-spacing: .01em; }
+
+.panel-snaps { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+.panel-snaps-label { flex: none; font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.panel-snaps-bar { flex: 1 1 auto; height: 6px; border-radius: 3px; background: #1a1f25; overflow: hidden; }
+.panel-snaps-fill { display: block; height: 100%; border-radius: 3px; background: linear-gradient(90deg, var(--team-primary,#333), var(--team-secondary,#777)); }
+.panel-snaps-pct { flex: none; font-size: 11.5px; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+.panel-status { margin-top: 14px; background: #1a1f25; border-radius: 8px; padding: 10px 12px; }
+.panel-status-head { display: flex; align-items: center; gap: 8px; }
+.panel-roster-desig { font-size: 12px; color: var(--muted); }
+.panel-status-comment { margin-top: 6px; font-size: 12.5px; line-height: 1.4; }
+.panel-status-return { margin-top: 4px; font-size: 12px; color: var(--muted); }
+
+.panel-position-line { margin-top: 12px; font-size: 12.5px; color: var(--muted); font-style: italic; }
+
+/* D165: the stats box is two tabs, Season stats | Game log, in the old heading's small-caps voice; the open tab
+   is ink-coloured and underlined in the club's colour. */
+.panel-stats-box { margin-top: 16px; }
+.panel-tabs { display: flex; gap: 18px; border-bottom: 1px solid #22282f; margin-bottom: 6px; }
+.panel-tab { background: none; border: 0; border-bottom: 2px solid transparent; margin-bottom: -1px; padding: 0 0 5px;
+  font: inherit; font-size: 11.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); cursor: pointer; }
+.panel-tab:hover { color: var(--ink); }
+.panel-tab[aria-selected="true"] { color: var(--ink); font-weight: 700; border-bottom-color: var(--team-secondary, #777); }
+.panel-tab:focus-visible { outline: 1px solid var(--muted); outline-offset: 2px; }
+.panel-gamelog-dnp td[colspan] { text-align: center; color: var(--muted); font-style: italic; }
+.panel-stats-table tr.panel-gamelog-trade td { text-align: center; font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--ink); background: rgba(255,255,255,.04); }
+/* D181: the totals row reads as a total, not another game — bold, a top border, a muted fill, same font size. */
+.panel-stats-table tr.panel-gamelog-total td { font-weight: 700; border-top: 2px solid var(--muted); background: rgba(255,255,255,.04); }
+/* D200: the game log's DK column is the one figure that folds every stat into a single number, so it stands out
+   bold in the team's accent even on a normal row; the totals row's own bold rule (above) already covers it there. */
+.panel-gamelog-dk { font-weight: 700; color: var(--team-secondary, #9fd3ff); }
+.panel-stats-heading { font-size: 11.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-bottom: 6px; }
+.panel-loading, .panel-error, .panel-stats-empty { padding: 14px 4px; text-align: center; color: var(--muted); font-size: 12.5px; }
+.panel-error { color: #ff9a90; }
+
+.panel-stats-table { width: 100%; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; }
+.panel-stats-table th, .panel-stats-table td { padding: 5px 6px; text-align: right; border-bottom: 1px solid #22282f; white-space: nowrap; }
+/* D169: a quarterback's twelve-column row (passing then rushing) stays on one line: tighter cells, smaller type. */
+.panel-stats-table.panel-stats-wide { font-size: 11px; }
+.panel-stats-table.panel-stats-wide th, .panel-stats-table.panel-stats-wide td { padding: 5px 3px; }
+.panel-stats-table th:first-child, .panel-stats-table td:first-child,
+.panel-stats-table th:nth-child(2), .panel-stats-table td:nth-child(2) { text-align: left; }
+.panel-stats-table thead th { color: var(--muted); font-weight: 700; text-transform: uppercase; font-size: 10.5px; }
+.panel-stats-note { margin-top: 6px; font-size: 11px; color: var(--muted); font-style: italic; line-height: 1.4; }
+
+@media (max-width: 1400px) {
+  .player-panel { flex-basis: 380px; }
+  .panel-name { font-size: 18px; }
+}
+
+/* D142: "ESPN lists him elsewhere" moved off the cards and into the panel — one muted line in the panel's
+   own note voice, sitting under the status block where the rest of this man's placement facts are. */
+.panel-espn-note { margin-top: 8px; font-size: 12px; color: var(--muted); line-height: 1.35; }
+
+/* A player route whose id matches nothing on the chart (main.js openPlayerPanel): the panel's place says so. */
+.panel-notfound { padding:24px 18px; color:var(--muted); font-size:13px; line-height:1.5; }
+.panel-notfound a { color:var(--fg); text-decoration:underline; margin-left:6px; }

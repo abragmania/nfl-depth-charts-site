@@ -1,0 +1,427 @@
+// D46 matchup view: one team's OFFENSE facing another team's DEFENSE across a line of scrimmage. It has to
+// fit one 1700x900 screen, so it is built on exactly the same compact overview the whole-team page uses:
+// field.js's computeLayout plus cards.js's renderColumn, fed a SYNTHETIC TeamView whose OFF unit is team
+// A's and whose DEF unit is team B's. That is the whole implementation — the line of scrimmage, the level
+// stripes, the TE block under its own TIGHT ENDS label, the facing order (offense reading bottom-up toward
+// the ball, defense reading down from it) and the fit-the-window scaling all come from the shared engine
+// rather than from a parallel one here that had to be kept in step with it by hand.
+//
+// Route #/matchup/:a/:b renders A-offense-over-B-defense; #/matchup/:a alone resolves B from A's
+// header.nextOpponent (this week's schedule) and redirects, or shows a picker on a bye week.
+import { getTeams, getTeam } from "./api.js";
+import { esc, renderColumn, renderTray, fitNames, wireDepthToggles, espnSchemeOf, unitTagsHtml, assetUrl } from "./cards.js";
+import { computeLayout, renderFieldSvg, renderLevelLabels, FIELD_VARIANT } from "./field.js";
+import { mountScaledField, disposeCurrentView, MIN_READABLE_SCALE } from "./viewfit.js";
+import { navStripHtml, wireNav } from "./nav.js";
+import { isLightWash } from "./landing.js";
+// D173: this week's games strip (shared with the landing page) and the game line for the game being viewed.
+import { gamesBarHtml, gameLineHtml, findGame, wireGamesToggle } from "./gamesbar.js";
+// D111: one legend, drawn on both pages (see matchupLegendHtml). D134: one reduced-depth option object too.
+import { legendHtml, REDUCED_DEPTH_OPTS } from "./team.js";
+
+const dash = "\u2014";
+const record = (r) => (r ? `${r.wins}-${r.losses}${r.ties ? "-" + r.ties : ""}` : dash);
+
+// The two teams' slot labels, so a card's "also listed at" chip resolves against whichever unit it came
+// from (cards.js's alsoListedChips takes one lookup per column).
+// Slot ids are `${unit}-${band}-${n}`, so BOTH teams have an "OFF-WR-1" and a "DEF-DL-1" — indexing all
+// four half-views would let whichever team was walked last silently win every lookup, so only the two
+// halves actually drawn on this field are indexed, and they cannot collide with each other.
+function slotLookupFor(viewA, viewB) {
+  const map = new Map();
+  for (const sl of viewA?.units?.OFF || []) map.set(sl.slotId, sl.label);
+  for (const sl of viewB?.units?.DEF || []) map.set(sl.slotId, sl.label);
+  return (slotId) => map.get(slotId);
+}
+
+// A TeamView shaped exactly as computeLayout expects, assembled from two real ones. Only the OFF half of
+// A and the DEF half of B are taken, which is the whole point of the view; `scheme` comes from B because
+// it is B's front that gets drawn.
+function facingView(viewA, viewB) {
+  return {
+    scheme: viewB.scheme,
+    // D137: the defending club's ESPN-vs-club scheme disagreement travels with its front, or this page
+    // would read ESPN's linebacker codes in the wrong formation (cards.js's espnSchemeOf).
+    schemeOverride: viewB.schemeOverride ?? null,
+    units: { OFF: viewA.units?.OFF || [], DEF: viewB.units?.DEF || [] },
+    unlisted: { OFF: viewA.unlisted?.OFF || {}, DEF: viewB.unlisted?.DEF || {} },
+  };
+}
+
+// One quiet summary line per team, from view.heat.summary (same string team.js's own header chip uses).
+function heatSummaryHtml(view) {
+  const summary = view?.heat?.summary;
+  const text = typeof summary === "string" ? summary
+    : Array.isArray(summary) ? summary.map((x) => (typeof x === "string" ? x : x?.text)).filter(Boolean).join(" \u00b7 ")
+    : "";
+  const title = view?.heat?.summaryDetail || text;
+  return text ? `<div class="matchup-team-heat" title="${esc(title)}">${esc(text)}</div>` : "";
+}
+
+// Same URL rule team.js's fieldHtml uses for its single watermark (D95/D98 part 1): prefer the dark
+// crest, fall back to the plain logo, resolved against the page by cards.js assetUrl (a root-relative path
+// resolved against the document locally but 404'd on the public site, which lives under a sub-path).
+const watermarkUrl = (team) => assetUrl(team.logoDark || team.logo || "");
+
+// D98 part 2: one crest per half, each sized to ~74% of that half's own height (70-80% asked for) and
+// centred within it, reading the split straight off the layout this same field already computed (the
+// line of scrimmage sits at layout.losY, not always exactly the canvas midpoint once margins are in) so
+// neither crest can ever cross into the other half or overlap the line of scrimmage.
+function halfWatermarkHtml(layout, team, half) {
+  const url = watermarkUrl(team);
+  if (!url) return "";
+  const span = half === "def" ? layout.losY : layout.layoutHeight - layout.losY;
+  const center = half === "def" ? layout.losY / 2 : layout.losY + span / 2;
+  const topPct = (center / layout.layoutHeight) * 100;
+  const heightPct = ((span * 0.74) / layout.layoutHeight) * 100;
+  return `<div class="matchup-watermark-crest" style="--wm-url:url('${esc(url)}');top:${topPct}%;height:${heightPct}%"></div>`;
+}
+
+// D113: each half carries its own ownership banner (top edge = the defending club, bottom edge = the
+// offensive club — the same split halfWatermarkHtml above draws crests for), in that club's own colours,
+// so a single shared field with two teams on it doesn't read as one team's positions rewritten over the
+// other's. The banner is a real, fixed-height DOM element OUTSIDE the scaled canvas (see fieldHtml/
+// renderMatchup's `.matchup-field-wrap`), not inside `.field-scale`: sized in canvas units it would shrink
+// along with the fit-to-window transform and read as barely taller than its own text. Fixed outside, it
+// stays exactly 32 real pixels at any window size, and doesn't cover the "SECONDARY" level label that
+// lives in that same margin band on the canvas itself.
+function halfBannerHtml(team, unitWord, pos) {
+  const url = watermarkUrl(team);
+  const crest = url ? `<img class="matchup-half-banner-crest" src="${esc(url)}" alt="" onerror="this.remove()">` : "";
+  const light = isLightWash(team.colourPrimary) ? " matchup-half-banner-light" : "";
+  return `<div class="matchup-half-banner matchup-half-banner-${pos}${light}" style="--banner-primary:${team.colourPrimary};--banner-secondary:${team.colourSecondary}">
+    ${crest}<span class="matchup-half-banner-text">${esc(team.name.toUpperCase())} <span class="matchup-half-banner-dot">·</span> ${unitWord}</span>
+  </div>`;
+}
+
+// Each column is tinted with the colours of the team it actually belongs to, so a glance at any row says
+// whose players those are without reading the header — the one thing a single shared field wash cannot do
+// when two teams are on it.
+function fieldHtml(viewA, viewB, teamA, teamB, spread, depthOpts = null, ownHeight = false) {
+  const view = facingView(viewA, viewB);
+  // D140: `ownHeight` is the fit engine's scrolling-state flag — the canvas takes these two clubs' own
+  // natural height instead of the constant every club shares, so the page ends where the chart ends.
+  const layout = computeLayout(view, { ...(depthOpts || {}), spread, ownHeight });
+  const slotLookup = slotLookupFor(viewA, viewB);
+  const colour = (t) => `--team-primary:${t.colourPrimary};--team-secondary:${t.colourSecondary}`;
+  const columnsHtml = layout.columns.map((c) => {
+    const team = c.unit === "OFF" ? teamA : teamB;
+    return renderColumn(c, team.abbr, { slotLookup, scheme: view.scheme, espnScheme: espnSchemeOf(view), colourStyle: colour(team) });
+  }).join("");
+  const traysHtml = layout.trays.map((t) => renderTray(t, (t.unit === "OFF" ? teamA : teamB).abbr)).join("");
+  // D98 part 2: B defends (top half), A is on offense (bottom half) — see facingView above.
+  const watermarkHtml = `<div class="field-watermark">${halfWatermarkHtml(layout, teamB, "def")}${halfWatermarkHtml(layout, teamA, "off")}${unitTagsHtml(layout, teamB, teamA)}</div>`;
+  // D99: the field surface tints each half with its own club. --team-primary/--team-secondary (from
+  // colour(teamB)) already carry the defending club for the header pill and column tints (D98 part 2);
+  // --team-a-primary/--team-a-secondary add the offensive club's colours for styles.css's
+  // .matchup-field .field-scale rule, and --los-pct gives it the real seam position off the same
+  // layout.losY the cards and yard lines already use, so the blend always lines up with the actual line
+  // of scrimmage rather than a hardcoded 50/50 split.
+  const losPct = ((layout.losY / layout.layoutHeight) * 100).toFixed(2);
+  return {
+    layout,
+    html: `<div class="field-outer matchup-field" data-field-variant="${FIELD_VARIANT}" style="${colour(teamB)};--team-a-primary:${teamA.colourPrimary};--team-a-secondary:${teamA.colourSecondary};--los-pct:${losPct}%">
+      <div class="field-scale" style="width:${layout.layoutWidth}px;height:${layout.layoutHeight}px">
+        ${watermarkHtml}
+        ${renderFieldSvg(layout.layoutHeight, layout.losY, layout.layoutWidth)}
+        <div class="field-layer">${columnsHtml}${traysHtml}</div>
+        <div class="level-layer">${renderLevelLabels(layout.levels, layout.layoutWidth)}</div>
+      </div>
+    </div>`,
+  };
+}
+
+function logoPlate(team, extraClass) {
+  return `<img class="matchup-logo${extraClass ? " " + extraClass : ""}" src="${esc(team.logoDark)}" alt="${esc(team.abbr)}" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'matchup-logo matchup-logo-fallback',textContent:'${esc(team.abbr)}'}))">`;
+}
+
+// ---- header / breadcrumb ----
+
+// D111 (Adam, 2026-09-16): "same on the matchup page (its two-club header: put the legend on the centre
+// block or under it, not taller)." The key is the same six items the team page prints, in the same words —
+// the two pages must never explain the same cards differently — sitting under the opponent picker inside
+// the centre block. That block is the SHORT one: the header's height is set by the two club panels, whose
+// 60px crest and three text lines run ~30 units taller than the title plus its controls, so the legend goes
+// into slack that already existed and .matchup-head does not grow (styles.css's `.matchup-vs.has-legend`,
+// which also tightens the block's own gap to pay for the extra line).
+// The markup is team.js's own legendHtml, imported rather than copied: the two pages draw the same cards, so
+// a reworded key must reword on both at once or the copies drift the way four of them once did over
+// OUT_STATUS_CODES.
+const matchupLegendHtml = () => legendHtml("legend-matchup legend-collapsed");
+
+// D113/D134: which club is on offense and which on defense is a chip beside that club's own name. It used
+// to be the compact state's stand-in for the two 32px half banners; since D155 the header is compact at
+// every size, so the chip is simply always on (styles.css's `.matchup.is-compact`).
+const unitChipHtml = (unit) => `<span class="matchup-unit-chip">${esc(unit)}</span>`;
+
+// D155 (Adam, 2026-09-18, "yes"): THERE IS ONLY ONE MATCHUP HEADER NOW. `is-compact` is written into the
+// page's own markup (see renderMatchup) instead of being toggled by the fit engine, and the key is rendered
+// already collapsed behind its "Legend" chip, exactly as a laptop always saw it.
+//
+// WHY: the header used to have two heights, 112px unfolded and 57px folded, and which one you got depended
+// on the window. Whichever way that was decided it produced the same absurdity — a TALLER window drawing a
+// SMALLER field, because the extra height bought a taller header and then some. D146's window-width rule
+// (MATCHUP_FOLD_WIDTH, now gone) moved the boundary rather than removing it: 1700x850 drew at 0.7918 folded
+// and 1700x900 at 0.7106 unfolded. One header, one height, no boundary to cross, and every pair of clubs the
+// same size at a given window — which is what D107 asks for and what two rulings failed to deliver here.
+// The injury sentence is not lost with the unfolded header: it moves into the empty club colour beside the
+// name and record, on one line (styles.css), with the whole of it in the element's `title`.
+//
+// There is therefore NO setCompact hook on this page's cascade, which also means `steps.header` is false in
+// mountScaledField and D134's step (1) is never offered here at all — it had nothing left to buy.
+
+// D113 (Adam, 2026-09-16): the centre block used to print its own "A offense vs B defense" line here — the
+// exact small grey text that read as "Denver's positions rewritten" rather than "Jacksonville's defense".
+// That announcement now lives on the field itself, as a full-width banner in each club's own colours
+// across the top and bottom edge (see halfBannerHtml/fieldHtml), so this block keeps only the opponent
+// picker, the swap link and the legend.
+function headerHtml(teamA, teamB, viewA, viewB, teams) {
+  const recA = viewA?.header?.record ?? teamA.record;
+  const recB = viewB?.header?.record ?? teamB.record;
+  // A club whose primary is pale (New Orleans' gold) gets dark ink on its panel, exactly as its landing
+  // tile does — same function, same threshold, so the two can never disagree.
+  const inkA = isLightWash(teamA.colourPrimary) ? " matchup-team-light" : "";
+  const inkB = isLightWash(teamB.colourPrimary) ? " matchup-team-light" : "";
+  return `<div class="matchup-head">
+    <div class="matchup-team matchup-team-a${inkA}" style="--team-primary:${teamA.colourPrimary};--team-secondary:${teamA.colourSecondary}">
+      ${logoPlate(teamA)}
+      <div class="matchup-team-info">
+        <div class="matchup-team-name">${esc(teamA.name)}${unitChipHtml("OFFENSE")}</div>
+        <div class="matchup-team-sub">Record ${record(recA)}</div>
+        ${heatSummaryHtml(viewA)}
+      </div>
+    </div>
+    <div class="matchup-vs has-legend">
+      <div class="matchup-vs-controls">
+        ${opponentPickerHtml(teams, teamA, teamB)}
+        <a class="matchup-swap" href="#/matchup/${esc(teamB.abbr)}/${esc(teamA.abbr)}" title="Swap: ${esc(teamB.abbr)} offense vs ${esc(teamA.abbr)} defense">⇄ Swap sides</a>
+      </div>
+      ${matchupLegendHtml()}
+    </div>
+    <div class="matchup-team matchup-team-b${inkB}" style="--team-primary:${teamB.colourPrimary};--team-secondary:${teamB.colourSecondary}">
+      <div class="matchup-team-info matchup-team-info-right">
+        <div class="matchup-team-name">${esc(teamB.name)}${unitChipHtml("DEFENSE")}</div>
+        <div class="matchup-team-sub">Record ${record(recB)}</div>
+        ${heatSummaryHtml(viewB)}
+      </div>
+      ${logoPlate(teamB)}
+    </div>
+  </div>`;
+}
+
+// D100: the same "all 31 other clubs, alphabetised" option list backs both the bye-week picker (which has
+// no B yet) and the header's opponent dropdown (which always has one) — one place builds it so the two
+// pickers can never drift into different sort orders or a different label format.
+function opponentOptionsHtml(teams, aAbbr, selectedAbbr) {
+  return teams.slice()
+    .filter((t) => t.abbr !== aAbbr)
+    .sort((a, b) => a.abbr.localeCompare(b.abbr))
+    .map((t) => `<option value="${esc(t.abbr)}" ${t.abbr === selectedAbbr ? "selected" : ""}>${esc(t.abbr)} — ${esc(t.name)}</option>`)
+    .join("");
+}
+
+// D100 (Adam, 2026-09-16): the opponent is always changeable from the header, not just on a bye week.
+// Sits beside the title and the Swap sides button in the centre block (D58: the header must not grow
+// taller, so this shares the swap button's row rather than adding one of its own). Defaults to A's
+// scheduled opponent; when the current B isn't that team, a muted note names the scheduled one so the
+// default stays visible even while looking at a hand-picked matchup.
+function opponentPickerHtml(teams, teamA, teamB) {
+  const nextOppAbbr = teamA.nextOpponent?.abbr;
+  const notScheduled = nextOppAbbr && nextOppAbbr !== teamB.abbr;
+  const note = notScheduled
+    ? `<span class="matchup-opp-note">not this week's opponent (next: ${esc(nextOppAbbr)})</span>` : "";
+  return `<span class="matchup-opp-picker">
+    <label for="matchup-opp-select">Opponent</label>
+    <select id="matchup-opp-select" aria-label="Change opponent">${opponentOptionsHtml(teams, teamA.abbr, teamB.abbr)}</select>
+    ${note}
+  </span>`;
+}
+
+function wireOpponentPicker(root, A) {
+  const select = root.querySelector("#matchup-opp-select");
+  if (!select) return;
+  select.addEventListener("change", (e) => {
+    const b = e.target.value;
+    if (b) location.hash = `#/matchup/${A}/${b}`;
+  });
+}
+
+function notFoundHtml(abbr) {
+  return `<div class="notfound">No such team "${esc(abbr)}". <a class="back" href="#/">Back to all teams</a></div>`;
+}
+
+function errorHtml(e) {
+  return `<div class="notfound">Couldn't load that matchup: ${esc(e.message)} <a class="back" href="#/">Back to all teams</a></div>`;
+}
+
+// A-has-no-game-this-week (bye) picker: A is fixed, pick any opponent to build the matchup by hand.
+function byePickerHtml(teamA, teams) {
+  const opts = opponentOptionsHtml(teams, teamA.abbr, null);
+  return `<div class="matchup-picker">
+    <h1>${esc(teamA.name)} matchup</h1>
+    <p class="matchup-picker-note">${esc(teamA.abbr)} has no game on this week's schedule (bye). Pick an opponent to build a matchup anyway.</p>
+    <form id="matchup-picker-form" class="matchup-picker-form">
+      <span class="matchup-picker-fixed">${esc(teamA.abbr)} offense vs</span>
+      <select id="matchup-picker-b" aria-label="Opponent team">${opts}</select>
+      <span class="matchup-picker-fixed">defense</span>
+      <button type="submit">Go</button>
+    </form>
+  </div>`;
+}
+
+function wireByePicker(root, A) {
+  const form = root.querySelector("#matchup-picker-form");
+  if (!form) return;
+  form.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const b = root.querySelector("#matchup-picker-b").value;
+    if (b) location.hash = `#/matchup/${A}/${b}`;
+  });
+}
+
+// ---- entry point ----
+
+export async function renderMatchup(root, search, aAbbr, bAbbr) {
+  wireGamesToggle(root); // the games strip's fold/unfold (gamesbar.js), wired once per root
+  search.hidden = true;
+  disposeCurrentView(); // the outgoing view's observers must not outlive its DOM
+  const A = (aAbbr || "").toUpperCase();
+  const { teams, games = [] } = await getTeams();
+  const teamA = teams.find((t) => t.abbr === A);
+  if (!teamA) {
+    document.title = "NFL Depth Charts";
+    root.innerHTML = notFoundHtml(aAbbr);
+    return;
+  }
+
+  if (!bAbbr) {
+    const opp = teamA.nextOpponent;
+    if (opp && opp.abbr) {
+      location.hash = `#/matchup/${A}/${opp.abbr}`; // hashchange re-invokes this route with :b resolved
+      return;
+    }
+    document.title = `${teamA.name} Matchup — NFL Depth Charts`;
+    // D59 follow-up (Adam, 2026-09-14): the bye-week picker is a team-context page too — it gets the same
+    // strip (Matchup pill lit, no opponent links since there's no team B yet) instead of its old lone
+    // "Back to team" link, so picking a bye-week matchup doesn't strand you any differently than any other
+    // route does.
+    root.innerHTML = `
+      ${gamesBarHtml(teams, games, null)}
+      ${navStripHtml({ teams, abbr: A, page: "matchup", primary: teamA.colourPrimary, secondary: teamA.colourSecondary })}
+      ${byePickerHtml(teamA, teams)}`;
+    wireByePicker(root, A);
+    wireNav(root);
+    return;
+  }
+
+  const B = bAbbr.toUpperCase();
+  const teamB = teams.find((t) => t.abbr === B);
+  if (!teamB) {
+    document.title = "NFL Depth Charts";
+    root.innerHTML = notFoundHtml(bAbbr);
+    return;
+  }
+
+  document.title = `${A} offense vs ${B} defense — NFL Depth Charts`;
+
+  let viewA, viewB;
+  try {
+    [{ data: viewA }, { data: viewB }] = await Promise.all([getTeam(A), getTeam(B)]);
+  } catch (e) {
+    root.innerHTML = errorHtml(e);
+    return;
+  }
+
+  // Mounted empty first so mountField-style measuring can pick the horizontal spread from the real box
+  // before the field is built (same two-phase approach as team.js — see its mountField comment).
+  // D59: the shared nav strip replaces this view's old breadcrumb — team A's switcher, the Matchup pill
+  // lit, and the "A team page · B team page" links, folded into the strip.
+  // The two half banners are real DOM siblings of `.field-outer`, not part of the scaled canvas (see
+  // halfBannerHtml/fieldHtml) — B defends the top half, A is on offense in the bottom half (the same split
+  // halfWatermarkHtml/facingView use). `.matchup-field-wrap` (styles.css) gives the three a single rounded,
+  // bordered frame so the banners read as caps on the same card the field sits in.
+  // D173: the week's games strip sits above everything, the chip for this game lit when A and B really are
+  // this week's opponents (either order); the game line (kickoff, venue, conditions) sits under the header and
+  // is absent for a hand-picked pairing that is not a real game this week.
+  const game = findGame(games, A, B);
+  root.innerHTML = `
+    <div class="matchup is-compact">
+      ${gamesBarHtml(teams, games, [A, B])}
+      ${navStripHtml({ teams, abbr: A, page: "matchup", opponentAbbr: B, primary: teamA.colourPrimary, secondary: teamA.colourSecondary })}
+      ${headerHtml(teamA, teamB, viewA, viewB, teams)}
+      ${gameLineHtml(game)}
+      <div class="team-body">
+        <div class="matchup-field-wrap">
+          ${halfBannerHtml(teamB, "DEFENSE", "top")}
+          <div class="field-outer matchup-field" data-field-variant="${FIELD_VARIANT}"></div>
+          ${halfBannerHtml(teamA, "OFFENSE", "bottom")}
+        </div>
+      </div>
+    </div>`;
+  wireNav(root); // D59: switcher routes to the newly picked team’s matchup
+  wireOpponentPicker(root, A); // D100: header opponent dropdown routes to #/matchup/A/B
+  mountMatchupField(root, viewA, viewB, teamA, teamB);
+}
+
+// D114 (Adam, 2026-09-16): "on the matchup screen it's permanently shaking uncontrollably." viewfit.js's
+// height budget knew only about the field's own top edge and a fixed bottom margin; it had never heard of the
+// D113 bottom half-banner, which lives INSIDE `.matchup-field-wrap` below `.field-outer` (see renderMatchup's
+// markup). Missing that, the wrap rendered taller than the window on every load, which raised a vertical
+// scrollbar, narrowed `main`, triggered a refit at the narrower width that shrank the field enough to lose
+// the scrollbar, widened `main` back, and refit grew the field right back into overflow - forever. This
+// measures the real, live space the bottom banner and the wrap's own trailing border/margin actually cost
+// - not a hardcoded 32, so a future CSS change to the banner is picked up automatically - and hands it to
+// mountScaledField as `reserveBelow` (a function, so it is re-measured on every refit rather than read once
+// and then gone stale). The top banner needs no such plumbing: it sits ABOVE `.field-outer`, so viewfit's
+// existing measurement of the field's own top edge already accounts for it.
+function matchupReserveBelow(root) {
+  const wrap = root.querySelector(".matchup-field-wrap");
+  const banner = root.querySelector(".matchup-half-banner-bottom");
+  if (!wrap || !banner) return 0;
+  const wrapCs = getComputedStyle(wrap);
+  return banner.offsetHeight + parseFloat(wrapCs.borderBottomWidth || 0) + parseFloat(wrapCs.marginBottom || 0);
+}
+
+// The team-page mount with two teams' worth of specifics: which colours each column takes, and which
+// team's page a click should open. Everything else — measure, spread, draw, rescale, rebuild, settle,
+// dispose — is viewfit.js's mountScaledField, shared with team.js.
+function mountMatchupField(root, viewA, viewB, teamA, teamB) {
+  const view = facingView(viewA, viewB);
+  let depthOpts = null; // D134: set by the cascade's setDepth hook, read by every build from here on
+  // D140: the same two canvases at these clubs' own natural height, measured once, for the scrolling state.
+  const own = { full: computeLayout(view, { ownHeight: true }), reduced: computeLayout(view, { ...REDUCED_DEPTH_OPTS, ownHeight: true }) };
+  return mountScaledField({
+    root,
+    probe: computeLayout(view),
+    build: (spread, minHeight, ownHeight) => fieldHtml(viewA, viewB, teamA, teamB, spread, depthOpts, ownHeight),
+    observe: [root.querySelector(".nav-strip"), root.querySelector(".matchup-head"), root.querySelector(".games-bar"), root.querySelector(".game-line")],
+    reserveBelow: () => matchupReserveBelow(root), // D114: account for the bottom half-banner strip
+    cascade: {
+      floor: MIN_READABLE_SCALE,
+      reduced: computeLayout(view, REDUCED_DEPTH_OPTS),
+      own, // D140
+      // D155: no setCompact and no foldWidth. The header is already compact in the markup, so there is
+      // nothing for the cascade to fold — which makes `steps.header` false and drops D134's step (1) from
+      // this page's cascade entirely. It goes straight from "none" to the depth step and then the floor.
+      setDepth: (on) => { depthOpts = on ? REDUCED_DEPTH_OPTS : null; },
+    },
+    onDraw: (el) => { fitNames(el); wireDepthToggles(el); wireMatchupClicks(el, teamA, teamB); },
+    onText: (el) => fitNames(el), // on the font swap only, never on every resize frame
+
+  });
+}
+
+// A card click opens that player's panel on HIS OWN team's page, which differs by half of the field here.
+function wireMatchupClicks(el, teamA, teamB) {
+  el.addEventListener("click", (e) => {
+    const hit = e.target.closest("[data-player-key]");
+    if (!hit) return;
+    e.preventDefault();
+    // A tray chip lives in `.tray`, NOT in a `.column`, so the closest column would be null for every
+    // unlisted player. The tray carries its own data-unit (cards.js's renderTray), checked first.
+    const tray = hit.closest(".tray");
+    const unit = tray ? tray.dataset.unit : hit.closest(".column")?.dataset.slotId?.split("-")[0];
+    const abbr = unit === "OFF" ? teamA.abbr : teamB.abbr;
+    location.hash = `#/team/${encodeURIComponent(abbr)}/player/${encodeURIComponent(hit.dataset.playerKey)}`;
+  });
+}

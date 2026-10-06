@@ -1,0 +1,304 @@
+// The analytics app's one data door. Loads a season's manifest and players file once, then only the week
+// files a view needs, caching all of it per season for the page's life. Live mode asks the local server's
+// /api/analytics routes; static mode (the published site, <meta name="nfl-static" content="1">) reads the
+// flat files the publish step writes, through the same staticPathFor() the depth charts use (public/js/api.js).
+// This app is served one folder down (/analytics/), so every static path gets a "../" in front.
+import { isStatic, staticPathFor, getPlayer, getHistory, getGameLog } from "../../js/api.js";
+import { weekKey, splitKey, weekInScope } from "./filters.js";
+
+// Mirrors the analytics contract's static layout, used only if api.js's staticPathFor() does not (yet) map
+// an analytics URL: /api/analytics/{s}/manifest -> api/analytics/{s}/manifest.json, .../players -> players.json,
+// .../w/{n} -> w{NN}.json.
+export function analyticsStaticPath(url) {
+  if (/^\/?api\/analytics\/identity$/.test(String(url).split("?")[0])) return "api/analytics/identity.json";
+  if (/^\/?api\/analytics\/seasons$/.test(String(url).split("?")[0])) return "api/analytics/seasons.json";
+  if (/^\/?api\/analytics\/status$/.test(String(url).split("?")[0])) return "api/analytics/status.json";
+  const m = String(url).split("?")[0].match(/^\/?api\/analytics\/(\d{4})\/(manifest|players|w\/(\d+))$/);
+  if (!m) return null;
+  if (m[3]) return `api/analytics/${m[1]}/w${String(+m[3]).padStart(2, "0")}.json`;
+  return `api/analytics/${m[1]}/${m[2]}.json`;
+}
+
+export function resolveAnalyticsUrl(url) {
+  if (!isStatic()) return url;
+  const p = staticPathFor(url) ?? analyticsStaticPath(url);
+  return p ? `../${p}` : url;
+}
+
+async function getJson(url, bust) {
+  const u = resolveAnalyticsUrl(url) + (bust ? `?v=${encodeURIComponent(bust)}` : "");
+  const r = await fetch(u, { headers: { accept: "application/json" } });
+  let body = null;
+  try { body = await r.json(); } catch { /* non-JSON body */ }
+  if (!r.ok || !body) {
+    const e = new Error(body?.error?.message || `${r.status} ${url}`);
+    e.status = r.status;
+    throw e;
+  }
+  return body;
+}
+
+const seasons = new Map(); // season -> Promise<{ manifest, players }>
+const weekFiles = new Map(); // "season-week" -> Promise<week file>
+let teamsPromise = null; // the team registry (colours, names): same for every season, fetched once
+let identityPromise = null; // D183: {builtAt, players: {[gsis]: {name, onChart}}}, or null when it cannot be had
+let statusPromise = null; // D196: the injury-status players map ({} when it cannot be had)
+let seasonsPromise = null; // D184: the sorted [year,...] every season the API has data for, or null when it cannot be had
+let identityNames = null; // gsis -> the depth-chart spelling, once loaded
+let lastPlayers = {}; // the merged players of the latest loadFor(), displayName()'s fallback
+
+// D183: the identity file's printed name per gsis (the depth chart's spelling for every man a chart carries, else
+// nflverse's). Never fails: a missing or unreadable file resolves to null and names fall back to players.json.
+export function loadIdentity() {
+  if (!identityPromise) {
+    identityPromise = getJson("/api/analytics/identity")
+      .then((body) => { identityNames = new Map(Object.entries(body?.players || {}).map(([g, p]) => [g, p?.name]).filter(([, n]) => n)); return body; })
+      .catch(() => { identityPromise = null; return null; });
+  }
+  return identityPromise;
+}
+
+// D183: the name to print for a gsis id. The identity file's (depth-chart) spelling first, then the name the
+// season's players.json carries (`players`, default: the latest loadFor()'s merged map), then the id itself.
+export function displayName(gsis, players = lastPlayers) {
+  return identityNames?.get(gsis) ?? players?.[gsis]?.name ?? gsis ?? null;
+}
+
+// PURE: the merged players map with every name the identity file knows replaced by its depth-chart spelling.
+export function applyIdentityNames(players, names) {
+  if (!names || !names.size) return players;
+  const out = {};
+  for (const [g, p] of Object.entries(players || {})) out[g] = names.has(g) ? { ...p, name: names.get(g) } : p;
+  return out;
+}
+
+// D196: the depth-chart compile's injury-status feed, { season, builtAt, players: {[gsis]: {team, pos, code, label,
+// scratch, detail, returnDate, updatedAt, shortComment, source, willNotPlay, fillIn, lastPlayed, playedThisSeason,
+// missed, missedThrough}} }. The statuses are the CURRENT season's; a page viewing another season gates on
+// `season`. Fetched once per page load when it succeeds. Never fails: a missing file (404 before the first build),
+// a network error or a malformed body resolve to { season: null, builtAt: null, players: {} }, and the next call
+// asks again.
+function statusFeed() {
+  if (!statusPromise) {
+    statusPromise = getJson("/api/analytics/status")
+      .then((body) => {
+        if (!body?.players || typeof body.players !== "object") throw new Error("malformed status feed");
+        return { season: body.season ?? null, builtAt: body.builtAt ?? null, players: body.players };
+      })
+      .catch(() => { statusPromise = null; return { season: null, builtAt: null, players: {} }; });
+  }
+  return statusPromise;
+}
+export function loadStatusFeed() { return statusFeed(); }
+// The players map alone ({} when the feed cannot be had).
+export function loadStatus() { return statusFeed().then((f) => f.players); }
+
+// D199: each charted man's depth-chart card on one club, for the "What's been lost" card's names list, as
+// { [gsis]: { slot, ovr, posRank, posCount, maddenPos, role } } from the depth-chart app's compiled team view
+// (GET /api/team/<ABBR>; the published site's api/team/<ABBR>.json through resolveAnalyticsUrl). Fetched once per
+// club per page load. Never fails: an unreachable view resolves to {} and the next call asks again.
+// D209 part (2): the raw TeamView (server/compile's own shape) a club's compiled chart response carries —
+// what the depth-chart app's panel.js draws a player CARD from. Cached separately from clubCards() below so
+// the two share one fetch instead of two: clubCards() now reads through this cache rather than fetching on
+// its own, and a page that also wants the full view for one man's card (the analytics player page) gets it
+// without a second request.
+const teamViewCache = new Map();
+export function loadTeamView(abbr) {
+  const k = String(abbr || "").toUpperCase();
+  if (!teamViewCache.has(k)) {
+    teamViewCache.set(k, getJson(`/api/team/${encodeURIComponent(k)}`).catch((e) => { teamViewCache.delete(k); throw e; }));
+  }
+  return teamViewCache.get(k);
+}
+
+const clubCardsCache = new Map();
+export function loadClubCards(abbr) {
+  const k = String(abbr || "").toUpperCase();
+  if (!clubCardsCache.has(k)) {
+    clubCardsCache.set(k, loadTeamView(abbr).then(clubCards).catch(() => { clubCardsCache.delete(k); return {}; }));
+  }
+  return clubCardsCache.get(k);
+}
+
+// D209 part (2): the full PlayerCard for one man inside an already-fetched TeamView — the same traversal
+// public/js/main.js's own (unexported) findCard() uses to reopen the depth-chart panel without a page
+// render, duplicated here rather than reached into: this app's own rule (see public/js/panel.js's file
+// header) is that a small pure helper is copied per file instead of importing another builder's private
+// code. Matches on gsisId first (the reliable id), falling back to playerKey for the rare card whose gsisId
+// is unset but whose depth-chart key IS itself the gsis id (panel.js's GSIS_RE case). PURE.
+export function findCardByGsis(view, gsis) {
+  const hit = (p) => p?.gsisId === gsis || p?.playerKey === gsis;
+  for (const unit of ["OFF", "DEF"]) {
+    for (const slot of view?.units?.[unit] || []) {
+      for (const p of slot.players || []) if (hit(p)) return p;
+    }
+    const byBand = view?.unlisted?.[unit] || {};
+    for (const band of Object.keys(byBand)) for (const p of byBand[band] || []) if (hit(p)) return p;
+  }
+  return null;
+}
+
+// D209 part (2) — 🔵 fix round, item 5: the depth-chart card's own network calls. These used to reimplement
+// api.js's getPlayer/getHistory/getGameLog with their own "../"-prefixed fetches, back when api.js's own
+// static-mode paths were relative to the caller's own page and this app (one folder down at /analytics/)
+// needed a different prefix. api.js's paths are now anchored to the SITE ROOT from ITS OWN module address
+// (see that file's header comment), so they already reach the right published file from any page depth —
+// the "../"-prefixed reimplementation was dead weight duplicating that logic, and is gone. What is left of
+// these three is the one thing api.js's bare calls do not do on their own: cache per player/club key, the
+// same way loadPlayerGameLog always has, so a depth-chart card rebuilt for a player already seen this page
+// load (or, after the D209 fix round, a redraw of the SAME player, which no longer rebuilds it at all — see
+// views/player.js's mountCard) costs no second request.
+const playerStatsCache = new Map();
+export function loadPlayerStats(espnId) {
+  const k = String(espnId ?? "");
+  if (!playerStatsCache.has(k)) playerStatsCache.set(k, getPlayer(espnId).catch((e) => { playerStatsCache.delete(k); throw e; }));
+  return playerStatsCache.get(k);
+}
+
+const playerHistoryCache = new Map();
+export function loadPlayerHistory(abbr, playerKey, params = {}) {
+  const k = `${abbr}|${playerKey}|${new URLSearchParams(params).toString()}`;
+  if (!playerHistoryCache.has(k)) playerHistoryCache.set(k, getHistory(abbr, playerKey, params).catch((e) => { playerHistoryCache.delete(k); throw e; }));
+  return playerHistoryCache.get(k);
+}
+
+// getGameLog already caches per club inside api.js itself, so this is a plain pass-through (kept as its own
+// name/export for every caller already written against it).
+export function loadPlayerGameLog(abbr) {
+  return getGameLog(abbr);
+}
+
+// PURE: the cards map from a team view. The slot is named the way the chart prints it: each slot's own label ("WR1",
+// "LT", "SS", "NT", "CB · Nickel", "RB"), numbered in ordinal order only when the same label repeats in the unit
+// ("EDGE" twice reads EDGE1/EDGE2, "ILB" twice ILB1/ILB2, "DE" twice DE1/DE2), with " backup" for a man listed
+// behind the starter. A man on several slots keeps a starting one (STARTER, an out starter, or the ACTIVE fill-in
+// promoted into an out starter's slot); a man only in the unlisted tray has no slot.
+const STARTING = new Set(["STARTER", "STARTER_OUT", "ACTIVE"]);
+export function clubCards(view) {
+  const out = {};
+  const put = (p, slot) => {
+    const g = p?.gsisId ? String(p.gsisId) : null;
+    if (!g) return;
+    const had = out[g];
+    const better = !had || (slot !== null && (had.slot === null || (STARTING.has(p.role) && !STARTING.has(had.role))));
+    if (!better) return;
+    const r = p.rating || {};
+    const n = (v) => (Number.isFinite(+v) && v !== null && v !== "" ? +v : null);
+    out[g] = { slot: slot && p.role === "BACKUP" ? `${slot} backup` : slot, ovr: n(r.current), posRank: n(r.posRank), posCount: n(r.posCount), maddenPos: r.maddenPos ?? null, role: p.role ?? null };
+  };
+  const units = view?.units || {};
+  for (const slots of Array.isArray(units) ? units.map((u) => u?.slots || []) : Object.values(units)) {
+    const list = Array.isArray(slots) ? slots : [];
+    const labelOf = (s) => String(s?.label || s?.band || "");
+    const byLabel = new Map();
+    list.forEach((s, idx) => { const l = labelOf(s); if (!byLabel.has(l)) byLabel.set(l, []); byLabel.get(l).push({ s, idx }); });
+    const numbered = new Map();
+    for (const [l, group] of byLabel) {
+      if (group.length < 2) continue;
+      group.sort((a, b) => ((Number.isFinite(+a.s?.ordinal) ? +a.s.ordinal : a.idx) - (Number.isFinite(+b.s?.ordinal) ? +b.s.ordinal : b.idx)) || a.idx - b.idx);
+      group.forEach((g, i) => numbered.set(g.s, `${l}${i + 1}`));
+    }
+    for (const s of list) {
+      const label = numbered.get(s) ?? labelOf(s);
+      for (const p of s?.players || []) put(p, label || null);
+    }
+  }
+  for (const byBand of Object.values(view?.unlisted || {})) for (const list of Object.values(byBand || {})) for (const p of Array.isArray(list) ? list : []) put(p, null);
+  return out;
+}
+
+// D184: every season the seasons endpoint lists, ascending. Never fails: a missing/unreadable endpoint resolves
+// to null and callers fall back to the current season alone.
+export function loadSeasons() {
+  if (!seasonsPromise) {
+    seasonsPromise = getJson("/api/analytics/seasons")
+      .then((body) => (Array.isArray(body?.seasons) ? body.seasons.map(Number).sort((a, b) => a - b) : null))
+      .catch(() => { seasonsPromise = null; return null; });
+  }
+  return seasonsPromise;
+}
+
+// The team registry for colour-coding (table.js's team pill). Routed through resolveAnalyticsUrl, not
+// public/js/api.js's own getTeams(), because that module's relative static path assumes it is called from
+// a page at the site root; this app is served one folder down (/analytics/) and needs the "../" prefix
+// resolveAnalyticsUrl already knows how to add.
+export function loadTeams() {
+  if (!teamsPromise) teamsPromise = getJson("/api/teams").catch((e) => { teamsPromise = null; throw e; });
+  return teamsPromise;
+}
+
+export function loadSeason(season) {
+  if (!seasons.has(season)) {
+    const p = Promise.all([getJson(`/api/analytics/${season}/manifest`), getJson(`/api/analytics/${season}/players`)])
+      .then(([manifest, players]) => ({ manifest, players }))
+      .catch((e) => { seasons.delete(season); throw e; });
+    seasons.set(season, p);
+  }
+  return seasons.get(season);
+}
+
+function loadWeek(season, w) {
+  const k = weekKey(season, w.week);
+  if (!weekFiles.has(k)) {
+    weekFiles.set(k, getJson(`/api/analytics/${season}/w/${w.week}`, w.hash).catch((e) => { weekFiles.delete(k); throw e; }));
+  }
+  return weekFiles.get(k);
+}
+
+// Which week keys a window needs fetched. last3 reads the four most recent weeks in scope (three games plus a
+// bye): regular-season weeks only unless the Playoffs chip is on, the same rule gamesInWindow applies, so a
+// completed season's Last 3 reads weeks 15-18 rather than its playoff weeks 19-22 (which the window then drops).
+export function weeksNeeded(allKeys, st) {
+  const keys = [...allKeys].sort();
+  if (st.window === "last3") return keys.filter((k) => weekInScope(k, st)).slice(-4);
+  if (st.window === "range") return keys.filter((k) => (!st.from || k >= st.from) && (!st.to || k <= st.to));
+  return keys;
+}
+
+// Everything a view needs for a filter state: { blocks, players, keys, manifests, missing }.
+// `seasonList` is filters.seasonsOf(st). A season whose files are absent (e.g. 2025 before its compile has run)
+// is reported in `missing` rather than failing the whole page, unless it is the only season asked for.
+export async function loadFor(seasonList, st) {
+  const [got] = await Promise.all([
+    Promise.all(seasonList.map((s) => loadSeason(s).then((v) => ({ s, ...v }), (e) => ({ s, error: e })))),
+    loadIdentity(),
+  ]);
+  const ok = got.filter((g) => !g.error);
+  if (!ok.length) throw got[0].error;
+  const missing = got.filter((g) => g.error).map((g) => g.s);
+  const byKey = new Map();
+  for (const g of ok) for (const w of g.manifest.weeks || []) byKey.set(weekKey(g.s, w.week), { season: g.s, w, cols: g.manifest.cols, driveCols: g.manifest.driveCols });
+  const keys = [...byKey.keys()].sort();
+  const need = weeksNeeded(keys, st);
+  const files = await Promise.all(need.map((k) => { const x = byKey.get(k); return loadWeek(x.season, x.w).then((f) => ({ k, x, f })); }));
+  const blocks = files.map(({ k, x, f }) => weekBlock(k, x, f));
+  // D183: the players map views read carries the depth-chart spelling already; displayName() is the same lookup.
+  lastPlayers = applyIdentityNames(mergePlayers(ok.map((g) => ({ season: g.s, players: g.players }))), identityNames);
+  return { blocks, players: lastPlayers, keys, manifests: ok.map((g) => ({ season: g.s, ...g.manifest })), missing };
+}
+
+// PURE: one fetched week file -> the block a view reads. `x` is the manifest side ({season, cols, driveCols}), `f`
+// the week file. D219: `drives` (one row per offensive drive, in `driveCols` order, see server/analytics/compile.js
+// DRIVE_COLS) rides along; a week file compiled before D219 has none, so it is [] and driveCols may be null.
+export function weekBlock(k, x, f) {
+  return {
+    season: x.season, week: splitKey(k).week, key: k, cols: f.cols || x.cols,
+    plays: f.plays || [], snaps: f.snaps || null, routes: f.routes || null, ngs: f.ngs || null, pfr: f.pfr || null,
+    driveCols: f.driveCols || x.driveCols || null, drives: f.drives || [],
+  };
+}
+
+// PURE: the per-season players files merged into one map whose `teams` are keyed by week key ("2025-14"),
+// newest season's name/pos winning.
+export function mergePlayers(list) {
+  const out = {};
+  for (const { season, players } of [...list].sort((a, b) => a.season - b.season)) {
+    for (const [id, p] of Object.entries(players || {})) {
+      const prev = out[id];
+      const teams = { ...(prev?.teams || {}) };
+      for (const [w, t] of Object.entries(p.teams || {})) teams[weekKey(season, w)] = t;
+      out[id] = { name: p.name ?? prev?.name, pos: p.pos ?? prev?.pos, espnId: p.espnId ?? prev?.espnId ?? null, teams };
+    }
+  }
+  return out;
+}

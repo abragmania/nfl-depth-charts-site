@@ -1,0 +1,236 @@
+// PURE (no DOM): the analytics app's filter state, its hash-query form, and the play/game predicates the
+// aggregators apply. Every view is a link (D177): the whole state round-trips through the hash query, and a
+// value equal to its default is left out so a plain #/usage stays short.
+//
+// Week keys: a week is identified across seasons by "SSSS-WW" (e.g. "2025-14"), which sorts correctly as a
+// string and is what the week-range filter stores. Labels: the default season's weeks read "W3"; any other
+// season's weeks carry the season's last two digits, "25·W14" (D177's Include-2025 union).
+
+export const CURRENT_SEASON = 2026;
+export const POSITIONS = ["WR", "TE", "RB", "FB", "QB"];
+export const WINDOWS = ["season", "last3", "range"];
+export const DOWNS = [1, 2, 3, 4];
+export const QUARTERS = [1, 2, 3, 4, 5]; // 5 = overtime
+
+// Adam (2026-09-24): "Season" means the REGULAR season everywhere in this app; weeks 19+ (a prior season's week
+// files run to 22) are playoffs and are out unless the Playoffs chip (hash po=1) is on. WC/DIV/CONF/SB label them.
+export const REG_SEASON_WEEKS = 18;
+const PLAYOFF_LABELS = { 19: "WC", 20: "DIV", 21: "CONF", 22: "SB" };
+
+// Three-way position chips: "in" (show only included positions), "out" (always hide), absent = neutral.
+// D193 (2026-09-25): Usage becomes the Receivers page, so its default is WR/TE only; a running back who lands
+// here (a link, a search) comes back into view with his own RB chip lit rather than the page's default excluding
+// him outright - Running backs (agg_rush.js RUSH_DEFAULT_POS) keeps its own RB/FB default unchanged.
+export const DEFAULT_POS = Object.freeze({ WR: "in", TE: "in" });
+
+// D184: the season a picker should start on when nothing says otherwise: the newest season the seasons
+// endpoint lists, or CURRENT_SEASON when that list is empty/unavailable (loadSeasons() failed, or no ctx yet).
+export function defaultSeason(seasons) {
+  return seasons && seasons.length ? Math.max(...seasons) : CURRENT_SEASON;
+}
+
+// D184: is season-1 on the list, i.e. is there a "previous season" to offer the Include switch for?
+export function prevAvailable(season, seasons) {
+  return Array.isArray(seasons) && seasons.includes(season - 1);
+}
+
+export function defaultState(seasons) {
+  return {
+    season: defaultSeason(seasons), with2025: false,
+    window: "season", from: null, to: null, po: false,
+    pos: { ...DEFAULT_POS },
+    team: "", opp: "",
+    // Adam (2026-09-24): no home/away, down or quarter splits in this app. The predicates below still honour
+    // these three if set, but nothing sets them: the filter bar has no control and the hash ignores them.
+    ha: "", downs: [], qtrs: [],
+    minTgt: 5, sort: "tgt", dir: "desc",
+    pi: true,                             // count pass-interference targets (D178 open decision 1); false = "excl. PI targets", hash pi=0
+    open: "",                             // the leaderboard row expanded in place (a gsis id), so it is linkable
+  };
+}
+
+export const weekKey = (season, week) => `${season}-${String(week).padStart(2, "0")}`;
+export function splitKey(key) {
+  const [s, w] = String(key).split("-");
+  return { season: +s, week: +w };
+}
+export function weekLabel(key, currentSeason = CURRENT_SEASON) {
+  const { season, week } = splitKey(key);
+  const w = PLAYOFF_LABELS[week] || `W${week}`;
+  return season === currentSeason ? w : `${String(season).slice(-2)}·${w}`;
+}
+
+// The seasons a state reads, newest first. D184: "Include previous" is always relative to the picked season
+// (season-1), not fixed to 2025.
+export const seasonsOf = (st) => (st.with2025 ? [st.season, st.season - 1] : [st.season]);
+
+// Three-way chip: neutral -> in -> out -> neutral.
+export function cyclePos(posState, pos) {
+  const next = { ...posState };
+  const cur = next[pos];
+  if (!cur) next[pos] = "in";
+  else if (cur === "in") next[pos] = "out";
+  else delete next[pos];
+  return next;
+}
+
+// Is a player at `pos` shown? An excluded position never is; if any position is included, only included
+// positions are; with nothing included, everything not excluded is.
+export function posAllowed(posState, pos) {
+  const p = String(pos || "").toUpperCase();
+  if (posState[p] === "out") return false;
+  const anyIn = Object.values(posState).some((v) => v === "in");
+  return anyIn ? posState[p] === "in" : true;
+}
+
+// ---- hash query ----------------------------------------------------------------------------------------
+const posToString = (pos) => POSITIONS.filter((p) => pos[p]).map((p) => (pos[p] === "out" ? "-" : "") + p).join(",");
+function posFromString(s) {
+  const out = {};
+  for (const tok of String(s || "").split(",").map((t) => t.trim().toUpperCase()).filter(Boolean)) {
+    const ex = tok.startsWith("-") || tok.startsWith("!");
+    const p = ex ? tok.slice(1) : tok;
+    if (POSITIONS.includes(p)) out[p] = ex ? "out" : "in";
+  }
+  return out;
+}
+const KEY_RE = /^\d{4}-\d{2}$/;
+
+// D184: the hash uses "s" for season and "prev" for Include-previous (was "season"/"with2025"), so
+// #/qb?s=2023&prev=1 is a link to 2023 with 2022 folded in. defaultState() has no seasons list here, so "s" is
+// always written unless it equals the bare CURRENT_SEASON fallback; a page comparing against its own fetched
+// seasons list (filterbar.js) still shows the right season as selected either way.
+export function toQuery(st) {
+  const d = defaultState();
+  const q = new URLSearchParams();
+  if (st.season !== d.season) q.set("s", st.season);
+  if (st.with2025) q.set("prev", "1");
+  if (st.window !== d.window) q.set("window", st.window);
+  if (st.window === "range") { if (st.from) q.set("from", st.from); if (st.to) q.set("to", st.to); }
+  if (st.po) q.set("po", "1");
+  const ps = posToString(st.pos);
+  if (ps !== posToString(d.pos)) q.set("pos", ps || "none");
+  if (st.team) q.set("team", st.team);
+  if (st.opp) q.set("opp", st.opp);
+  if (st.minTgt !== d.minTgt) q.set("min", st.minTgt);
+  if (st.pi === false) q.set("pi", "0");
+  if (st.sort !== d.sort) q.set("sort", st.sort);
+  if (st.dir !== d.dir) q.set("dir", st.dir);
+  if (st.open) q.set("open", st.open);
+  return q.toString();
+}
+
+export function fromQuery(qs) {
+  const q = new URLSearchParams(String(qs || "").replace(/^\?/, ""));
+  const st = defaultState();
+  if (q.has("s") && /^\d{4}$/.test(q.get("s"))) st.season = +q.get("s");
+  st.with2025 = q.get("prev") === "1";
+  if (WINDOWS.includes(q.get("window"))) st.window = q.get("window");
+  if (st.window === "range") {
+    st.from = KEY_RE.test(q.get("from") || "") ? q.get("from") : null;
+    st.to = KEY_RE.test(q.get("to") || "") ? q.get("to") : null;
+  }
+  st.po = q.get("po") === "1";
+  if (q.has("pos")) st.pos = q.get("pos") === "none" ? {} : posFromString(q.get("pos"));
+  const abbr = (v) => (/^[A-Z]{2,3}$/.test(String(v || "").toUpperCase()) ? String(v).toUpperCase() : "");
+  st.team = abbr(q.get("team"));
+  st.opp = abbr(q.get("opp"));
+  if (q.has("min") && Number.isFinite(+q.get("min")) && +q.get("min") >= 0) st.minTgt = Math.floor(+q.get("min"));
+  st.pi = q.get("pi") !== "0";
+  if (/^[a-zA-Z0-9]+$/.test(q.get("sort") || "")) st.sort = q.get("sort");
+  if (["asc", "desc"].includes(q.get("dir"))) st.dir = q.get("dir");
+  if (/^[A-Za-z0-9_.:-]{1,40}$/.test(q.get("open") || "")) st.open = q.get("open");
+  return st;
+}
+
+// ---- window and predicates -----------------------------------------------------------------------------
+
+// Is a week key inside the app's scope? Regular-season weeks always; weeks 19+ (playoffs) only with the Playoffs
+// chip (st.po). gamesInWindow and data.js's weeksNeeded share this so a fetch never misses what a window counts.
+export function weekInScope(key, st) {
+  return !!st.po || splitKey(key).week <= REG_SEASON_WEEKS;
+}
+
+// Which (week, team) games count. `games` is [{ key, team, gameId }] for every club-game loaded (one entry per
+// club per game). season: every regular-season game; range: from..to inclusive (either end open when null);
+// last3: each club's three most recent games within scope, so a club on a bye still gets three games, not three
+// weeks. Every window first drops weeks 19+ (playoffs) unless st.po is on (Adam, 2026-09-24: Season means the
+// regular season app-wide); the Playoffs chip adds them back for whichever window is chosen.
+// Returns a Set of `${key}|${team}`.
+export function gamesInWindow(games, st) {
+  const inScope = (g) => weekInScope(g.key, st);
+  const out = new Set();
+  if (st.window === "last3") {
+    const byTeam = new Map();
+    for (const g of games) { if (!inScope(g)) continue; if (!byTeam.has(g.team)) byTeam.set(g.team, []); byTeam.get(g.team).push(g); }
+    for (const list of byTeam.values()) {
+      const uniq = [...new Map(list.map((g) => [g.key, g])).values()].sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
+      for (const g of uniq.slice(-3)) out.add(`${g.key}|${g.team}`);
+    }
+    return out;
+  }
+  for (const g of games) {
+    if (!inScope(g)) continue;
+    if (st.window === "range") {
+      if (st.from && g.key < st.from) continue;
+      if (st.to && g.key > st.to) continue;
+    }
+    out.add(`${g.key}|${g.team}`);
+  }
+  return out;
+}
+
+// Play-level predicate from the situational filters (column indexes from colIndex). Team/opponent/home-away
+// are game-level but live on every row, so they are applied here too.
+export function playPredicate(st, C) {
+  const downs = new Set(st.downs), qtrs = new Set(st.qtrs);
+  return (r) => {
+    if (st.team && r[C.posteam] !== st.team) return false;
+    if (st.opp && r[C.defteam] !== st.opp) return false;
+    if (st.ha === "home" && !r[C.homeOff]) return false;
+    if (st.ha === "away" && r[C.homeOff]) return false;
+    if (downs.size && !downs.has(+r[C.down])) return false;
+    if (qtrs.size && !qtrs.has(Math.min(5, +r[C.qtr]))) return false;
+    return true;
+  };
+}
+
+// Down and quarter cannot be split out of a weekly table (routes, snaps): those columns go blank under them.
+export const isSituational = (st) => st.downs.length > 0 || st.qtrs.length > 0;
+
+// ---- D225b: ranking links ---------------------------------------------------------------------------------------
+// A figure tile on a player's page opens his position's leaderboard sorted by that figure's own column, on the same
+// season / window / include-previous switches the page is on, with his row highlighted (`hl=<gsis>`, read by the
+// three leaderboards through table.js's hlOf). BOARD_KEYS mirrors each leaderboard's column keys by hand (filters.js
+// imports nothing; tests/analytics_rank_links.test.mjs checks the three sets against the tables' own column lists).
+// D224 F: the Deciding columns' keys (this-week opponent and vs usual, the last-3 figures) are board keys too, so a
+// link can sort by them; no player-page tile carries those keys, so no tile links to them.
+// A tile whose key is not in its board's set gets no link. LOW_FIRST: columns where the lower figure is the better one
+// open ascending, so the best man is first; every other column opens descending, as its header's first click does.
+export const BOARD_KEYS = Object.freeze({
+  receivers: new Set(["dkG", "dk", "rec", "yds", "td", "tgt", "tgtShare", "ayShare", "wopr", "rz", "ez", "rzTgtG", "rzTgtShare", "ezG", "routePct", "snapPct", "yprr", "epaTgt", "catchPct", "opp", "oppG", "oppShare", "ydsOpp", "epaOpp", "tdOpp", "ay", "adot", "depthDeep", "routes", "tprr", "wkOpp", "wkVs", "snapL3", "routeL3", "tgtL3"]),
+  rbs: new Set(["dkG", "dk", "yds", "td", "rec", "recYds", "recTd", "oppG", "oppShare", "car", "carG", "rushShare", "tgt", "tgtShare", "rzOpp", "rzOppG", "rzCarG", "i5Share", "snapPct", "ypc", "epaCar", "ryoeAtt", "yprr", "epaTgt", "succPct", "eff", "long", "explPct", "rz", "gl", "ydsOpp", "epaOpp", "tdOpp", "routes", "tprr", "catchPct", "wkOpp", "wkVs", "snapL3", "rushL3", "tgtL3"]),
+  qb: new Set(["dkG", "dk", "yds", "td", "int", "db", "att", "epaDb", "cpoe", "succPct", "ypa", "rushAttG", "rushYdsG", "rushTd", "scrPct", "cmpPct", "adot", "sackPct", "pressPct", "paPct", "blitzPct", "ttt", "xcomp", "wkOpp", "wkVs", "dbG", "dbGL3"]),
+});
+const LOW_FIRST = { receivers: new Set(), rbs: new Set(["eff"]), qb: new Set(["sackPct", "pressPct", "int"]) };
+const MIN_PARAM = { receivers: "min", rbs: "mincar", qb: "mindb" };
+
+// PURE: the leaderboard address for one tile, or null when the figure has no column there. board: "receivers" |
+// "rbs" | "qb"; key: the column key; st: the page's filter state; gsis: the man to highlight; pos: his position (a
+// receiver other than WR or TE gets his own chip lit so the default chips do not hide him); min: the leaderboard's
+// minimum (targets, carries or dropbacks) to open with, so a man under the default minimum still shows (null = its
+// default). The club filter is dropped (the tile speaks for the whole league); the opponent filter is kept, so the
+// highlighted row shows the same figure as the tile he clicked. `find=1` marks an arrival from a tile: the board
+// centres his row once and strips it from the address (table.js scrollToHl), so Back never re-scrolls.
+export function rankHref(board, key, st, { gsis = "", pos = "", min = null } = {}) {
+  if (!BOARD_KEYS[board]?.has(key) || !gsis) return null;
+  const dir = LOW_FIRST[board].has(key) ? "asc" : "desc";
+  const s = { ...st, team: "", open: "", sort: key, dir };
+  s.pos = board === "receivers" && POSITIONS.includes(pos) && !(pos in DEFAULT_POS) ? { ...DEFAULT_POS, [pos]: "in" } : { ...DEFAULT_POS };
+  const q = new URLSearchParams(toQuery(s));
+  q.set("sort", key); q.set("dir", dir); q.set("hl", gsis); q.set("find", "1");
+  if (board !== "receivers") q.delete("pos"); // the backs' and quarterbacks' boards keep their own default chips
+  q.delete("min"); // the page's own minimum never rides along (it would stick on the board); only the override below sets one
+  if (min !== null && Number.isFinite(+min)) q.set(MIN_PARAM[board], Math.max(0, Math.floor(+min)));
+  return `#/${board}?${q.toString()}`;
+}

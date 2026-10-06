@@ -1,0 +1,122 @@
+{
+ "season": 2026,
+ "cols": [
+  "game_id",
+  "posteam",
+  "defteam",
+  "homeOff",
+  "qtr",
+  "down",
+  "ydstogo",
+  "yardline_100",
+  "type",
+  "passer",
+  "target",
+  "rusher",
+  "band",
+  "dir",
+  "air",
+  "yac",
+  "yards",
+  "complete",
+  "td",
+  "int",
+  "epa",
+  "success",
+  "cpoe",
+  "pa",
+  "screen",
+  "motion",
+  "rpo",
+  "blitzers",
+  "rushers",
+  "redzone",
+  "ezTarget",
+  "route",
+  "pressure",
+  "pi",
+  "fumbler",
+  "fumLost",
+  "sd",
+  "xpass",
+  "drive",
+  "firstDown",
+  "secs",
+  "noHuddle",
+  "shotgun",
+  "pers"
+ ],
+ "driveCols": [
+  "game_id",
+  "posteam",
+  "drive",
+  "result",
+  "pts",
+  "rz",
+  "plays"
+ ],
+ "weeks": [
+  {
+   "week": 1,
+   "hash": "57d1387c780d3553",
+   "plays": 1924,
+   "builtAt": "2026-10-05T16:00:58.317Z"
+  },
+  {
+   "week": 2,
+   "hash": "1470dd34aed8f99a",
+   "plays": 1936,
+   "builtAt": "2026-10-05T16:00:58.317Z"
+  },
+  {
+   "week": 3,
+   "hash": "8634de9bc5af164a",
+   "plays": 2000,
+   "builtAt": "2026-10-05T16:00:58.317Z"
+  },
+  {
+   "week": 4,
+   "hash": "769de977052ad0d4",
+   "plays": 1864,
+   "builtAt": "2026-10-06T10:05:04.992Z"
+  }
+ ],
+ "throughWeek": 4,
+ "currentWeek": 5,
+ "heldUntil": "2026-10-13T09:00:00.000Z",
+ "sources": {
+  "pbp": {
+   "fetchedAt": "2026-10-05T16:00:44.306Z",
+   "sha": "0c2e4494acf5278125e1e981ab552b76f31463ae3fc1ef349da61ee8df65ee2d"
+  },
+  "ftn": {
+   "fetchedAt": "2026-10-05T16:00:44.547Z",
+   "sha": "2b92fb1af8df36a28b0eb028d08fd1913d0fd4e799dfee06943a5c9b0210f045"
+  },
+  "ngs": {
+   "fetchedAt": "2026-10-05T16:00:45.358Z",
+   "sha": "deb95131f04f9ea6"
+  },
+  "pfr": {
+   "fetchedAt": "2026-10-06T10:04:44.998Z",
+   "sha": "3e40d432cc30c6d6"
+  },
+  "pfrRush": {
+   "fetchedAt": "2026-10-06T10:04:45.154Z",
+   "sha": "db026ec7d91f24855cfff55bfcd53a8473d4843dd0d99967349017e1a6239786"
+  },
+  "pfrRec": {
+   "fetchedAt": "2026-10-06T10:04:45.441Z",
+   "sha": "395d9ed52c6c4a03334a792537f2e513c7dd0c5f7615cee76dba31b2e18a1460"
+  },
+  "routes": {
+   "fetchedAt": "2026-10-06T10:04:45.687Z",
+   "sha": "b7de13f9206c7f26f27318afd37b5261aa9c6842fe53a3f08762ab3102257a25"
+  },
+  "participation": null,
+  "snaps": {
+   "fetchedAt": "2026-10-06T10:00:45.014Z",
+   "sha": "53720f396f9c2bfaf869c8a7af644f043caae278c6a3c1d6b4ed52ec597c8061"
+  }
+ }
+}
