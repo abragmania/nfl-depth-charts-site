@@ -58,27 +58,27 @@
  "weeks": [
   {
    "week": 1,
-   "hash": "c12ab31a923db0c7",
+   "hash": "2a034075409e6496",
    "plays": 1924,
-   "builtAt": "2026-10-07T14:03:22.671Z"
+   "builtAt": "2026-10-07T18:01:13.750Z"
   },
   {
    "week": 2,
-   "hash": "d887fd5ef8774394",
+   "hash": "4f2a35b55c9d538b",
    "plays": 1936,
-   "builtAt": "2026-10-07T14:03:22.671Z"
+   "builtAt": "2026-10-07T18:01:13.750Z"
   },
   {
    "week": 3,
-   "hash": "d1a9bd71462029c9",
+   "hash": "8a3581b2c54eb486",
    "plays": 2000,
-   "builtAt": "2026-10-07T14:03:22.671Z"
+   "builtAt": "2026-10-07T18:01:13.750Z"
   },
   {
    "week": 4,
-   "hash": "6336ea892d8360b0",
+   "hash": "4535904ce6aaaf3e",
    "plays": 1990,
-   "builtAt": "2026-10-07T14:03:22.671Z"
+   "builtAt": "2026-10-07T18:01:13.750Z"
   }
  ],
  "throughWeek": 4,
@@ -86,16 +86,16 @@
  "heldUntil": "2026-10-13T09:00:00.000Z",
  "sources": {
   "pbp": {
-   "fetchedAt": "2026-10-06T16:23:19.029Z",
-   "sha": "f01a557cce332f91faeda3a879cbd5f7ec9dfd42ec58a6c3a33abde9488d5498"
+   "fetchedAt": "2026-10-07T18:00:51.369Z",
+   "sha": "26bc95c58183063e5e113cfc1ba7285989a2b054a299abd242ea547dfcf8e5a5"
   },
   "ftn": {
-   "fetchedAt": "2026-10-06T16:23:19.316Z",
-   "sha": "f9293bb8c5698db305e2e2185c81292d80b2a8a4e6d956b055602b1800081434"
+   "fetchedAt": "2026-10-07T18:00:51.963Z",
+   "sha": "23fed5943f24cb2d56de90e1263ef2e1ec110cd5ecf770870b999a95e030da29"
   },
   "ngs": {
-   "fetchedAt": "2026-10-06T16:23:20.023Z",
-   "sha": "038c6fd639adaaae"
+   "fetchedAt": "2026-10-07T18:00:52.707Z",
+   "sha": "da2119c3ebf5ba30"
   },
   "pfr": {
    "fetchedAt": "2026-10-07T14:03:10.019Z",
