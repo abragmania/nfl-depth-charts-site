@@ -58,9 +58,9 @@
  "weeks": [
   {
    "week": 1,
-   "hash": "2a034075409e6496",
+   "hash": "fab40c83d9df278d",
    "plays": 1924,
-   "builtAt": "2026-10-07T18:01:13.750Z"
+   "builtAt": "2026-10-07T21:22:58.553Z"
   },
   {
    "week": 2,
@@ -84,6 +84,7 @@
  "throughWeek": 4,
  "currentWeek": 5,
  "heldUntil": "2026-10-13T09:00:00.000Z",
+ "snapPatches": "15cdecc72eec8fb7",
  "sources": {
   "pbp": {
    "fetchedAt": "2026-10-07T20:49:02.311Z",
