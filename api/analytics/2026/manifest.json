@@ -58,27 +58,27 @@
  "weeks": [
   {
    "week": 1,
-   "hash": "ccf6f2d0271a8bb8",
+   "hash": "208baba80bb47f86",
    "plays": 1924,
-   "builtAt": "2026-10-11T20:00:55.605Z"
+   "builtAt": "2026-10-12T15:10:16.600Z"
   },
   {
    "week": 2,
-   "hash": "bc8edb64ca85a187",
+   "hash": "563aa258edb3cb83",
    "plays": 1936,
-   "builtAt": "2026-10-11T20:00:55.605Z"
+   "builtAt": "2026-10-12T15:10:16.600Z"
   },
   {
    "week": 3,
-   "hash": "aac9c7de2370a0e9",
+   "hash": "95706037e959ce45",
    "plays": 2000,
-   "builtAt": "2026-10-11T20:00:55.605Z"
+   "builtAt": "2026-10-12T15:10:16.600Z"
   },
   {
    "week": 4,
-   "hash": "112e41e07ea018bb",
+   "hash": "3223b8571af51f23",
    "plays": 1990,
-   "builtAt": "2026-10-11T20:00:55.605Z"
+   "builtAt": "2026-10-12T15:10:16.600Z"
   }
  ],
  "throughWeek": 4,
