@@ -12,7 +12,7 @@
 // of weekly percentages (the window row from aggregateUsage already is).
 // The weekly chart always spans every loaded week (the whole timeline, both seasons when Include 2025 is on) so a
 // one-week window can be seen in context; the window's weeks are flagged `inWin` and drawn bright.
-import { aggregateUsage, clubGames, colIndex, usageReference, inPool, tierCuts, referenceText } from "./agg.js";
+import { aggregateUsage, clubGames, colIndex, usageReference, inPool, tierCuts, referenceText, snapGame, poolSnapShare } from "./agg.js";
 import { gamesInWindow, splitKey, isSituational } from "./filters.js";
 import { aggregateRush, rushReference } from "./agg_rush.js";
 import { fantasyByPlayer } from "./agg_fantasy.js";
@@ -418,12 +418,13 @@ const meanOf = (rows, k) => mean(rows.map((r) => (r[k] === null || r[k] === unde
 // is left out, never a zero. Under 3 games played, the last-3 figure covers what he has (`last3Games` says how many,
 // `short` is true). The window is the page's own (st.window over the loaded weeks), so the previous season is in only
 // when Include-previous loaded it and the window reaches it. Every share is total over total in the counted games,
-// with the row's definitions (agg.js, agg_rush.js), except snap share, which the row too takes as the mean of his
-// weekly snap percentages (the snap table has no club snap counts):
+// with the row's definitions (agg.js, agg_rush.js); snap share is pooled as on the row (D150, agg.js poolSnapShare):
 //   oppShare    = (targets + designed runs) / (club pass attempts + club designed runs)            (back)
 //   tgtShare    = targets / club pass attempts                                                      (both)
 //   ayShare     = air yards on his targets / club air yards on pass attempts                        (receiver)
-//   snapPct     = mean of his weekly offensive snap % over the counted games with a snap figure     (both)
+//   snapPct     = his offensive snaps / his club's over the counted games with a snap figure; the mean of
+//                 their percentages, labelled "source-mean" (method3 / method), when a club total is not
+//                 established                                                                       (both)
 //   routePct    = routes / the club dropbacks each charted week's route % implies; charted games only, null when a
 //                 charted week has no route %                                                       (both)
 //   rzShare     = (red-zone targets + red-zone designed runs) / (club red-zone pass attempts + club red-zone
@@ -467,8 +468,10 @@ export function trendFigures(blocks, players, st, gsis, back) {
     const team = players?.[gsis]?.teams?.[b.key];
     const gk = `${b.key}|${team}`;
     if (!team || !winSet.has(gk)) continue;
+    // A snap makes the game his (D196: a game he dressed for without a snap is not a game he played, so it is left
+    // out here, never a zero); the game's snap entry feeds the pooled share (D150, agg.js poolSnapShare).
     const off = num(b.snaps?.[gsis]?.off);
-    if (off !== null && off > 0) M(gk).snap = off / 100;
+    if (off !== null && off > 0) M(gk).snap = snapGame(b, gsis, "off", team);
     const rt = b.routes?.[gsis];
     const n = num(rt?.routes);
     // Routes alone never make a game his (agg.js's rule: a game is a snap or a play); they join a game he played.
@@ -477,19 +480,19 @@ export function trendFigures(blocks, players, st, gsis, back) {
   const played = [...per.keys()].sort();
   const last3 = played.slice(-3);
   const fig = (gks) => {
-    const s = { tgt: 0, air: 0, des: 0, rzTgt: 0, rzDes: 0, att: 0, cAir: 0, runs: 0, rzAtt: 0, rzRuns: 0, snap: 0, snapN: 0, routes: 0, drop: 0, routeN: 0, pctOk: true };
+    const s = { tgt: 0, air: 0, des: 0, rzTgt: 0, rzDes: 0, att: 0, cAir: 0, runs: 0, rzAtt: 0, rzRuns: 0, snaps: [], routes: 0, drop: 0, routeN: 0, pctOk: true };
     for (const gk of gks) {
       const m = per.get(gk), c = club.get(gk) || C0();
       s.tgt += m.tgt; s.air += m.air; s.des += m.des; s.rzTgt += m.rzTgt; s.rzDes += m.rzDes;
       s.att += c.att; s.cAir += c.air; s.runs += c.runs; s.rzAtt += c.rzAtt; s.rzRuns += c.rzRuns;
-      if (m.snap !== null) { s.snap += m.snap; s.snapN++; }
+      if (m.snap) s.snaps.push(m.snap);
       if (m.routes !== null) { s.routes += m.routes; s.routeN++; if (m.pct) s.drop += m.routes / m.pct; else if (m.routes > 0) s.pctOk = false; }
     }
     return {
       oppShare: [ratio(s.tgt + s.des, s.att + s.runs), gks.length],
       tgtShare: [ratio(s.tgt, s.att), gks.length],
       ayShare: [ratio(s.air, s.cAir), gks.length],
-      snapPct: situational ? [null, 0] : [ratio(s.snap, s.snapN), s.snapN],
+      snapPct: situational ? [null, 0] : poolPair(s.snaps),
       routePct: situational ? [null, 0] : [s.pctOk ? ratio(s.routes, s.drop) : null, s.routeN],
       rzShare: [ratio(s.rzTgt + s.rzDes, s.rzAtt + s.rzRuns), gks.length],
       // D219 figure 5 (🔵): the same 3-play floor as the club page's Target distribution (rzI5Shares below).
@@ -497,11 +500,14 @@ export function trendFigures(blocks, players, st, gsis, back) {
     };
   };
   const keys = back ? RB_TREND_KEYS : REC_TREND_KEYS;
+  function poolPair(games) { const sp = poolSnapShare(games); return [sp ? sp.share : null, games.length, sp?.method ?? null]; }
   const a = fig(last3), w = fig(played);
   const figures = {};
   for (const k of keys) {
-    const [l3, n3] = a[k], [season, n] = w[k];
-    figures[k] = Object.freeze({ last3: l3, season, pts: l3 === null || season === null ? null : (l3 - season) * 100, n3, n });
+    const [l3, n3, m3] = a[k], [season, n, m] = w[k];
+    // snapPct alone carries how each figure was taken (D150): method3 / method, "pooled", "source" or "source-mean".
+    figures[k] = Object.freeze({ last3: l3, season, pts: l3 === null || season === null ? null : (l3 - season) * 100, n3, n,
+      ...(k === "snapPct" ? { method3: m3 ?? null, method: m ?? null } : {}) });
   }
   return Object.freeze({
     kind: back ? "back" : "receiver", keys: Object.freeze([...keys]), games: played.length, last3Games: last3.length,

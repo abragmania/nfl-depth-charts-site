@@ -69,6 +69,7 @@ export function decorateDeciding(rows, kind, { blocks, players, st, payload = nu
       r.dbGL3 = x && x.g > 0 ? x.db / x.g : null;
     } else {
       r.snapL3 = (x || u)?.snapPct ?? null;
+      r.snapL3Method = (x || u)?.snapMethod ?? null; // D150: "pooled", "source" or "source-mean", for the cell's hover
       r.tgtL3 = (x || u)?.tgtShare ?? null;
       if (kind === "rec") r.routeL3 = x?.routePct ?? null; else r.rushL3 = x?.rushShare ?? null;
     }

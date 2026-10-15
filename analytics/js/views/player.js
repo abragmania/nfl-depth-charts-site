@@ -19,7 +19,7 @@ import { isStatic } from "../../../js/api.js";
 import { playerView, maddenBlocking, maddenEdition, pageState, lastTeam, RZ_I5_FLOOR, trendFigures } from "../agg_player.js";
 import { weekState, seasonBlocks, weekAllowedCells, clubTargetCounts, weekStrip, VS_USUAL_TEXT } from "../agg_week.js";
 import { teammateSplits } from "../agg_absence.js";
-import { aggregateUsage, usageReference, clubGames, colIndex, REF_POS } from "../agg.js";
+import { aggregateUsage, usageReference, clubGames, colIndex, REF_POS, poolSnapShare, snapMethodNote, SNAP_SHARE_DEF } from "../agg.js";
 import { renderFilterBar } from "../filterbar.js";
 import { tierOf } from "../table.js";
 import { tierNote } from "../agg.js";
@@ -314,7 +314,7 @@ export function gameLogRows(v, st, kind = v?.recut?.kind) {
     const pts = played ? g?.pts ?? 0 : null;
     const oppShare = played ? ratio((s.tgt || 0) + (s.car || 0), (s.att || 0) + (s.runs || 0)) : null;
     const f = {
-      wk, vs: s.opp ? (s.home === false ? "@" : "") + s.opp : "", snap: s.snap, oppN: s.oppN, car: s.car, rushYds: line.rushYds ?? 0, rushTd: line.rushTd ?? 0,
+      wk, vs: s.opp ? (s.home === false ? "@" : "") + s.opp : "", snap: s.snap, snapN: s.snapN ?? null, snapClub: s.snapClub ?? null, oppN: s.oppN, car: s.car, rushYds: line.rushYds ?? 0, rushTd: line.rushTd ?? 0,
       tgt: s.tgt ?? 0, rec: line.rec ?? 0, recYds: line.recYds ?? 0, recTd: line.recTd ?? 0, tgtPct: s.v, ayPct: s.ay, routes: s.routes,
       yprr: isNum(s.routes) && s.routes > 0 ? (line.recYds ?? 0) / s.routes : null, dk: pts,
     };
@@ -323,13 +323,15 @@ export function gameLogRows(v, st, kind = v?.recut?.kind) {
     return { type: "week", key: s.key, wk, opp: f.vs, season, pts, note, shares: kind === "back" ? [oppShare, s.v] : [s.v, s.ay],
       cells: cols.map(([k]) => fmtLog(k, f[k])), heat, _f: f, _played: played };
   };
-  // Totals: counts summed; Snap % the mean over the games he played (the app's snap rule); Tgt % total over total
-  // (D181); AY % his air yards (the week's share x the club's air) over the club's air, likewise; YPRR = yards in
-  // charted weeks / routes.
+  // Totals: counts summed; Snap % pooled (D150, agg.js poolSnapShare, the app's snap rule): his snaps over his club's
+  // in the games he played plus any week he dressed for without an offensive snap (a DNP row whose snap count is 0),
+  // the mean of the per-game percentages when a club total is not established; Tgt % total over total (D181); AY % his
+  // air yards (the week's share x the club's air) over the club's air, likewise; YPRR = yards in charted weeks / routes.
   const totalRow = (label, list, dk) => {
     const P = list.filter((r) => r._played);
     const sum = (k) => P.reduce((s, r) => s + (isNum(r._f[k]) ? r._f[k] : 0), 0);
-    const snaps = P.map((r) => r._f.snap).filter(isNum);
+    const snapPool = poolSnapShare(list.map((r) => (r._played && isNum(r._f.snap) ? { pct: r._f.snap, n: r._f.snapN, club: r._f.snapClub }
+      : r._f.snapN === 0 ? { pct: 0, n: 0, club: r._f.snapClub } : null)));
     const wOf = (r) => weeks.find((w) => w.key === r.key) || {};
     const att = P.reduce((s, r) => s + (wOf(r).att || 0), 0);
     const clubAy = P.reduce((s, r) => s + (wOf(r).clubAy || 0), 0);
@@ -337,12 +339,14 @@ export function gameLogRows(v, st, kind = v?.recut?.kind) {
     const charted = P.filter((r) => isNum(r._f.routes));
     const routes = charted.reduce((s, r) => s + r._f.routes, 0);
     const f = {
-      wk: label, vs: `${P.length} g`, snap: snaps.length ? snaps.reduce((a, b) => a + b, 0) / snaps.length : null, oppN: sum("oppN"), car: sum("car"),
+      wk: label, vs: `${P.length} g`, snap: snapPool ? snapPool.share : null, oppN: sum("oppN"), car: sum("car"),
       rushYds: sum("rushYds"), rushTd: sum("rushTd"), tgt: sum("tgt"), rec: sum("rec"), recYds: sum("recYds"), recTd: sum("recTd"),
       tgtPct: ratio(sum("tgt"), att), ayPct: ratio(myAy, clubAy), routes: charted.length ? routes : null,
       yprr: routes > 0 ? charted.reduce((s, r) => s + (r._f.recYds || 0), 0) / routes : null, dk,
     };
-    return { type: "total", cells: cols.map(([k]) => fmtLog(k, f[k])) };
+    // D150: the Snap % cell says when it is the source's mean rather than pooled.
+    const snapNote = isNum(f.snap) ? snapMethodNote(snapPool?.method) : "";
+    return { type: "total", cells: cols.map(([k]) => fmtLog(k, f[k])), ...(snapNote ? { titles: cols.map(([k]) => (k === "snap" ? snapNote : "")) } : {}) };
   };
   const dkSeason = (season) => (R.fantasy?.games || []).filter((g) => splitKey(String(g.gk).split("|")[0]).season === season).reduce((s, g) => s + (g.pts || 0), 0);
   const all = [];
@@ -650,6 +654,8 @@ export function pageBody(v, st, { wn = windowName(st, v.weeks || []), activeKey 
   const tip = (...parts) => parts.filter(Boolean).join(". ");
   // A side item or a sub-line prints no league figure, so its league figure goes into the tooltip.
   const lgTip = (x) => (x && x !== DASH ? `League: ${x}` : "");
+  // D150: his snap share's hover says when it is the source's mean rather than pooled (the row it comes from).
+  const snapNote = snapMethodNote((back ? R.rushRow || v.row : v.row)?.snapMethod);
   // D225b: a figure tile opens his position's leaderboard sorted by that figure's own column, on this page's season and
   // window, with his row highlighted (filters.js rankHref; null when the board has no column for the figure). A man
   // under a board's default minimum opens it with his own count as the minimum so his row is on the table.
@@ -704,14 +710,14 @@ export function pageBody(v, st, { wn = windowName(st, v.weeks || []), activeKey 
       const t = ot("i5Share", "I5 carry %", tPct(x.i5Share), tPct(R.i5Lg), isNum(x.i5Share) ? def : `${def}. Not shown: his clubs ran ${x.i5Runs} such run${x.i5Runs === 1 ? "" : "s"} in his games (fewer than ${RZ_I5_FLOOR})`, { plain: true, sub: `${x.i5Des} of ${x.i5Runs}` });
       return t;
     })(),
-    snapPct: ot("snapPct", "Snap %", tPct(O.snapPct, 0), tPct(OL.snapPct, 0), "Share of his club's offensive snaps, mean of his games (nflverse snap counts); route % under it: routes / club dropbacks (heatradar.app)", { share: true, sub: `route % ${tPct(O.routePct, 0)}`, subLg: tPct(OL.routePct, 0) }),
+    snapPct: ot("snapPct", "Snap %", tPct(O.snapPct, 0), tPct(OL.snapPct, 0), tip(`Snap %: ${SNAP_SHARE_DEF} (nflverse snap counts); route % under it: routes / club dropbacks (heatradar.app)`, snapNote), { share: true, sub: `route % ${tPct(O.routePct, 0)}`, subLg: tPct(OL.routePct, 0) }),
   } : {
     tgtG: ot("tgtG", "Targets / g", tFix(O.tgtG, 1), tFix(OL.tgtG, 1), `Targets per game he played (${st.pi === false ? "excludes" : "includes"} pass-interference targets)`, { plain: true, sub: `${tInt(r.tgt)} in all`, subLg: tFix(L.tgt, 1) }),
     tgtShare: ot("tgtShare", "Tgt %", tPct(O.tgtShare), tPct(OL.tgtShare), "His targets / his club's pass attempts in his games (nflverse play-by-play); targets per route run under it (routes: heatradar.app)", { share: true, sub: `TPRR ${tFix(O.tprr, 2)}`, subLg: tFix(OL.tprr, 2) }),
     ayShare: ot("ayShare", "AY %", tPct(O.ayShare), tPct(OL.ayShare), "His air yards / his club's air yards in his games; aDOT (air yards per target) under it; nflverse play-by-play", { share: true, sub: `aDOT ${tFix(O.adot, 1)}`, subLg: tFix(OL.adot, 1) }),
     wopr: ot("wopr", "WOPR", tFix(O.wopr, 2), tFix(OL.wopr, 2), "1.5 x target share + 0.7 x air-yards share (nflverse play-by-play)"),
     rz: ot("rz", "RZ targets", tInt(O.rz), tFix(OL.rz, 1), "Red-zone targets (inside the opponent's 20); end-zone targets under it; nflverse play-by-play", { plain: true, sub: `${tInt(O.ez)} end-zone`, subLg: tFix(OL.ez, 1) }),
-    routePct: ot("routePct", "Route %", tPct(O.routePct, 0), tPct(OL.routePct, 0), "Routes / club dropbacks (heatradar.app, charted); snap % under it (nflverse snap counts)", { share: true, sub: `snap % ${tPct(O.snapPct, 0)}`, subLg: tPct(OL.snapPct, 0) }),
+    routePct: ot("routePct", "Route %", tPct(O.routePct, 0), tPct(OL.routePct, 0), tip(`Routes / club dropbacks (heatradar.app, charted); snap % under it: ${SNAP_SHARE_DEF} (nflverse snap counts)`, snapNote), { share: true, sub: `snap % ${tPct(O.snapPct, 0)}`, subLg: tPct(OL.snapPct, 0) }),
   };
   const logRows = gameLogRows(v, st, R.kind);
   const dk = R.fantasy?.dk, dkG = R.fantasy?.dkG;

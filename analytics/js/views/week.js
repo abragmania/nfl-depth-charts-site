@@ -21,12 +21,13 @@ import { loadFor, loadTeams, loadStatusFeed, loadTeamView } from "../data.js";
 import { aggregateTeams, teamReference, teamTargets, teamCarries } from "../agg_team.js";
 import { gridRows } from "../agg_grid.js";
 import { trendFigures } from "../agg_player.js";
-import { qbTrend } from "../agg_qb.js";
+import { qbTrend, aggregateQb } from "../agg_qb.js";
 import { posGroup } from "../agg_allowed.js";
 import { weekState, seasonBlocks, weekAllowedCells, vsUsualFor, trendMarks, VS_USUAL_TEXT, gameOdds, skillStarters, resolveWeekRoute } from "../agg_week.js";
 import { gamesBarHtml, wireGamesToggle, fmtKickoffET } from "../../../js/gamesbar.js";
 import { esc, isNum, pct, teamPill, pfrNote } from "./qb.js";
 import { shareSample, shareCountHtml } from "../table.js";
+import { snapMethodNote, SNAP_SHARE_DEF } from "../agg.js";
 import { teamPageState, playCallingHtml, olineBlockHtml, olineStripHtml } from "./team.js";
 import { dlineBlockHtml, coverageTilesHtml, dlineStripHtml, coverageStripHtml } from "./team_def.js";
 import { vsUsualCell, statusChip, statusNameClass, fmtVsUsual, WEEK_TREND_LABELS } from "./kit.js";
@@ -67,7 +68,7 @@ export function trendCell(marks) {
     const dir = x.delta > 0.05 ? "up" : x.delta < -0.05 ? "down" : "";
     const lab = WEEK_TREND_LABELS[x.k] || x.k;
     const fmt = (v) => (!Number.isFinite(v) ? DASH : x.unit === "pts" ? `${(v * 100).toFixed(1)}%` : v.toFixed(1));
-    const tip = `${lab}: last 3 ${fmt(x.last3)} over ${x.n3} game${x.n3 === 1 ? "" : "s"}, season ${fmt(x.season)} over ${x.n} (${x.unit === "pts" ? "percentage points" : "per game"}); above or below only, never good or bad`;
+    const tip = `${lab}: last 3 ${fmt(x.last3)} over ${x.n3} game${x.n3 === 1 ? "" : "s"}, season ${fmt(x.season)} over ${x.n} (${x.unit === "pts" ? "percentage points" : "per game"}); above or below only, never good or bad${x.sourceMean ? `. ${snapMethodNote("source-mean")}` : ""}`;
     return `<span class="an-wk-tr" title="${esc(tip)}"><span class="an-wk-lab">${esc(lab)}</span> ${dir ? `<i class="an-wk-arrow">${dir === "up" ? "▲" : "▼"}</i> ` : ""}${fmtVsUsual(x.delta, 1)}</span>`;
   });
   return `<td class="an-wv-tr">${items.join("") || DASH}</td>`;
@@ -89,16 +90,18 @@ export function startersHtml(rows, { def = "", q = "" } = {}) {
   };
   const line = (x, fill) => {
     const u = x.usage || {};
+    const snapNote = isNum(u.snapPct) ? snapMethodNote(u.snapMethod) : "";
+    const snapTd = `<td class="num"${snapNote ? ` title="${esc(snapNote)}"` : ""}>${P(u.snapPct)}</td>`;
     const usage = u.qb
-      ? `<td class="num">${P(u.snapPct)}</td><td class="an-wv-qbline" colspan="4">${[["dropbacks/g", u.qb.dbG], ["carries/g", u.qb.carG], ["red-zone dropbacks/g", u.qb.rzDbG]].map(([l, v]) => `<b>${isNum(v) ? (+v).toFixed(1) : DASH}</b> ${l}`).join(" · ")}</td>`
-      : `<td class="num">${P(u.snapPct)}</td><td class="num">${P(u.routePct)}</td><td class="num">${P(u.tgtShare, 1)}</td><td class="num">${P(u.rushShare, 1)}</td>${rzCell(u.rz)}`;
+      ? `${snapTd}<td class="an-wv-qbline" colspan="4">${[["dropbacks/g", u.qb.dbG], ["carries/g", u.qb.carG], ["red-zone dropbacks/g", u.qb.rzDbG]].map(([l, v]) => `<b>${isNum(v) ? (+v).toFixed(1) : DASH}</b> ${l}`).join(" · ")}</td>`
+      : `${snapTd}<td class="num">${P(u.routePct)}</td><td class="num">${P(u.tgtShare, 1)}</td><td class="num">${P(u.rushShare, 1)}</td>${rzCell(u.rz)}`;
     const slot = fill ? `<span class="an-wv-fill" title="Filling in for the out starter above">↳</span>` : esc(x.slot);
     return `<tr class="${fill ? "an-wv-fillrow" : ""}${x.extra ? " an-wv-extra" : ""}"><td class="an-wv-slot"${x.extra ? ` title="${esc(`Not a charted starter: ${isNum(x.clubShare) ? `${(x.clubShare * 100).toFixed(1)}%` : "15% or more"} of every target the club threw this season (15% or more adds him)`)}"` : ""}>${slot}</td><td class="an-wv-name">${link(x.man)}</td>${usage}${trendCell(x.marks)}<td class="an-wv-vs">${vsUsualCell(x.matchup, { vsText: VS_USUAL_TEXT })}</td></tr>`;
   };
   const body = rows.map((x) => line(x, false) + (x.fill ? line({ ...x.fill, slot: x.slot }, true) : "")).join("");
   const th = (h, t, cls = "num") => `<th class="${cls}" title="${esc(t)}">${h}</th>`;
   return `<table class="an-wv-table"><thead><tr>${th("", "Depth-chart slot", "an-wv-slot")}${th("Player", "As the depth chart lists him; red = will not play, his fill-in beneath him", "")}`
-    + th("Snap %", "The mean of his weekly offensive snap % this season")
+    + th("Snap %", `This season: ${SNAP_SHARE_DEF}`)
     + th("Route %", "Routes / club dropbacks in his games (heatradar, charted weeks)")
     + th("Tgt %", "His targets / the club's pass attempts in his games")
     + th("Car %", "His designed runs / the club's designed runs in his games")
@@ -115,6 +118,10 @@ export function sideRows({ view, club, def, blocks: allBlocks, players, ws, feed
   const cr = teamCarries(blocks, players, { ...ws, pos: {} }, club);
   const T = new Map(tg.map((r) => [r.gsis, r])), C = new Map(cr.map((r) => [r.gsis, r]));
   const starters = skillStarters(view, { targets: tg, feed });
+  // A QB's season Snap % is the QB page's own row (aggregateQb over the same season state, D150 pooled, a dressed game
+  // without a snap counting 0), not qbTrend's, which covers only games with a dropback or a carry. Built on first use.
+  let qbRows = null;
+  const qbRow = (g) => (qbRows ??= new Map(aggregateQb(blocks, players, { ...ws, pos: {} }).rows.map((r) => [r.gsis, r]))).get(g) || null;
   const fill = (x, kind, band) => {
     const g = x.man.gsis, t = T.get(g), c = C.get(g);
     const grp = kind === "qb" ? "QB" : posGroup(players?.[g]?.pos) || (kind === "back" ? "RB" : band === "TE" ? "TE" : "WR");
@@ -122,11 +129,13 @@ export function sideRows({ view, club, def, blocks: allBlocks, players, ws, feed
     if (kind === "qb") {
       trend = qbTrend(blocks, players, ws, g);
       const f = (k) => trend.figures?.[k]?.season ?? null;
-      usage = { snapPct: f("snapPct"), qb: { dbG: f("dbG"), carG: f("carG"), rzDbG: f("rzDbG") } };
+      const q = qbRow(g);
+      usage = { snapPct: q?.snapPct ?? null, snapMethod: q?.snapMethod ?? null, qb: { dbG: f("dbG"), carG: f("carG"), rzDbG: f("rzDbG") } };
     } else {
       const back = kind === "back";
       trend = trendFigures(blocks, players, ws, g, back);
-      usage = { snapPct: (back ? c?.snapPct : t?.snapPct) ?? t?.snapPct ?? c?.snapPct ?? null, routePct: t?.routePct ?? null, tgtShare: t?.tgtShare ?? null, rushShare: c?.rushShare ?? null,
+      const sRow = [back ? c : t, t, c].find((y) => y?.snapPct !== null && y?.snapPct !== undefined);
+      usage = { snapPct: sRow?.snapPct ?? null, snapMethod: sRow?.snapMethod ?? null, routePct: t?.routePct ?? null, tgtShare: t?.tgtShare ?? null, rushShare: c?.rushShare ?? null,
         rz: back ? (c ? { k: "i5Share", r: c } : null) : (t ? { k: "rzTgtShare", r: t } : null) };
     }
     return { ...x, kind, usage, marks: trendMarks(trend, kind), matchup: vsUsualFor(cells, def, grp) };

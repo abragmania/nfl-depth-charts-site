@@ -7,8 +7,8 @@
 // Every explained part is the outermost thing on its row on the side its line leaves from (or leaves the card
 // through its bottom edge, or along the seam under the banner), so no line runs across another part.
 // planLeaders is the pure layout (measured boxes in, lines and label positions out); tests/guide.test.mjs drives it.
-// GUIDE_CALLOUTS is also the claims table: each sentence names the Part 2 rulings it rests on, and the test checks
-// every one is still live in PROJECT.md, so a retired ruling turns the suite red.
+// GUIDE_CALLOUTS is also the claims table: each sentence names the rulings it rests on, and the test checks
+// every one is still live in RULES.md, so a retired ruling turns the suite red.
 import { renderColumn, esc, fitNames } from "./cards.js";
 import { layoutStyle } from "./field.js";
 import { registerView } from "./viewfit.js";

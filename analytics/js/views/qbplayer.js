@@ -22,7 +22,7 @@ import { fromQuery, seasonsOf, weekLabel, splitKey, gamesInWindow, rankHref, isS
 import { backLink } from "../router.js";
 import { loadFor, loadTeams, displayName, loadStatusFeed } from "../data.js";
 import { isStatic } from "../../../js/api.js";
-import { clubGames } from "../agg.js";
+import { clubGames, snapMethodNote, SNAP_SHARE_DEF } from "../agg.js";
 import { qbTrend, aggregateQb, qbReference, qbTier, qbZones, qbSplits, SPLITS, QB_MADDEN_ATTRS, inQbPool, qbPoolStat, qbGameCuts, QB_MIN_DB } from "../agg_qb.js";
 import { fantasyByPlayer } from "../agg_fantasy.js";
 import { median, ratingTier, maddenEdition, iterationLabel } from "../agg_player.js";
@@ -194,7 +194,7 @@ export function qbOppTiles(R, ref) {
     { key: "rzDb", label: "Red-zone dropbacks", value: tInt(R.rzDb ?? 0), lg: isNum(L.rzDb) ? tFix(L.rzDb, 1) : null, title: "Dropbacks from the opponent's 20-yard line or closer. Source: nflverse play-by-play" },
     { key: "rushAttG", label: "Carries / game", value: tFix(R.rushAttG, 1), lg: isNum(L.rushAttG) ? tFix(L.rushAttG, 1) : null, tier: tier("rushAttG"), title: "Designed runs + scrambles per game he played (coloured only for runners). Source: nflverse play-by-play" },
     { key: "in10Car", label: "Carries inside the 10", value: tInt(R.in10Car ?? 0), lg: isNum(L.in10Car) ? tFix(L.in10Car, 1) : null, title: "Designed runs + scrambles from the opponent's 10-yard line or closer. Source: nflverse play-by-play" },
-    { key: "snapPct", label: "Snap %", value: tPct(R.snapPct, 0), lg: isNum(L.snapPct) ? tPct(L.snapPct, 0) : null, share: true, bar: R.snapPct, lgBar: L.snapPct, title: "The mean of his weekly offensive snap share over his club's games the snap table lists him in (the dashed tick is the pool's mean). Source: nflverse snap counts" },
+    { key: "snapPct", label: "Snap %", value: tPct(R.snapPct, 0), lg: isNum(L.snapPct) ? tPct(L.snapPct, 0) : null, share: true, bar: R.snapPct, lgBar: L.snapPct, title: [`Snap %: ${SNAP_SHARE_DEF}, over his club's games the snap table lists him in (the dashed tick is the pool's mean). Source: nflverse snap counts`, snapMethodNote(R.snapMethod)].filter(Boolean).join(". ") },
   ];
 }
 

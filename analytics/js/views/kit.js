@@ -25,6 +25,7 @@
 // charts/bars.js is untouched by this file as of this draft.
 
 import { displayed } from "../agg_grid.js";
+import { snapMethodNote } from "../agg.js";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
@@ -223,7 +224,8 @@ function fanChartSvg(weekRows, shareLabels, { fit = null, label = "DK points", t
 // week rows and ignores the rest):
 //   { type: "week", key, wk, opp, season, pts, shares, note, cells, heat }  - cells.length === columns.length
 //   { type: "season", label }                                              - a small season header ("2025")
-//   { type: "total", cells }                                               - a totals row (untinted, never heat)
+//   { type: "total", cells, titles? }                                      - a totals row (untinted, never heat);
+//                                                                            titles[i], when set, is cell i's hover
 // columns: [{ key, label, align: "left"|"right", kind: "dk"|"share1"|"share2", cuts }] - kind drives text colour
 // (DK gold, share columns tinted to match their overlay line); `cuts`, when given, turns on this column's heat:
 // four descending numbers, elite/strong/avg/weak (same shape as the app's existing per-key tier cuts, e.g.
@@ -263,7 +265,7 @@ function glTable(rows, columns, { current = null, pastOpen = false } = {}) {
       const btn = past ? ` <button type="button" class="an-rc-gl-tog" data-gl-toggle aria-expanded="${pastOpen ? "true" : "false"}">${pastOpen ? "hide" : "show"} ${esc(section)} weeks</button>` : "";
       return `<tr class="an-rc-gl-season"><td colspan="${columns.length}">${esc(r.label)}${btn}</td></tr>`;
     }
-    if (r.type === "total") return `<tr class="an-rc-gl-total">${(r.cells || []).map((v, i) => `<td${glCellClass(columns[i] || {})}>${esc(v)}</td>`).join("")}</tr>`;
+    if (r.type === "total") return `<tr class="an-rc-gl-total">${(r.cells || []).map((v, i) => `<td${glCellClass(columns[i] || {})}${titleAttr(r.titles?.[i])}>${esc(v)}</td>`).join("")}</tr>`;
     if (collapsing && !pastOpen && section !== null && section !== String(current)) return "";
     // type === "week"
     if (r.note === "bye" || r.note === "dnp") {
@@ -404,7 +406,7 @@ export function statusLine(status, { season = null, latestWeek = null } = {}) {
 export const TREND_LABELS = { oppShare: "Opp %", snapPct: "Snap %", tgtShare: "Tgt %", ayShare: "AY %", routePct: "Route %", rzShare: "RZ share", rzTgtShare: "RZ tgt %" };
 const TREND_DEFS = {
   oppShare: "(targets + designed runs) / (club pass attempts + club designed runs)",
-  snapPct: "the mean of his weekly offensive snap %",
+  snapPct: "his offensive snaps / his club's offensive snaps (pooled, D150)",
   tgtShare: "targets / club pass attempts",
   ayShare: "air yards on his targets / club air yards",
   routePct: "routes / club dropbacks (charted weeks)",
@@ -422,7 +424,7 @@ export function trendStrip(trend, { weekFmt = null } = {}) {
     const a = pct(f.season), b = pct(f.last3);
     if (a === null && b === null) return "";
     const dir = a !== null && b !== null && a !== b ? (b > a ? "up" : "down") : "";
-    const tip = `${TREND_LABELS[k] || k}: ${TREND_DEFS[k] || ""}. Window: ${a === null ? "–" : a + "%"} over ${f.n} game${f.n === 1 ? "" : "s"}; last 3: ${b === null ? "–" : b + "%"} over ${f.n3} game${f.n3 === 1 ? "" : "s"}. Above or below only, never good or bad`;
+    const tip = `${TREND_LABELS[k] || k}: ${TREND_DEFS[k] || ""}. Window: ${a === null ? "–" : a + "%"} over ${f.n} game${f.n === 1 ? "" : "s"}; last 3: ${b === null ? "–" : b + "%"} over ${f.n3} game${f.n3 === 1 ? "" : "s"}. Above or below only, never good or bad${[f.method, f.method3].includes("source-mean") ? `. ${snapMethodNote("source-mean")}` : ""}`;
     return `<span class="an-rc-tritem" title="${esc(tip)}"><span class="an-rc-trlabel">${esc(TREND_LABELS[k] || k)}</span> ${a === null ? "–" : a} → <b>${b === null ? "–" : b}</b>${dir ? ` <i class="an-rc-trarrow ${dir}">${dir === "up" ? "▲" : "▼"}</i>` : ""}</span>`;
   }).filter(Boolean);
   if (!items.length) return "";
@@ -635,7 +637,7 @@ export function thisWeekStrip(data, { maxChips = 5, vsText = "", weekFmt = null 
       const dir = x.delta > 0.05 ? "up" : x.delta < -0.05 ? "down" : "";
       const lab = WEEK_TREND_LABELS[x.k] || x.k;
       const fmt = (v) => (!Number.isFinite(v) ? "–" : x.unit === "pts" ? `${(v * 100).toFixed(1)}%` : v.toFixed(1));
-      const tip = `${lab}: last 3 ${fmt(x.last3)} over ${x.n3} game${x.n3 === 1 ? "" : "s"}, season ${fmt(x.season)} over ${x.n} (${x.unit === "pts" ? "percentage points" : "per game"}); above or below only, never good or bad`;
+      const tip = `${lab}: last 3 ${fmt(x.last3)} over ${x.n3} game${x.n3 === 1 ? "" : "s"}, season ${fmt(x.season)} over ${x.n} (${x.unit === "pts" ? "percentage points" : "per game"}); above or below only, never good or bad${x.sourceMean ? `. ${snapMethodNote("source-mean")}` : ""}`;
       return `<span class="an-wk-tr"${titleAttr(tip)}><span class="an-wk-lab">${esc(lab)}</span> ${dir ? `<i class="an-wk-arrow">${dir === "up" ? "▲" : "▼"}</i> ` : ""}${fmtVsUsual(x.delta, 1)}</span>`;
     });
     parts.push(`<span class="an-wk-trend"${titleAttr(`His last ${t.last3Games} games played (${(t.last3Weeks || []).map(wf).join(", ")}) against all ${t.games} this season`)}><span class="an-wk-lab">Last 3</span>${items.join("")}</span>`);

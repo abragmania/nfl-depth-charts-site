@@ -17,7 +17,7 @@ import { isLightWash } from "./landing.js";
 // D173: this week's games strip (shared with the landing page) and the game line for the game being viewed.
 import { gamesBarHtml, gameLineHtml, findGame, wireGamesToggle } from "./gamesbar.js";
 // D111: one legend, drawn on both pages (see matchupLegendHtml). D134: one reduced-depth option object too.
-import { legendHtml, REDUCED_DEPTH_OPTS } from "./team.js";
+import { legendHtml, REDUCED_DEPTH_OPTS, sampleChipHtml } from "./team.js";
 
 const dash = "\u2014";
 const record = (r) => (r ? `${r.wins}-${r.losses}${r.ties ? "-" + r.ties : ""}` : dash);
@@ -175,7 +175,10 @@ const unitChipHtml = (unit) => `<span class="matchup-unit-chip">${esc(unit)}</sp
 // That announcement now lives on the field itself, as a full-width banner in each club's own colours
 // across the top and bottom edge (see halfBannerHtml/fieldHtml), so this block keeps only the opponent
 // picker, the swap link and the legend.
-function headerHtml(teamA, teamB, viewA, viewB, teams) {
+// `sample` = {a, b}: getTeam's fromFixture flag per club. A club drawn from the bundled sample file carries
+// team.js's own "sample data" chip on its panel (global rule: no sample value on a real page unlabelled).
+// Exported for tests.
+export function headerHtml(teamA, teamB, viewA, viewB, teams, sample = {}) {
   const recA = viewA?.header?.record ?? teamA.record;
   const recB = viewB?.header?.record ?? teamB.record;
   // A club whose primary is pale (New Orleans' gold) gets dark ink on its panel, exactly as its landing
@@ -188,6 +191,7 @@ function headerHtml(teamA, teamB, viewA, viewB, teams) {
       <div class="matchup-team-info">
         <div class="matchup-team-name">${esc(teamA.name)}${unitChipHtml("OFFENSE")}</div>
         <div class="matchup-team-sub">Record ${record(recA)}</div>
+        ${sampleChipHtml(sample.a)}
         ${heatSummaryHtml(viewA)}
       </div>
     </div>
@@ -202,6 +206,7 @@ function headerHtml(teamA, teamB, viewA, viewB, teams) {
       <div class="matchup-team-info matchup-team-info-right">
         <div class="matchup-team-name">${esc(teamB.name)}${unitChipHtml("DEFENSE")}</div>
         <div class="matchup-team-sub">Record ${record(recB)}</div>
+        ${sampleChipHtml(sample.b)}
         ${heatSummaryHtml(viewB)}
       </div>
       ${logoPlate(teamB)}
@@ -324,9 +329,9 @@ export async function renderMatchup(root, search, aAbbr, bAbbr) {
 
   document.title = `${A} offense vs ${B} defense — NFL Depth Charts`;
 
-  let viewA, viewB;
+  let viewA, viewB, sampleA, sampleB;
   try {
-    [{ data: viewA }, { data: viewB }] = await Promise.all([getTeam(A), getTeam(B)]);
+    [{ data: viewA, fromFixture: sampleA }, { data: viewB, fromFixture: sampleB }] = await Promise.all([getTeam(A), getTeam(B)]);
   } catch (e) {
     root.innerHTML = errorHtml(e);
     return;
@@ -348,7 +353,7 @@ export async function renderMatchup(root, search, aAbbr, bAbbr) {
     <div class="matchup is-compact">
       ${gamesBarHtml(teams, games, [A, B])}
       ${navStripHtml({ teams, abbr: A, page: "matchup", opponentAbbr: B, primary: teamA.colourPrimary, secondary: teamA.colourSecondary })}
-      ${headerHtml(teamA, teamB, viewA, viewB, teams)}
+      ${headerHtml(teamA, teamB, viewA, viewB, teams, { a: sampleA, b: sampleB })}
       ${gameLineHtml(game)}
       <div class="team-body">
         <div class="matchup-field-wrap">

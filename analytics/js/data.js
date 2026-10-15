@@ -284,6 +284,9 @@ export function weekBlock(k, x, f) {
   return {
     season: x.season, week: splitKey(k).week, key: k, cols: f.cols || x.cols,
     plays: f.plays || [], snaps: f.snaps || null, routes: f.routes || null, ngs: f.ngs || null, pfr: f.pfr || null,
+    // D150: the snap counts and established club totals the pooled snap share needs (agg.js poolSnapShare); null in a
+    // week file compiled before them, which then reads "source-mean".
+    snapCounts: f.snapCounts || null, snapTeams: f.snapTeams || null,
     driveCols: f.driveCols || x.driveCols || null, drives: f.drives || [],
   };
 }

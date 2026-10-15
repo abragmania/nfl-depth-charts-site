@@ -15,7 +15,11 @@
 //   aDOT            = his air yards / his targets (a pass-interference target with no air yards is left out)
 //   TPRR, YPRR      = targets and receiving yards in the weeks the routes table covers him / his routes there
 //   route %         = routes / the club dropbacks implied by each week's own route % (routes / pct)
-//   snap %          = the mean of his weekly offensive snap percentages (the snap table gives 0-100 per week)
+//   snap %          = POOLED (D150, poolSnapShare below): his offensive snaps / his club's offensive snaps summed over
+//                     every window game the snap table has a row for him in, a game he dressed for without an
+//                     offensive snap adding the club's snaps below and 0 above (that game is not one of his games for
+//                     the other figures); one game is the source's own percentage; snapMethod says "pooled",
+//                     "source" or "source-mean" (a club total not established, or a season compiled before the counts)
 //   zones           = his targets by depth band (D179: B behind the line, S 1-9, I 10-19, D 20+) and direction
 // PASS-INTERFERENCE TARGETS (D178 open decision 1, Adam 2026-09-24): a row with pi=1 is a defensive pass
 // interference no-play the ledger kept. It counts as a target for the receiver (targets, target share's numerator,
@@ -68,6 +72,48 @@ const ratio = (a, b) => (b > 0 ? a / b : null);
 // heatradar-style tables may give route % as 0-1 or 0-100; normalise to a fraction.
 export const frac = (p) => { const x = num(p); if (x === null || x <= 0) return null; return x > 1.5 ? x / 100 : x; };
 
+// ---- D150: snap share, POOLED (the ONE helper every page uses for a share over more than one game) ----------
+// A week block carries three snap tables (server/analytics/join.js indexSnaps): `snaps` {gsis: {off, def}} the
+// source's own percentage per side (0-100, null when he took no snap there), `snapCounts` {gsis: {off, def}} his snap
+// counts (0 for a side he dressed for and played none of; null where the source left the cell blank) and `snapTeams`
+// {club: {off, def}} the club's own snaps that game where its rows establish them (null where they do not). A week file
+// compiled before D150's counts has neither of the last two.
+// snapGame: one man's game on one side ("off" | "def") for poolSnapShare: { pct (the source's fraction; 0 for a
+// dressed-but-unused game), n (his snaps or null), club (the club's established snaps or null) }, or null when the
+// block holds no row for him on that side. `team` is his club that week.
+export function snapGame(b, id, side, team) {
+  const pct = num(b?.snaps?.[id]?.[side]);
+  const n = num(b?.snapCounts?.[id]?.[side]);
+  if (pct === null && n !== 0) return null;
+  // A blank percentage beside a real count reaches `snaps` as 0 (server/analytics/join.js keeps that published figure)
+  // while its count is null: the source has not stated that side, so it is no game, never a 0 (D150's blank-cell rule).
+  if (pct === 0 && n === null && b?.snapCounts?.[id]) return null;
+  return { pct: pct === null ? 0 : pct / 100, n, club: num(b?.snapTeams?.[team]?.[side]) };
+}
+// poolSnapShare(games) -> { share, games, snaps, clubSnaps, method } | null (no game). The depth chart's rule
+// (server/lib/snapshare.js poolShare; tests/analytics_pooled_share.test.mjs holds the two equal): his snaps over his
+// club's snaps summed over the games, a dressed-but-unused game adding the club's snaps below and 0 above
+// (method "pooled"). One game is the source's own percentage ("source"). When any game lacks his count or an
+// established club total (or his count exceeds it), the whole figure is the mean of the source's per-game
+// percentages and says so ("source-mean"); a season compiled before the counts always reads "source-mean".
+export function poolSnapShare(games) {
+  const g = (games || []).filter(Boolean);
+  if (!g.length) return null;
+  if (g.length === 1) return { share: g[0].pct, games: 1, snaps: null, clubSnaps: null, method: "source" };
+  let snaps = 0, club = 0, pooled = true;
+  for (const x of g) {
+    if (!Number.isFinite(x.n) || !(x.club > 0) || x.n > x.club) { pooled = false; break; }
+    snaps += x.n; club += x.club;
+  }
+  if (pooled && club > 0) return { share: snaps / club, games: g.length, snaps, clubSnaps: club, method: "pooled" };
+  return { share: g.reduce((a, x) => a + x.pct, 0) / g.length, games: g.length, snaps: null, clubSnaps: null, method: "source-mean" };
+}
+// The hover sentence for a snap share whose method is "source-mean" ("" otherwise), for every place that shows one.
+export const SNAP_SOURCE_MEAN_NOTE = "Snap % is source-mean here: the mean of his per-game snap percentages, because a club snap total in these games is not established by the snap counts (D150)";
+export const snapMethodNote = (method) => (method === "source-mean" ? SNAP_SOURCE_MEAN_NOTE : "");
+// The snap share's definition for column and tile hover text.
+export const SNAP_SHARE_DEF = "his offensive snaps / his club's offensive snaps over the games, a game he dressed for without a snap counting 0 (pooled, D150)";
+
 // Every club-game the blocks hold: [{ key, team, gameId, opp, home }].
 export function clubGames(blocks) {
   const seen = new Map();
@@ -103,6 +149,7 @@ export function aggregateUsage(blocks, players, st) {
   // Kept apart from acc so a man seen only as a fumbler never changes which rows exist or their order.
   const fumOf = new Map(); // gsis -> { fum, fl }
   const pfrRec = new Map(); // gsis -> Map(gk -> PFR drops that week)
+  const snapG = new Map(); // gsis -> Map(gk -> snapGame), dressed-but-unused games included (D150); apart from acc likewise
   const P = (id) => {
     if (!acc.has(id)) acc.set(id, { tgt: 0, air: 0, adotN: 0, rz: 0, ez: 0, rec: 0, yds: 0, td: 0, epa: 0, epaN: 0,
       car: 0, des: 0, ryds: 0, repa: 0, rtd: 0, wkCar: new Map(),
@@ -162,9 +209,12 @@ export function aggregateUsage(blocks, players, st) {
     for (const [id, s] of Object.entries(b.snaps || {})) {
       const off = num(s?.off);
       const team = players?.[id]?.teams?.[b.key];
-      if (!team || off === null || off <= 0) continue;
+      if (!team) continue;
       const gk = `${b.key}|${team}`;
       if (!gameOk(gk)) continue;
+      const sg = snapGame(b, id, "off", team);
+      if (sg) { if (!snapG.has(id)) snapG.set(id, new Map()); snapG.get(id).set(gk, sg); }
+      if (off === null || off <= 0) continue;
       const p = P(id); p.games.add(gk); p.snaps.set(gk, off / 100);
     }
     for (const [id, rt] of Object.entries(b.routes || {})) {
@@ -220,15 +270,22 @@ export function aggregateUsage(blocks, players, st) {
       tprr = ratio(tTgt, tRoutes);
       yprr = ratio(tYds, tRoutes);
     }
-    if (!situational && p.snaps.size) snapPct = [...p.snaps.values()].reduce((a, b) => a + b, 0) / p.snaps.size;
+    const mySnaps = snapG.get(id);
+    const pool = situational ? null : poolSnapShare(mySnaps ? [...mySnaps.values()] : []);
+    if (pool) snapPct = pool.share;
+    // Each week's snap count and club total ride along on the series (null when unknown, and under a down or quarter
+    // filter), so the player page's game-log totals pool the same games; a dressed-but-unused week carries them too.
+    const snapWeek = new Map();
+    if (!situational && mySnaps) for (const [gk, x] of mySnaps) snapWeek.set(gk.split("|")[0], x);
     const byKey = new Map();
     for (const gk of g) byKey.set(gk.split("|")[0], gk);
     const series = weeks.map((key) => {
-      const gk = byKey.get(key);
-      if (!gk) return { key, v: null, ay: null, snap: null, tgt: 0, oppN: 0 };
+      const gk = byKey.get(key), sw = snapWeek.get(key);
+      if (!gk) return { key, v: null, ay: null, snap: null, tgt: 0, oppN: 0, ...(sw ? { snapN: sw.n, snapClub: sw.club } : {}) };
       return { key, v: ratio(p.wk.get(gk) || 0, teamAtt.get(gk) || 0), ay: ratio(p.wkAir.get(gk) || 0, teamAir.get(gk) || 0),
         snap: situational ? null : p.snaps.get(gk) ?? null, tgt: p.wk.get(gk) || 0,
-        oppN: (p.wk.get(gk) || 0) + (p.wkCar.get(gk) || 0) }; // opportunities that week (a series "opp" is an opponent elsewhere)
+        oppN: (p.wk.get(gk) || 0) + (p.wkCar.get(gk) || 0), // opportunities that week (a series "opp" is an opponent elsewhere)
+        ...(sw ? { snapN: sw.n, snapClub: sw.club } : {}) };
     });
     const lastGk = g[g.length - 1];
     rows.push({
@@ -236,7 +293,7 @@ export function aggregateUsage(blocks, players, st) {
       team: lastGk ? lastGk.split("|")[1] : "", g: g.length, clubG: lastGk ? clubWin.get(lastGk.split("|")[1]) || 0 : 0,
       tgt: p.tgt, tgtShare, ay: p.air, ayShare, wopr, adot: ratio(p.air, p.adotN),
       rz: p.rz, ez: p.ez, rec: p.rec, yds: p.yds, td: p.td, epaTgt: p.epaN ? p.epa / p.epaN : null,
-      routes, routePct, tprr, yprr, snapPct, series, zones: p.zones, ...depthFields(p.zones),
+      routes, routePct, tprr, yprr, snapPct, snapMethod: pool?.method ?? null, series, zones: p.zones, ...depthFields(p.zones),
       recEpa: p.epa, car: p.car, des: p.des, rushYds: p.ryds, rushEpa: p.repa, rushTd: p.rtd, clubAtt: att, clubRuns: runs,
       opp, oppG: ratio(opp, g.length), oppShare: ratio(p.tgt + p.des, att + runs),
       ydsOpp: ratio(p.yds + p.ryds, opp), epaOpp: ratio(p.epa + p.repa, opp), tdOpp: ratio(p.td + p.rtd, opp),

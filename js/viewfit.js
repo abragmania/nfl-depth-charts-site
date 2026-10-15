@@ -271,8 +271,8 @@ export const LIST_MAX_WIDTH = 700;
 // looking right first"). THE ONE SWITCH: while it is false the list is unreachable and every window on
 // every page behaves exactly as it did before the phone work — isListWindow below is the single point any
 // caller can reach the list through, so nothing else needs a guard. `?phone=1` in the URL forces it on for
-// QA of the unfinished work; the URL is read once, at startup, and never again. PROJECT.md Part 4 holds the
-// inventory, and tests/docs.test.mjs fails if that inventory and this switch ever disagree.
+// QA of the unfinished work; the URL is read once, at startup, and never again. PROJECT.md's PHONE VIEW line holds
+// the inventory, and tests/docs.test.mjs fails if that inventory and this switch ever disagree.
 export const PHONE_LIST_ENABLED = false;
 const PHONE_LIST_FORCED = typeof location !== "undefined" && /[?&]phone=1(&|$)/.test(location.search || "");
 export const phoneListOn = () => PHONE_LIST_ENABLED || PHONE_LIST_FORCED;

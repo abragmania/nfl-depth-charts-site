@@ -25,6 +25,7 @@
 // the Defense names out, "def" draws only the Defense names, for the defense sub-page) }.
 import { esc, isNum } from "./qb.js";
 import { statusChip, statusNameClass, shortDate } from "./kit.js";
+import { snapMethodNote } from "../agg.js";
 
 const BAND = (pos) => (pos === "RB" || pos === "FB" ? "BACKFIELD" : pos);
 const SKILL_BANDS = new Set(["QB", "BACKFIELD", "WR", "TE"]);
@@ -115,7 +116,9 @@ export function lostCardHtml(list, { season, feedSeason, abbr = "", q = "", feed
       const last = lp && lp.season != null && lp.week != null && isNum(+lp.season) && isNum(+lp.week) ? weekText(+lp.season, +lp.week) : m ? weekText(+m[1], +m[2]) : "";
       if (last) over += ` (last played ${last})`;
     }
-    const before = `<div class="an-tm-lostbefore">${held.length ? `held ${held.join(", ")} ${over}` : `held no measurable share ${over}`}</div>`;
+    // D150: the snap share is pooled; when a club total is not established it is the source's mean and says so.
+    const snapNote = isNum(b.snapShare) && Math.round(b.snapShare * 100) > 0 ? snapMethodNote(b.snapMethod) : "";
+    const before = `<div class="an-tm-lostbefore"${snapNote ? ` title="${esc(snapNote)}"` : ""}>${held.length ? `held ${held.join(", ")} ${over}` : `held no measurable share ${over}`}</div>`;
     let since = "";
     if (r.sinceGames > 0) {
       // The fill-in first whether or not his share rose, then everyone else who rose; each by the share that rose most.

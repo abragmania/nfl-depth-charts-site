@@ -107,7 +107,9 @@ export function trendMarks(trend, kind) {
     const share = kind !== "qb" || k === "snapPct";
     const delta = share ? f.pts : f.delta;
     if (!isNum(delta)) return null;
-    return { k, last3: f.last3, season: f.season, delta: +delta, unit: share ? "pts" : "", n3: f.n3, n: f.n };
+    // A snap share says when either figure is the source's mean rather than pooled (D150).
+    return { k, last3: f.last3, season: f.season, delta: +delta, unit: share ? "pts" : "", n3: f.n3, n: f.n,
+      ...(k === "snapPct" ? { sourceMean: [f.method, f.method3].includes("source-mean") } : {}) };
   }).filter(Boolean);
   return { hidden: false, games, last3Games: trend.last3Games, last3Weeks: trend.last3Weeks || [], marks };
 }

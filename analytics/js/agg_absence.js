@@ -58,8 +58,10 @@
 //               with the red-zone flag; the club's looks are its red-zone pass attempts plus its red-zone run rows.
 //   ayShare   = his air yards on targets / the club's air yards on pass attempts in G.
 //   oppShare  = (targets + designed runs) / (pass attempts + designed runs) in G (D191's Opp %).
-//   snapShare = the MEAN of his weekly snap percentages over the games in G that have a snap row for him (the snap
-//               table holds percentages, not counts, so this is agg.js's snapPct rule, not a total over a total).
+//   snapShare = POOLED (D150, agg.js poolSnapShare, the snapPct rule): his snaps on his side / the club's snaps on
+//               that side over the games in G that have a snap row for him, a dressed-but-unused game adding the
+//               club's snaps below and 0 above; the mean of the source's percentages when a club total is not
+//               established. snapMethod says which ("pooled", "source" for one game, "source-mean").
 // Every ratio is null on a zero denominator. Club per-game rates: passG = pass attempts / games, runG = designed runs
 // / games, over BEFORE and over SINCE.
 // ABSORBED: every teammate (a man with a pass attempt, target or designed run for the club in BEFORE or SINCE, the
@@ -67,7 +69,7 @@
 // the depth chart's fill-in (status.fillIn: a gsis, an object with one, or a name) first when he is in the list, then
 // by the largest of his rises. `fillIn` on the
 // missing man carries the fill-in's before/since shares whether or not he rose.
-import { clubGames, colIndex, rushEvent, frac } from "./agg.js";
+import { clubGames, colIndex, rushEvent, frac, snapGame, poolSnapShare } from "./agg.js";
 import { gamesInWindow, splitKey, weekInScope } from "./filters.js";
 import { fantasyByPlayer } from "./agg_fantasy.js";
 
@@ -122,7 +124,10 @@ function clubIndex(blocks, players, st, team) {
     for (const [id, x] of Object.entries(b.snaps || {})) {
       if (players?.[id]?.teams?.[b.key] !== team) continue;
       const off = num(x?.off), def = num(x?.def);
-      G.snaps.set(id, { off: off !== null && off > 0 ? off / 100 : null, def: def !== null && def > 0 ? def / 100 : null });
+      // off/def: the game's share when he took a snap on that side (who played, his usual, a left-early game);
+      // game: the side's snapGame for the pooled share (D150), a dressed-but-unused game included.
+      G.snaps.set(id, { off: off !== null && off > 0 ? off / 100 : null, def: def !== null && def > 0 ? def / 100 : null,
+        game: { off: snapGame(b, id, "off", team), def: snapGame(b, id, "def", team) } });
     }
   }
   return { team, season, games, per };
@@ -178,13 +183,14 @@ function shares(idx, id, games, side = "off") {
     att += G.att; air += G.air; runs += G.runs; rz += G.rz;
     const m = G.men.get(id);
     if (m) { mAtt += m.att; tgt += m.tgt; mAir += m.air; des += m.des; car += m.car; mRz += m.rz; }
-    const sn = snapOf(G, id, side);
-    if (sn !== null) snaps.push(sn);
+    const sg = G.snaps.get(id)?.game?.[side];
+    if (sg) snaps.push(sg);
   }
+  const sp = poolSnapShare(snaps);
   return {
     games: games.length, att: mAtt, attShare: ratio(mAtt, att), tgt, tgtShare: ratio(tgt, att), car, des, carG: ratio(car, games.length), carShare: ratio(des, runs),
     rz: mRz, rzShare: ratio(mRz, rz), air: mAir, ayShare: ratio(mAir, air), oppShare: ratio(tgt + des, att + runs),
-    snapShare: snaps.length ? snaps.reduce((a, b) => a + b, 0) / snaps.length : null,
+    snapShare: sp ? sp.share : null, snapMethod: sp?.method ?? null,
   };
 }
 
@@ -274,7 +280,7 @@ export function absences(blocks, players, st, team, status) {
       lastGame: w.last ? w.last.key : null, beforeGames: w.before.map((g) => g.key), sinceKeys: w.since.map((g) => g.key),
       sinceGames: w.since.length,
     };
-    if (nameOnly) { out.push({ ...base, snapShare: w.noData ? null : before.snapShare }); continue; }
+    if (nameOnly) { out.push({ ...base, snapShare: w.noData ? null : before.snapShare, snapMethod: w.noData ? null : before.snapMethod }); continue; }
     const nul = (o) => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, k === "games" ? v : w.noData ? null : v]));
     const fid = fillInId(idx, players, e.fillIn);
     let absorbed = [], fillIn = null;
@@ -305,8 +311,8 @@ export function withWithout(blocks, players, st, team, gsis, other) {
   const idx = clubIndex(blocks || [], players, st, team);
   const pos = String(players?.[gsis]?.pos || "").toUpperCase();
   const w = windows(idx, gsis, SKILL_POS.has(pos) || !pos ? "off" : sideOf(pos));
-  const pick = (x) => ({ games: x.games, att: x.att, attShare: x.attShare, tgt: x.tgt, tgtShare: x.tgtShare, car: x.car, carG: x.carG, carShare: x.carShare, snapShare: x.snapShare });
-  const empty = (n) => ({ games: n, att: null, attShare: null, tgt: null, tgtShare: null, car: null, carG: null, carShare: null, snapShare: null });
+  const pick = (x) => ({ games: x.games, att: x.att, attShare: x.attShare, tgt: x.tgt, tgtShare: x.tgtShare, car: x.car, carG: x.carG, carShare: x.carShare, snapShare: x.snapShare, snapMethod: x.snapMethod });
+  const empty = (n) => ({ games: n, att: null, attShare: null, tgt: null, tgtShare: null, car: null, carG: null, carShare: null, snapShare: null, snapMethod: null });
   return deepFreeze({
     gsis, other, name: players?.[other]?.name || other, pos: String(players?.[other]?.pos || "").toUpperCase(),
     missingName: players?.[gsis]?.name || gsis, priorSeason: w.priorSeason, noData: w.noData,

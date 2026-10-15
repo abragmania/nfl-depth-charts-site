@@ -40,6 +40,13 @@ function heatSummaryChip(view) {
   return `<span class="chip chip-heat" title="${esc(title)}">${esc(view.heat.summary)}</span>`;
 }
 
+// Global rule (no sample value on a real page unlabelled): api.js's getTeam falls back to a bundled fixture
+// when a club is not compiled, and every page that draws that response says so with this one chip. Exported
+// so the Matchup page prints the identical chip instead of a copy of it.
+export function sampleChipHtml(fromFixture) {
+  return fromFixture ? `<span class="chip chip-sample" title="The live /api/team endpoint is not compiled yet; showing bundled sample data.">sample data</span>` : "";
+}
+
 // Exported so the zoom/matchup views can reuse the exact same header instead of re-deriving their own
 // (integration note, 2026-09-11) — team/view/teams are the same shapes renderTeam already works with;
 // fromFixture defaults to false since most callers other than this file's own renderTeam() won't have
@@ -64,7 +71,7 @@ export function headerHtml(team, view, fromFixture = false, teams, withLegend = 
 
   const chips = [heatSummaryChip(view)];
   if (view.chartSource === "espn") chips.push(`<span class="chip chip-warn" title="The club depth-chart page could not be read; showing ESPN's chart instead.">chart: ESPN (club page unavailable)</span>`);
-  if (fromFixture) chips.push(`<span class="chip chip-sample" title="The live /api/team endpoint is not compiled yet; showing bundled sample data.">sample data</span>`);
+  chips.push(sampleChipHtml(fromFixture));
 
   // Ruling E (Adam, 2026-09-13): one line. The name, record, next opponent, bye and scheme now sit on
   // the SAME row as the controls instead of stacking three deep, and the crest shrinks from 96px to

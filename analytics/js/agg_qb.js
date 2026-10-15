@@ -31,8 +31,9 @@
 // RE-CUT ADDITIONS (increment 3, PROJECT.md Part 4 B2; new keys only, no existing key changes):
 //   rzDb         = dropbacks from the opponent's 20 or closer (the ledger's redzone flag).
 //   in10Car      = carries (designed runs + scrambles) from the opponent's 10 or closer (yardline_100 <= 10).
-//   snapPct      = the Usage page's rule: the mean of his weekly offensive snap percentages over his club's window games
-//                  the snap table lists him in (blank under a down or quarter filter).
+//   snapPct      = the Usage page's rule, POOLED (agg.js poolSnapShare, D150): his offensive snaps / his club's over his
+//                  club's window games the snap table lists him in, a dressed-but-unused game counting 0 (blank under a
+//                  down or quarter filter); snapMethod "pooled", "source" (one game) or "source-mean".
 //   tdPct, intPct = td / att, int / att.
 //   dropPer100   = PFR drops by his receivers (pfr.pass drops) / his play-by-play attempts, over the weeks PFR lists him
 //                  with a drops figure, x 100 (the TPRR precedent; pfrDrops, pfrDropAtt carry the sums); null when none.
@@ -41,7 +42,7 @@
 // INCREMENT 6 ADDITIONS (the QB page's game log; new fields only): each series week also carries `sacks` (his sacks
 //   that week, same window and game rules as the row's sacks); qbGameCuts (below) gives the log's heat cuts and
 //   qbPoolStat the headline tiles' league mean, tier and rank for figures the reference has no cuts for.
-import { colIndex, clubGames, percentileCuts, tierFromCuts, MIN_POOL, pooledRatio, plainMean } from "./agg.js";
+import { colIndex, clubGames, percentileCuts, tierFromCuts, MIN_POOL, pooledRatio, plainMean, snapGame, poolSnapShare } from "./agg.js";
 import { gamesInWindow, playPredicate, isSituational } from "./filters.js";
 import { fantasyByPlayer, dkFields } from "./agg_fantasy.js";
 
@@ -123,7 +124,7 @@ function newAcc() {
     air: 0, airN: 0, cpoe: 0, cpoeN: 0, sacks: 0, pa: 0, paN: 0, bl: 0, blN: 0, scr: 0, scrYds: 0, des: 0, desYds: 0, rushTd: 0,
     rushEpa: 0, rushEpaN: 0, wk: new Map(), zones: Object.fromEntries(ZONE_KEYS.map((k) => [k, emptyCell()])),
     pfrPress: 0, pfrDb: 0, pfrKeys: new Set(), tttW: 0, ttt: 0, xcW: 0, xc: 0,
-    rzDb: 0, in10Car: 0, pfrDrops: 0, pfrDropAtt: 0, pfrDropWeeks: 0, snaps: [] };
+    rzDb: 0, in10Car: 0, pfrDrops: 0, pfrDropAtt: 0, pfrDropWeeks: 0 };
 }
 const wkAcc = () => ({ db: 0, att: 0, cmp: 0, epa: 0, epaN: 0, cpoe: 0, cpoeN: 0, air: 0, airN: 0, car: 0, ryds: 0, sacks: 0 });
 
@@ -149,6 +150,7 @@ export function aggregateQb(blocks, players, st, opts = {}) {
   const lgZones = Object.fromEntries(ZONE_KEYS.map((k) => [k, emptyCell()]));
   let pfrThrough = null;
   const fumOf = new Map(); // gsis -> { fum, fl }; apart from acc so a fumbler-only man never adds a row
+  const snapG = new Map(); // gsis -> [snapGame] over his club's window games (D150 pooled snap %)
 
   for (const b of blocks) {
     const C = colIndex(b.cols);
@@ -219,12 +221,14 @@ export function aggregateQb(blocks, players, st, opts = {}) {
       if (pr === null || situational) continue;
       a.pfrDb += a.wk.get(b.key)?.db || 0; a.pfrPress += pr; a.pfrKeys.add(b.key);
     }
-    // Re-cut snapPct: the snap table, his club's window game that week (the Usage page's rule).
-    if (!situational) for (const [id, s] of Object.entries(b.snaps || {})) {
-      const a = acc.get(id), off = num(s?.off);
+    // Re-cut snapPct: the snap table, his club's window game that week (the Usage page's rule, D150 pooled: a
+    // dressed-but-unused game counts). Kept apart from acc, so a game before his first dropback still counts.
+    if (!situational) for (const id of Object.keys(b.snaps || {})) {
+      if (!isQb(id)) continue;
       const team = players?.[id]?.teams?.[b.key];
-      if (!a || !team || off === null || off <= 0 || !gameOk(`${b.key}|${team}`)) continue;
-      a.snaps.push(off / 100);
+      if (!team || !gameOk(`${b.key}|${team}`)) continue;
+      const sg = snapGame(b, id, "off", team);
+      if (sg) (snapG.get(id) ?? snapG.set(id, []).get(id)).push(sg);
     }
     for (const [id, n] of Object.entries(b.ngs?.passing || {})) {
       const a = acc.get(id); const w = a?.wk.get(b.key);
@@ -263,7 +267,7 @@ export function aggregateQb(blocks, players, st, opts = {}) {
         return { key, db: w.db, att: w.att, epaDb: ratio(w.epa, w.epaN), cpoe: ratio(w.cpoe, w.cpoeN), adot: ratio(w.air, w.airN), cmpPct: ratio(w.cmp, w.att), car: w.car, ryds: w.ryds, sacks: w.sacks };
       }),
       zones: a.zones,
-      ...recutQb(a, fumOf.get(id), situational),
+      ...recutQb(a, fumOf.get(id), situational, snapG.get(id)),
       ...dkFields(fantasy.get(id), gp, st),
     });
   }
@@ -271,12 +275,13 @@ export function aggregateQb(blocks, players, st, opts = {}) {
 }
 
 // The re-cut's additive QB keys (see the header).
-function recutQb(a, f, situational) {
+function recutQb(a, f, situational, snapGames) {
   const fum = f?.fum ?? 0, fl = f?.fl ?? 0;
+  const sp = poolSnapShare(snapGames || []);
   const dropsOk = !situational && a.pfrDropWeeks > 0;
   return {
     rzDb: a.rzDb, in10Car: a.in10Car,
-    snapPct: !situational && a.snaps.length ? a.snaps.reduce((s, x) => s + x, 0) / a.snaps.length : null,
+    snapPct: situational || !sp ? null : sp.share, snapMethod: situational || !sp ? null : sp.method,
     tdPct: ratio(a.td, a.att), intPct: ratio(a.int, a.att),
     pfrDrops: dropsOk ? a.pfrDrops : null, pfrDropAtt: dropsOk ? a.pfrDropAtt : null,
     dropPer100: dropsOk && a.pfrDropAtt > 0 ? (100 * a.pfrDrops) / a.pfrDropAtt : null,
@@ -413,8 +418,8 @@ export const QB_MADDEN_ATTRS = [["throwPower", "Throw Power"], ["throwAccuracySh
 //   dbG    = dropbacks (qbEvent: attempts, sacks, scrambles; a PI no-play is none) / games
 //   carG   = carries (designed runs + scrambles) / games
 //   rzDbG  = dropbacks with the ledger's redzone flag / games
-//   snapPct = the mean of his weekly offensive snap % over the counted games with a snap figure (null under a down or
-//            quarter filter, as the row's).
+//   snapPct = POOLED over the counted games with a snap figure (agg.js poolSnapShare, D150; null under a down or
+//            quarter filter, as the row's); method3 / method say "pooled", "source" or "source-mean" for each.
 // Shape (frozen), as trendFigures': { kind: "qb", keys, games, last3Games, short, last3Weeks, figures: { [key]: {
 // last3, season, delta (last3 - season, in the figure's unit; snapPct in percentage points), pts (snapPct only), n3,
 // n } } }. The strip hides its arrows when games <= last3Games (fewer than four games), as the Trend strip does.
@@ -438,31 +443,31 @@ export function qbTrend(blocks, players, st, gsis) {
     const team = players?.[gsis]?.teams?.[b.key];
     const gk = `${b.key}|${team}`;
     if (!team || !winSet.has(gk)) continue;
-    const off = num(b.snaps?.[gsis]?.off);
-    if (off !== null && off > 0 && per.has(gk)) per.get(gk).snap = off / 100;
+    const sg = snapGame(b, gsis, "off", team);
+    if (sg && per.has(gk)) per.get(gk).snap = sg;
   }
   const played = [...per.keys()].sort();
   const last3 = played.slice(-3);
   const fig = (gks) => {
-    const s = { db: 0, car: 0, rzDb: 0, snap: 0, snapN: 0 };
+    const s = { db: 0, car: 0, rzDb: 0, snaps: [] };
     for (const gk of gks) {
       const m = per.get(gk);
       s.db += m.db; s.car += m.car; s.rzDb += m.rzDb;
-      if (m.snap !== null) { s.snap += m.snap; s.snapN++; }
+      if (m.snap !== null) s.snaps.push(m.snap);
     }
-    const n = gks.length;
+    const n = gks.length, sp = poolSnapShare(s.snaps);
     return {
       dbG: [ratio(s.db, n), n], carG: [ratio(s.car, n), n], rzDbG: [ratio(s.rzDb, n), n],
-      snapPct: situational ? [null, 0] : [ratio(s.snap, s.snapN), s.snapN],
+      snapPct: situational ? [null, 0, null] : [sp ? sp.share : null, s.snaps.length, sp?.method ?? null],
     };
   };
   const a = fig(last3), w = fig(played);
   const figures = {};
   for (const k of QB_TREND_KEYS) {
-    const [l3, n3] = a[k], [season, n] = w[k];
+    const [l3, n3, m3] = a[k], [season, n, m] = w[k];
     const d = l3 === null || season === null ? null : l3 - season;
     const out = { last3: l3, season, delta: k === "snapPct" && d !== null ? d * 100 : d, n3, n };
-    if (k === "snapPct") out.pts = out.delta;
+    if (k === "snapPct") { out.pts = out.delta; out.method3 = m3; out.method = m; }
     figures[k] = Object.freeze(out);
   }
   return Object.freeze({

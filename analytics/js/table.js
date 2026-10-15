@@ -8,7 +8,7 @@
 //    beside it (a dashed "lg avg 18%" line on bars, "· lg 18.4" beside a stat), so good or bad reads at a glance.
 // 2. TOTALS: anything broken down by week also prints its window total. A share totals by weighting (his
 //    targets / the club attempts over the window), never as a mean of the weekly percentages.
-import { sortRows, tierFromCuts, tierNote, TIER_NAMES, USAGE_TIER_KEYS, MIN_POOL } from "./agg.js";
+import { sortRows, tierFromCuts, tierNote, TIER_NAMES, USAGE_TIER_KEYS, MIN_POOL, snapMethodNote } from "./agg.js";
 import { weekLabel, POSITIONS, seasonsOf } from "./filters.js";
 import { rzI5Shares, RZ_I5_FLOOR } from "./agg_player.js";
 // D196: the injury badge and red-name rule, kit.js's own copy (built the same round by the player-page builder,
@@ -141,7 +141,7 @@ const COLS = [
   { k: "rzTgtShare", h: "RZ tgt %", t: RZ_TIPS.rzTgtShare, f: (v) => pct(v), grp: "o", bar: 0.5 },
   { k: "ezG", h: "EZ/g", t: RZ_TIPS.ezG, f: (v) => fix(v, 2), grp: "o" },
   { k: "routePct", h: "Rt %", t: "Route participation: routes / club dropbacks", f: (v) => pct(v, 0), grp: "o", bar: 1 },
-  { k: "snapPct", h: "Snap %", t: "Share of his club's offensive snaps (nflverse snap counts)", f: (v) => pct(v, 0), grp: "o", bar: 1 },
+  { k: "snapPct", h: "Snap %", t: "Share of his club's offensive snaps, pooled: his snaps / the club's over the games (D150; nflverse snap counts)", f: (v) => pct(v, 0), grp: "o", bar: 1 },
   { k: "yprr", h: "YPRR", t: "Receiving yards per route run", f: (v) => fix(v, 2), grp: "e" },
   { k: "epaTgt", h: "EPA/Tgt", t: "Expected points added per target", f: (v) => signed(v, 2), grp: "e" },
   { k: "catchPct", h: "Catch %", t: CATCH_TIP, f: (v) => pct(v), grp: "e" },
@@ -521,7 +521,9 @@ export function tableHtml(allRows, st, query, view = {}, status = {}) {
       const ok = r.pos !== "RB";
       return `<td class="num ${c.cls} an-depth-td">${ok ? depthBarHtml(r.depth, r.adot) : DASH}</td>`;
     }
-    const ss = shareSample(c.k, r, st), title = [note, ss.title, c.base ? l3Title(r) : ""].filter(Boolean).join(". ");
+    // D150: a snap share that is the source's mean rather than pooled says so (snapMethod, snapL3Method).
+    const snapNote = v === null || v === undefined ? "" : c.k === "snapPct" ? snapMethodNote(r.snapMethod) : c.k === "snapL3" ? snapMethodNote(r.snapL3Method) : "";
+    const ss = shareSample(c.k, r, st), title = [note, ss.title, c.base ? l3Title(r) : "", snapNote].filter(Boolean).join(". ");
     return `<td class="num ${c.cls}${tier ? " t-" + tier : ""}${bar ? " has-bar" : ""}"${title ? ` title="${esc(title)}"` : ""}>${bar}<span>${c.f(v)}${shareCountHtml(ss.count)}</span></td>`;
   };
   const body = rows.map((r, i) => {

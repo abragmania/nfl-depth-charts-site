@@ -17,6 +17,7 @@ import { lostCardHtml } from "./lost.js";
 import { lineBlock } from "./kit.js";
 import { RZ_I5_FLOOR } from "../agg_player.js";
 import { depthBarHtml } from "../table.js";
+import { snapMethodNote } from "../agg.js";
 import { nameOf } from "../names.js";
 
 const P = (v, d = 1) => (isNum(v) ? pct(v, d) + "%" : NA);
@@ -500,7 +501,7 @@ export async function renderTeam(ctx, params, query) {
     "Inside-the-5 carry share: his designed runs from the opponent's 5 or closer / the club's designed runs there in his games (scrambles on neither side)");
   const tgtItems = tgts.map((r) => ({ gsis: r.gsis, pos: r.pos, name: displayName(r.gsis, data.players), share: r.tgtShare, tier: r.tier,
     main: P(r.tgtShare), cells: [r.tgt, isNum(r.routes) ? Math.round(r.routes) : "–", isNum(r.snapPct) ? `${Math.round(r.snapPct * 100)}%` : "–", rzFig(r), depthBarHtml(r.depth, r.adot)],
-    title: `${displayName(r.gsis, data.players)}: ${r.tgt} targets in ${r.g} game${r.g === 1 ? "" : "s"}, ${isNum(r.tgtShare) ? (r.tgtShare * 100).toFixed(1) + "%" : "–"} of the club's attempts in his games (${isNum(r.clubShare) ? Math.round(r.clubShare * 100) + "%" : "–"} of every club target in the window)${isNum(r.lgShare) ? `; ${r.pos} league average ${(r.lgShare * 100).toFixed(1)}%` : ""}${isNum(r.routes) ? `; ${Math.round(r.routes)} routes (heatradar)` : ""}${isNum(r.snapPct) ? `; ${Math.round(r.snapPct * 100)}% of snaps` : ""}` }));
+    title: `${displayName(r.gsis, data.players)}: ${r.tgt} targets in ${r.g} game${r.g === 1 ? "" : "s"}, ${isNum(r.tgtShare) ? (r.tgtShare * 100).toFixed(1) + "%" : "–"} of the club's attempts in his games (${isNum(r.clubShare) ? Math.round(r.clubShare * 100) + "%" : "–"} of every club target in the window)${isNum(r.lgShare) ? `; ${r.pos} league average ${(r.lgShare * 100).toFixed(1)}%` : ""}${isNum(r.routes) ? `; ${Math.round(r.routes)} routes (heatradar)` : ""}${isNum(r.snapPct) ? `; ${Math.round(r.snapPct * 100)}% of snaps${r.snapMethod === "source-mean" ? ` (${snapMethodNote(r.snapMethod)})` : ""}` : ""}` }));
   const carItems = cars.map((r) => ({ gsis: r.gsis, pos: r.pos, name: displayName(r.gsis, data.players), share: r.rushShare, tier: r.tier,
     main: P(r.rushShare), cells: [r.car, fix(r.ypc, 1), `<span class="${r.epaTier ? "t-" + r.epaTier : ""} an-tm-epa">${signed(r.epaCar, 2)}</span>`, i5Fig(r)],
     title: `${displayName(r.gsis, data.players)}: ${r.car} carries${r.scr ? ` (${r.scr} scrambles)` : ""}, ${r.yds} yards; ${isNum(r.rushShare) ? (r.rushShare * 100).toFixed(1) + "%" : "–"} of the club's designed runs in his games${isNum(r.lgShare) ? `; ${r.pos} league average ${(r.lgShare * 100).toFixed(1)}%` : ""}` }));

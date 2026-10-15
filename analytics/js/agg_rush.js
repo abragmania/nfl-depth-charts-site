@@ -22,7 +22,9 @@
 //   RYOE/att     = NGS rush yards over expected summed over the weeks NGS lists him / his designed runs those weeks
 //                  (the same rule as the RB player page). Eff = NGS efficiency (distance run / rush yards; LOWER is
 //                  more north-south), weighted by his designed runs those weeks.
-//   Snap %       = the mean of his weekly offensive snap percentages (as on the Usage page).
+//   Snap %       = POOLED, agg.js poolSnapShare (D150, as on the Usage page): his offensive snaps / his club's over
+//                  every window game the snap table has a row for him in, a dressed-but-unused game adding the club's
+//                  snaps below; snapMethod "pooled", "source" (one game) or "source-mean" (a total not established).
 //   Games        = the club-games in the window where he appears on any play or took an offensive snap.
 // OPPORTUNITIES (D191, Adam 2026-09-24: raw opportunities matter more than yards per opportunity; the counts lead):
 //   Opp          = carries (a QB's scrambles included) + targets (the Usage page's count, so the PI-targets switch
@@ -48,8 +50,8 @@
 //                  when it lists him in none (the file may be empty). PFR's carry count is only this denominator; the
 //                  play-by-play carries stay canonical (D178).
 //   dk, dkG, dkTdShare = agg_fantasy.js (DraftKings, D194), dkG over this row's g.
-// Weekly-table figures (the PFR two) and DK go blank under a down or quarter filter.
-import { colIndex, clubGames, aggregateUsage, inPool, tierCuts, tierFromCuts, referenceText, rushEvent, pooledRatio, plainMean } from "./agg.js";
+// Weekly-table figures (the PFR two, snap %) and DK go blank under a down or quarter filter.
+import { colIndex, clubGames, aggregateUsage, inPool, tierCuts, tierFromCuts, referenceText, rushEvent, pooledRatio, plainMean, snapGame, poolSnapShare } from "./agg.js";
 import { gamesInWindow, playPredicate, posAllowed, POSITIONS, isSituational } from "./filters.js";
 import { fantasyByPlayer, dkFields } from "./agg_fantasy.js";
 
@@ -103,6 +105,7 @@ export function aggregateRush(blocks, players, st) {
   const clubAtt = new Map(); // gk -> the club's pass attempts (agg.js's rule: a pass-interference target is not one)
   const add = (m, k, v) => m.set(k, (m.get(k) || 0) + v);
   const fumOf = new Map(); // gsis -> { fum, fl }; apart from acc so a fumbler-only man never adds a row
+  const snapG = new Map(); // gsis -> Map(gk -> snapGame) for the pooled snap % (D150); apart from acc likewise
 
   for (const b of blocks) {
     const C = colIndex(b.cols);
@@ -138,13 +141,17 @@ export function aggregateRush(blocks, players, st) {
       w.car++; if (e.designed) w.des++; w.yds += y;
       a.wk.set(b.key, w);
     }
-    // Snaps: a game he took an offensive snap in is one of his games (a back who only blocked still played).
+    // Snaps: a game he took an offensive snap in is one of his games (a back who only blocked still played). Snap %
+    // pools every window game the snap table has a row for him in, a dressed-but-unused game included (D150).
     for (const [id, s] of Object.entries(b.snaps || {})) {
       const off = num(s?.off);
       const team = players?.[id]?.teams?.[b.key];
-      if (!team || off === null || off <= 0) continue;
+      if (!team) continue;
       const gk = `${b.key}|${team}`;
       if (!gameOk(gk)) continue;
+      const sg = snapGame(b, id, "off", team);
+      if (sg) { if (!snapG.has(id)) snapG.set(id, new Map()); snapG.get(id).set(gk, sg); }
+      if (off === null || off <= 0) continue;
       const a = A(id); a.games.add(gk); a.snaps.set(gk, off / 100);
     }
   }
@@ -205,6 +212,8 @@ export function aggregateRush(blocks, players, st) {
       return gameOk(`${key}|${t}`) ? { key, dnp: true, car: null, share: null } : { key, car: null, share: null };
     });
     const n = ngs.get(id), u = usage.get(id);
+    // A weekly table: blank under a down or quarter filter, as on the Usage and QB pages.
+    const sp = situational ? null : poolSnapShare(snapG.has(id) ? [...snapG.get(id).values()] : []);
     const att = g.reduce((s, gk) => s + (clubAtt.get(gk) || 0), 0);
     const tgt = u?.tgt ?? 0;
     const opp = a.car + tgt;
@@ -214,7 +223,7 @@ export function aggregateRush(blocks, players, st) {
       yds: a.yds, ypc: ratio(a.yds, a.car), succPct: ratio(a.succ, a.succN), epaCar: ratio(a.epa, a.epaN),
       rz: a.rz, gl: a.gl, td: a.td, long: a.long, explPct: ratio(a.expl, a.car), expl: a.expl, bins: a.bins,
       ryoeAtt: n ? ratio(n.ryoe, n.ryoeCar) : null, eff: n ? ratio(n.eff, n.effCar) : null,
-      snapPct: a.snaps.size ? [...a.snaps.values()].reduce((s, x) => s + x, 0) / a.snaps.size : null,
+      snapPct: sp ? sp.share : null, snapMethod: sp?.method ?? null,
       routes: u?.routes ?? null, tgt, tgtShare: u?.tgtShare ?? null,
       clubAtt: att, recYds: u?.yds ?? 0, recEpa: u?.recEpa ?? 0, recTd: u?.td ?? 0,
       opp, oppG: ratio(opp, g.length), oppShare: ratio(a.des + tgt, runs + att),

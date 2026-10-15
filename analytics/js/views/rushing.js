@@ -6,7 +6,7 @@
 // The weekly strips and the team pill are qb.js's, shared.
 import { fromQuery, toQuery, seasonsOf, weekLabel, POSITIONS, DEFAULT_POS } from "../filters.js";
 import { loadFor, loadTeams, loadStatusFeed, displayName } from "../data.js";
-import { clubGames, tierNote, TIER_NAMES, MIN_POOL, POOL_PER_GAME, POOL_FLOOR } from "../agg.js";
+import { clubGames, tierNote, TIER_NAMES, MIN_POOL, POOL_PER_GAME, POOL_FLOOR, snapMethodNote } from "../agg.js";
 import { aggregateRush, rushReference, rushTier, sortRushRows, rushOpts, rushQueryFrom, samePos, RUSH_DEFAULT_POS, RUSH_MIN_CAR, RUSH_TIER_KEYS, BIN_LABELS, GOAL_LINE } from "../agg_rush.js";
 import { renderFilterBar } from "../filterbar.js";
 import { decorateDeciding } from "../deciding.js";
@@ -49,7 +49,7 @@ const COLS = [
   { k: "tgtShare", h: "Tgt %", t: "Target share: his targets / his club's pass attempts in his games", f: (v) => pct(v), grp: "o", bar: 0.3 },
   { k: "rzOppG", h: "RZ opp/g", t: RZ_TIPS.rzOppG, f: (v) => fixM(v, 2), grp: "o" },
   { k: "i5Share", h: "i5 %", t: RZ_TIPS.i5Share, f: (v) => pct(v, 0), grp: "o", bar: 0.6 },
-  { k: "snapPct", h: "Snap %", t: "Share of his club's offensive snaps (nflverse snap counts)", f: (v) => pct(v, 0), grp: "o", bar: 1 },
+  { k: "snapPct", h: "Snap %", t: "Share of his club's offensive snaps, pooled: his snaps / the club's over the games (D150; nflverse snap counts)", f: (v) => pct(v, 0), grp: "o", bar: 1 },
   { k: "ypc", h: "YPC", t: "Yards per carry", f: (v) => fixM(v, 1), grp: "e" },
   { k: "epaCar", h: "EPA/car", t: "Expected points added per carry", f: (v) => signed(v, 2), grp: "e" },
   { k: "ryoeAtt", h: "RYOE/att", t: "NGS rush yards over expected per carry (the weeks NGS lists him)", f: (v) => signed(v, 2), grp: "e" },
@@ -152,7 +152,7 @@ function detailHtml(r, st, q, P, wn) {
       ${tile("RYOE/att", signed(r.ryoeAtt, 2), "ryoeAtt", signed(L.ryoeAtt, 2), "NGS rush yards over expected per carry")}${tile("Eff", fixM(r.eff, 2), "eff", fixM(L.eff, 2), "NGS efficiency: lower is more north-south")}
     </div></div>
     <div class="an-dcol"><div class="an-dh">Involvement</div><div class="an-dtiles">
-      ${tile("Snap %", pct(r.snapPct, 0), "snapPct", pct(L.snapPct, 0))}${tile("Rush %", pct(r.rushShare), "rushShare", pct(L.rushShare))}
+      ${tile("Snap %", pct(r.snapPct, 0), "snapPct", pct(L.snapPct, 0), isNum(r.snapPct) ? snapMethodNote(r.snapMethod) : "")}${tile("Rush %", pct(r.rushShare), "rushShare", pct(L.rushShare))}
       ${tile("Tgt %", pct(r.tgtShare), "tgtShare", pct(L.tgtShare))}${tile("Targets", intM(r.tgt), "", fixM(L.tgt, 1))}
       ${tile("Routes", intM(r.routes), "", fixM(L.routes, 0), "heatradar, charted")}${tile("Car/g", fixM(r.carG, 1), "carG", fixM(L.carG, 1))}
       <div class="an-dlinks"><a href="#/player/${encodeURIComponent(r.gsis)}${q ? "?" + q : ""}">Player page →</a><a href="${depth}">Depth chart →</a></div>
@@ -197,6 +197,9 @@ export function rushTableHtml(allRows, st, query, view = {}, status = {}) {
     const ss = shareSample(c.k, r, st);
     if (ss.title) title = [title, ss.title].filter(Boolean).join(". ");
     if (c.base) title = [title, l3Title(r)].filter(Boolean).join(". ");
+    // D150: a snap share that is the source's mean rather than pooled says so.
+    const snapNote = !isNum(v) ? "" : c.k === "snapPct" ? snapMethodNote(r.snapMethod) : c.k === "snapL3" ? snapMethodNote(r.snapL3Method) : "";
+    if (snapNote) title = [title, snapNote].filter(Boolean).join(". ");
     return `<td class="num ${c.cls}${tier ? " t-" + tier : ""}${bar ? " has-bar" : ""}"${title ? ` title="${esc(title)}"` : ""}>${bar}<span>${c.f(v)}${shareCountHtml(ss.count)}</span></td>`;
   };
   const body = rows.map((r, i) => {

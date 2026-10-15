@@ -10,7 +10,7 @@
 import { isStatic, resolveUrl } from "./api.js";
 
 const POLL_MS = 5000;
-const STALE_HOURS = 36; // matches server/api/refresh.js's isStale() and PROJECT.md Part 4's "ambers past 36h"
+const STALE_HOURS = 36; // matches server/api/refresh.js's isStale()
 
 // D53: "the app refreshes itself when opened if the data is older than 6 hours" - but never more than once
 // per page load (this flag) and never more than once per hour even across reloads (the localStorage

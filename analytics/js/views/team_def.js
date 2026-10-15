@@ -17,6 +17,7 @@ import { windowName } from "./qbplayer.js";
 import { lostCardHtml } from "./lost.js";
 import { lineBlock } from "./kit.js";
 import { nameOf } from "../names.js";
+import { snapMethodNote } from "../agg.js";
 import { teamPageState, teamSideSeg, clubZoneField, clubZoneLegend, zonePlaysHtml, TEAM_ZONE_MODES, distList, ordinal, clubGridRowHtml, TGT_COLS, CAR_COLS, RANKINGS_DEF_KEYS, rankingsHref, gridTileHref, lineStripHtml, lineStripSpec } from "./team.js";
 
 const P = (v, d = 1) => (isNum(v) ? pct(v, d) + "%" : NA);
@@ -256,7 +257,7 @@ export async function renderTeamDefense(ctx, params, query) {
   const cars = carsAll.slice(0, 8);
   const tgtItems = tgts.map((r) => ({ gsis: r.gsis, pos: r.pos, name: displayName(r.gsis, data.players), share: r.tgtShare, tier: r.tier,
     main: P(r.tgtShare), cells: [r.tgt, isNum(r.routes) ? r.routes : "–", isNum(r.snapPct) ? `${Math.round(r.snapPct * 100)}%` : "–"],
-    title: `${displayName(r.gsis, data.players)}: ${r.tgt} targets in ${r.g} game${r.g === 1 ? "" : "s"} against ${abbr}, ${isNum(r.tgtShare) ? (r.tgtShare * 100).toFixed(1) + "%" : "–"} of his own club's attempts in those games (${isNum(r.clubShare) ? Math.round(r.clubShare * 100) + "%" : "–"} of every target this defense faced)${isNum(r.lgShare) ? `; ${r.pos} league average ${(r.lgShare * 100).toFixed(1)}%` : ""}` }));
+    title: `${displayName(r.gsis, data.players)}: ${r.tgt} targets in ${r.g} game${r.g === 1 ? "" : "s"} against ${abbr}, ${isNum(r.tgtShare) ? (r.tgtShare * 100).toFixed(1) + "%" : "–"} of his own club's attempts in those games (${isNum(r.clubShare) ? Math.round(r.clubShare * 100) + "%" : "–"} of every target this defense faced)${isNum(r.lgShare) ? `; ${r.pos} league average ${(r.lgShare * 100).toFixed(1)}%` : ""}${isNum(r.snapPct) && r.snapMethod === "source-mean" ? `; ${snapMethodNote(r.snapMethod)}` : ""}` }));
   const carItems = cars.map((r) => ({ gsis: r.gsis, pos: r.pos, name: displayName(r.gsis, data.players), share: r.rushShare, tier: r.tier,
     main: P(r.rushShare), cells: [r.car, fix(r.ypc, 1), `<span class="${r.epaTier ? "t-" + r.epaTier : ""} an-tm-epa">${signed(r.epaCar, 2)}</span>`],
     title: `${displayName(r.gsis, data.players)}: ${r.car} carries${r.scr ? ` (${r.scr} scrambles)` : ""}, ${r.yds} yards against ${abbr}; ${isNum(r.rushShare) ? (r.rushShare * 100).toFixed(1) + "%" : "–"} of his own club's designed runs in those games${isNum(r.lgShare) ? `; ${r.pos} league average ${(r.lgShare * 100).toFixed(1)}%` : ""}` }));
