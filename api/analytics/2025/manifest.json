@@ -61,168 +61,168 @@
    "week": 1,
    "hash": "4c3edca936e1ff6f",
    "plays": 1924,
-   "builtAt": "2026-10-19T23:36:02.347Z"
+   "builtAt": "2026-10-15T18:37:36.714Z"
   },
   {
    "week": 2,
    "hash": "22670b89eb2340cd",
    "plays": 1957,
-   "builtAt": "2026-10-19T23:36:02.347Z"
+   "builtAt": "2026-10-15T18:37:36.714Z"
   },
   {
    "week": 3,
    "hash": "0db398507d469904",
    "plays": 1944,
-   "builtAt": "2026-10-19T23:36:02.347Z"
+   "builtAt": "2026-10-15T18:37:36.714Z"
   },
   {
    "week": 4,
    "hash": "3eea51940416423b",
    "plays": 1939,
-   "builtAt": "2026-10-19T23:36:02.347Z"
+   "builtAt": "2026-10-15T18:37:36.714Z"
   },
   {
    "week": 5,
    "hash": "fe6d283d7a6818e3",
    "plays": 1720,
-   "builtAt": "2026-10-19T23:36:02.347Z"
+   "builtAt": "2026-10-15T18:37:36.714Z"
   },
   {
    "week": 6,
    "hash": "638dbc18f4a4d9ec",
    "plays": 1775,
-   "builtAt": "2026-10-19T23:36:02.347Z"
+   "builtAt": "2026-10-15T18:37:36.714Z"
   },
   {
    "week": 7,
    "hash": "46a5fcc28ae06d3b",
    "plays": 1872,
-   "builtAt": "2026-10-19T23:36:02.347Z"
+   "builtAt": "2026-10-15T18:37:36.714Z"
   },
   {
    "week": 8,
    "hash": "5e11bfd36d525c2d",
    "plays": 1548,
-   "builtAt": "2026-10-19T23:36:02.347Z"
+   "builtAt": "2026-10-15T18:37:36.714Z"
   },
   {
    "week": 9,
    "hash": "47ea07d26fba036e",
    "plays": 1717,
-   "builtAt": "2026-10-19T23:36:02.347Z"
+   "builtAt": "2026-10-15T18:37:36.714Z"
   },
   {
    "week": 10,
    "hash": "49ce1819489d396e",
    "plays": 1725,
-   "builtAt": "2026-10-19T23:36:02.347Z"
+   "builtAt": "2026-10-15T18:37:36.714Z"
   },
   {
    "week": 11,
    "hash": "86ee31b4fd0c866f",
    "plays": 1836,
-   "builtAt": "2026-10-19T23:36:02.347Z"
+   "builtAt": "2026-10-15T18:37:36.714Z"
   },
   {
    "week": 12,
    "hash": "01c364d9f8bdb992",
    "plays": 1750,
-   "builtAt": "2026-10-19T23:36:02.347Z"
+   "builtAt": "2026-10-15T18:37:36.714Z"
   },
   {
    "week": 13,
    "hash": "df23e9024304b67f",
    "plays": 1956,
-   "builtAt": "2026-10-19T23:36:02.347Z"
+   "builtAt": "2026-10-15T18:37:36.714Z"
   },
   {
    "week": 14,
    "hash": "98f9a1f50b762a22",
    "plays": 1725,
-   "builtAt": "2026-10-19T23:36:02.347Z"
+   "builtAt": "2026-10-15T18:37:36.714Z"
   },
   {
    "week": 15,
    "hash": "1f2df54a67c9c27f",
    "plays": 1915,
-   "builtAt": "2026-10-19T23:36:02.347Z"
+   "builtAt": "2026-10-15T18:37:36.714Z"
   },
   {
    "week": 16,
    "hash": "f9a1da013e2d946c",
    "plays": 1970,
-   "builtAt": "2026-10-19T23:36:02.347Z"
+   "builtAt": "2026-10-15T18:37:36.714Z"
   },
   {
    "week": 17,
    "hash": "378b1a308a723b64",
    "plays": 1915,
-   "builtAt": "2026-10-19T23:36:02.347Z"
+   "builtAt": "2026-10-15T18:37:36.714Z"
   },
   {
    "week": 18,
    "hash": "942671d30e379dc2",
    "plays": 1901,
-   "builtAt": "2026-10-19T23:36:02.347Z"
+   "builtAt": "2026-10-15T18:37:36.714Z"
   },
   {
    "week": 19,
    "hash": "4c41e46b64b9cad0",
    "plays": 768,
-   "builtAt": "2026-10-19T23:36:02.347Z"
+   "builtAt": "2026-10-15T18:37:36.714Z"
   },
   {
    "week": 20,
    "hash": "f7d459f8b7da64d5",
    "plays": 553,
-   "builtAt": "2026-10-19T23:36:02.347Z"
+   "builtAt": "2026-10-15T18:37:36.714Z"
   },
   {
    "week": 21,
    "hash": "b1a9d9082cf5ce1f",
    "plays": 241,
-   "builtAt": "2026-10-19T23:36:02.347Z"
+   "builtAt": "2026-10-15T18:37:36.714Z"
   },
   {
    "week": 22,
    "hash": "e3c1f1f91dc8204c",
    "plays": 137,
-   "builtAt": "2026-10-19T23:36:02.347Z"
+   "builtAt": "2026-10-15T18:37:36.714Z"
   }
  ],
  "pfrUncharted": "e435e4a2f1ef0bd0",
  "sources": {
   "pbp": {
-   "fetchedAt": "2026-09-27T21:56:19.852Z",
+   "fetchedAt": "2026-09-24T20:38:00.403Z",
    "sha": "8ce0001826f0f7b895b7a1068e4db7f43696c699db7064ccb1201855768fd06c"
   },
   "ftn": {
-   "fetchedAt": "2026-09-27T21:56:21.043Z",
+   "fetchedAt": "2026-09-24T20:38:01.418Z",
    "sha": "62a66416043ff08d43303bf5f3af5390e3fe0f29461a1fc6e295a15cac6ea994"
   },
   "ngs": {
-   "fetchedAt": "2026-09-27T21:56:01.211Z",
-   "sha": "4b9e9f628dc0af4a"
+   "fetchedAt": "2026-09-24T20:37:59.637Z",
+   "sha": "3cd03db87af80863"
   },
   "pfr": {
-   "fetchedAt": "2026-09-27T21:56:24.038Z",
+   "fetchedAt": "2026-09-24T20:38:02.564Z",
    "sha": "9ebf83e7490017ca"
   },
   "pfrRush": {
-   "fetchedAt": "2026-09-27T21:56:25.157Z",
+   "fetchedAt": "2026-09-25T20:21:17.327Z",
    "sha": "a348586c1d392b64fa3c0947d652fb5f0ecab76a04ed3035d59834a99183027b"
   },
   "pfrRec": {
-   "fetchedAt": "2026-09-27T21:56:25.339Z",
+   "fetchedAt": "2026-09-25T20:21:17.564Z",
    "sha": "78542d5c7b0df65c5c4a7ead0af14835d0680a50f9b8eed2175ac647f531e91d"
   },
   "routes": null,
   "participation": {
-   "fetchedAt": "2026-09-27T21:56:21.726Z",
+   "fetchedAt": "2026-09-24T20:38:01.648Z",
    "sha": "59069adfee7b0f464befba8a5e8be331e523633cc6a7ab403d37bcbcdfbe66ac"
   },
   "snaps": {
-   "fetchedAt": "2026-09-27T21:56:25.643Z",
+   "fetchedAt": "2026-09-24T20:38:03.095Z",
    "sha": "3fc2deb0e9ad86d34d4578cb80bb21c95253e088ee22ca028adf46f7485eff1f"
   }
  }
