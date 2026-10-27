@@ -59,45 +59,45 @@
  "weeks": [
   {
    "week": 1,
-   "hash": "7b8ab444a9aea070",
+   "hash": "6cc0ec0a70b76f84",
    "plays": 1924,
-   "builtAt": "2026-10-26T16:00:57.760Z"
+   "builtAt": "2026-10-27T18:01:20.027Z"
   },
   {
    "week": 2,
-   "hash": "8c3790c01e57bc8e",
+   "hash": "90f9d5e0b77cd687",
    "plays": 1936,
-   "builtAt": "2026-10-26T16:00:57.760Z"
+   "builtAt": "2026-10-27T18:01:20.027Z"
   },
   {
    "week": 3,
-   "hash": "e17ed98296a4b0b8",
+   "hash": "8e0b43c9054b5bbd",
    "plays": 2000,
-   "builtAt": "2026-10-26T16:00:57.760Z"
+   "builtAt": "2026-10-27T18:01:20.027Z"
   },
   {
    "week": 4,
-   "hash": "27e9ae0233dcf005",
+   "hash": "8c052e88911a2fcd",
    "plays": 1990,
-   "builtAt": "2026-10-26T16:00:57.760Z"
+   "builtAt": "2026-10-27T18:01:20.027Z"
   },
   {
    "week": 5,
-   "hash": "707c24d7fab48ab2",
+   "hash": "0910f39c930d584f",
    "plays": 1891,
-   "builtAt": "2026-10-26T16:00:57.760Z"
+   "builtAt": "2026-10-27T18:01:20.027Z"
   },
   {
    "week": 6,
-   "hash": "11d0f94141ca0146",
+   "hash": "3beb37514f5623e5",
    "plays": 1804,
-   "builtAt": "2026-10-26T16:00:57.760Z"
+   "builtAt": "2026-10-27T18:01:20.027Z"
   },
   {
    "week": 7,
-   "hash": "234f5e751bfb429e",
-   "plays": 1580,
-   "builtAt": "2026-10-27T10:04:42.163Z"
+   "hash": "12a4bece1299e5cb",
+   "plays": 1709,
+   "builtAt": "2026-10-27T18:01:20.027Z"
   }
  ],
  "throughWeek": 7,
@@ -106,16 +106,16 @@
  "snapPatches": "15cdecc72eec8fb7",
  "sources": {
   "pbp": {
-   "fetchedAt": "2026-10-26T16:00:39.950Z",
-   "sha": "a90e7a5ac89ed0fde7a2621e56c58bef6e5963d8a27128476c6879c0553f34c8"
+   "fetchedAt": "2026-10-27T18:00:58.788Z",
+   "sha": "5fa3f8e09c724b8476704f27acaa09ff89fc354ac760f7e860c7acf62ae8a8ed"
   },
   "ftn": {
-   "fetchedAt": "2026-10-26T16:00:40.330Z",
-   "sha": "af988102c3fea604a1fe62aa4b7fbe12dbb2c2aeaf3550e506b55d0d68de8be2"
+   "fetchedAt": "2026-10-27T18:00:59.365Z",
+   "sha": "5ae430191a0e06772fb023269e56d6478db2891b17c0f5f9b6bceb3e5ba00f99"
   },
   "ngs": {
-   "fetchedAt": "2026-10-26T16:00:40.980Z",
-   "sha": "6bed7e4ade0cd801"
+   "fetchedAt": "2026-10-27T18:01:00.040Z",
+   "sha": "c5817b76eaa42e9f"
   },
   "pfr": {
    "fetchedAt": "2026-10-27T10:04:11.162Z",
