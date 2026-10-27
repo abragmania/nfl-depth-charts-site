@@ -92,11 +92,17 @@
    "hash": "11d0f94141ca0146",
    "plays": 1804,
    "builtAt": "2026-10-26T16:00:57.760Z"
+  },
+  {
+   "week": 7,
+   "hash": "234f5e751bfb429e",
+   "plays": 1580,
+   "builtAt": "2026-10-27T10:04:42.163Z"
   }
  ],
- "throughWeek": 6,
- "currentWeek": 7,
- "heldUntil": "2026-10-27T09:00:00.000Z",
+ "throughWeek": 7,
+ "currentWeek": 8,
+ "heldUntil": "2026-11-03T10:00:00.000Z",
  "snapPatches": "15cdecc72eec8fb7",
  "sources": {
   "pbp": {
@@ -112,25 +118,25 @@
    "sha": "6bed7e4ade0cd801"
   },
   "pfr": {
-   "fetchedAt": "2026-10-25T15:55:58.549Z",
-   "sha": "9dcfeb31bcd1d318"
+   "fetchedAt": "2026-10-27T10:04:11.162Z",
+   "sha": "1224ba7c6de43cfa"
   },
   "pfrRush": {
-   "fetchedAt": "2026-10-25T15:55:58.817Z",
-   "sha": "1521121e2e6cc5684a7569665db74624b7f59167a9c75be5bfb6006d4ee05781"
+   "fetchedAt": "2026-10-27T10:04:11.335Z",
+   "sha": "8bedc343be42bcf29c1cdacce80a074bedd0282161b18ceb93fb209c53a1f98f"
   },
   "pfrRec": {
-   "fetchedAt": "2026-10-25T15:55:59.016Z",
-   "sha": "85d13d301f3a4611f5ecce1c07fb9502a33f50719aec776ee2d4aa076d1154cb"
+   "fetchedAt": "2026-10-27T10:04:11.593Z",
+   "sha": "befb17f4fbbf3ecc8b8ee27ff3386271b3b4ac74a6fb7067f483790982a8bf6c"
   },
   "routes": {
-   "fetchedAt": "2026-10-25T15:55:59.356Z",
-   "sha": "098d94bccde85df78894ca73e5713962aeceac68ea759dda7d5af5a5c8105e0d"
+   "fetchedAt": "2026-10-27T10:04:11.867Z",
+   "sha": "8255e725f3ad47af4295d46b1794a7f03dc3248661a76276cbdc9a75dd6acb66"
   },
   "participation": null,
   "snaps": {
-   "fetchedAt": "2026-10-25T15:54:35.308Z",
-   "sha": "763a510790ef4bcc10434df108eb464a5ff475d5d5c769e2a961370a53bf922f"
+   "fetchedAt": "2026-10-27T10:00:47.422Z",
+   "sha": "2cf9aacf1c23a3834798b0488dd10fca1df4950a9a180f71709806fe1553e36f"
   }
  }
 }
