@@ -10,7 +10,7 @@
 //    targets / the club attempts over the window), never as a mean of the weekly percentages.
 import { sortRows, tierFromCuts, tierNote, TIER_NAMES, USAGE_TIER_KEYS, MIN_POOL, snapMethodNote } from "./agg.js";
 import { weekLabel, POSITIONS, seasonsOf } from "./filters.js";
-import { rzI5Shares, RZ_I5_FLOOR } from "./agg_player.js";
+import { rzI5Shares } from "./agg_player.js";
 // D196: the injury badge and red-name rule, kit.js's own copy (built the same round by the player-page builder,
 // which owns kit.js/analytics_recut.css) - re-exported here so the Receivers/QB/Running backs tables draw the
 // exact same badge, in the exact same CSS (.an-stchip/.an-st-*, already in analytics_recut.css), as the player
@@ -83,7 +83,7 @@ export const CATCH_TIP = "Catch %: receptions / targets, pass-interference targe
 const SHARE_NOTE = "Blank under an opponent, down, quarter or home/away filter (the share ignores them).";
 export const RZ_TIPS = {
   rzTgtG: "Red-zone targets per game he played (targets inside the opponent's 20 / his games in the window)",
-  rzTgtShare: `Red-zone target share: his red-zone targets / his club's red-zone pass attempts in his games. ${SHARE_NOTE}`,
+  rzTgtShare: `Red-zone target share: his red-zone targets / his club's red-zone pass attempts in his games (a pass-interference target there counts on both sides). ${SHARE_NOTE}`,
   ezG: "End-zone targets per game he played (end-zone targets / his games in the window)",
   rzOppG: "Red-zone opportunities per game he played (carries + targets inside the opponent's 20 / his games in the window)",
   rzCarG: "Red-zone carries per game he played (carries inside the opponent's 20 / his games in the window)",
@@ -103,15 +103,16 @@ export function withRzFigures(rows, blocks, players, st, kind, { blank = sharesB
   return rows;
 }
 // The sample behind a share, for its cell (both tables): the small "(3/3)" beside the percent and a sentence for the
-// cell's title, the club page's wording (views/team.js shareFig). Under the 3-play floor the cell is a dash and the
-// title says why; a filter-blanked share (sharesBlanked) says nothing here, the column header already does.
+// cell's title, the club page's wording (views/team.js shareFig). No floor (D224: a tiny-sample red-zone share stays
+// shown with its count; D219: none for inside-the-5): the cell is a dash only when the club had no such play in his
+// games, and the title says so; a filter-blanked share (sharesBlanked) says nothing here, the column header already does.
 export function shareSample(k, r, st) {
   const [his, club, what] = k === "rzTgtShare" ? [r.rzTgtN, r.rzAttN, "red-zone pass attempts"] : k === "i5Share" ? [r.i5Des, r.i5Runs, "designed runs from the 5 or closer"] : [];
   if (!what || !Number.isFinite(his) || !Number.isFinite(club)) return { count: "", title: "" };
   const share = r[k];
   if (Number.isFinite(share)) return { count: `${his}/${club}`, title: `his ${his} of the club's ${club} in his games` };
   if (sharesBlanked(st)) return { count: "", title: "" };
-  return { count: "", title: `not shown, the club had ${club} such play${club === 1 ? "" : "s"} in his games (fewer than ${RZ_I5_FLOOR}); he had ${his}` };
+  return { count: "", title: `the club had no ${what} in his games` };
 }
 export const shareCountHtml = (count) => (count ? `<small class="an-rzn" style="margin-left:3px;font-size:.72em;font-weight:400;opacity:.6">${count}</small>` : "");
 // D224 increment D: the target-depth mix bar (four parts, shallow to deep: behind the line, short, intermediate, deep)

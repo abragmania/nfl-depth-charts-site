@@ -18,7 +18,7 @@
 // card-banner, banner-out, banner-active, badge*, rating-pill, tray-label/tray-chip)
 // rather than inventing parallel styles.
 import { getTeams, getTeam, invalidateTeam } from "./api.js";
-import { esc, BAND_DISPLAY, headshotHtml, wireDepthToggles, isFullyOut, isScratch, psBadge, slotBadge, snapHistoryHtml, withClubRole } from "./cards.js";
+import { esc, BAND_DISPLAY, headshotHtml, wireDepthToggles, isFullyOut, isScratch, psBadge, slotBadge, snapHistoryHtml, withClubRole, gameEndNote } from "./cards.js";
 import { headerHtml, mountTeamField, teamBodyHtml } from "./team.js";
 import { SIDE_CARD_W, SIDE_MAX_DEPTH_ROWS } from "./field.js";
 import { fitToViewport, disposeCurrentView, SIDE_MIN_READABLE_SCALE } from "./viewfit.js";
@@ -47,7 +47,7 @@ const STATUS_CLASS = {
 function statusBadge(status) {
   if (!status) return "";
   const cls = STATUS_CLASS[status.code] || "badge-out";
-  const title = [status.label, status.detail, status.shortComment, status.returnDate ? `Return: ${status.returnDate}` : null]
+  const title = [status.label, status.detail, status.shortComment, status.returnDate ? `Return: ${status.returnDate}` : null, gameEndNote(status)]
     .filter(Boolean).map(esc).join(" — ");
   return `<span class="badge ${cls}" title="${title}">${esc(status.code)}</span>`;
 }
@@ -135,6 +135,7 @@ function tooltipFor(p) {
   const bits = [p.name];
   if (p.status?.shortComment) bits.push(p.status.shortComment);
   if (p.status?.returnDate) bits.push(`Return: ${p.status.returnDate}`);
+  if (gameEndNote(p.status)) bits.push(gameEndNote(p.status));
   return esc(bits.join(" · "));
 }
 

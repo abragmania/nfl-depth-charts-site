@@ -1,6 +1,6 @@
 // Horizontal bars for the player page: Madden blocking ratings (0-99, coloured by the depth charts' rating tiers,
-// a tick at his position's median) and the 2025 route list (targets per route, with his position's share of
-// targets on that route as a faint reference bar behind his own share).
+// a tick at his position's median) and the route list for whichever seasons carry route labels (targets per route,
+// with his position's share of targets on that route as a faint reference bar behind his own share).
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
 // bars: [{ label, v, median, tier }]; `pos` names the reference ("WR median 58").

@@ -12,7 +12,9 @@
 //   target share    = his targets / his club's pass attempts in his games (pass plays only: no sacks, scrambles)
 //   air-yards share = his air yards on targets / his club's air yards on pass attempts in his games
 //   WOPR            = 1.5 x target share + 0.7 x air-yards share
-//   aDOT            = his air yards / his targets (a pass-interference target with no air yards is left out)
+//   aDOT            = his air yards / his targets that carry an air-yards figure (a target with none, PI or not, is
+//                     left out of both sides: missing is missing, never zero); the air-yards share likewise sums only
+//                     the air yards that are there, his and the club's
 //   TPRR, YPRR      = targets and receiving yards in the weeks the routes table covers him / his routes there
 //   route %         = routes / the club dropbacks implied by each week's own route % (routes / pct)
 //   snap %          = POOLED (D150, poolSnapShare below): his offensive snaps / his club's offensive snaps summed over
@@ -191,8 +193,9 @@ export function aggregateUsage(blocks, players, st) {
       const id = r[C.target];
       if (!id) continue;
       const p = P(id);
-      p.tgt++; p.air += air ?? 0; add(p.wkAir, gk, air ?? 0);
-      if (!(pi && air === null)) p.adotN++;
+      p.tgt++;
+      // A target with no air-yards figure adds nothing to the air yards and is left out of aDOT's denominator.
+      if (air !== null) { p.air += air; add(p.wkAir, gk, air); p.adotN++; }
       const band = r[C.band], dir = r[C.dir];
       if (band && dir) p.zones[`${band}${dir}`] = (p.zones[`${band}${dir}`] || 0) + 1;
       if (truthy(r[C.redzone])) { p.rz++; if (truthy(r[C.td]) && !truthy(r[C.int])) p.rzTd++; }
@@ -255,7 +258,10 @@ export function aggregateUsage(blocks, players, st) {
     const runs = g.reduce((s, gk) => s + (teamRuns.get(gk) || 0), 0);
     const tgtShare = ratio(p.tgt, att);
     const opp = p.tgt + p.car;
-    const ayShare = ratio(p.air, teamAy);
+    // Missing is missing: targets with not one air-yards figure among them leave his air yards, air-yards share and
+    // WOPR blank, never 0 (no targets at all is a real 0).
+    const airMissing = p.tgt > 0 && p.adotN === 0;
+    const ayShare = airMissing ? null : ratio(p.air, teamAy);
     const wopr = tgtShare === null || ayShare === null ? null : 1.5 * tgtShare + 0.7 * ayShare;
 
     let routes = null, routePct = null, tprr = null, yprr = null, snapPct = null;
@@ -282,7 +288,9 @@ export function aggregateUsage(blocks, players, st) {
     const series = weeks.map((key) => {
       const gk = byKey.get(key), sw = snapWeek.get(key);
       if (!gk) return { key, v: null, ay: null, snap: null, tgt: 0, oppN: 0, ...(sw ? { snapN: sw.n, snapClub: sw.club } : {}) };
-      return { key, v: ratio(p.wk.get(gk) || 0, teamAtt.get(gk) || 0), ay: ratio(p.wkAir.get(gk) || 0, teamAir.get(gk) || 0),
+      // A week whose targets carry no air-yards figure has no air-yards share that week (null), never 0.
+      const wkAirMissing = (p.wk.get(gk) || 0) > 0 && !p.wkAir.has(gk);
+      return { key, v: ratio(p.wk.get(gk) || 0, teamAtt.get(gk) || 0), ay: wkAirMissing ? null : ratio(p.wkAir.get(gk) || 0, teamAir.get(gk) || 0),
         snap: situational ? null : p.snaps.get(gk) ?? null, tgt: p.wk.get(gk) || 0,
         oppN: (p.wk.get(gk) || 0) + (p.wkCar.get(gk) || 0), // opportunities that week (a series "opp" is an opponent elsewhere)
         ...(sw ? { snapN: sw.n, snapClub: sw.club } : {}) };
@@ -291,7 +299,7 @@ export function aggregateUsage(blocks, players, st) {
     rows.push({
       gsis: id, name: meta.name || id, pos, espnId: meta.espnId ?? null,
       team: lastGk ? lastGk.split("|")[1] : "", g: g.length, clubG: lastGk ? clubWin.get(lastGk.split("|")[1]) || 0 : 0,
-      tgt: p.tgt, tgtShare, ay: p.air, ayShare, wopr, adot: ratio(p.air, p.adotN),
+      tgt: p.tgt, tgtShare, ay: airMissing ? null : p.air, ayShare, wopr, adot: ratio(p.air, p.adotN),
       rz: p.rz, ez: p.ez, rec: p.rec, yds: p.yds, td: p.td, epaTgt: p.epaN ? p.epa / p.epaN : null,
       routes, routePct, tprr, yprr, snapPct, snapMethod: pool?.method ?? null, series, zones: p.zones, ...depthFields(p.zones),
       recEpa: p.epa, car: p.car, des: p.des, rushYds: p.ryds, rushEpa: p.repa, rushTd: p.rtd, clubAtt: att, clubRuns: runs,

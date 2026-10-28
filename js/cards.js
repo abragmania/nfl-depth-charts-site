@@ -102,10 +102,14 @@ export function headshotHtml(p, size, opts = {}) {
   return `<span class="headshot-box" style="${boxStyle}"><img class="headshot" src="${esc(p.headshot)}" alt="" width="${size}" height="${size}" loading="lazy" decoding="async" onerror="${fallback}"></span>`;
 }
 
+// D26: an INACTIVE tag whose game end ESPN never confirmed (server/compile/status.js gameEndEstimated) says so
+// wherever the status is explained. The one wording, shared with zoom.js and panel.js.
+export const gameEndNote = (status) => (status?.gameEndEstimated === true ? "Clears 5 hours after kickoff: ESPN's scoreboard has no result for this game" : null);
+
 function statusBadge(status) {
   if (!status) return "";
   const cls = STATUS_CLASS[status.code] || "badge-out";
-  const title = [status.label, status.detail, status.shortComment, status.returnDate ? `Return: ${status.returnDate}` : null]
+  const title = [status.label, status.detail, status.shortComment, status.returnDate ? `Return: ${status.returnDate}` : null, gameEndNote(status)]
     .filter(Boolean).map(esc).join(" — ");
   return `<span class="badge ${cls}" title="${title}">${esc(status.code)}</span>`;
 }
@@ -281,6 +285,7 @@ function tooltipFor(p, disagrees) {
   if (p.reserveBackup) bits.push("Second-stringer here, on reserve");
   if (p.status?.shortComment) bits.push(p.status.shortComment);
   if (p.status?.returnDate) bits.push(`Return: ${p.status.returnDate}`);
+  if (gameEndNote(p.status)) bits.push(gameEndNote(p.status));
   if (p.weekOneNote) bits.push(p.weekOneNote);
   if (disagrees) bits.push(`ESPN lists him at ${p.espnSlot}${p.espnRank ? ` #${p.espnRank}` : ""}`);
   return esc(bits.join(" · "));
@@ -331,6 +336,7 @@ export function overviewTitle(p, disagrees) {
   if (p.status?.detail) bits.push(p.status.detail);
   if (p.status?.shortComment) bits.push(p.status.shortComment);
   if (p.status?.returnDate) bits.push(`Return: ${p.status.returnDate}`);
+  if (gameEndNote(p.status)) bits.push(gameEndNote(p.status));
   if (p.weekOneNote) bits.push(p.weekOneNote);
   // D150: the card's share is pooled from the snap counts wherever the file establishes his club's own totals
   // for those games, and the average of the source's per-game percentages where it does not. The weaker figure

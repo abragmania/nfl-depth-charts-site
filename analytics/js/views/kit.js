@@ -251,8 +251,8 @@ function glCellClass(col, tier) {
 }
 // current/pastOpen (👁 fix round, optional): with `current` (the picked season) given and the rows spanning more than
 // one season, a past season's week rows are left out unless `pastOpen`, so the log shows the current season's rows
-// plus that season's header and totals row; the past season's header carries a small "show 2025 weeks" / "hide 2025
-// weeks" button (data-gl-toggle) the page wires. Without `current` nothing changes.
+// plus that season's header and totals row; the past season's header carries a small "show <season> weeks" / "hide
+// <season> weeks" button (data-gl-toggle, named for that past season) the page wires. Without `current` nothing changes.
 function glTable(rows, columns, { current = null, pastOpen = false } = {}) {
   const head = (columns || []).map((c) => `<th${glCellClass(c)}>${esc(c.label)}</th>`).join("");
   const seasons = (rows || []).filter((r) => r.type === "season").map((r) => String(r.label));
@@ -411,7 +411,7 @@ const TREND_DEFS = {
   ayShare: "air yards on his targets / club air yards",
   routePct: "routes / club dropbacks (charted weeks)",
   rzShare: "(red-zone targets + red-zone designed runs) / the club's red-zone pass attempts + designed runs",
-  rzTgtShare: "red-zone targets / club red-zone pass attempts",
+  rzTgtShare: "red-zone targets / club red-zone pass attempts (a pass-interference target there counts on both sides)",
 };
 export function trendStrip(trend, { weekFmt = null } = {}) {
   // Omitted when the last 3 are the whole window (it would only read "45 → 45"): under 4 games he played.

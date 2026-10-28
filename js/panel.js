@@ -18,7 +18,7 @@
 // Finding 6: rating, status, and roster designation are already computed on the compiled card and are
 // NEVER refetched here — only bio (draft round, full season/college stats) comes from the network, via
 // GET /api/player/{espnId} (server/api/player.js).
-import { esc, snapHistoryHtml, espnPlacement, espnSchemeOf } from "./cards.js";
+import { esc, snapHistoryHtml, espnPlacement, espnSchemeOf, gameEndNote } from "./cards.js";
 import { renderHistory } from "./history.js";
 import { getPlayer, getHistory, getGameLog, getJson } from "./api.js";
 import { dkGamePoints } from "../analytics/js/agg_fantasy.js";
@@ -206,6 +206,9 @@ function statusBlockHtml(card) {
   const comment = s?.longComment || s?.shortComment;
   if (comment) parts.push(`<div class="panel-status-comment">${esc(comment)}</div>`);
   if (s?.returnDate) parts.push(`<div class="panel-status-return">Expected return: ${esc(s.returnDate)}</div>`);
+  // D26: an INACTIVE tag whose game end ESPN never confirmed says so (the shared wording in cards.js).
+  const endNote = gameEndNote(s);
+  if (endNote) parts.push(`<div class="panel-status-return">${esc(endNote)}</div>`);
   return `<div class="panel-status">${parts.join("")}</div>`;
 }
 
@@ -346,7 +349,7 @@ export const GAMELOG_FAMILIES = {
        ["CAR", col("carries")], ["R YDS", col("rushing_yards")], ["R TD", col("rushing_tds")], ["FL", col("fumbles_lost_total")], DK_COL], // D169 rushing, D170 FL, D200 DK
   RB: [["ATT", col("carries")], ["YDS", col("rushing_yards")],
        ["AVG", (s) => (s.carries ? (Math.round(((s.rushing_yards ?? 0) / s.carries) * 10) / 10).toFixed(1) : dash)],
-       ["TD", col("rushing_tds")], ["REC", col("receptions")], ["REC YDS", col("receiving_yards")], ["REC TD", col("receiving_tds")], ["FL", col("fumbles_lost_total")], DK_COL], // D200: REC TD (RB can score there), DK
+       ["TD", col("rushing_tds")], ["TGT", col("targets")], ["REC", col("receptions")], ["REC YDS", col("receiving_yards")], ["REC TD", col("receiving_tds")], ["FL", col("fumbles_lost_total")], DK_COL], // D200: REC TD (RB can score there), DK; TGT before REC (Adam, 2026-10-28)
   WR_TE: [["TGT", col("targets")], ["REC", col("receptions")], ["YDS", col("receiving_yards")], ["TD", col("receiving_tds")],
           ["CAR", col("carries")], ["R YDS", col("rushing_yards")], ["R TD", col("rushing_tds")], ["FL", col("fumbles_lost_total")], DK_COL], // D200: a WR/TE's occasional carries score too, DK
   DL_EDGE: [TKL, ["SACK", col("def_sacks")], ["TFL", col("def_tackles_for_loss")], ["QB HITS", col("def_qb_hits")]],

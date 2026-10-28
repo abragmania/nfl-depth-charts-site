@@ -20,8 +20,8 @@ import { renderTeamDefense } from "./views/team_def.js";
 import { renderGrid } from "./views/grid.js";
 import { renderRankings, legacyHash } from "./views/rankings.js";
 import { renderWeek } from "./views/week.js";
-import { loadSeason } from "./data.js";
-import { fromQuery, seasonsOf, weekKey, weekLabel, CURRENT_SEASON } from "./filters.js";
+import { loadSeason, loadSeasons } from "./data.js";
+import { fromQuery, seasonsOf, weekKey, weekLabel, currentSeason, setKnownSeasons, seasonsInTime, SEASONS_WAIT_MS } from "./filters.js";
 
 const root = document.getElementById("app");
 const nav = document.getElementById("an-nav");
@@ -52,7 +52,7 @@ async function paintAsof(query, isCurrent) {
     const label = weekLabel(weekKey(st.season, last.week), st.season);
     // Usage.js's old "· built <date>" suffix, kept for the current season only - a past season's build time means
     // nothing to a reader.
-    const t = st.season === CURRENT_SEASON && last.builtAt ? new Date(last.builtAt) : null;
+    const t = st.season === currentSeason() && last.builtAt ? new Date(last.builtAt) : null;
     const built = t && !isNaN(t) ? ` · built ${t.toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}` : "";
     asof.textContent = `Through ${label}${built}`;
     asof.hidden = false;
@@ -126,4 +126,11 @@ router.on("/defense", (p, q) => location.replace(legacyHash("def", q)));
 // app's new default section, rather than showing a dead end (D193 plan, Routes). location.replace (🔵 review,
 // 2026-09-25), not location.hash =, so the bad address does not get its own entry in browser history - Back
 // from Receivers should leave the app, not bounce to the dead link that sent the reader here.
-router.start(() => { location.replace("#/receivers"); });
+// D39: the seasons list is recorded before the first page draws, so a link with no season opens the newest season
+// the data holds (filters.js currentSeason). The page never waits blank: "Loading…" shows meanwhile, and after
+// SEASONS_WAIT_MS the router starts on the date rule; a list that arrives later is not recorded (filters.js seasonsInTime).
+root.innerHTML = `<div class="an-msg">Loading…</div>`;
+seasonsInTime(loadSeasons(), SEASONS_WAIT_MS).then((list) => {
+  if (list) setKnownSeasons(list);
+  router.start(() => { location.replace("#/receivers"); });
+});

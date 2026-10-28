@@ -15,7 +15,6 @@ import { esc, NA, isNum, pct, fix, signed, int, teamPill, qbStrips, qbZoneField,
 import { windowName } from "./qbplayer.js";
 import { lostCardHtml } from "./lost.js";
 import { lineBlock } from "./kit.js";
-import { RZ_I5_FLOOR } from "../agg_player.js";
 import { depthBarHtml } from "../table.js";
 import { snapMethodNote } from "../agg.js";
 import { nameOf } from "../names.js";
@@ -488,15 +487,16 @@ export async function renderTeam(ctx, params, query) {
   const tgts = teamTargets(data.blocks, data.players, pst, abbr).slice(0, 12);
   const cars = teamCarries(data.blocks, data.players, pst, abbr).slice(0, 8);
   // D219 figure 5 (columns since D225a): the last column of each row, red-zone target share (targets rows) or
-  // inside-the-5 carry share (carries rows), with its own tooltip; "–" under the club's 3-play floor in his games.
+  // inside-the-5 carry share (carries rows), with its own tooltip; no floor (D224, D219), "–" only when the club had no
+  // such play in his games.
   const shareFig = (tag, share, his, club, def) => {
     const t = isNum(share)
       ? `${def} = ${his} of ${club} (${(share * 100).toFixed(1)}%)`
-      : `${def}: not shown, the club had ${club} such play${club === 1 ? "" : "s"} in his games (fewer than ${RZ_I5_FLOOR}); he had ${his}`;
+      : `${def}: the club had no such play in his games`;
     return `<span class="an-tm-rz" title="${esc(t)}">${isNum(share) ? `${Math.round(share * 100)}% (${his}/${club})` : "–"}</span>`;
   };
   const rzFig = (r) => shareFig("RZ", r.rzTgtShare, r.rzTgtN, r.rzAttN,
-    `Red-zone target share: his targets inside the opponent's 20 / the club's pass attempts there in his games (a pass-interference target is his target, never a club attempt${pst.pi === false ? "; excluded here" : ""})`);
+    `Red-zone target share: his targets inside the opponent's 20 / the club's pass attempts there in his games (a pass-interference target there counts on both sides${pst.pi === false ? "; excluded here" : ""})`);
   const i5Fig = (r) => shareFig("I5", r.i5Share, r.i5Des, r.i5Runs,
     "Inside-the-5 carry share: his designed runs from the opponent's 5 or closer / the club's designed runs there in his games (scrambles on neither side)");
   const tgtItems = tgts.map((r) => ({ gsis: r.gsis, pos: r.pos, name: displayName(r.gsis, data.players), share: r.tgtShare, tier: r.tier,

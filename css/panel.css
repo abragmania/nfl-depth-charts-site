@@ -114,6 +114,8 @@
 /* D169: a quarterback's twelve-column row (passing then rushing) stays on one line: tighter cells, smaller type. */
 .panel-stats-table.panel-stats-wide { font-size: 11px; }
 .panel-stats-table.panel-stats-wide th, .panel-stats-table.panel-stats-wide td { padding: 5px 3px; }
+/* A wide log's two-word headings (REC YDS, REC TD) may break onto two lines so the row still fits the card. */
+.panel-stats-table.panel-stats-wide thead th { white-space: normal; }
 .panel-stats-table th:first-child, .panel-stats-table td:first-child,
 .panel-stats-table th:nth-child(2), .panel-stats-table td:nth-child(2) { text-align: left; }
 .panel-stats-table thead th { color: var(--muted); font-weight: 700; text-transform: uppercase; font-size: 10.5px; }
@@ -122,6 +124,7 @@
 @media (max-width: 1400px) {
   .player-panel { flex-basis: 380px; }
   .panel-name { font-size: 18px; }
+  .panel-stats-table.panel-stats-wide th, .panel-stats-table.panel-stats-wide td { padding: 5px 2px; }
 }
 
 /* D142: "ESPN lists him elsewhere" moved off the cards and into the panel — one muted line in the panel's

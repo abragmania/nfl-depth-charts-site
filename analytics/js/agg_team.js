@@ -554,7 +554,8 @@ export function teamTargets(blocks, players, st, team) {
   const rows = aggregateUsage(blocks, players, { ...base, team }).rows.filter((r) => r.tgt > 0);
   const ref = usageReference(aggregateUsage(blocks, players, { ...base, team: "" }).rows);
   const total = rows.reduce((s, r) => s + r.tgt, 0);
-  // D219 figure 5: rzTgtN, rzAttN, rzTgtShare (null under agg_player.js's 3-play floor) over his games for this club.
+  // D219 figure 5: rzTgtN, rzAttN, rzTgtShare over his games for this club; no floor (D224), the share null only when
+  // the club threw no red-zone pass in his games.
   const rz = rzI5Shares(blocks, players, base, team);
   return rows.map((r) => ({ ...r, ...rzPick(rz.get(r.gsis), "rz"), clubShare: ratio(r.tgt, total), tier: tierFromCuts(r.tgtShare, ref.at(r.pos).cuts?.tgtShare?.cuts), lgShare: ref.at(r.pos).lg?.overall?.tgtShare ?? null }))
     .sort((a, b) => b.tgt - a.tgt || String(a.name).localeCompare(String(b.name)));
@@ -566,7 +567,8 @@ export function teamCarries(blocks, players, st, team) {
   const rows = aggregateRush(blocks, players, { ...base, team }).rows.filter((r) => r.car > 0);
   const ref = rushReference(aggregateRush(blocks, players, { ...base, team: "" }).rows);
   const total = rows.reduce((s, r) => s + r.car, 0);
-  // D219 figure 5: i5Des, i5Runs, i5Share (null under the 3-play floor) over his games for this club.
+  // D219 figure 5: i5Des, i5Runs, i5Share over his games for this club; no floor (D219), the share null only when the
+  // club ran no designed run inside the 5 in his games.
   const rz = rzI5Shares(blocks, players, base, team);
   return rows.map((r) => { const P = ref.at(r.pos); return { ...r, ...rzPick(rz.get(r.gsis), "i5"), clubShare: ratio(r.car, total), tier: rushTier("rushShare", r.rushShare, P.cuts), epaTier: rushTier("epaCar", r.epaCar, P.cuts), lgShare: P.lg?.rushShare ?? null }; })
     .sort((a, b) => b.car - a.car || String(a.name).localeCompare(String(b.name)));

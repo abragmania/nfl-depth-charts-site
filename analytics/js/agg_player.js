@@ -12,7 +12,7 @@
 // of weekly percentages (the window row from aggregateUsage already is).
 // The weekly chart always spans every loaded week (the whole timeline, both seasons when Include 2025 is on) so a
 // one-week window can be seen in context; the window's weeks are flagged `inWin` and drawn bright.
-import { aggregateUsage, clubGames, colIndex, usageReference, inPool, tierCuts, referenceText, snapGame, poolSnapShare } from "./agg.js";
+import { aggregateUsage, clubGames, colIndex, usageReference, inPool, tierCuts, referenceText, snapGame, poolSnapShare, frac } from "./agg.js";
 import { gamesInWindow, splitKey, isSituational } from "./filters.js";
 import { aggregateRush, rushReference } from "./agg_rush.js";
 import { fantasyByPlayer } from "./agg_fantasy.js";
@@ -123,7 +123,9 @@ export function playerView(blocks, players, stIn, gsis) {
   const myWeek = new Map(); // key -> { car, ryds, gk }
   const myRoutes = new Map(); // key -> his charted routes that week
   const my = { ryds: 0, rz: 0, rtd: 0 }; // his window rushing counts the per-player accumulator does not keep
-  let has2025Routes = false;
+  // D39: route labels are read from whichever season's plays carry them (the participation data), never one fixed year.
+  let hasRoutes = false;
+  const routeSeasons = new Set(); // the seasons his route-labelled targets in the window come from
 
   for (const b of blocks) {
     const C = colIndex(b.cols);
@@ -156,7 +158,7 @@ export function playerView(blocks, players, stIn, gsis) {
         }
         if (inW && inGroup(id)) {
           if (zk && lgZone[zk]) { addTarget(lgZone[zk], t); lgZoned++; }
-          if (b.season === 2025 && t.route) {
+          if (t.route) {
             if (!lgRoute.has(t.route)) lgRoute.set(t.route, emptyCell());
             addTarget(lgRoute.get(t.route), t); lgRouted++;
           }
@@ -167,8 +169,8 @@ export function playerView(blocks, players, stIn, gsis) {
             myZone[zk].plays.push({ key: b.key, opp: r[C.defteam], down: num(r[C.down]), togo: num(r[C.ydstogo]), yl: num(r[C.yardline_100]),
               qtr: num(r[C.qtr]), result: resultText(t), yards: t.yards, air: num(r[C.air]), epa: t.epa });
           }
-          if (b.season === 2025 && t.route) {
-            has2025Routes = true;
+          if (t.route) {
+            hasRoutes = true; routeSeasons.add(b.season);
             if (!myRoute.has(t.route)) myRoute.set(t.route, emptyCell());
             addTarget(myRoute.get(t.route), t);
           }
@@ -312,7 +314,7 @@ export function playerView(blocks, players, stIn, gsis) {
 
   const result = {
     ...out, team: row?.team || frow?.team || lastTeam(meta), row, lg, cuts: ref.cuts, refText: ref.text, weeks: win.weeks, series, zones, zoned: myZoned,
-    eff, lgEff, rush: null, routes: null, has2025Routes, opps,
+    eff, lgEff, rush: null, routes: null, hasRoutes, routeSeasons: [...routeSeasons].sort((a, b) => b - a), opps,
   };
 
   if (RUSHER_POS.has(pos)) {
@@ -329,7 +331,7 @@ export function playerView(blocks, players, stIn, gsis) {
   result.recut = recutLayers({ blocks, players, st, gsis, pos, row, uRef, ref, lgEff, eff });
   result.recut.trend = trendFigures(blocks, players, st, gsis, RUSHER_POS.has(pos));
 
-  if (has2025Routes) {
+  if (hasRoutes) {
     const list = [...myRoute.entries()].map(([route, c]) => ({ route, ...cellRates(c), lgShare: ratio(lgRoute.get(route)?.n || 0, lgRouted), lg: cellRates(lgRoute.get(route)) }));
     const tot = list.reduce((s, x) => s + x.n, 0);
     for (const x of list) x.share = ratio(x.n, tot);
@@ -429,9 +431,11 @@ const meanOf = (rows, k) => mean(rows.map((r) => (r[k] === null || r[k] === unde
 //                 charted week has no route %                                                       (both)
 //   rzShare     = (red-zone targets + red-zone designed runs) / (club red-zone pass attempts + club red-zone
 //                 designed runs)                                                                    (back)
-//   rzTgtShare  = red-zone targets / club red-zone pass attempts; null under 3 club attempts (RZ_I5_FLOOR) (receiver)
-// A pass-interference target is his target but never a club attempt (agg.js); with "excl. PI targets" the row is
-// skipped outright. Snap and route shares are null under a down or quarter filter, as on the row.
+//   rzTgtShare  = red-zone targets / club red-zone pass attempts; no floor (D224), null only with none   (receiver)
+// A pass-interference target is his target but never a club attempt (agg.js), except in the two red-zone shares
+// (rzShare, rzTgtShare), where a red-zone PI target counts on the club's side too, so both sides count the same plays
+// and the share never passes 100% (rzI5Shares below); with "excl. PI targets" the row is skipped outright on both
+// sides. Snap and route shares are null under a down or quarter filter, as on the row.
 // Shape (frozen): { kind: "back" | "receiver", keys, games, last3Games, short, last3Weeks: [week keys],
 //   figures: { [key]: { last3, season, pts (last3 - season, in percentage points), n3, n } } } where n3 and n are the
 //   games that fed the figure (fewer than the games counted when snaps or routes are missing that week).
@@ -459,7 +463,9 @@ export function trendFigures(blocks, players, st, gsis, back) {
       if (!club.has(gk)) club.set(gk, C0());
       const c = club.get(gk);
       if (type === "run") { c.runs++; if (rz) c.rzRuns++; }
-      if (type === "pass" && !pi) { c.att++; c.air += num(r[C.air]) ?? 0; if (rz) c.rzAtt++; }
+      if (type === "pass" && !pi) { c.att++; c.air += num(r[C.air]) ?? 0; }
+      // Red zone: a PI target is a club red-zone play too, as it is his (rzI5Shares' rule).
+      if (type === "pass" && rz && (!pi || r[C.target])) c.rzAtt++;
       if (![C.passer, C.target, C.rusher].some((i) => i !== undefined && r[i] === gsis)) continue;
       const m = M(gk);
       if (type === "pass" && r[C.target] === gsis) { m.tgt++; m.air += num(r[C.air]) ?? 0; if (rz) m.rzTgt++; }
@@ -475,7 +481,7 @@ export function trendFigures(blocks, players, st, gsis, back) {
     const rt = b.routes?.[gsis];
     const n = num(rt?.routes);
     // Routes alone never make a game his (agg.js's rule: a game is a snap or a play); they join a game he played.
-    if (n !== null && per.has(gk)) { const m = per.get(gk); m.routes = n; m.pct = routeFrac(rt.routePct); }
+    if (n !== null && per.has(gk)) { const m = per.get(gk); m.routes = n; m.pct = frac(rt.routePct); }
   }
   const played = [...per.keys()].sort();
   const last3 = played.slice(-3);
@@ -495,8 +501,8 @@ export function trendFigures(blocks, players, st, gsis, back) {
       snapPct: situational ? [null, 0] : poolPair(s.snaps),
       routePct: situational ? [null, 0] : [s.pctOk ? ratio(s.routes, s.drop) : null, s.routeN],
       rzShare: [ratio(s.rzTgt + s.rzDes, s.rzAtt + s.rzRuns), gks.length],
-      // D219 figure 5 (🔵): the same 3-play floor as the club page's Target distribution (rzI5Shares below).
-      rzTgtShare: [s.rzAtt >= RZ_I5_FLOOR ? ratio(s.rzTgt, s.rzAtt) : null, gks.length],
+      // D224: a tiny-sample red-zone share stays shown, no floor (the club page's Target distribution, rzI5Shares below).
+      rzTgtShare: [ratio(s.rzTgt, s.rzAtt), gks.length],
     };
   };
   const keys = back ? RB_TREND_KEYS : REC_TREND_KEYS;
@@ -514,20 +520,21 @@ export function trendFigures(blocks, players, st, gsis, back) {
     short: last3.length < 3, last3Weeks: Object.freeze(last3.map((gk) => gk.split("|")[0])), figures: Object.freeze(figures),
   });
 }
-const routeFrac = (p) => { const x = num(p); if (x === null || x <= 0) return null; return x > 1.5 ? x / 100 : x; };
 
 // ---- Red-zone target share and inside-the-5 carry share (D219 figure 5) -------------------------------------
 // PURE. One pass over the window's plays; per man, over HIS games (agg.js's rule: a club-game where he is the passer,
 // target or rusher on any play, or took an offensive snap), with `team` set only that club's games:
-//   rzTgtN / rzAttN = his red-zone targets / the club's red-zone pass attempts (the ledger's redzone flag, the
-//     opponent's 20 or closer). A pass-interference target is his target but never a club attempt, as agg.js and the
-//     player page's Trend strip (rzTgtShare) count them; with "excl. PI targets" the row is skipped outright.
+//   rzTgtN / rzAttN = his red-zone targets / the club's red-zone pass attempts plus its red-zone pass-interference
+//     targets (the ledger's redzone flag, the opponent's 20 or closer). A PI target counts for him as a target does
+//     everywhere (agg.js, target share's numerator), and here it counts on the club's side too, so both sides count the
+//     same plays and the share never passes 100% (the Trend strip's rzTgtShare and rzShare count the same way); with
+//     "excl. PI targets" the row is skipped outright on both sides, as target share skips it.
 //   i5Des / i5Runs  = his designed runs / the club's designed runs from the opponent's 5 or closer (yardline_100 <= 5).
 //     Scrambles are called passes and sit on neither side (the rush-share rule).
-// The share (rzTgtShare, i5Share) is null when the club ran fewer than RZ_I5_FLOOR such plays in his games; the counts
-// are always kept. No down, quarter, opponent or home/away filter applies (the distributions and the player page
-// strip them). Returns Map(gsis -> frozen { rzTgtN, rzAttN, rzTgtShare, i5Des, i5Runs, i5Share, g }).
-export const RZ_I5_FLOOR = 3;
+// No floor (D224: a tiny-sample red-zone share stays shown with its count beside it; D219: none for inside-the-5): the
+// share (rzTgtShare, i5Share) is null only when the club ran no such play in his games; the counts are always kept.
+// No down, quarter, opponent or home/away filter applies (the distributions and the player page strip them).
+// Returns Map(gsis -> frozen { rzTgtN, rzAttN, rzTgtShare, i5Des, i5Runs, i5Share, g }).
 export const INSIDE5 = 5;
 export function rzI5Shares(blocks, players, st, team = "") {
   const inWin = gamesInWindow(clubGames(blocks), st);
@@ -551,7 +558,7 @@ export function rzI5Shares(blocks, players, st, team = "") {
       const i5 = yl !== null && yl <= INSIDE5;
       if (!club.has(gk)) club.set(gk, { rz: 0, i5: 0 });
       const c = club.get(gk);
-      if (type === "pass" && !pi && rz) c.rz++;
+      if (type === "pass" && rz && (!pi || r[C.target])) c.rz++; // a PI target is a club red-zone play, as it is his
       if (type === "run" && i5) c.i5++;
       for (const col of ["passer", "target", "rusher"]) if (C[col] !== undefined && r[C[col]]) H(r[C[col]], gk);
       if (type === "pass" && rz && r[C.target]) H(r[C.target], gk).rz++;
@@ -571,8 +578,8 @@ export function rzI5Shares(blocks, players, st, team = "") {
       const c = club.get(gk) || { rz: 0, i5: 0 };
       rzTgtN += x.rz; i5Des += x.i5; rzAttN += c.rz; i5Runs += c.i5;
     }
-    out.set(id, Object.freeze({ rzTgtN, rzAttN, rzTgtShare: rzAttN >= RZ_I5_FLOOR ? rzTgtN / rzAttN : null,
-      i5Des, i5Runs, i5Share: i5Runs >= RZ_I5_FLOOR ? i5Des / i5Runs : null, g: m.size }));
+    out.set(id, Object.freeze({ rzTgtN, rzAttN, rzTgtShare: ratio(rzTgtN, rzAttN),
+      i5Des, i5Runs, i5Share: ratio(i5Des, i5Runs), g: m.size }));
   }
   return out;
 }
@@ -600,12 +607,13 @@ export function iterationLabel(it) {
   const m = s.match(/(\d+)/);
   return m ? `Week ${+m[1]} ratings` : `${s} ratings`;
 }
-export const maddenEdition = (season) => `Madden NFL ${String(+season + 1).slice(-2)}`;
+// D34: Madden ratings are labelled by the NFL season year ("2026 Madden"), never the Madden edition number.
+export const maddenSeasonLabel = (season) => `${season} Madden`;
 
 // { status: "absent" (no file) | "unrated" (no entry for him) | "ok", title, ovr, bars: [{ k, label, v, median, tier }] }
 export function maddenBlocking(madden, gsis, pos, season) {
   if (!madden || !madden.players) return { status: "absent", title: null, ovr: null, bars: [] };
-  const title = `${maddenEdition(madden.season ?? season)} · ${iterationLabel(madden.iteration)}`;
+  const title = `${maddenSeasonLabel(madden.season ?? season)} · ${iterationLabel(madden.iteration)}`;
   const me = madden.players[gsis];
   if (!me) return { status: "unrated", title, ovr: null, bars: [] };
   const myPos = normPos(me.pos || pos);

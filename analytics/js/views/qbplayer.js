@@ -25,7 +25,7 @@ import { isStatic } from "../../../js/api.js";
 import { clubGames, snapMethodNote, SNAP_SHARE_DEF } from "../agg.js";
 import { qbTrend, aggregateQb, qbReference, qbTier, qbZones, qbSplits, SPLITS, QB_MADDEN_ATTRS, inQbPool, qbPoolStat, qbGameCuts, QB_MIN_DB } from "../agg_qb.js";
 import { fantasyByPlayer } from "../agg_fantasy.js";
-import { median, ratingTier, maddenEdition, iterationLabel } from "../agg_player.js";
+import { median, ratingTier, maddenSeasonLabel, iterationLabel } from "../agg_player.js";
 import { renderFilterBar } from "../filterbar.js";
 import { ratingBars } from "../charts/hbars.js";
 import { headlineRow, fantasyBand, phaseBlock, varianceStrip, maddenFoot, playerHead, currentStatus, latestWeekIn } from "./kit.js";
@@ -51,7 +51,7 @@ function loadMadden(season) {
 // PURE: the passing attributes as rating bars against the QB median ({ status, title, ovr, bars, peers }).
 export function maddenQb(madden, gsis, season) {
   if (!madden?.players) return { status: "absent", title: null, ovr: null, bars: [], peers: 0 };
-  const title = `${maddenEdition(madden.season ?? season)} · ${iterationLabel(madden.iteration)}`;
+  const title = `${maddenSeasonLabel(madden.season ?? season)} · ${iterationLabel(madden.iteration)}`;
   const me = madden.players[gsis];
   if (!me) return { status: "unrated", title, ovr: null, bars: [], peers: 0 };
   const peers = Object.values(madden.players).filter((p) => String(p.pos || "").toUpperCase() === "QB");
@@ -376,6 +376,8 @@ export async function renderQbPlayer(ctx, params, query) {
   }
   const pst = pageState(st);
   const fullSt = { ...pst, window: "season", from: null, to: null };
+  // D39: which loaded seasons carry per-play pressure, read from the data (the splits note and the footer name them).
+  const press = { carried: pressureSeasons(data.blocks), loaded: [...seasonsOf(st)].sort((a, b) => b - a) };
   const win = aggregateQb(data.blocks, data.players, pst, { playsFor: gsis });
   const full = aggregateQb(data.blocks, data.players, fullSt);
   const ref = qbReference(win.rows);
@@ -465,7 +467,7 @@ export async function renderQbPlayer(ctx, params, query) {
   const variance = `<div class="an-qbp-var"><div class="an-dh">Variance <span class="an-dsub">his rate beside the QB pool's, above or below, never good or bad</span></div>${varianceStrip(qbVarianceItems(R, ref))}</div>`;
   const maddenHtml = `<div class="an-card an-qbp-madden"><div class="an-dh">Madden · passing ${mq.title ? `<span class="an-dsub">${esc(mq.title)}</span>` : ""}</div>
     ${mq.status === "absent" ? `<div class="an-note">Madden ratings not on file.</div>`
-      : mq.status === "unrated" ? `<div class="an-note">No ${esc(maddenEdition(st.season))} rating on file for him.</div>`
+      : mq.status === "unrated" ? `<div class="an-note">No ${esc(maddenSeasonLabel(st.season))} rating on file for him.</div>`
       : ratingBars(mq.bars, "QB") + `<div class="an-note">EA's passing attributes; the tick is the QB median (${mq.peers} rated).</div>`}</div>`;
 
   const sub = `${seasonLabel(st)} · ${win.weeks.length ? (win.weeks.length === 1 ? weekLabel(win.weeks[0], st.season) : `${weekLabel(win.weeks[0], st.season)} to ${weekLabel(win.weeks[win.weeks.length - 1], st.season)}`) : "no games"}${st.window === "last3" ? " (each club's last 3 games)" : ""} · league reference: ${ref.text}${pnote ? " · " + pnote : ""}`;
@@ -486,7 +488,7 @@ export async function renderQbPlayer(ctx, params, query) {
     ${headlineRow(linked(qbHeadlineTiles(R, ref)))}
     ${fantasyHtml()}
     <div class="an-qbp-split">${passBlock()}<div class="an-qbp-side">${rushBlock()}${variance}${maddenFoot(maddenHtml)}</div></div>
-    <p class="an-foot">Dropbacks, attempts, completions, yards, TD, INT, aDOT, EPA, success, CPOE, sacks, scrambles, designed runs, red-zone and inside-the-10 figures, fumbles and zones: nflverse play-by-play. DraftKings points: the same play rows, DraftKings Classic scoring with no 2-point conversions or return touchdowns (kneel-downs are not in the rows). Snap %: nflverse snap counts. Play action, screens, blitz % and the blitz split: FTN charting. Pressure % and drops by his receivers: PFR advanced stats (a week behind). Pressured vs clean: the 2025 participation file (per-play pressure; none exists for 2026 yet). Time to throw and expected completion: Next Gen Stats. Passing attributes: EA Madden ratings. Zone references pool every QB attempt in the window; every other league figure is the QB reference pool's. No QBR.</p>
+    <p class="an-foot">Dropbacks, attempts, completions, yards, TD, INT, aDOT, EPA, success, CPOE, sacks, scrambles, designed runs, red-zone and inside-the-10 figures, fumbles and zones: nflverse play-by-play. DraftKings points: the same play rows, DraftKings Classic scoring with no 2-point conversions or return touchdowns (kneel-downs are not in the rows). Snap %: nflverse snap counts. Play action, screens, blitz % and the blitz split: FTN charting. Pressure % and drops by his receivers: PFR advanced stats (a week behind). Pressured vs clean: ${esc(pressureFoot(press))}. Time to throw and expected completion: Next Gen Stats. Passing attributes: EA Madden ratings. Zone references pool every QB attempt in the window; every other league figure is the QB reference pool's. No QBR.</p>
   </section>`;
     if (reuse) root.querySelector("[data-cardslot]")?.replaceWith(reuse);
     else { ui.cardEl = root.querySelector(".an-pl-card"); ui.cardGsis = gsis; }
@@ -513,13 +515,41 @@ export async function renderQbPlayer(ctx, params, query) {
   };
   wireZones();
   const sbox = root.querySelector("[data-splits]");
-  const paintSplits = () => { sbox.innerHTML = splitsHtml(qbSplits(data.blocks, data.players, pst, gsis, { noScreens: ui.noScreens }), st); };
+  const paintSplits = () => { sbox.innerHTML = splitsHtml(qbSplits(data.blocks, data.players, pst, gsis, { noScreens: ui.noScreens }), st, press); };
   paintSplits();
   root.querySelector("[data-screens]")?.addEventListener("change", (e) => { ui.noScreens = e.target.checked; paintSplits(); });
 }
 
-// The splits as one compact table: each split's two sides, his figure with every QB's beside it.
-export function splitsHtml(sp, st) {
+// D39: the loaded seasons whose play rows carry the participation file's per-play pressure (newest first), from the
+// data, never a fixed year (a season without the column, or with it all blank, carries none).
+export function pressureSeasons(blocks) {
+  const out = new Set();
+  for (const b of blocks || []) {
+    if (out.has(b.season)) continue;
+    const i = (b.cols || []).indexOf("pressure");
+    if (i >= 0 && (b.plays || []).some((r) => r[i] !== null && r[i] !== undefined)) out.add(b.season);
+  }
+  return [...out].sort((a, b) => b - a);
+}
+// The footer's source line for the pressured-vs-clean split: which loaded seasons carry per-play pressure, and which do not.
+export function pressureFoot({ carried = [], loaded = [] } = {}) {
+  const none = loaded.filter((s) => !carried.includes(s));
+  const has = carried.length ? `in ${carried.join(" + ")}` : "";
+  const not = none.length ? `none in ${none.join(" + ")}` : "";
+  return `the participation file's per-play pressure${has || not ? ` (${[has, not].filter(Boolean).join("; ")})` : ""}`;
+}
+// The note in place of the pressured / clean rows when he has no per-play pressure in the window.
+export function pressureGap({ carried = null, loaded = [] } = {}) {
+  const pfr = "PFR gives weekly totals only: see Pressure %";
+  if (!carried) return `No per-play pressure for him in this window (${pfr}).`;
+  if (!carried.length) return `No per-play pressure in the ${loaded.join(" + ")} participation data (${pfr}).`;
+  const none = loaded.filter((s) => !carried.includes(s));
+  return `No per-play pressure for him in this window (the participation file carries it for ${carried.join(" + ")}${none.length ? `, not ${none.join(" + ")}` : ""}; ${pfr}).`;
+}
+
+// The splits as one compact table: each split's two sides, his figure with every QB's beside it. `press`: pressureSeasons
+// of the loaded blocks and the loaded seasons ({ carried, loaded }), for the note when the pressure split is empty.
+export function splitsHtml(sp, st, press = {}) {
   const P = (v, d = 1) => (isNum(v) ? (v * 100).toFixed(d) + "%" : "–");
   const cells = (me, lg) => [
     `<td class="num">${me.db}</td>`,
@@ -532,7 +562,7 @@ export function splitsHtml(sp, st) {
   const rows = SPLITS.map(([k]) => {
     const s = sp[k];
     if (k === "pressure" && !s.available) {
-      return `<tr class="an-qbp-sgap"><th>Pressured / clean</th><td colspan="6" class="an-note">${st.with2025 ? `No per-play pressure for him in the ${st.season - 1} weeks of this window.` : `Per-play pressure exists only in the ${st.season - 1} participation file: switch on Include ${st.season - 1}. (PFR gives ${st.season} weekly totals only: see Pressure %.)`}</td></tr>`;
+      return `<tr class="an-qbp-sgap"><th>Pressured / clean</th><td colspan="6" class="an-note">${esc(pressureGap(press))}</td></tr>`;
     }
     return `<tr class="an-qbp-sfirst"><th>${esc(s.yesLabel)}</th>${cells(s.yes, s.lgYes)}</tr><tr><th>${esc(s.noLabel)}</th>${cells(s.no, s.lgNo)}</tr>`;
   }).join("");

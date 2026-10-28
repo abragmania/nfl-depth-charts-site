@@ -16,7 +16,7 @@ import { fromQuery, toQuery, seasonsOf, weekLabel, splitKey, gamesInWindow, rank
 import { backLink } from "../router.js";
 import { loadFor, loadTeams, displayName, loadStatusFeed, loadTeamView, findCardByGsis, loadPlayerStats, loadPlayerHistory, loadPlayerGameLog, clubCards } from "../data.js";
 import { isStatic } from "../../../js/api.js";
-import { playerView, maddenBlocking, maddenEdition, pageState, lastTeam, RZ_I5_FLOOR, trendFigures } from "../agg_player.js";
+import { playerView, maddenBlocking, maddenSeasonLabel, pageState, lastTeam, trendFigures } from "../agg_player.js";
 import { weekState, seasonBlocks, weekAllowedCells, clubTargetCounts, weekStrip, VS_USUAL_TEXT } from "../agg_week.js";
 import { teammateSplits } from "../agg_absence.js";
 import { aggregateUsage, usageReference, clubGames, colIndex, REF_POS, poolSnapShare, snapMethodNote, SNAP_SHARE_DEF } from "../agg.js";
@@ -377,8 +377,9 @@ export function logColumns(kind, cuts) {
 // PURE. The club's WR/TE/RB/FB rows from aggregateUsage with the club filter (the page's own window, the same shares
 // the tables show: target share and air-yards share over each man's games, route % from the charted weeks), the top
 // `n` by targets (ties by name), and HIM added at the foot when he is outside them. Red-zone target share: his
-// red-zone targets over his club's red-zone pass attempts (a pass-interference no-play is never an attempt, his
-// target all the same, as agg.js counts both) in the games he played for the club. League ticks: each row's own
+// red-zone targets over his club's red-zone pass attempts plus its red-zone pass-interference targets in the games he
+// played for the club: a PI target is his (agg.js) and counts on the club's side too, so the share never passes 100%
+// (agg_player.js rzI5Shares' rule); with "excl. PI targets" it is out of both sides. League ticks: each row's own
 // position reference pool (usageReference over the whole league's rows in the same window). null without a club.
 const truthy = (v) => v === true || v === 1 || v === "1" || v === "true";
 export function clubTargets(blocks, players, st, gsis, team, { n = 6 } = {}) {
@@ -399,7 +400,8 @@ export function clubTargets(blocks, players, st, gsis, team, { n = 6 } = {}) {
     const gk = `${b.key}|${team}`;
     if (!inWin.has(gk)) continue;
     for (const r of b.plays || []) {
-      if (r[C.posteam] !== team || r[C.type] !== "pass" || truthy(r[C.pi]) || !truthy(r[C.redzone])) continue;
+      if (r[C.posteam] !== team || r[C.type] !== "pass" || !truthy(r[C.redzone])) continue;
+      if (truthy(r[C.pi]) && (base.pi === false || !r[C.target])) continue;
       rzAtt.set(gk, (rzAtt.get(gk) || 0) + 1);
     }
   }
@@ -424,7 +426,7 @@ export function clubTargetsHtml(ct, { qs = "", wn = "" } = {}) {
   const cols = [
     ["tgtShare", "Tgt %", "lgTgt", "Targets / the club's pass attempts in his games"],
     ["ayShare", "AY %", "lgAy", "Air yards on his targets / the club's air yards in his games"],
-    ["rzShare", "RZ tgt %", null, "Red-zone targets / the club's red-zone pass attempts in his games"],
+    ["rzShare", "RZ tgt %", null, "Red-zone targets / the club's red-zone pass attempts in his games (a pass-interference target there counts on both sides)"],
     ["routePct", "Route %", null, "Routes / club dropbacks (heatradar.app, charted weeks)"],
   ];
   const scale = (k, lk) => (k === "routePct" ? 1 : Math.max(0.1, ...ct.rows.flatMap((r) => [r[k], lk ? r[lk] : null]).filter(isNum)));
@@ -453,9 +455,17 @@ export function wwPicked(split, pick) {
   const q = split?.qualified || [];
   return q.find((c) => c.gsis === pick) || q[0] || null;
 }
-export function withWithoutHtml(split, { pick = null, back = false, qs = "", nameOf = (id, n) => n, weekFmt = (k) => k } = {}) {
+// chartedSeasons: the loaded seasons whose week files carry heatradar routes (D39: the no-routes hover names them from
+// the data, never a fixed year); null leaves the hover at the source name alone.
+export function withWithoutHtml(split, { pick = null, back = false, qs = "", nameOf = (id, n) => n, weekFmt = (k) => k, chartedSeasons = null } = {}) {
   const c = wwPicked(split, pick);
   if (!c) return "";
+  const shown = [...(split.seasons || [])].sort((a, b) => b - a);
+  const charted = (chartedSeasons || []).filter((s) => shown.includes(s)).sort((a, b) => b - a);
+  const noRoutes = !chartedSeasons ? "No charted routes in those games (heatradar.app)"
+    : !charted.length ? `No charted routes in those games (heatradar.app has none for ${shown.join(" + ")})`
+    : charted.length < shown.length ? `No charted routes in those games (heatradar.app charts ${charted.join(" + ")} only)`
+    : "No charted routes in those games (heatradar.app)";
   const nm = (x) => nameOf(x.gsis, x.name);
   const scope = `${split.seasons.join(" + ")} season to date, whatever the filters`;
   const buttons = split.qualified.map((x) => {
@@ -470,7 +480,7 @@ export function withWithoutHtml(split, { pick = null, back = false, qs = "", nam
   const rows = [
     ["Games", (x) => String(x.games), (x) => `${plural(x.games, "game")} he played for ${split.team}: ${games(x)}`],
     ["Target share", (x) => pct(x.tgtShare), (x) => `His ${x.tgt} targets / the club's ${x.att} pass attempts in those games (nflverse play-by-play)`],
-    ["Route %", (x) => pct(x.routePct), (x) => (x.routeGames ? `His ${x.routes} routes / the club dropbacks each charted week implies, ${plural(x.routeGames, "charted game")} (heatradar.app)` : "No charted routes in those games (heatradar.app charts 2026 only)")],
+    ["Route %", (x) => pct(x.routePct), (x) => (x.routeGames ? `His ${x.routes} routes / the club dropbacks each charted week implies, ${plural(x.routeGames, "charted game")} (heatradar.app)` : noRoutes)],
     ...(back ? [["Carry share", (x) => pct(x.carShare), (x) => `His ${x.des} designed runs / the club's ${x.runs} designed runs in those games (nflverse play-by-play)`]] : []),
     ["DK / g", (x) => tFix(x.dkG, 1), (x) => `${tFix(x.dk, 1)} DraftKings points over ${plural(x.games, "game")} (D194 scoring)`],
   ];
@@ -556,7 +566,8 @@ export async function renderPlayer(ctx, params, query) {
     try { split = teammateSplits(data.blocks, data.players, st, gsis); } catch (e) { console.warn("With and without:", e); }
     ui.wwSplit = { key: wwKey, blocks: data.blocks, split };
   }
-  const wwOpts = { back: isBackKind, qs, nameOf: (id, n) => displayName(id, data.players) || n, weekFmt: (k) => weekLabel(k, st.season) };
+  const chartedSeasons = [...new Set(data.blocks.filter((b) => b.routes && Object.keys(b.routes).length).map((b) => b.season))];
+  const wwOpts = { back: isBackKind, qs, nameOf: (id, n) => displayName(id, data.players) || n, weekFmt: (k) => weekLabel(k, st.season), chartedSeasons };
   const wwHtml = () => withWithoutHtml(ui.wwSplit.split, { ...wwOpts, pick: ui.ww });
   const activeKey = st.window === "range" && st.from && st.from === st.to ? st.from : null;
   const sub = `${seasonLabel(st)} · ${v.weeks.length ? (v.weeks.length === 1 ? weekLabel(v.weeks[0], st.season) : `${weekLabel(v.weeks[0], st.season)} to ${weekLabel(v.weeks[v.weeks.length - 1], st.season)}`) : "no games"}${st.window === "last3" ? " (his club's last 3 games)" : ""} · league reference: ${v.recut.opportunityRefText}`;
@@ -702,12 +713,12 @@ export function pageBody(v, st, { wn = windowName(st, v.weeks || []), activeKey 
     car: ot("car", "Carries", tInt(O.car), tFix(OL.car, 0), "Carries (nflverse play-by-play); rush share under it: his carries / his club's designed runs in his games", { plain: true, sub: `rush share ${tPct(O.rushShare)}`, subLg: tPct(OL.rushShare) }),
     tgt: ot("tgt", "Targets", tInt(O.tgt), tFix(OL.tgt, 0), `Targets (${st.pi === false ? "excludes" : "includes"} pass-interference targets); target share under it: his targets / his club's pass attempts in his games`, { plain: true, sub: `target share ${tPct(O.tgtShare)}`, subLg: tPct(OL.tgtShare) }),
     rzOpp: ot("rzOpp", "RZ opp", tInt(O.rzOpp), tFix(OL.rzOpp, 1), "Red-zone opportunities: carries + targets inside the opponent's 20; goal-line carries (inside the 5) under it; nflverse play-by-play", { plain: true, sub: `${tInt(O.gl)} goal-line carries`, subLg: tFix(OL.gl, 1) }),
-    // D219 figure 5: the club Offense page's Carry distribution figure (agg_player.js rzI5Shares), hidden under the
-    // club's 3-play floor in his games.
+    // D219 figure 5: the club Offense page's Carry distribution figure (agg_player.js rzI5Shares), shown however small
+    // the sample with its count under it (D219: no floor for inside-the-5).
     i5Share: (() => {
       const x = R.i5 || { i5Des: 0, i5Runs: 0, i5Share: null };
       const def = "Inside-the-5 carry share: his designed runs from the opponent's 5 or closer / his clubs' designed runs there in his games (every club he played for in the window; scrambles on neither side); nflverse play-by-play";
-      const t = ot("i5Share", "I5 carry %", tPct(x.i5Share), tPct(R.i5Lg), isNum(x.i5Share) ? def : `${def}. Not shown: his clubs ran ${x.i5Runs} such run${x.i5Runs === 1 ? "" : "s"} in his games (fewer than ${RZ_I5_FLOOR})`, { plain: true, sub: `${x.i5Des} of ${x.i5Runs}` });
+      const t = ot("i5Share", "I5 carry %", tPct(x.i5Share), tPct(R.i5Lg), isNum(x.i5Share) ? def : `${def}. His clubs ran no such run in his games`, { plain: true, sub: `${x.i5Des} of ${x.i5Runs}` });
       return t;
     })(),
     snapPct: ot("snapPct", "Snap %", tPct(O.snapPct, 0), tPct(OL.snapPct, 0), tip(`Snap %: ${SNAP_SHARE_DEF} (nflverse snap counts); route % under it: routes / club dropbacks (heatradar.app)`, snapNote), { share: true, sub: `route % ${tPct(O.routePct, 0)}`, subLg: tPct(OL.routePct, 0) }),
@@ -741,8 +752,9 @@ export function pageBody(v, st, { wn = windowName(st, v.weeks || []), activeKey 
   const weekly = weeklyHtml(v, st, wn, activeKey, recFit);
   const clubHtml = clubTargetsHtml(club, { qs: clubQs, wn });
   const zones = `<div class="an-pl-rczones"${zoneMin ? ` style="min-width:min(100%, ${zoneMin}px)"` : ""}><div class="an-dh">Target zones <span class="an-dsub">${v.zoned} targets with a depth and direction · ${esc(wn)}</span></div><div data-zones>${zoneHtml(v, st, wn)}</div>${clubUnder ? clubHtml : ""}</div>`;
-  const routesHtml = st.with2025 && v.routes && v.routes.length ? `<div class="an-pl-rcroutes" data-band="${BAND(pos)}"><div class="an-dh">Routes · ${st.season - 1} <span class="an-dsub">${v.routes.reduce((s, x) => s + x.n, 0)} targets with a route label (nflverse participation)</span></div>${routeList(v.routes)}</div>` : "";
-  // The routes list (Include previous season) rides in the same row, so it sits beside the zones when they fit.
+  const routesHtml = v.routes && v.routes.length ? `<div class="an-pl-rcroutes" data-band="${BAND(pos)}"><div class="an-dh">Routes · ${esc((v.routeSeasons || []).join(" + "))} <span class="an-dsub">${v.routes.reduce((s, x) => s + x.n, 0)} targets with a route label (nflverse participation)</span></div>${routeList(v.routes)}</div>` : "";
+  // D39: the routes list covers whichever seasons in the window carry route labels (agg_player.js routeSeasons); it
+  // rides in the same row, so it sits beside the zones when they fit.
   // D196: the club's pass catchers beside the zone field (the row wraps them under the strips when it must).
   const recBody = `<div class="an-pl-row">${weekly}${zones}${clubUnder ? "" : clubHtml}${routesHtml}</div>`;
   const usageNote = (k, val) => note(k, val, v.cuts);
@@ -848,7 +860,7 @@ export function pageBody(v, st, { wn = windowName(st, v.weeks || []), activeKey 
   // (5) Madden foot: the blocking block, unchanged.
   const blockHtml = `<div class="an-card an-pl-block"><div class="an-dh">Blocking ${block.title ? `<span class="an-dsub">${esc(block.title)}</span>` : ""}</div>
     ${block.status === "absent" ? `<div class="an-note">Madden ratings not on file.</div>`
-      : block.status === "unrated" ? `<div class="an-note">No ${esc(maddenEdition(st.season))} rating on file for him.</div>`
+      : block.status === "unrated" ? `<div class="an-note">No ${esc(maddenSeasonLabel(st.season))} rating on file for him.</div>`
       : ratingBars(block.bars, block.pos) + `<div class="an-note">EA's blocking attributes; the tick is the ${esc(block.pos)} median (${block.peers} rated). No free per-player blocking stat exists this season (D182).</div>`}</div>`;
 
   // D224 E: the With-and-without section (drawn by the page; "" when no teammate qualifies) sits under the Variance strip.

@@ -363,8 +363,9 @@ export function sortQbRows(rows, key, dir = "desc") {
 
 // ---- splits (the player page) -----------------------------------------------------------------------------
 // His dropbacks split three ways, each side against every QB's dropbacks pooled in the same window:
-//   play action vs not (FTN pa), blitzed vs not (FTN: 1+ blitzers), pressured vs clean (2025 only: the participation
-//   file's per-play pressure column; PFR gives weekly totals only, so no per-play pressure exists for 2026).
+//   play action vs not (FTN pa), blitzed vs not (FTN: 1+ blitzers), pressured vs clean (the participation file's
+//   per-play pressure column, in whichever seasons carry it; PFR gives weekly totals only, so a season without that
+//   column has no pressured-vs-clean split and `pressure.available` says so).
 // `noScreens` leaves screen passes (FTN) out of every split. A side: { db, att, cmpPct, ypa, epaDb, succPct, sackPct }.
 const sideAcc = () => ({ db: 0, att: 0, cmp: 0, yds: 0, epa: 0, epaN: 0, succ: 0, succN: 0, sacks: 0 });
 function addSide(s, e) {

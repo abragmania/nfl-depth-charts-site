@@ -1,12 +1,37 @@
-// PURE (no DOM): the analytics app's filter state, its hash-query form, and the play/game predicates the
-// aggregators apply. Every view is a link (D177): the whole state round-trips through the hash query, and a
-// value equal to its default is left out so a plain #/usage stays short.
+// PURE (no DOM; one module-level record, the seasons list main.js hands setKnownSeasons): the analytics app's
+// filter state, its hash-query form, and the play/game predicates the aggregators apply. Every view is a link
+// (D177): the whole state round-trips through the hash query, and a value equal to its default is left out so a
+// plain #/usage stays short.
 //
 // Week keys: a week is identified across seasons by "SSSS-WW" (e.g. "2025-14"), which sorts correctly as a
 // string and is what the week-range filter stores. Labels: the default season's weeks read "W3"; any other
 // season's weeks carry the season's last two digits, "25·W14" (D177's Include-2025 union).
 
-export const CURRENT_SEASON = 2026;
+import { seasonFromDate } from "../../js/season_rule.js";
+
+// D39: the current season is never a literal. It is the newest season the seasons endpoint lists (main.js records
+// that list through setKnownSeasons when it arrives before the first page draws); with no list (not loaded in time,
+// or unavailable) it is the season the date falls in by the NFL league-year rule (public/js/season_rule.js, the one
+// copy the server shares: January and February belong to the previous season).
+let knownSeasons = null;
+export function setKnownSeasons(list) {
+  const ok = Array.isArray(list) ? list.map(Number).filter(Number.isInteger) : [];
+  knownSeasons = ok.length ? ok : null;
+}
+export { seasonFromDate };
+export const currentSeason = () => (knownSeasons ? Math.max(...knownSeasons) : seasonFromDate());
+// D39: how long the app waits for the seasons list before drawing the first page on the date rule instead.
+export const SEASONS_WAIT_MS = 3000;
+// The seasons request raced against a timeout: resolves to the list when it arrived within `ms`, otherwise (late,
+// failed or empty-handed) null. A late list is dropped, never recorded, so currentSeason() cannot move mid-session.
+// Timers are injectable so the race is tested without waiting.
+export function seasonsInTime(request, ms = SEASONS_WAIT_MS, { setTimer = setTimeout, clearTimer = clearTimeout } = {}) {
+  const LATE = Symbol("late");
+  let timer = null;
+  const late = new Promise((resolve) => { timer = setTimer(() => resolve(LATE), ms); });
+  const got = Promise.resolve(request).then((list) => list ?? null, () => null);
+  return Promise.race([got, late]).then((x) => { clearTimer(timer); return x === LATE ? null : x; });
+}
 export const POSITIONS = ["WR", "TE", "RB", "FB", "QB"];
 export const WINDOWS = ["season", "last3", "range"];
 export const DOWNS = [1, 2, 3, 4];
@@ -24,9 +49,9 @@ const PLAYOFF_LABELS = { 19: "WC", 20: "DIV", 21: "CONF", 22: "SB" };
 export const DEFAULT_POS = Object.freeze({ WR: "in", TE: "in" });
 
 // D184: the season a picker should start on when nothing says otherwise: the newest season the seasons
-// endpoint lists, or CURRENT_SEASON when that list is empty/unavailable (loadSeasons() failed, or no ctx yet).
+// endpoint lists, or currentSeason() when that list is empty/unavailable (loadSeasons() failed, or no ctx yet).
 export function defaultSeason(seasons) {
-  return seasons && seasons.length ? Math.max(...seasons) : CURRENT_SEASON;
+  return seasons && seasons.length ? Math.max(...seasons) : currentSeason();
 }
 
 // D184: is season-1 on the list, i.e. is there a "previous season" to offer the Include switch for?
@@ -54,10 +79,10 @@ export function splitKey(key) {
   const [s, w] = String(key).split("-");
   return { season: +s, week: +w };
 }
-export function weekLabel(key, currentSeason = CURRENT_SEASON) {
+export function weekLabel(key, labelSeason = currentSeason()) {
   const { season, week } = splitKey(key);
   const w = PLAYOFF_LABELS[week] || `W${week}`;
-  return season === currentSeason ? w : `${String(season).slice(-2)}·${w}`;
+  return season === labelSeason ? w : `${String(season).slice(-2)}·${w}`;
 }
 
 // The seasons a state reads, newest first. D184: "Include previous" is always relative to the picked season
@@ -98,8 +123,8 @@ const KEY_RE = /^\d{4}-\d{2}$/;
 
 // D184: the hash uses "s" for season and "prev" for Include-previous (was "season"/"with2025"), so
 // #/qb?s=2023&prev=1 is a link to 2023 with 2022 folded in. defaultState() has no seasons list here, so "s" is
-// always written unless it equals the bare CURRENT_SEASON fallback; a page comparing against its own fetched
-// seasons list (filterbar.js) still shows the right season as selected either way.
+// always written unless it equals currentSeason(); a page comparing against its own fetched seasons list
+// (filterbar.js) still shows the right season as selected either way.
 export function toQuery(st) {
   const d = defaultState();
   const q = new URLSearchParams();
@@ -202,7 +227,7 @@ export const isSituational = (st) => st.downs.length > 0 || st.qtrs.length > 0;
 // A figure tile on a player's page opens his position's leaderboard sorted by that figure's own column, on the same
 // season / window / include-previous switches the page is on, with his row highlighted (`hl=<gsis>`, read by the
 // three leaderboards through table.js's hlOf). BOARD_KEYS mirrors each leaderboard's column keys by hand (filters.js
-// imports nothing; tests/analytics_rank_links.test.mjs checks the three sets against the tables' own column lists).
+// imports no table or view code; tests/analytics_rank_links.test.mjs checks the three sets against the tables' own column lists).
 // D224 F: the Deciding columns' keys (this-week opponent and vs usual, the last-3 figures) are board keys too, so a
 // link can sort by them; no player-page tile carries those keys, so no tile links to them.
 // A tile whose key is not in its board's set gets no link. LOW_FIRST: columns where the lower figure is the better one
