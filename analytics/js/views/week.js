@@ -105,7 +105,7 @@ export function startersHtml(rows, { def = "", q = "" } = {}) {
     + th("Route %", "Routes / club dropbacks in his games (heatradar, charted weeks)")
     + th("Tgt %", "His targets / the club's pass attempts in his games")
     + th("Car %", "His designed runs / the club's designed runs in his games")
-    + th("RZ", "Red-zone target share (receivers) or inside-the-5 carry share (backs), with his count of the club's plays in his games; a dash under 3 such plays")
+    + th("RZ", "Red-zone target share (receivers) or inside-the-5 carry share (backs), with his count of the club's plays in his games, shown at any sample; a dash means his club ran no such play in his games, or he has no row")
     + th("Last 3", "His last 3 games played against all his games this season (shows from four games)", "an-wv-tr")
     + th(`vs ${esc(def)}`, `What ${def} gives up to his position against what the same offenses' men usually get, DK points per game first (the allowed table's vs usual)`, "an-wv-vs")
     + `</tr></thead><tbody>${body}</tbody></table>`;

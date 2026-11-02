@@ -80,7 +80,7 @@ export const CATCH_TIP = "Catch %: receptions / targets, pass-interference targe
 // raw counts sit behind More). The rates divide the table's own counts by his games in the window. The shares come from
 // agg_player.js's rzI5Shares (the club and player pages' figure, never recomputed here), which ignores the opponent, down,
 // quarter and home/away filters, so under any of them the share is blank rather than wrong.
-const SHARE_NOTE = "Blank under an opponent, down, quarter or home/away filter (the share ignores them).";
+const SHARE_NOTE = "Blank under an opponent, down, quarter or home/away filter (the share ignores them). Every share shows at any sample; the colour cuts come from the men whose share rests on 3+ club plays.";
 export const RZ_TIPS = {
   rzTgtG: "Red-zone targets per game he played (targets inside the opponent's 20 / his games in the window)",
   rzTgtShare: `Red-zone target share: his red-zone targets / his club's red-zone pass attempts in his games (a pass-interference target there counts on both sides). ${SHARE_NOTE}`,

@@ -14,7 +14,7 @@
 // one-week window can be seen in context; the window's weeks are flagged `inWin` and drawn bright.
 import { aggregateUsage, clubGames, colIndex, usageReference, inPool, tierCuts, referenceText, snapGame, poolSnapShare, frac } from "./agg.js";
 import { gamesInWindow, splitKey, isSituational } from "./filters.js";
-import { aggregateRush, rushReference } from "./agg_rush.js";
+import { aggregateRush, rushReference, rushPooled } from "./agg_rush.js";
 import { fantasyByPlayer } from "./agg_fantasy.js";
 
 const num = (v) => (v === null || v === undefined || v === "" || !Number.isFinite(+v) ? null : +v);
@@ -380,12 +380,14 @@ function recutLayers({ blocks, players, st, gsis, pos, row, uRef, ref, lgEff, ef
     // A back with no carries still has his Receivers row: its scrimmage figures stand in (rushYds, rushTd, yds, td).
     const src = withDerived(rushRow, true) || (row ? { ...row, scrimYds: (row.yds ?? 0) + (row.rushYds ?? 0), totTd: (row.td ?? 0) + (row.rushTd ?? 0) } : null);
     const q = rRef.pool.filter((r) => r.pos === pos).map((r) => withDerived(r, true));
-    // D219 figure 5: his inside-the-5 carry share over every game he played in the window (any club), and the plain
-    // mean over his position's rushing reference pool (the men with a figure).
+    // D219 figure 5: his inside-the-5 carry share over every game he played in the window (any club), and the
+    // pooled league figure over his position's rushing reference pool (D224, Adam 2026-11-02: his designed runs over the clubs'
+    // designed runs across the same men, never a mean of percentages). The pool's rows carry no counts here, so rz5's are
+    // fed to rushPooled (agg_rush.js), the one pooled i5Share calculation, which is why rr.pooled.i5Share is not used.
     const rz5 = rzI5Shares(blocks, players, st);
     return {
       kind: "back", rushRow,
-      i5: rz5.get(gsis) || null, i5Lg: mean(q.map((r) => rz5.get(r.gsis)?.i5Share ?? null)), pool: freezePool(q), fantasy: { ...fantasy, ...pick(src, ["dk", "dkG", "dkTdShare"]) },
+      i5: rz5.get(gsis) || null, i5Lg: rushPooled(q.map((r) => ({ i5Des: rz5.get(r.gsis)?.i5Des, i5Runs: rz5.get(r.gsis)?.i5Runs }))).i5Share, pool: freezePool(q), fantasy: { ...fantasy, ...pick(src, ["dk", "dkG", "dkTdShare"]) },
       headline: pick(src, RB_HEADLINE_KEYS), headlineLg: Object.fromEntries(RB_HEADLINE_KEYS.map((k) => [k, meanOf(q, k)])),
       opportunity: pick(rushRow || row, RB_OPP_KEYS), opportunityLg: pick(rr.lg, RB_OPP_KEYS), cuts: withHeadlineCuts(rr.cuts, q, rRef.pool.map((r) => withDerived(r, true)), RB_HEADLINE_KEYS), opportunityRefText: rr.text,
       variance: pick(rushRow, RB_VARIANCE_KEYS), varianceLg: pick(rr.pooled, RB_VARIANCE_KEYS),

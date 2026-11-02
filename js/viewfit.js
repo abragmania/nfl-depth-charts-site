@@ -225,7 +225,7 @@ export function headerFoldsAt(width, foldWidth = HEADER_FOLD_WIDTH, folded = fal
 // come from the measured box and the two canvases, never from what is on screen, so the answer cannot feed back on
 // itself, and where the two canvases draw the same (a height-bound page) full names always win. A closed card never asks.
 // THE SWITCH (D233's undo): false restores today's behaviour exactly — the card narrows the field and the names
-// shrink — and nothing else in this file or field.js changes. tests/viewfit.test.mjs pins both states.
+// shrink — and nothing else in this file or field.js changes. tests/viewfit.test.mjs pins both states: the trigger test asserts the rule answers the switch's own value, and the tests that need short names skip while it is off.
 export const SHORT_NAMES_WITH_CARD = true;
 //   kFull   the scale the full-name canvas draws at in this box (the smaller of its width fit and the height fit)
 //   kShort  the same for the narrowest short-name canvas this club has
@@ -272,7 +272,7 @@ export const LIST_MAX_WIDTH = 700;
 // every page behaves exactly as it did before the phone work — isListWindow below is the single point any
 // caller can reach the list through, so nothing else needs a guard. `?phone=1` in the URL forces it on for
 // QA of the unfinished work; the URL is read once, at startup, and never again. PROJECT.md's PHONE VIEW line holds
-// the inventory, and tests/docs.test.mjs fails if that inventory and this switch ever disagree.
+// the inventory.
 export const PHONE_LIST_ENABLED = false;
 const PHONE_LIST_FORCED = typeof location !== "undefined" && /[?&]phone=1(&|$)/.test(location.search || "");
 export const phoneListOn = () => PHONE_LIST_ENABLED || PHONE_LIST_FORCED;

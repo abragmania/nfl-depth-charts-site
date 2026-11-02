@@ -717,7 +717,7 @@ export function pageBody(v, st, { wn = windowName(st, v.weeks || []), activeKey 
     // the sample with its count under it (D219: no floor for inside-the-5).
     i5Share: (() => {
       const x = R.i5 || { i5Des: 0, i5Runs: 0, i5Share: null };
-      const def = "Inside-the-5 carry share: his designed runs from the opponent's 5 or closer / his clubs' designed runs there in his games (every club he played for in the window; scrambles on neither side); nflverse play-by-play";
+      const def = "Inside-the-5 carry share: his designed runs from the opponent's 5 or closer / his clubs' designed runs there in his games (every club he played for in the window; scrambles on neither side); the league figure is his position's pool pooled the same way (its designed runs inside the 5 / its clubs' in their games, not a mean of percentages); nflverse play-by-play";
       const t = ot("i5Share", "I5 carry %", tPct(x.i5Share), tPct(R.i5Lg), isNum(x.i5Share) ? def : `${def}. His clubs ran no such run in his games`, { plain: true, sub: `${x.i5Des} of ${x.i5Runs}` });
       return t;
     })(),

@@ -282,6 +282,7 @@ export function rushPooled(q) {
     ybcCar: pooledRatio(q, (r) => r.pfrYbc, (r) => r.pfrCar),
     catchPct: pooledRatio(q, (r) => r.rec, (r) => r.tgt - (r.piTgt || 0)),
     flRate: pooledRatio(q, (r) => r.fl, (r) => r.fum),
+    i5Share: pooledRatio(q, (r) => r.i5Des, (r) => r.i5Runs), // D224: pooled, never a mean of percentages (agg.js SHARE_CUT_MIN)
     dkTdShare: plainMean(q.map((r) => r.dkTdShare)),
   };
 }

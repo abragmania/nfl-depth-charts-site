@@ -369,6 +369,13 @@ export const TIER_NAMES = ["elite", "strong", "avg", "weak", "flat"];
 export const MIN_POOL = 8;
 export const USAGE_TIER_KEYS = ["opp", "oppG", "oppShare", "tgtShare", "ayShare", "wopr", "routePct", "snapPct", "tprr", "yprr", "epaTgt", "dkG", "rzTgtShare"];
 const finite = (x) => x !== null && x !== undefined && Number.isFinite(+x);
+// D224 (Adam, 2026-11-02): the two red-zone shares (rzTgtShare, i5Share) show at any sample, but a man whose share rests
+// on under SHARE_CUT_MIN club plays (its bottom number: rzAttN, i5Runs) does not help set the percentile cuts; his own cell
+// is still coloured from them. The league average of each is pooled (his-side counts over club-side counts, usagePooled and
+// agg_rush.js rushPooled), never a mean of men's percentages. A row with no count is not judged small.
+export const SHARE_CUT_MIN = 3;
+export const SHARE_CUT_BASE = { rzTgtShare: "rzAttN", i5Share: "i5Runs" };
+const setsCuts = (k, x) => { const base = SHARE_CUT_BASE[k]; return !(base && finite(x[base]) && +x[base] < SHARE_CUT_MIN); };
 export function percentileCuts(vals) {
   const v = vals.filter(finite).map(Number).sort((a, b) => a - b);
   if (!v.length) return null;
@@ -380,23 +387,27 @@ export function tierFromCuts(v, cuts) {
   const i = cuts.findIndex((c) => v >= c);
   return TIER_NAMES[i < 0 ? 4 : i];
 }
-// { [key]: { cuts, n (men in the pool that set the cuts), posN (men at his position with a value), src: "pos" |
-// "league" | null } } for one position, from his position's pool items and the league-wide pool items.
+// { [key]: { cuts, n (men that set the cuts), posN (men at his position that set them), src: "pos" | "league" | null,
+// plays: true on the SHARE_CUT_BASE keys, where n and posN count only men on SHARE_CUT_MIN+ club plays } } for one
+// position, from his position's pool items and the league-wide pool items.
 export function tierCuts(posItems, leagueItems, keys) {
   const out = {};
   for (const k of keys) {
-    const pv = posItems.map((x) => x[k]).filter(finite);
-    if (pv.length >= MIN_POOL) { out[k] = { cuts: percentileCuts(pv), n: pv.length, posN: pv.length, src: "pos" }; continue; }
-    const lv = leagueItems.map((x) => x[k]).filter(finite);
-    out[k] = lv.length >= MIN_POOL ? { cuts: percentileCuts(lv), n: lv.length, posN: pv.length, src: "league" } : { cuts: null, n: lv.length, posN: pv.length, src: null };
+    const extra = SHARE_CUT_BASE[k] ? { plays: true } : {};
+    const pv = posItems.filter((x) => setsCuts(k, x)).map((x) => x[k]).filter(finite);
+    if (pv.length >= MIN_POOL) { out[k] = { cuts: percentileCuts(pv), n: pv.length, posN: pv.length, src: "pos", ...extra }; continue; }
+    const lv = leagueItems.filter((x) => setsCuts(k, x)).map((x) => x[k]).filter(finite);
+    out[k] = lv.length >= MIN_POOL ? { cuts: percentileCuts(lv), n: lv.length, posN: pv.length, src: "league", ...extra } : { cuts: null, n: lv.length, posN: pv.length, src: null, ...extra };
   }
   return out;
 }
-// The hover text for a coloured value: empty when his own position set the cuts, else why it did not.
+// The hover text for a coloured value: empty when his own position set the cuts, else why it did not. A share whose
+// cuts count only men on SHARE_CUT_MIN+ club plays (entry.plays) says so instead of "reference pool".
 export function tierNote(entry, pos) {
   if (!entry || entry.src === "pos") return "";
-  if (entry.src === "league") return `Colour from the league-wide cuts: only ${entry.posN} ${pos}${entry.posN === 1 ? "" : "s"} in the reference pool (under ${MIN_POOL})`;
-  return `Not coloured: under ${MIN_POOL} players in the reference pool`;
+  const where = entry.plays ? `on ${SHARE_CUT_MIN}+ club plays` : "in the reference pool";
+  if (entry.src === "league") return `Colour from the league-wide cuts: only ${entry.posN} ${pos}${entry.posN === 1 ? "" : "s"} ${where} (under ${MIN_POOL})`;
+  return `Not coloured: under ${MIN_POOL} players ${where}`;
 }
 
 // The usage reference for every position from rows aggregated with no team, opponent or position filter (the
@@ -438,6 +449,7 @@ export function usagePooled(q) {
     cpoeTgt: pooledRatio(q, (r) => (finite(r.cpoeTgt) ? r.cpoeTgt * r.cpoeN : null), (r) => (finite(r.cpoeTgt) ? r.cpoeN : null)),
     dropPer100: pooledRatio(q, (r) => r.pfrDrops, (r) => r.pfrTgt, 100),
     flRate: pooledRatio(q, (r) => r.fl, (r) => r.fum),
+    rzTgtShare: pooledRatio(q, (r) => r.rzTgtN, (r) => r.rzAttN),
     dkTdShare: plainMean(q.map((r) => r.dkTdShare)),
   };
 }
