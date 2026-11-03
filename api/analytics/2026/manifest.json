@@ -98,11 +98,17 @@
    "hash": "f0cddbd787427377",
    "plays": 1709,
    "builtAt": "2026-11-02T18:53:22.804Z"
+  },
+  {
+   "week": 8,
+   "hash": "252bc05a05d83e0a",
+   "plays": 1605,
+   "builtAt": "2026-11-03T11:05:51.712Z"
   }
  ],
- "throughWeek": 7,
- "currentWeek": 8,
- "heldUntil": "2026-11-03T10:00:00.000Z",
+ "throughWeek": 8,
+ "currentWeek": 9,
+ "heldUntil": "2026-11-10T10:00:00.000Z",
  "snapPatches": "15cdecc72eec8fb7",
  "sources": {
   "pbp": {
@@ -118,24 +124,24 @@
    "sha": "61ebb36e65aa5f11"
   },
   "pfr": {
-   "fetchedAt": "2026-11-02T18:52:54.708Z",
+   "fetchedAt": "2026-11-03T11:05:28.524Z",
    "sha": "4a9c061a57c4a2ce"
   },
   "pfrRush": {
-   "fetchedAt": "2026-11-02T18:52:55.003Z",
+   "fetchedAt": "2026-11-03T11:05:28.707Z",
    "sha": "12ee19b3d7de61c631c2219c37962e393663265254fa0d090ce37adbb71324f6"
   },
   "pfrRec": {
-   "fetchedAt": "2026-11-02T18:52:55.241Z",
+   "fetchedAt": "2026-11-03T11:05:28.984Z",
    "sha": "24f6911494c7b62ba8e5b99b700f975f4f6b2658c4742e8b0327dce4b1c2d683"
   },
   "routes": {
-   "fetchedAt": "2026-11-02T18:52:55.569Z",
-   "sha": "cf0531d6ab8ac0d2c29ff1962eca8ef85fea0975e33dee0e7498784653c85832"
+   "fetchedAt": "2026-11-03T11:05:29.308Z",
+   "sha": "1f35cc60dea21abb47e9986673b335ef431b682c9d4ffd0f85d22e90b87200fe"
   },
   "participation": null,
   "snaps": {
-   "fetchedAt": "2026-11-02T18:48:56.731Z",
+   "fetchedAt": "2026-11-03T11:00:41.026Z",
    "sha": "030a2d33abf1cb44a93459f298d4e62cd3cfa58f88e7cc58bca047aa5566ec6b"
   }
  }
