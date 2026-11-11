@@ -3,8 +3,8 @@
 // /api/analytics routes; static mode (the published site, <meta name="nfl-static" content="1">) reads the
 // flat files the publish step writes, through the same staticPathFor() the depth charts use (public/js/api.js).
 // This app is served one folder down (/analytics/), so every static path gets a "../" in front.
-import { isStatic, staticPathFor, getPlayer, getHistory, getGameLog } from "../../js/api.js";
-import { weekKey, splitKey, weekInScope } from "./filters.js";
+import { isStatic, staticPathFor, getPlayer, getHistory, getGameLog } from "../../js/api.js?v=5a68acbbcf";
+import { weekKey, splitKey, weekInScope } from "./filters.js?v=5a68acbbcf";
 
 // Mirrors the analytics contract's static layout, used only if api.js's staticPathFor() does not (yet) map
 // an analytics URL: /api/analytics/{s}/manifest -> api/analytics/{s}/manifest.json, .../players -> players.json,

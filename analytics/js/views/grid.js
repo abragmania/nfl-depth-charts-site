@@ -7,15 +7,15 @@
 // Under the grid, D196's "What each defense allows, by position" (views/allowed_table.js; Adam, 2026-09-25: on this
 // page, not the Defense page), on the same filters and window; its own sort (psort, pdir) and vs-usual switch (vs=1)
 // ride in the same hash. The Rating / Rank switch is the grid's only.
-import { fromQuery, toQuery, seasonsOf, weekLabel, defaultState } from "../filters.js";
-import { loadFor, loadTeams } from "../data.js";
-import { aggregateTeams } from "../agg_team.js";
-import { allowedByPosition, allowedVsUsual } from "../agg_allowed.js";
-import { gridRows, GRID_CATEGORIES, displayed } from "../agg_grid.js";
-import { renderFilterBar } from "../filterbar.js";
-import { esc, teamPill, pfrNote, seasonLabel } from "./qb.js";
-import { teamPageState, ordinal } from "./team.js";
-import { allowedState, allowedQuery, posCells, allowedSectionHtml, posBestDir } from "./allowed_table.js";
+import { fromQuery, toQuery, seasonsOf, weekLabel, defaultState } from "../filters.js?v=5a68acbbcf";
+import { loadFor, loadTeams } from "../data.js?v=5a68acbbcf";
+import { aggregateTeams } from "../agg_team.js?v=5a68acbbcf";
+import { allowedByPosition, allowedVsUsual } from "../agg_allowed.js?v=5a68acbbcf";
+import { gridRows, GRID_CATEGORIES, displayed } from "../agg_grid.js?v=5a68acbbcf";
+import { renderFilterBar } from "../filterbar.js?v=5a68acbbcf";
+import { esc, teamPill, pfrNote, seasonLabel } from "./qb.js?v=5a68acbbcf";
+import { teamPageState, ordinal } from "./team.js?v=5a68acbbcf";
+import { allowedState, allowedQuery, posCells, allowedSectionHtml, posBestDir } from "./allowed_table.js?v=5a68acbbcf";
 
 const SIDES = [["off", "Offense"], ["def", "Defense"]];
 const PFR = /PFR/;

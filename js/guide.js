@@ -9,9 +9,9 @@
 // planLeaders is the pure layout (measured boxes in, lines and label positions out); tests/guide.test.mjs drives it.
 // GUIDE_CALLOUTS is also the claims table: each sentence names the rulings it rests on, and the test checks
 // every one is still live in RULES.md, so a retired ruling turns the suite red.
-import { renderColumn, esc, fitNames } from "./cards.js";
-import { layoutStyle } from "./field.js";
-import { registerView } from "./viewfit.js";
+import { renderColumn, esc, fitNames } from "./cards.js?v=5a68acbbcf";
+import { layoutStyle } from "./field.js?v=5a68acbbcf";
+import { registerView } from "./viewfit.js?v=5a68acbbcf";
 
 // ---- the sample: a right tackle column on a made-up club -----------------------------------------------------
 // The opening starter is on IR, so the first healthy man below him plays and takes line one with the green

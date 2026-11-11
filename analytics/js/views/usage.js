@@ -1,12 +1,12 @@
 // Receivers (#/receivers; the old Usage page, D193): the pass-catchers' leaderboard (D177's first priority, with fantasy
 // in mind), WRs and TEs by default, backs on their chip; every filter, the sort, the minimum and the open row live in
 // the hash. The table itself (column order Production, Opportunity, Efficiency, then the ancillary group) is table.js.
-import { fromQuery, toQuery, seasonsOf, weekLabel, POSITIONS } from "../filters.js";
-import { loadFor, loadTeams, loadStatusFeed } from "../data.js";
-import { aggregateUsage, clubGames, usageReference, REF_POS, POOL_PER_GAME, POOL_FLOOR } from "../agg.js";
-import { renderFilterBar } from "../filterbar.js";
-import { renderTable, anchor, withRzFigures, viewFrom, withView, statusApplies, hlOf, withHl, scrollToHl, receiversWantsDeciding, withViewSort } from "../table.js";
-import { decorateDeciding } from "../deciding.js";
+import { fromQuery, toQuery, seasonsOf, weekLabel, POSITIONS } from "../filters.js?v=5a68acbbcf";
+import { loadFor, loadTeams, loadStatusFeed } from "../data.js?v=5a68acbbcf";
+import { aggregateUsage, clubGames, usageReference, REF_POS, POOL_PER_GAME, POOL_FLOOR } from "../agg.js?v=5a68acbbcf";
+import { renderFilterBar } from "../filterbar.js?v=5a68acbbcf";
+import { renderTable, anchor, withRzFigures, viewFrom, withView, statusApplies, hlOf, withHl, scrollToHl, receiversWantsDeciding, withViewSort } from "../table.js?v=5a68acbbcf";
+import { decorateDeciding } from "../deciding.js?v=5a68acbbcf";
 
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 // The column set (D224 F: view=deciding|standard|all; a legacy more=1 reads as All) rides beside the shared filters (table.js withView).

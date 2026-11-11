@@ -7,7 +7,7 @@
 // was published instead of how old the data is. isStatic() is api.js's single source of truth for the mode
 // (the <meta name="nfl-static"> flag publish.mjs injects); resolveUrl() maps /api/refresh/status onto the
 // published api/refresh/status.json.
-import { isStatic, resolveUrl } from "./api.js";
+import { isStatic, resolveUrl } from "./api.js?v=5a68acbbcf";
 
 const POLL_MS = 5000;
 const STALE_HOURS = 36; // matches server/api/refresh.js's isStale()
@@ -96,13 +96,48 @@ export async function trigger(buttonEl, { force = false } = {}) {
     if (!ok && status !== 409) throw new Error(body?.error?.message || `refresh failed to start (${status})`);
     // A 409 means one is already running (e.g. the scheduled task fired moments ago) - fall through and
     // poll that run instead of treating it as a failure.
-    await poll();
+    const final = await poll();
+    showPublishNote(final?.publish ?? null);
     window.dispatchEvent(new CustomEvent("nfl:data-refreshed"));
   } catch (e) {
     console.error("NFLRefresh.trigger failed:", e);
     if (buttonEl) buttonEl.title = e.message;
   } finally {
     setSpinning(buttonEl, false);
+  }
+}
+
+// What the last cycle did with the public site, in plain words for the line beside the Refresh now button (never
+// silent when a publish is held). `pub` is /api/refresh/status's `publish` ({state, at, reason, pending}); null: nothing to say.
+export function publishNoteText(pub) {
+  if (!pub) return null;
+  if (pub.state === "held") return "Site not published: uncommitted site code; it publishes on the next cycle once committed";
+  if (pub.state === "refused") {
+    const why = String(pub.reason ?? "").replace(/^publish refused:\s*/i, "").split(/(?<=\.)\s/)[0].trim();
+    return `Site not published: ${why || "this machine is behind GitHub"}`;
+  }
+  if (pub.state === "failed") return "Site publish failed; it is tried again on the next cycle";
+  if (pub.state === "published" && pub.at && !Number.isNaN(Date.parse(pub.at))) return `published ${shortTime(pub.at)}`;
+  return null;
+}
+
+// One small line after each Refresh now button (the team page re-creates the button on every render, so this is
+// called again after each status read and each refresh). Inline style: this file does not own the stylesheets.
+function showPublishNote(pub) {
+  if (typeof document === "undefined") return;
+  const text = publishNoteText(pub);
+  for (const btn of document.querySelectorAll(".refresh-btn")) {
+    let note = btn.nextElementSibling?.classList?.contains("refresh-publish-note") ? btn.nextElementSibling : null;
+    if (!text) { note?.remove(); continue; }
+    if (!note) {
+      note = document.createElement("span");
+      note.className = "refresh-publish-note";
+      note.style.cssText = "margin-left:8px;font-size:11px;opacity:.8;white-space:nowrap;";
+      btn.insertAdjacentElement("afterend", note);
+    }
+    note.textContent = text;
+    note.title = pub?.reason ?? "";
+    note.style.color = pub?.state === "published" ? "" : "#ffcf8a";
   }
 }
 
@@ -169,6 +204,7 @@ export async function renderStatus(el) {
   const headline = errored ? "At least one data source failed on the last refresh."
     : (stale ? "Data is more than 36 hours old." : "");
   el.title = [headline, ...lines].filter(Boolean).join("\n");
+  showPublishNote(body.publish ?? null);
 }
 
 // D53: called once at startup (public/js/main.js, after the router starts). Starts a refresh cycle only

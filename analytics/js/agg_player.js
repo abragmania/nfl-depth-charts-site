@@ -12,10 +12,10 @@
 // of weekly percentages (the window row from aggregateUsage already is).
 // The weekly chart always spans every loaded week (the whole timeline, both seasons when Include 2025 is on) so a
 // one-week window can be seen in context; the window's weeks are flagged `inWin` and drawn bright.
-import { aggregateUsage, clubGames, colIndex, usageReference, inPool, tierCuts, referenceText, snapGame, poolSnapShare, frac } from "./agg.js";
-import { gamesInWindow, splitKey, isSituational } from "./filters.js";
-import { aggregateRush, rushReference, rushPooled } from "./agg_rush.js";
-import { fantasyByPlayer } from "./agg_fantasy.js";
+import { aggregateUsage, clubGames, colIndex, usageReference, inPool, tierCuts, referenceText, snapGame, poolSnapShare, frac } from "./agg.js?v=5a68acbbcf";
+import { gamesInWindow, splitKey, isSituational } from "./filters.js?v=5a68acbbcf";
+import { aggregateRush, rushReference, rushPooled } from "./agg_rush.js?v=5a68acbbcf";
+import { fantasyByPlayer } from "./agg_fantasy.js?v=5a68acbbcf";
 
 const num = (v) => (v === null || v === undefined || v === "" || !Number.isFinite(+v) ? null : +v);
 const truthy = (v) => v === true || v === 1 || v === "1" || v === "true";

@@ -15,8 +15,8 @@
 // The bonuses are per game, never per window. dk = the sum of his games; dkG = dk / the aggregator row's own games;
 // dkTdShare = (4 passTd + 6 rushTd + 6 recTd) / dk, null when dk <= 0. Under a down or quarter filter dk is null
 // (the bonuses are whole-game), though nothing in the app sets those filters today.
-import { colIndex, clubGames, rushEvent } from "./agg.js";
-import { gamesInWindow, playPredicate, isSituational } from "./filters.js";
+import { colIndex, clubGames, rushEvent } from "./agg.js?v=5a68acbbcf";
+import { gamesInWindow, playPredicate, isSituational } from "./filters.js?v=5a68acbbcf";
 
 export const DK = Object.freeze({
   passYd: 0.04, passTd: 4, int: -1, passBonus: 3, passBonusAt: 300,

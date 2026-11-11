@@ -4,7 +4,7 @@
 // and when two seasons are loaded a divider with the season names separates them. Each week is one clickable
 // column (data-key) whose native tooltip gives the week, the opponent and every strip's value.
 // Same rules and look as the expanded leaderboard row (table.js weeklyBars), sized up for a page.
-import { weekLabel, splitKey } from "../filters.js";
+import { weekLabel, splitKey } from "../filters.js?v=5a68acbbcf";
 
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 

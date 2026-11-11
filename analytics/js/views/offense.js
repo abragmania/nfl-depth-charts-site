@@ -7,16 +7,16 @@
 //
 // The root <section> carries "an-def an-pl an-off": an-pl for the page spacing every analytics page shares, an-off
 // so a rule can address this page alone.
-import { fromQuery, toQuery, seasonsOf, weekLabel } from "../filters.js";
-import { loadFor, loadTeams } from "../data.js";
-import { aggregateTeams, teamReference, teamTier, teamZones, sortTeamRows, OFF_TIER, SOFT_KEYS, RANK_LOW_FIRST } from "../agg_team.js";
-import { TIER_NAMES } from "../agg.js";
-import { renderFilterBar } from "../filterbar.js";
-import { esc, NA, isNum, pct, fix, signed, teamPill, qbStrips, pfrNote, seasonLabel } from "./qb.js";
-import { windowName } from "./qbplayer.js";
-import { moreFrom, visibleCols, allOpen, toggleMore, moreCell, fitOpen, wireMore } from "../table.js";
-import { nameOf, headerOf } from "../names.js";
-import { teamPageState, clubZoneField, clubZoneLegend, zonePlaysHtml, TEAM_ZONE_MODES } from "./team.js";
+import { fromQuery, toQuery, seasonsOf, weekLabel } from "../filters.js?v=5a68acbbcf";
+import { loadFor, loadTeams } from "../data.js?v=5a68acbbcf";
+import { aggregateTeams, teamReference, teamTier, teamZones, sortTeamRows, OFF_TIER, SOFT_KEYS, RANK_LOW_FIRST } from "../agg_team.js?v=5a68acbbcf";
+import { TIER_NAMES } from "../agg.js?v=5a68acbbcf";
+import { renderFilterBar } from "../filterbar.js?v=5a68acbbcf";
+import { esc, NA, isNum, pct, fix, signed, teamPill, qbStrips, pfrNote, seasonLabel } from "./qb.js?v=5a68acbbcf";
+import { windowName } from "./qbplayer.js?v=5a68acbbcf";
+import { moreFrom, visibleCols, allOpen, toggleMore, moreCell, fitOpen, wireMore } from "../table.js?v=5a68acbbcf";
+import { nameOf, headerOf } from "../names.js?v=5a68acbbcf";
+import { teamPageState, clubZoneField, clubZoneLegend, zonePlaysHtml, TEAM_ZONE_MODES } from "./team.js?v=5a68acbbcf";
 
 const P = (v, d = 1) => (isNum(v) ? pct(v, d) : NA);
 // The headline "how good are they" measure, EPA/play, leads the table with a bar (signed, centred on zero); the

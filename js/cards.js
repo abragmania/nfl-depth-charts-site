@@ -9,7 +9,7 @@
 // rating-tier surface colours all survive the shrink. The SIDE, GROUP and MATCHUP views keep their big
 // headshot cards and their own renderers (zoom.js's fullCard, matchup.js's matchupCard) — they come
 // through renderSlotBody below, which is deliberately untouched by this ruling.
-import { lineOneCount, lineOneHeight, visibleDepthRows, displayOrder, outFillInDemotion, OUT_STATUS_CODES, isFullyOut, isScratch, fillingIn, depthVisibilityRank, slotRateOf } from "./field.js";
+import { lineOneCount, lineOneHeight, visibleDepthRows, displayOrder, outFillInDemotion, OUT_STATUS_CODES, isFullyOut, isScratch, fillingIn, depthVisibilityRank, slotRateOf } from "./field.js?v=5a68acbbcf";
 // Re-exported so zoom.js and matchup.js share this single definition rather than keeping their own
 // copies. D60's isScratch rides the same route.
 export { OUT_STATUS_CODES, isFullyOut, isScratch };

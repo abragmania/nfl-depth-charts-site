@@ -8,16 +8,16 @@
 //
 // Route #/matchup/:a/:b renders A-offense-over-B-defense; #/matchup/:a alone resolves B from A's
 // header.nextOpponent (this week's schedule) and redirects, or shows a picker on a bye week.
-import { getTeams, getTeam } from "./api.js";
-import { esc, renderColumn, renderTray, fitNames, wireDepthToggles, espnSchemeOf, unitTagsHtml, assetUrl } from "./cards.js";
-import { computeLayout, renderFieldSvg, renderLevelLabels, FIELD_VARIANT } from "./field.js";
-import { mountScaledField, disposeCurrentView, MIN_READABLE_SCALE } from "./viewfit.js";
-import { navStripHtml, wireNav } from "./nav.js";
-import { isLightWash } from "./landing.js";
+import { getTeams, getTeam } from "./api.js?v=5a68acbbcf";
+import { esc, renderColumn, renderTray, fitNames, wireDepthToggles, espnSchemeOf, unitTagsHtml, assetUrl } from "./cards.js?v=5a68acbbcf";
+import { computeLayout, renderFieldSvg, renderLevelLabels, FIELD_VARIANT } from "./field.js?v=5a68acbbcf";
+import { mountScaledField, disposeCurrentView, MIN_READABLE_SCALE } from "./viewfit.js?v=5a68acbbcf";
+import { navStripHtml, wireNav } from "./nav.js?v=5a68acbbcf";
+import { isLightWash } from "./landing.js?v=5a68acbbcf";
 // D173: this week's games strip (shared with the landing page) and the game line for the game being viewed.
-import { gamesBarHtml, gameLineHtml, findGame, wireGamesToggle } from "./gamesbar.js";
+import { gamesBarHtml, gameLineHtml, findGame, wireGamesToggle } from "./gamesbar.js?v=5a68acbbcf";
 // D111: one legend, drawn on both pages (see matchupLegendHtml). D134: one reduced-depth option object too.
-import { legendHtml, REDUCED_DEPTH_OPTS, sampleChipHtml } from "./team.js";
+import { legendHtml, REDUCED_DEPTH_OPTS, sampleChipHtml } from "./team.js?v=5a68acbbcf";
 
 const dash = "\u2014";
 const record = (r) => (r ? `${r.wins}-${r.losses}${r.ties ? "-" + r.ties : ""}` : dash);

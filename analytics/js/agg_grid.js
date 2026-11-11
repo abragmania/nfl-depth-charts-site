@@ -10,8 +10,8 @@
 // A cell's RANK: competition ranking on the value rounded to the digits the page shows (1, 2, 2, 4), best first.
 // A club with no value is null everywhere (value, rating, rank, n) and is not counted in anyone's mean, deviation,
 // rank or n.
-import { OFF_TIER, DEF_TIER } from "./agg_team.js";
-import { nameOf } from "./names.js";
+import { OFF_TIER, DEF_TIER } from "./agg_team.js?v=5a68acbbcf";
+import { nameOf } from "./names.js?v=5a68acbbcf";
 
 // Frozen all the way down (the table is shared by every page that draws the grid).
 const deepFreeze = (o) => { if (o && typeof o === "object" && !Object.isFrozen(o)) { Object.values(o).forEach(deepFreeze); Object.freeze(o); } return o; };

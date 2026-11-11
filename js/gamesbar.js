@@ -1,9 +1,9 @@
 // This week's games strip (D172) and the matchup page's game line (D173), shared by the landing page and the
 // Matchup page so the two draw the same chips from the same /api/teams `games` list. Pure string builders, no
 // DOM, so they are testable in Node (tests/landing.test.mjs, tests/gamesbar.test.mjs).
-import { icon, weatherIconKey, espnIconKey } from "./icons.js";
-import { assetUrl } from "./cards.js";
-import { isPlated, crestSrc } from "./clublogo.js";
+import { icon, weatherIconKey, espnIconKey } from "./icons.js?v=5a68acbbcf";
+import { assetUrl } from "./cards.js?v=5a68acbbcf";
+import { isPlated, crestSrc } from "./clublogo.js?v=5a68acbbcf";
 
 const ESC = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ESC[c]);

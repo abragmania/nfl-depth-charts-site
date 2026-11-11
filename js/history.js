@@ -5,10 +5,10 @@
 // Talks to GET /api/history/{abbr}/{playerKey} through api.js's getHistory() helper, so the published static
 // copy (D67) reads the pre-rendered file instead. This block's own styles live in this file, injected once
 // under the .hist- prefix; styles.css carries none of them.
-import { getHistory, getTeams } from "./api.js";
+import { getHistory, getTeams } from "./api.js?v=5a68acbbcf";
 // D209 (2026-09-28): a crest path from /api/teams is bare and site-root-relative; clublogo.js (through cards.js's
 // assetUrl) anchors it to the site root, so the same call is right on the depth-chart app and on the analytics player page.
-import { isPlated, crestSrc } from "./clublogo.js";
+import { isPlated, crestSrc } from "./clublogo.js?v=5a68acbbcf";
 
 const CSS = `
 .hist { margin-top: 14px; font-size: 13px; }

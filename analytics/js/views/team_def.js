@@ -5,20 +5,20 @@
 // the win/full aggregation and the header are copied from team.js rather than shared beyond teamSideSeg/teamPageState/
 // distList/the zone helpers (team.js's own render loop is entangled with its "lost" module state and its offense-only
 // tiles, so pulling more of it out would cost more than the duplication it would save).
-import { backLink } from "../router.js";
-import { fromQuery, toQuery, seasonsOf, weekLabel } from "../filters.js";
-import { loadFor, loadTeams, loadStatusFeed, loadClubCards, displayName } from "../data.js";
-import { aggregateTeams, teamReference, teamTier, teamRank, teamZones, defTargets, defCarries, SOFT_KEYS } from "../agg_team.js";
-import { gridRows } from "../agg_grid.js";
-import { absences, isMissing } from "../agg_absence.js";
-import { renderFilterBar } from "../filterbar.js";
-import { esc, NA, isNum, pct, fix, signed, int, teamPill, qbStrips, pfrNote, seasonLabel } from "./qb.js";
-import { windowName } from "./qbplayer.js";
-import { lostCardHtml } from "./lost.js";
-import { lineBlock } from "./kit.js";
-import { nameOf } from "../names.js";
-import { snapMethodNote } from "../agg.js";
-import { teamPageState, teamSideSeg, clubZoneField, clubZoneLegend, zonePlaysHtml, TEAM_ZONE_MODES, distList, ordinal, clubGridRowHtml, TGT_COLS, CAR_COLS, RANKINGS_DEF_KEYS, rankingsHref, gridTileHref, lineStripHtml, lineStripSpec } from "./team.js";
+import { backLink } from "../router.js?v=5a68acbbcf";
+import { fromQuery, toQuery, seasonsOf, weekLabel } from "../filters.js?v=5a68acbbcf";
+import { loadFor, loadTeams, loadStatusFeed, loadClubCards, displayName } from "../data.js?v=5a68acbbcf";
+import { aggregateTeams, teamReference, teamTier, teamRank, teamZones, defTargets, defCarries, SOFT_KEYS } from "../agg_team.js?v=5a68acbbcf";
+import { gridRows } from "../agg_grid.js?v=5a68acbbcf";
+import { absences, isMissing } from "../agg_absence.js?v=5a68acbbcf";
+import { renderFilterBar } from "../filterbar.js?v=5a68acbbcf";
+import { esc, NA, isNum, pct, fix, signed, int, teamPill, qbStrips, pfrNote, seasonLabel } from "./qb.js?v=5a68acbbcf";
+import { windowName } from "./qbplayer.js?v=5a68acbbcf";
+import { lostCardHtml } from "./lost.js?v=5a68acbbcf";
+import { lineBlock } from "./kit.js?v=5a68acbbcf";
+import { nameOf } from "../names.js?v=5a68acbbcf";
+import { snapMethodNote } from "../agg.js?v=5a68acbbcf";
+import { teamPageState, teamSideSeg, clubZoneField, clubZoneLegend, zonePlaysHtml, TEAM_ZONE_MODES, distList, ordinal, clubGridRowHtml, TGT_COLS, CAR_COLS, RANKINGS_DEF_KEYS, rankingsHref, gridTileHref, lineStripHtml, lineStripSpec } from "./team.js?v=5a68acbbcf";
 
 const P = (v, d = 1) => (isNum(v) ? pct(v, d) + "%" : NA);
 

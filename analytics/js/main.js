@@ -7,21 +7,21 @@
 // into one Rankings page (an Offense | Defense switch on top, views/rankings.js) and renamed the picker's tab
 // Clubs, so TEAMS now reads Grid, Rankings, Clubs. The old links (#/usage, #/rushing, #/teams, #/team, #/offense,
 // #/defense) keep working as aliases so nothing already bookmarked breaks.
-import * as router from "./router.js";
-import "../../js/sitebar.js"; // side effect only: paints the shared site strip into #sitebar (D209 part 1)
-import { renderNav, sectionForPos } from "./nav.js";
-import { renderUsage } from "./views/usage.js";
-import { renderPlayer } from "./views/player.js";
-import { renderQb } from "./views/qb.js";
-import { renderQbPlayer } from "./views/qbplayer.js";
-import { renderRushing } from "./views/rushing.js";
-import { renderTeams, renderTeam } from "./views/team.js";
-import { renderTeamDefense } from "./views/team_def.js";
-import { renderGrid } from "./views/grid.js";
-import { renderRankings, legacyHash } from "./views/rankings.js";
-import { renderWeek } from "./views/week.js";
-import { loadSeason, loadSeasons } from "./data.js";
-import { fromQuery, seasonsOf, weekKey, weekLabel, currentSeason, setKnownSeasons, seasonsInTime, SEASONS_WAIT_MS } from "./filters.js";
+import * as router from "./router.js?v=5a68acbbcf";
+import "../../js/sitebar.js?v=5a68acbbcf"; // side effect only: paints the shared site strip into #sitebar (D209 part 1)
+import { renderNav, sectionForPos } from "./nav.js?v=5a68acbbcf";
+import { renderUsage } from "./views/usage.js?v=5a68acbbcf";
+import { renderPlayer } from "./views/player.js?v=5a68acbbcf";
+import { renderQb } from "./views/qb.js?v=5a68acbbcf";
+import { renderQbPlayer } from "./views/qbplayer.js?v=5a68acbbcf";
+import { renderRushing } from "./views/rushing.js?v=5a68acbbcf";
+import { renderTeams, renderTeam } from "./views/team.js?v=5a68acbbcf";
+import { renderTeamDefense } from "./views/team_def.js?v=5a68acbbcf";
+import { renderGrid } from "./views/grid.js?v=5a68acbbcf";
+import { renderRankings, legacyHash } from "./views/rankings.js?v=5a68acbbcf";
+import { renderWeek } from "./views/week.js?v=5a68acbbcf";
+import { loadSeason, loadSeasons } from "./data.js?v=5a68acbbcf";
+import { fromQuery, seasonsOf, weekKey, weekLabel, currentSeason, setKnownSeasons, seasonsInTime, SEASONS_WAIT_MS } from "./filters.js?v=5a68acbbcf";
 
 const root = document.getElementById("app");
 const nav = document.getElementById("an-nav");

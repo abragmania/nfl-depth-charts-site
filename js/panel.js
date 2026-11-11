@@ -18,10 +18,10 @@
 // Finding 6: rating, status, and roster designation are already computed on the compiled card and are
 // NEVER refetched here — only bio (draft round, full season/college stats) comes from the network, via
 // GET /api/player/{espnId} (server/api/player.js).
-import { esc, snapHistoryHtml, espnPlacement, espnSchemeOf, gameEndNote } from "./cards.js";
-import { renderHistory } from "./history.js";
-import { getPlayer, getHistory, getGameLog, getJson } from "./api.js";
-import { dkGamePoints } from "../analytics/js/agg_fantasy.js";
+import { esc, snapHistoryHtml, espnPlacement, espnSchemeOf, gameEndNote } from "./cards.js?v=5a68acbbcf";
+import { renderHistory } from "./history.js?v=5a68acbbcf";
+import { getPlayer, getHistory, getGameLog, getJson } from "./api.js?v=5a68acbbcf";
+import { dkGamePoints } from "../analytics/js/agg_fantasy.js?v=5a68acbbcf";
 
 const dash = "—";
 const STATUS_CLASS = {

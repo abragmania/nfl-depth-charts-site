@@ -15,22 +15,22 @@
 //       position (agg_week.js weekAllowedCells + vsUsualFor, drawn by kit.js vsUsualCell: the strip's own figure and
 //       hover). An out starter is red with his fill-in beneath him.
 // Every figure is computed elsewhere; this file loads, picks and draws.
-import { backLink } from "../router.js";
-import { fromQuery, toQuery, weekLabel } from "../filters.js";
-import { loadFor, loadTeams, loadStatusFeed, loadTeamView } from "../data.js";
-import { aggregateTeams, teamReference, teamTargets, teamCarries } from "../agg_team.js";
-import { gridRows } from "../agg_grid.js";
-import { trendFigures } from "../agg_player.js";
-import { qbTrend, aggregateQb } from "../agg_qb.js";
-import { posGroup } from "../agg_allowed.js";
-import { weekState, seasonBlocks, weekAllowedCells, vsUsualFor, trendMarks, VS_USUAL_TEXT, gameOdds, skillStarters, resolveWeekRoute } from "../agg_week.js";
-import { gamesBarHtml, wireGamesToggle, fmtKickoffET } from "../../../js/gamesbar.js";
-import { esc, isNum, pct, teamPill, pfrNote } from "./qb.js";
-import { shareSample, shareCountHtml } from "../table.js";
-import { snapMethodNote, SNAP_SHARE_DEF } from "../agg.js";
-import { teamPageState, playCallingHtml, olineBlockHtml, olineStripHtml } from "./team.js";
-import { dlineBlockHtml, coverageTilesHtml, dlineStripHtml, coverageStripHtml } from "./team_def.js";
-import { vsUsualCell, statusChip, statusNameClass, fmtVsUsual, WEEK_TREND_LABELS } from "./kit.js";
+import { backLink } from "../router.js?v=5a68acbbcf";
+import { fromQuery, toQuery, weekLabel } from "../filters.js?v=5a68acbbcf";
+import { loadFor, loadTeams, loadStatusFeed, loadTeamView } from "../data.js?v=5a68acbbcf";
+import { aggregateTeams, teamReference, teamTargets, teamCarries } from "../agg_team.js?v=5a68acbbcf";
+import { gridRows } from "../agg_grid.js?v=5a68acbbcf";
+import { trendFigures } from "../agg_player.js?v=5a68acbbcf";
+import { qbTrend, aggregateQb } from "../agg_qb.js?v=5a68acbbcf";
+import { posGroup } from "../agg_allowed.js?v=5a68acbbcf";
+import { weekState, seasonBlocks, weekAllowedCells, vsUsualFor, trendMarks, VS_USUAL_TEXT, gameOdds, skillStarters, resolveWeekRoute } from "../agg_week.js?v=5a68acbbcf";
+import { gamesBarHtml, wireGamesToggle, fmtKickoffET } from "../../../js/gamesbar.js?v=5a68acbbcf";
+import { esc, isNum, pct, teamPill, pfrNote } from "./qb.js?v=5a68acbbcf";
+import { shareSample, shareCountHtml } from "../table.js?v=5a68acbbcf";
+import { snapMethodNote, SNAP_SHARE_DEF } from "../agg.js?v=5a68acbbcf";
+import { teamPageState, playCallingHtml, olineBlockHtml, olineStripHtml } from "./team.js?v=5a68acbbcf";
+import { dlineBlockHtml, coverageTilesHtml, dlineStripHtml, coverageStripHtml } from "./team_def.js?v=5a68acbbcf";
+import { vsUsualCell, statusChip, statusNameClass, fmtVsUsual, WEEK_TREND_LABELS } from "./kit.js?v=5a68acbbcf";
 
 const DASH = "–";
 // The games strip from inside the analytics app: a chip opens the depth chart's Matchup page one folder up, its
