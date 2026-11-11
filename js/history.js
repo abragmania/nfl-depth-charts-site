@@ -6,13 +6,9 @@
 // copy (D67) reads the pre-rendered file instead. This block's own styles live in this file, injected once
 // under the .hist- prefix; styles.css carries none of them.
 import { getHistory, getTeams } from "./api.js";
-import { assetUrl } from "./cards.js";
-
-// D209 (2026-09-28): a crest path from /api/teams is bare and site-root-relative ("img/logos/KC.png",
-// server/api/teams.js's own contract). cards.js's assetUrl anchors it to the site root from its own module
-// address, so the same call is right on the depth-chart app (at the root) and on the analytics player page
-// (one folder down), which draws this history block since D209.
-const crestUrl = (u) => assetUrl(u);
+// D209 (2026-09-28): a crest path from /api/teams is bare and site-root-relative; clublogo.js (through cards.js's
+// assetUrl) anchors it to the site root, so the same call is right on the depth-chart app and on the analytics player page.
+import { isPlated, crestSrc } from "./clublogo.js";
 
 const CSS = `
 .hist { margin-top: 14px; font-size: 13px; }
@@ -29,6 +25,7 @@ const CSS = `
 .hist-table tr.hist-collapsed td { text-align:center; font-style:italic; padding:8px 6px; }
 .hist-team { display:inline-flex; align-items:center; gap:4px; }
 .hist-team img { width:20px; height:20px; object-fit:contain; }
+.hist-team img.club-plate { width:20px; height:20px; padding:2px; box-sizing:border-box; background:#e9edf1; border-radius:50%; }
 .hist-team .hist-oldcode { font-size:10px; color:var(--muted,#8a94a0); }
 .hist-teamleg { display:inline-flex; align-items:center; gap:6px; }
 .hist-teamsep { color:var(--muted,#8a94a0); font-size:11px; }
@@ -160,7 +157,9 @@ function rowHtml(r, teams, isCurrentSeason = false) {
   const old = stints.length === 1 && r.teamRaw && r.teamRaw !== stints[0].abbr ? `<span class="hist-oldcode">${esc(r.teamRaw)}</span>` : "";
   const logos = stints.map((s) => {
     const t = teams.find((x) => x.abbr === s.abbr);
-    return `<span class="hist-teamleg">${t?.logo ? `<img src="${esc(crestUrl(t.logo))}" alt="${esc(s.abbr)}">` : ""}${esc(s.abbr)}</span>`;
+    const plated = isPlated(s.abbr);
+    const src = crestSrc(t, plated);
+    return `<span class="hist-teamleg">${src ? `<img${plated ? ' class="club-plate"' : ""} src="${esc(src)}" alt="${esc(s.abbr)}" onerror="this.remove()">` : ""}${esc(s.abbr)}</span>`;
   }).join(`<span class="hist-teamsep">/</span>`);
   const teamHtml = stints.length ? `<span class="hist-team">${logos}${old}</span>` : dash;
   const star = r.ovr != null && r.matchConfidence !== "id" ? `<span class="hist-star" title="matched by ${esc(r.matchMethod)}, not by player id">*</span>` : "";

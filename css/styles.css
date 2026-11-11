@@ -170,6 +170,8 @@ main.page-landing { padding:10px 20px 12px; }
 .teamhead .meta > * { white-space:nowrap; flex:none; }
 .opp { display:inline-flex; align-items:center; gap:5px; }
 .opp-logo { width:17px !important; height:17px !important; }
+/* The faint crests (CAR, NYJ, BAL) on a light circle so they read on the dark page (public/js/clublogo.js). */
+.club-plate { background:#e9edf1; border-radius:50%; padding:2px; box-sizing:border-box; object-fit:contain; }
 /* Ruling E: these must stay on the header's single line. min-width:0 plus the ellipsis on .chip below
    lets the widest element (the heat summary chip) give ground instead of pushing the whole control
    group onto a second row - which is what happened on HOU, whose two chips cost the defensive side

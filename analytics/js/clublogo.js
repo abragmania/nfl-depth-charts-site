@@ -2,7 +2,7 @@
 // The crest is the dark-background variant (logoDark), loaded through cards.js's assetUrl so it resolves on the public
 // static site too. The abbreviation stays in the page as visually hidden text (sort, search, copy) and as the image's
 // alt and title; a crest that fails to load falls back to today's coloured chip (never a broken image or a blank).
-import { assetUrl } from "../../js/cards.js";
+import { isPlated, crestSrc } from "../../js/clublogo.js";
 
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
@@ -15,14 +15,12 @@ function luminance(hex) {
   return 0.2126 * lin((n >> 16) & 255) + 0.7152 * lin((n >> 8) & 255) + 0.0722 * lin(n & 255);
 }
 
-const PLATED = new Set(["CAR", "NYJ", "BAL"]);
-
 // `t`: the club object from getTeams() (or undefined for an unknown abbr). Returns the <a> for the club.
 export function clubChip(abbr, t, href, { cls = "", title = "" } = {}) {
   const style = t ? ` style="--team-bg:${esc(t.colourPrimary)};--team-ink:${(luminance(t.colourPrimary) ?? 0) > 0.40 ? "#14181d" : "#fff"}"` : "";
   // The faint crests sit on a light circle in a name cell (analytics.css), so they use the light-background file there.
-  const plated = /\ban-nameclub\b/.test(cls) && PLATED.has(abbr);
-  const src = t ? assetUrl((plated ? t.logo : t.logoDark) || t.logo || t.logoDark || "") : "";
+  const plated = /\ban-nameclub\b/.test(cls) && isPlated(abbr);
+  const src = crestSrc(t, plated);
   const ttl = ` title="${esc(title ? `${abbr} · ${title}` : abbr)}"`;
   const base = `an-teampill${cls ? " " + cls : ""}`;
   const club = ` data-club="${esc(abbr)}"`;

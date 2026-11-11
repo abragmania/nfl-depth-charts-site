@@ -4,6 +4,7 @@ import { renderColumn, renderTray, esc, fitNames, wireDepthToggles, espnSchemeOf
 import { mountScaledField, disposeCurrentView, MIN_READABLE_SCALE, decideViewMode, HEADER_FOLD_WIDTH } from "./viewfit.js";
 import { navStripHtml, wireNav } from "./nav.js";
 import { renderPhoneList } from "./phonelist.js";
+import { isPlated, crestSrc } from "./clublogo.js";
 
 const dash = "—";
 const STALE_HOURS = 36;
@@ -66,7 +67,7 @@ export function headerHtml(team, view, fromFixture = false, teams, withLegend = 
   const asOfFull = view.dataAsOf ? esc(new Date(view.dataAsOf).toLocaleString()) : dash;
 
   const oppHtml = opp
-    ? `<span class="opp">${opp.home ? "vs" : "@"} ${oppTeam ? `<img class="opp-logo" src="${esc(oppTeam.logo)}" alt="${esc(opp.abbr)}">` : ""}${esc(opp.abbr)} · ${fmtKickoff(opp.kickoff)}</span>`
+    ? `<span class="opp">${opp.home ? "vs" : "@"} ${oppTeam ? `<img class="opp-logo${isPlated(opp.abbr) ? " club-plate" : ""}" src="${esc(crestSrc(oppTeam, isPlated(opp.abbr)))}" alt="${esc(opp.abbr)}" onerror="this.style.visibility='hidden'">` : ""}${esc(opp.abbr)} · ${fmtKickoff(opp.kickoff)}</span>`
     : `<span class="opp">${dash}</span>`;
 
   const chips = [heatSummaryChip(view)];

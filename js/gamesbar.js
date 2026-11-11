@@ -3,6 +3,7 @@
 // DOM, so they are testable in Node (tests/landing.test.mjs, tests/gamesbar.test.mjs).
 import { icon, weatherIconKey, espnIconKey } from "./icons.js";
 import { assetUrl } from "./cards.js";
+import { isPlated, crestSrc } from "./clublogo.js";
 
 const ESC = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ESC[c]);
@@ -60,8 +61,9 @@ function gameChipHtml(g, teamsByAbbr, active, links = GAME_LINKS) {
   const cur = active ? ' aria-current="true"' : "";
   const title = [fmtKickoffET(g.kickoff), g.venue?.name].filter(Boolean).join(" · ");
   const rows = d.rows.map(({ abbr, data }) => {
-    const url = logoUrl(teamsByAbbr.get(abbr));
-    const logo = url ? `<img class="game-chip-logo" src="${esc(url)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">` : '<span class="game-chip-logo"></span>';
+    const plated = isPlated(abbr);
+    const url = plated ? crestSrc(teamsByAbbr.get(abbr), true) : logoUrl(teamsByAbbr.get(abbr));
+    const logo = url ? `<img class="game-chip-logo${plated ? " club-plate" : ""}" src="${esc(url)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">` : '<span class="game-chip-logo"></span>';
     const val = !data ? "" : data.kind === "total"
       ? `<span class="game-chip-ou">O/U</span> ${esc(data.text)}` : esc(data.text);
     return `${logo}<span class="game-chip-abbr">${esc(abbr)}</span><span class="game-chip-data game-chip-data-${data?.kind ?? "none"}">${val}</span>`;
