@@ -39,12 +39,6 @@ const REFERENCE_WIDTH = 1600; // the OFF_BANDS anchors below were tuned against 
 export const LAYOUT_WIDTH = 1800;
 const SCALE = LAYOUT_WIDTH / REFERENCE_WIDTH;
 
-// Both field-surface variants live in styles.css behind [data-field-variant="A"|"B"] — flip this one
-// constant to switch every page (team/side/matchup) at once. "A" = neutral charcoal field with the
-// club's colour as a soft edge vignette; "B" = one vertical wash of the club's primary colour, darkest
-// at the top/bottom edges, lighter at the line of scrimmage.
-export const FIELD_VARIANT = "A";
-
 // D111: the secondary (CB, NB, S) draws on one row — corners at the outer edges, nickel inside the left
 // corner, safeties inside them — instead of two, which keeps the defense at four rows and the shorter
 // canvas that gives every club (D107). Horizontal placement is untouched: corners/nickel/safeties keep
@@ -898,19 +892,29 @@ const labelCrowded = (cols, reach, dropAware = false) =>
 // D233, narrow canvas only: a label that has to lift prints in the gap ABOVE its row, at the left edge, and on the
 // narrow canvas the row above can have a card standing right there (the Offense page's left tackle over PASS
 // CATCHERS). Where that card's bottom would come within the lifted label, the row above is made that much taller,
-// which pushes the label and its row down clear of it; a row with a "not on chart" strip already has the room.
+// which pushes the label and its row down clear of it. A "not on chart" strip on the row above is moved right of the
+// label when its text still fits there (computeLayout); one too long for that stays at the row's bottom, under the
+// label, so the room is added BELOW that strip (labelRoomBelow, read by placeRow) rather than above it.
 const LABEL_LIFT_AIR = 2;
-function reserveLabelRoom(rowsTopDown, labelMap, gap) {
+function stripStaysUnderLabel(row, tray, reach, canvasWidth) {
+  const natural = trayNaturalWidth(tray);
+  const box = fitTrayWidth(trayBounds(row, tray.band), natural, canvasWidth);
+  return box.left < reach && box.right - reach < natural && reach + natural > canvasWidth;
+}
+function reserveLabelRoom(rowsTopDown, labelMap, gap, canvasWidth) {
   for (let i = 1; i < rowsTopDown.length; i++) {
     const row = rowsTopDown[i];
     const above = rowsTopDown[i - 1];
     if (row.level === above.level) continue; // one label per level, printed on its first row
     const reach = levelLabelWidth(row.label || labelMap[row.level] || row.level);
     if (!labelCrowded(row.cols, reach, true)) continue; // this label prints inside its own stripe
-    const low = Math.max(0, ...above.cols.filter((c) => c.x - c.width / 2 < reach)
+    const stripInWay = above.trays.some((t) => stripStaysUnderLabel(above, t, reach, canvasWidth));
+    const low = stripInWay ? above.height : Math.max(0, ...above.cols.filter((c) => c.x - c.width / 2 < reach)
       .map((c) => (c.stacked ? c.yOffset ?? 0 : 0) + (c.drop ?? 0) + c.height));
     const short = LABEL_LIFT + LABEL_LIFT_AIR - (above.height - low + gap);
-    if (short > 0) above.height += short;
+    if (short <= 0) continue;
+    above.height += short;
+    if (stripInWay) above.labelRoomBelow = (above.labelRoomBelow ?? 0) + short;
   }
 }
 
@@ -1037,8 +1041,8 @@ export function computeLayout(teamView, opts = {}) {
   const levelGap = levelGapOf(style);
   // D233: on the narrow canvas a lifted level label is given room clear of any card above it (reserveLabelRoom).
   if (compressedWidth) {
-    reserveLabelRoom(defRowsTopDown, DEF_LEVEL_LABEL, bandGap + levelGap);
-    reserveLabelRoom(offRowsTopDown, OFF_LEVEL_LABEL, bandGap + levelGap);
+    reserveLabelRoom(defRowsTopDown, DEF_LEVEL_LABEL, bandGap + levelGap, compressedWidth);
+    reserveLabelRoom(offRowsTopDown, OFF_LEVEL_LABEL, bandGap + levelGap, compressedWidth);
   }
   const placeSpan = (rows, top, extraGap) => {
     let y = top;
@@ -1305,8 +1309,10 @@ function placeRow(row, top) {
   row.bottom = top + row.height;
   row.contentTop = row.top;
   row.contentBottom = row.top + row.contentHeight;
-  row.trayTop = row.trayHeight ? row.bottom - (row.trayHeight - TRAY_GAP) : row.bottom;
-  row.trayBottom = row.bottom;
+  // D233: room reserveLabelRoom added under a strip it found in a lifted label's way stays below the strip.
+  const trayBase = row.bottom - (row.labelRoomBelow ?? 0);
+  row.trayTop = row.trayHeight ? trayBase - (row.trayHeight - TRAY_GAP) : trayBase;
+  row.trayBottom = trayBase;
   for (const c of row.cols) {
     // D63: a stacked column (TE2 under TE1) takes its place down the stack rather than the row's top.
     // Every column starts on the row's shared top line (so a row reads as one row) but is sized to its OWN
@@ -1408,8 +1414,9 @@ function trayNaturalWidth(tray) {
     });
     return w;
   }
-  const label = tray.band ? `not on chart · ${tray.band}` : "not on chart";
-  let w = TRAY_TEXT_PAD + label.length * TRAY_LABEL_CHAR_W;
+  // A one-band strip prints the band's display name too ("NB" prints "CB · Nickel"), so it is costed the same way.
+  const label = tray.band ? "not on chart · ".length + Math.max(String(tray.band).length, TRAY_BAND_NAME_CHARS) : "not on chart".length;
+  let w = TRAY_TEXT_PAD + label * TRAY_LABEL_CHAR_W;
   for (const p of tray.entries ?? []) w += trayChipWidth(p);
   return w;
 }

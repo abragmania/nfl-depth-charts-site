@@ -54,8 +54,8 @@
 //                  (pfrDrops, pfrTgt carry the two sums); null when PFR lists him in none (its file may be empty).
 //   dk, dkG, dkTdShare = agg_fantasy.js (DraftKings, D194), dkG over this row's g.
 // PFR is a weekly table, so dropPer100 goes blank under a down or quarter filter, as routes do.
-import { gamesInWindow, playPredicate, posAllowed, isSituational } from "./filters.js?v=5a68acbbcf";
-import { fantasyByPlayer, dkFields } from "./agg_fantasy.js?v=5a68acbbcf";
+import { gamesInWindow, playPredicate, posAllowed, isSituational } from "./filters.js?v=b92308e039";
+import { fantasyByPlayer, dkFields } from "./agg_fantasy.js?v=b92308e039";
 
 export const colIndex = (cols) => Object.fromEntries((cols || []).map((c, i) => [c, i]));
 

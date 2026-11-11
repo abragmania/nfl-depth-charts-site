@@ -1,7 +1,7 @@
 // The filter bar every analytics page carries. It only reads a state and hands back a new one (onChange);
 // the page turns that into the hash, so every filter combination is a link (filters.js).
-import { POSITIONS, cyclePos, weekLabel, defaultState, prevAvailable, splitKey, REG_SEASON_WEEKS } from "./filters.js?v=5a68acbbcf";
-import { loadSeasons } from "./data.js?v=5a68acbbcf";
+import { POSITIONS, cyclePos, weekLabel, defaultState, prevAvailable, splitKey, REG_SEASON_WEEKS } from "./filters.js?v=b92308e039";
+import { loadSeasons } from "./data.js?v=b92308e039";
 
 // D184: the seasons list for the picker, fetched once and cached. `ctx.seasons` can override it (tests, or a
 // caller that already has the list); otherwise the bar paints with what it has (falls back to the picked

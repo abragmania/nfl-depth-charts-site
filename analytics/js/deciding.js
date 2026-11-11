@@ -10,12 +10,12 @@
 //     vsUsualFor; kit.js vsUsualCell, so the figure, colour and rank are the This-week strip's, never recomputed here).
 //     Current season only: a past season's table (or a club the teams file lacks) gets dashes. wkOpp sorts by club,
 //     wkVs by the DK/g vs-usual figure.
-import { aggregateUsage } from "./agg.js?v=5a68acbbcf";
-import { aggregateRush } from "./agg_rush.js?v=5a68acbbcf";
-import { aggregateQb } from "./agg_qb.js?v=5a68acbbcf";
-import { posGroup } from "./agg_allowed.js?v=5a68acbbcf";
-import { nextGame, vsUsualFor, weekAllowedCells, weekState, seasonBlocks, VS_USUAL_TEXT } from "./agg_week.js?v=5a68acbbcf";
-import { vsUsualCell } from "./views/kit.js?v=5a68acbbcf";
+import { aggregateUsage } from "./agg.js?v=b92308e039";
+import { aggregateRush } from "./agg_rush.js?v=b92308e039";
+import { aggregateQb } from "./agg_qb.js?v=b92308e039";
+import { posGroup } from "./agg_allowed.js?v=b92308e039";
+import { nextGame, vsUsualFor, weekAllowedCells, weekState, seasonBlocks, VS_USUAL_TEXT } from "./agg_week.js?v=b92308e039";
+import { vsUsualCell } from "./views/kit.js?v=b92308e039";
 
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const isNum = (v) => v !== null && v !== undefined && Number.isFinite(+v);

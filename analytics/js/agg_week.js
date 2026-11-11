@@ -18,12 +18,12 @@
 //       D or Q (name and status only). "Top by targets" counts the club's targets in the current season and keeps
 //       only men on the club's current depth chart (a traded or released man drops out).
 // Everything here is free of page state so the This-week matchup page (increment C) reuses it.
-import { colIndex, clubGames } from "./agg.js?v=5a68acbbcf";
-import { gamesInWindow, splitKey } from "./filters.js?v=5a68acbbcf";
-import { allowedByPosition, allowedVsUsual, ALLOWED_FIGURES, posGroup } from "./agg_allowed.js?v=5a68acbbcf";
-import { isMissing } from "./agg_absence.js?v=5a68acbbcf";
-import { posCells } from "./views/allowed_table.js?v=5a68acbbcf";
-import { fmtKickoffShort } from "../../js/gamesbar.js?v=5a68acbbcf";
+import { colIndex, clubGames } from "./agg.js?v=b92308e039";
+import { gamesInWindow, splitKey } from "./filters.js?v=b92308e039";
+import { allowedByPosition, allowedVsUsual, ALLOWED_FIGURES, posGroup } from "./agg_allowed.js?v=b92308e039";
+import { isMissing } from "./agg_absence.js?v=b92308e039";
+import { posCells } from "./views/allowed_table.js?v=b92308e039";
+import { fmtKickoffShort } from "../../js/gamesbar.js?v=b92308e039";
 
 const truthy = (v) => v === true || v === 1 || v === "1" || v === "true";
 const isNum = (v) => v !== null && v !== undefined && Number.isFinite(+v);

@@ -7,11 +7,10 @@
 // Every explained part is the outermost thing on its row on the side its line leaves from (or leaves the card
 // through its bottom edge, or along the seam under the banner), so no line runs across another part.
 // planLeaders is the pure layout (measured boxes in, lines and label positions out); tests/guide.test.mjs drives it.
-// GUIDE_CALLOUTS is also the claims table: each sentence names the rulings it rests on, and the test checks
-// every one is still live in RULES.md, so a retired ruling turns the suite red.
-import { renderColumn, esc, fitNames } from "./cards.js?v=5a68acbbcf";
-import { layoutStyle } from "./field.js?v=5a68acbbcf";
-import { registerView } from "./viewfit.js?v=5a68acbbcf";
+// GUIDE_CALLOUTS is also the claims table: each sentence names the rulings it rests on.
+import { renderColumn, esc, fitNames } from "./cards.js?v=b92308e039";
+import { layoutStyle } from "./field.js?v=b92308e039";
+import { registerView } from "./viewfit.js?v=b92308e039";
 
 // ---- the sample: a right tackle column on a made-up club -----------------------------------------------------
 // The opening starter is on IR, so the first healthy man below him plays and takes line one with the green
@@ -48,7 +47,7 @@ export const GUIDE_CALLOUTS = [
     text: "★ a star is out, ▲ up from the practice squad, ● joined after Week 1." },
   { sel: ".prow-one .snaps", side: "right", exit: "side", title: "Snap counts", rulings: ["D91", "D162"],
     text: "His snaps in the last 3 games, most recent first (0 = did not play)." },
-  { sel: ".prow-outrail .prow-ovr", side: "right", exit: "side", title: "Madden rating", rulings: ["D1", "D22", "D43"],
+  { sel: ".prow-outrail .prow-ovr", side: "right", exit: "side", title: "Madden rating", rulings: ["D1", "D22"],
     text: "His Madden rating; we use EA's latest weekly update. Greener is better." },
 ];
 

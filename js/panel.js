@@ -18,10 +18,10 @@
 // Finding 6: rating, status, and roster designation are already computed on the compiled card and are
 // NEVER refetched here — only bio (draft round, full season/college stats) comes from the network, via
 // GET /api/player/{espnId} (server/api/player.js).
-import { esc, snapHistoryHtml, espnPlacement, espnSchemeOf, gameEndNote } from "./cards.js?v=5a68acbbcf";
-import { renderHistory } from "./history.js?v=5a68acbbcf";
-import { getPlayer, getHistory, getGameLog, getJson } from "./api.js?v=5a68acbbcf";
-import { dkGamePoints } from "../analytics/js/agg_fantasy.js?v=5a68acbbcf";
+import { esc, snapHistoryHtml, espnPlacement, espnSchemeOf, gameEndNote } from "./cards.js?v=b92308e039";
+import { renderHistory, historyRequest } from "./history.js?v=b92308e039";
+import { getPlayer, getHistory, getGameLog, getJson } from "./api.js?v=b92308e039";
+import { dkGamePoints } from "../analytics/js/agg_fantasy.js?v=b92308e039";
 
 const dash = "—";
 const STATUS_CLASS = {
@@ -598,9 +598,13 @@ function wireCloseHandlersOnce(asideEl) {
   asideEl.addEventListener("click", (e) => {
     if (e.target.closest(".panel-close")) navigateAwayFromPlayer(asideEl);
   });
-  document.addEventListener("keydown", (e) => {
+  // The listener sits on the document, so it outlives this aside when the page re-renders: once the aside has
+  // left the page it removes itself, and a stale aside can never fire history.back() from a later page.
+  const onKey = (e) => {
+    if (!asideEl.isConnected) { document.removeEventListener("keydown", onKey); return; }
     if (e.key === "Escape" && !asideEl.hidden) navigateAwayFromPlayer(asideEl);
-  });
+  };
+  document.addEventListener("keydown", onKey);
 }
 
 function fillDraftRound(asideEl, apiDraft) {
@@ -638,24 +642,12 @@ export function gamesChipData(seasons) {
   return { text: `${games} game${games === 1 ? "" : "s"}`, title: `Regular-season games on file${span}` };
 }
 
-// history.js owns the /api/history fetch for the position/season table it renders into `[data-history]`,
-// but it renders straight into that container and hands nothing back to its caller — and this builder's
-// file list doesn't include history.js — so this calls api.js's getHistory() a second time for the same
-// player rather than reaching into that file for its parsed response. Mirrors history.js's own query-param
-// and team/key fallback logic exactly (see that file's renderHistory) so both calls resolve the same player.
-// Returns [] (not a throw) for the deliberate "no prior NFL seasons on record" 404 — a rookie's honest chip
-// is "0 games", not an error.
-// `getHistoryFn` defaults to this file's own getHistory (public/js/api.js) — mountCardData's caller can
-// supply a different one (the analytics player page's own data.js, whose relative paths are correct one
-// folder down from the site root; see mountCardData's header comment).
-async function fetchGamesSeasons(card, abbr, getHistoryFn = getHistory) {
-  const team = String(abbr || card?.teamAbbr || card?.team || "").toUpperCase();
-  const key = card?.playerKey ?? card?.gsisId ?? card?.espnId ?? "";
-  if (!team || !key) return [];
-  const q = new URLSearchParams();
-  for (const [k, v] of [["gsisId", card?.gsisId], ["espnId", card?.espnId], ["pfrId", card?.pfrId], ["eaId", card?.rating?.eaId], ["name", card?.name], ["college", card?.bio?.college], ["birthDate", card?.bio?.birthDate], ["position", card?.displayLabel ?? card?.position]])
-    if (v != null && v !== "") q.set(k, String(v));
-  const { ok, status, body } = await getHistoryFn(team, key, q);
+// The games chip reads the same /api/history request the season table does (history.js's historyRequest,
+// made once in mountCardData). Returns [] (not a throw) for the deliberate "no prior NFL seasons on record"
+// 404 — a rookie's honest chip is "0 games", not an error.
+async function fetchGamesSeasons(request) {
+  if (!request.team || !request.key) return [];
+  const { ok, status, body } = await request.response;
   if (status === 404 && body?.error?.code === "no_history") return [];
   if (!ok) throw new Error(body?.error?.message || `${status} /api/history`);
   return body?.seasons || [];
@@ -759,7 +751,8 @@ export function mountCardData(containerEl, card, teamView, teamMeta, { statsLink
   const abbr = teamMeta?.abbr || teamView?.abbr || "";
 
   wireStatsTabsOnce(containerEl);
-  { const h = containerEl.querySelector("[data-history]"); if (h) renderHistory(h, card, teamMeta, { abbr: teamView?.abbr ?? teamMeta?.abbr }); }
+  const historyReq = historyRequest(card, abbr, getHistoryFn); // one fetch for the season table and the games chip
+  { const h = containerEl.querySelector("[data-history]"); if (h) renderHistory(h, card, teamMeta, { request: historyReq }); }
   if (statsLink) patchStatsLink(containerEl, myGen, card, teamView?.season); // Job 2: shows itself only if this man has analytics data
 
   // D115: independent of the ESPN-bio fetch below (gated on card.espnId) — the games count comes from
@@ -774,14 +767,15 @@ export function mountCardData(containerEl, card, teamView, teamMeta, { statsLink
   // D165: what the Game log tab fetches when it is first opened (showStatsTab); gen ties it to this opening.
   containerEl._gameLogReq = { gen: myGen, abbr, playerKey: String(card.playerKey ?? ""), family, season: teamView?.season ?? null, snapShare: card.snapShare ?? null, started: false, getGameLogFn };
 
-  fetchGamesSeasons(card, abbr, getHistoryFn)
+  fetchGamesSeasons(historyReq)
     .then((seasons) => {
       if (containerEl._panelGen !== myGen) return;
       patchGamesChip(containerEl, gamesChipData(seasons));
       containerEl._histSeasons = seasons;
       if (containerEl._espnStats) renderStats(containerEl, containerEl._espnStats, family, seasons);
     })
-    .catch(() => {}); // leave the dash placeholder; a real failure already surfaces via the history block above
+    // The chip keeps its dash and says why on hover; the history block above shows the same failure in full.
+    .catch((err) => { if (containerEl._panelGen === myGen) patchGamesChip(containerEl, { text: dash, title: `Games unavailable: ${err?.message || "history request failed"}` }); });
 
   if (!card.espnId) return; // finding 1: no ESPN id on file -> card-only panel, no fetch, no error state
 

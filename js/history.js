@@ -5,10 +5,10 @@
 // Talks to GET /api/history/{abbr}/{playerKey} through api.js's getHistory() helper, so the published static
 // copy (D67) reads the pre-rendered file instead. This block's own styles live in this file, injected once
 // under the .hist- prefix; styles.css carries none of them.
-import { getHistory, getTeams } from "./api.js?v=5a68acbbcf";
+import { getHistory, getTeams } from "./api.js?v=b92308e039";
 // D209 (2026-09-28): a crest path from /api/teams is bare and site-root-relative; clublogo.js (through cards.js's
 // assetUrl) anchors it to the site root, so the same call is right on the depth-chart app and on the analytics player page.
-import { isPlated, crestSrc } from "./clublogo.js?v=5a68acbbcf";
+import { isPlated, crestSrc } from "./clublogo.js?v=b92308e039";
 
 const CSS = `
 .hist { margin-top: 14px; font-size: 13px; }
@@ -220,17 +220,25 @@ export function historyHtml(data, teamsMeta) {
   </div>`;
 }
 
-export async function renderHistory(container, card, teamsMeta, { abbr = "" } = {}) {
-  if (!container) return;
-  ensureStyle();
+// One /api/history request for a card: the team/key fallback and the ids the server matches on, written once. The
+// season table below and the player panel's games chip (panel.js) both read the same request, so opening a card
+// fetches the history once. `getHistoryFn` is api.js's getHistory unless the page hands in its own cached loader.
+export function historyRequest(card, abbr = "", getHistoryFn = getHistory) {
   const team = (abbr || card?.teamAbbr || card?.team || abbrFromRoute() || "").toUpperCase();
   const key = card?.playerKey ?? card?.gsisId ?? card?.espnId ?? "";
-  container.innerHTML = `<div class="hist-state">Loading season history…</div>`;
   const q = new URLSearchParams();
   for (const [k, v] of [["gsisId", card?.gsisId], ["espnId", card?.espnId], ["pfrId", card?.pfrId], ["eaId", card?.rating?.eaId], ["name", card?.name], ["college", card?.bio?.college], ["birthDate", card?.bio?.birthDate], ["position", card?.displayLabel ?? card?.position]]) if (v != null && v !== "") q.set(k, String(v));
+  return { team, key, response: getHistoryFn(team, key, q) };
+}
+
+// `request` is a historyRequest already made for this card (the panel shares one); without it this makes its own.
+export async function renderHistory(container, card, teamsMeta, { abbr = "", request = null } = {}) {
+  if (!container) return;
+  ensureStyle();
+  container.innerHTML = `<div class="hist-state">Loading season history…</div>`;
   const token = (container.dataset.histToken = String(Date.now()) + Math.random());
   try {
-    const { ok, status, body } = await getHistory(team, key, q);
+    const { ok, status, body } = await (request ?? historyRequest(card, abbr)).response;
     if (container.dataset.histToken !== token) return; // a newer render superseded this one
     if (status === 404 && body?.error?.code === "no_history") { container.innerHTML = `<div class="hist-state">No prior NFL seasons on record${body.currentSeason ? ` (rookie in ${esc(body.currentSeason)})` : ""}.</div>`; return; }
     if (!ok) throw new Error(body?.error?.message || `${status} /api/history`);

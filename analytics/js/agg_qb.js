@@ -42,9 +42,9 @@
 // INCREMENT 6 ADDITIONS (the QB page's game log; new fields only): each series week also carries `sacks` (his sacks
 //   that week, same window and game rules as the row's sacks); qbGameCuts (below) gives the log's heat cuts and
 //   qbPoolStat the headline tiles' league mean, tier and rank for figures the reference has no cuts for.
-import { colIndex, clubGames, percentileCuts, tierFromCuts, MIN_POOL, pooledRatio, plainMean, snapGame, poolSnapShare } from "./agg.js?v=5a68acbbcf";
-import { gamesInWindow, playPredicate, isSituational } from "./filters.js?v=5a68acbbcf";
-import { fantasyByPlayer, dkFields } from "./agg_fantasy.js?v=5a68acbbcf";
+import { colIndex, clubGames, percentileCuts, tierFromCuts, MIN_POOL, pooledRatio, plainMean, snapGame, poolSnapShare } from "./agg.js?v=b92308e039";
+import { gamesInWindow, playPredicate, isSituational } from "./filters.js?v=b92308e039";
+import { fantasyByPlayer, dkFields } from "./agg_fantasy.js?v=b92308e039";
 
 const num = (v) => (v === null || v === undefined || v === "" || !Number.isFinite(+v) ? null : +v);
 const truthy = (v) => v === true || v === 1 || v === "1" || v === "true";

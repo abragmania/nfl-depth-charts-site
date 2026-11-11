@@ -1,22 +1,19 @@
-import { getTeams, getTeam, invalidateTeam } from "./api.js?v=5a68acbbcf";
-import { computeLayout, renderFieldSvg, renderLevelLabels, FIELD_VARIANT, REDUCED_DEPTH_ROWS } from "./field.js?v=5a68acbbcf";
-import { renderColumn, renderTray, esc, fitNames, wireDepthToggles, espnSchemeOf, unitTagsHtml, assetUrl } from "./cards.js?v=5a68acbbcf";
-import { mountScaledField, disposeCurrentView, MIN_READABLE_SCALE, decideViewMode, HEADER_FOLD_WIDTH } from "./viewfit.js?v=5a68acbbcf";
-import { navStripHtml, wireNav } from "./nav.js?v=5a68acbbcf";
-import { renderPhoneList } from "./phonelist.js?v=5a68acbbcf";
-import { isPlated, crestSrc } from "./clublogo.js?v=5a68acbbcf";
+import { getTeams, getTeam, invalidateTeam } from "./api.js?v=b92308e039";
+import { computeLayout, renderFieldSvg, renderLevelLabels, REDUCED_DEPTH_ROWS } from "./field.js?v=b92308e039";
+import { renderColumn, renderTray, esc, fitNames, wireDepthToggles, espnSchemeOf, unitTagsHtml, assetUrl } from "./cards.js?v=b92308e039";
+import { mountScaledField, disposeCurrentView, MIN_READABLE_SCALE, decideViewMode, HEADER_FOLD_WIDTH } from "./viewfit.js?v=b92308e039";
+import { navStripHtml, wireNav } from "./nav.js?v=b92308e039";
+import { renderPhoneList } from "./phonelist.js?v=b92308e039";
+import { isPlated, crestSrc } from "./clublogo.js?v=b92308e039";
+import { fmtKickoffET } from "./gamesbar.js?v=b92308e039";
 
 const dash = "—";
 const STALE_HOURS = 36;
 
 const record = (r) => (r ? `${r.wins}-${r.losses}${r.ties ? "-" + r.ties : ""}` : dash);
 
-function fmtKickoff(iso) {
-  if (!iso) return dash;
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return dash;
-  return d.toLocaleString(undefined, { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
-}
+// The "Next:" kickoff in Eastern time and labelled ET, the same wording as the games strip (gamesbar.js).
+const fmtKickoff = (iso) => fmtKickoffET(iso) ?? dash;
 
 // Ruling E: the header is one line, and the full "9/13/2026, 11:15:33 AM" was ~50px of that line spent on
 // a seconds value nobody reads. Short form on the chip, the full timestamp in its title.
@@ -123,7 +120,7 @@ export function headerHtml(team, view, fromFixture = false, teams, withLegend = 
 // six items stay direct flex children of `.legend` and every window big enough today renders identically.
 export function legendHtml(extraClass = "") {
   return `<div class="legend${extraClass ? " " + extraClass : ""}">
-    <button type="button" class="legend-chip" aria-label="Show the key">Legend</button>
+    <button type="button" class="legend-chip" aria-label="Show the key" aria-expanded="false">Legend</button>
     <span class="legend-items">
     <span><b>Bold top row</b> = opening-day starter</span>
     <span><span class="sw sw-out"></span><b>OUT</b> starter out</span>
@@ -132,6 +129,33 @@ export function legendHtml(extraClass = "") {
     <span><span class="tier-strip"><span style="background:var(--tier-elite)"></span><span style="background:var(--tier-strong)"></span><span style="background:var(--tier-avg)"></span><span style="background:var(--tier-weak)"></span><span style="background:var(--tier-flat)"></span></span>▬ row tint = rating</span>
     </span>
   </div>`;
+}
+
+// D134's folded key (styles.css .legend-collapsed): its popover opens on hover or keyboard focus, the chip says so
+// through aria-expanded, and Escape closes it until the pointer leaves or the chip is focused again. The Escape
+// listener sits on the document in the capture phase, so it reaches an open popover before the player panel's own
+// Escape does, and it removes itself once its legend has left the page. Every page that draws legendHtml calls this.
+export function wireLegend(root) {
+  for (const legend of root.querySelectorAll(".legend")) {
+    const chip = legend.querySelector(".legend-chip");
+    if (!chip) continue;
+    const isOpen = () => legend.classList.contains("legend-collapsed") && !legend.classList.contains("legend-dismissed")
+      && (legend.matches(":hover") || legend.contains(document.activeElement));
+    const sync = () => chip.setAttribute("aria-expanded", String(isOpen()));
+    legend.addEventListener("mouseenter", sync);
+    legend.addEventListener("mouseleave", () => { legend.classList.remove("legend-dismissed"); sync(); });
+    legend.addEventListener("focusin", () => { legend.classList.remove("legend-dismissed"); sync(); });
+    legend.addEventListener("focusout", () => setTimeout(sync, 0)); // activeElement moves after focusout
+    const onKey = (e) => {
+      if (!legend.isConnected) { document.removeEventListener("keydown", onKey, true); return; }
+      if (e.key !== "Escape" || !isOpen()) return;
+      e.stopPropagation();
+      legend.classList.add("legend-dismissed");
+      if (legend.contains(document.activeElement)) document.activeElement.blur();
+      sync();
+    };
+    document.addEventListener("keydown", onKey, true);
+  }
 }
 
 function slotLookupFor(view) {
@@ -163,14 +187,13 @@ function fieldHtml(view, team, layoutOpts = {}) {
   // against the STYLESHEET's own /css/ folder, and the old root-relative "/img/logos/..." form 404'd on the
   // public site, which lives under a sub-path - either way the watermark silently vanished.
   const watermarkUrl = assetUrl(team.logoDark || team.logo || "");
-  // The field-variant's "B" wash lightens the surface around the real line of scrimmage, so it needs the
-  // same --los-pct a matchup page already carries; a single-unit side page has no losY (D72), so it falls
-  // back to the vertical middle rather than lighting up a spot that means nothing on that page.
+  // D152: the crest centres on the real line of scrimmage (styles.css .field-watermark), the same --los-pct a
+  // matchup page already carries; a single-unit side page has no losY (D72), so it falls back to the middle.
   const losPct = layout.losY != null ? ((layout.losY / layout.layoutHeight) * 100).toFixed(2) + "%" : "50%";
   return {
     layout,
     html: `
-    <div class="field-outer" data-field-variant="${FIELD_VARIANT}" style="--team-primary:${team.colourPrimary};--team-secondary:${team.colourSecondary};--los-pct:${losPct}">
+    <div class="field-outer" style="--team-primary:${team.colourPrimary};--team-secondary:${team.colourSecondary};--los-pct:${losPct}">
       <div class="field-scale" style="width:${layout.layoutWidth}px;height:${layout.layoutHeight}px">
         <div class="field-watermark"${watermarkUrl ? ` style="--wm-url:url('${esc(watermarkUrl)}')"` : ` data-no-crest="1"`}>${unitTagsHtml(layout, team, team)}</div>
         ${svg}
@@ -254,7 +277,7 @@ function setTeamCompact(root, on) {
 // re-rendering the whole-team page.
 export function teamBodyHtml(team) {
   return `<div class="team-body">
-      <div class="field-outer" data-field-variant="${FIELD_VARIANT}" style="--team-primary:${team.colourPrimary};--team-secondary:${team.colourSecondary}"></div>
+      <div class="field-outer" style="--team-primary:${team.colourPrimary};--team-secondary:${team.colourSecondary}"></div>
       <aside class="player-panel" hidden></aside>
     </div>`;
 }
@@ -340,6 +363,7 @@ export async function renderTeam(root, search, abbr, playerKey) {
   window.__nflView = { abbr: A, view, teamMeta: team, page: "team" };
 
   if (!asList) wireNav(root); // D59: switcher routes to the equivalent page on the newly picked team (the list wires its own)
+  wireLegend(root);
 
   // "Refresh now" kicks off a server-side refresh cycle (window.NFLRefresh, from refresh.js — main.js
   // imports it for this side effect) and reloads this team once it's done. The listener is added once per

@@ -12,10 +12,10 @@
 //
 // Nothing here goes through the canvas transform: the list is real CSS type at real CSS sizes (phone.css),
 // and the field's scaled canvas and this list never appear on the same page.
-import { computeLayout, levelGroups } from "./field.js?v=5a68acbbcf";
-import { renderColumn, renderTray, esc, fitNames, wireDepthToggles, espnSchemeOf, PHONE_HEADSHOT_MIN_RATING } from "./cards.js?v=5a68acbbcf";
-import { registerView, decideViewMode } from "./viewfit.js?v=5a68acbbcf";
-import { wireNav } from "./nav.js?v=5a68acbbcf";
+import { computeLayout, levelGroups } from "./field.js?v=b92308e039";
+import { renderColumn, renderTray, esc, fitNames, wireDepthToggles, espnSchemeOf, PHONE_HEADSHOT_MIN_RATING } from "./cards.js?v=b92308e039";
+import { registerView, decideViewMode } from "./viewfit.js?v=b92308e039";
+import { wireNav } from "./nav.js?v=b92308e039";
 
 // The one set of drawing options this page asks computeLayout and renderColumn for (D138's plan): the
 // line-one men plus ONE backup, the rest behind an expanding "+N more" chip. Exported so the tests can

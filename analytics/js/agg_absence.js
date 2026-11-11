@@ -69,9 +69,9 @@
 // the depth chart's fill-in (status.fillIn: a gsis, an object with one, or a name) first when he is in the list, then
 // by the largest of his rises. `fillIn` on the
 // missing man carries the fill-in's before/since shares whether or not he rose.
-import { clubGames, colIndex, rushEvent, frac, snapGame, poolSnapShare } from "./agg.js?v=5a68acbbcf";
-import { gamesInWindow, splitKey, weekInScope } from "./filters.js?v=5a68acbbcf";
-import { fantasyByPlayer } from "./agg_fantasy.js?v=5a68acbbcf";
+import { clubGames, colIndex, rushEvent, frac, snapGame, poolSnapShare } from "./agg.js?v=b92308e039";
+import { gamesInWindow, splitKey, weekInScope } from "./filters.js?v=b92308e039";
+import { fantasyByPlayer } from "./agg_fantasy.js?v=b92308e039";
 
 export const SKILL_POS = new Set(["QB", "RB", "FB", "WR", "TE"]);
 export const DEF_POS = new Set(["DE", "DT", "NT", "DL", "EDGE", "ED", "LB", "ILB", "OLB", "MLB", "CB", "NB", "DB", "S", "FS", "SS", "SAF"]);

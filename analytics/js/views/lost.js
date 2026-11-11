@@ -23,9 +23,9 @@
 // note as on every other page; absences()'s own copy of the status is the fallback), cards (loadClubCards()'s map,
 // gsis -> { slot, ovr, posRank, posCount, maddenPos, role }; missing is fine), side ("both" by default; "off" leaves
 // the Defense names out, "def" draws only the Defense names, for the defense sub-page) }.
-import { esc, isNum } from "./qb.js?v=5a68acbbcf";
-import { statusChip, statusNameClass, shortDate } from "./kit.js?v=5a68acbbcf";
-import { snapMethodNote } from "../agg.js?v=5a68acbbcf";
+import { esc, isNum } from "./qb.js?v=b92308e039";
+import { statusChip, statusNameClass, shortDate } from "./kit.js?v=b92308e039";
+import { snapMethodNote } from "../agg.js?v=b92308e039";
 
 const BAND = (pos) => (pos === "RB" || pos === "FB" ? "BACKFIELD" : pos);
 const SKILL_BANDS = new Set(["QB", "BACKFIELD", "WR", "TE"]);

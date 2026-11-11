@@ -4,11 +4,11 @@
 // the same offenses' men usually get. Built for the Defense page, moved under the Team grid (Adam, 2026-09-25, D196's
 // last paragraph: placement, not a redesign), so the cells stay compact rather than the grid's 0-100 tiles. PURE: no
 // DOM; views/grid.js renders it and wires its switch and headers.
-import { TIER_NAMES, MIN_POOL, percentileCuts, tierFromCuts } from "../agg.js?v=5a68acbbcf";
-import { ALLOWED_FIGURES, POS_GROUPS } from "../agg_allowed.js?v=5a68acbbcf";
-import { rankWithTies, displayed } from "../agg_grid.js?v=5a68acbbcf";
-import { esc, NA, isNum, teamPill } from "./qb.js?v=5a68acbbcf";
-import { ordinal } from "./team.js?v=5a68acbbcf";
+import { TIER_NAMES, MIN_POOL, percentileCuts, tierFromCuts } from "../agg.js?v=b92308e039";
+import { ALLOWED_FIGURES, POS_GROUPS } from "../agg_allowed.js?v=b92308e039";
+import { rankWithTies, displayed } from "../agg_grid.js?v=b92308e039";
+import { esc, NA, isNum, teamPill } from "./qb.js?v=b92308e039";
+import { ordinal } from "./team.js?v=b92308e039";
 
 // The columns per position group (ALLOWED_FIGURES keys, in order) and their short heads; the group header names the
 // position. Every figure is per game except Yds/opp (yards / (targets + carries) over the window).

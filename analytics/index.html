@@ -9,9 +9,9 @@
      pre-rendered files under ../api/analytics/ instead of the local server. -->
 <meta name="nfl-static" content="1">
 <title>NFL Analytics</title>
-<link rel="stylesheet" href="css/analytics.css?v=5a68acbbcf">
-<link rel="stylesheet" href="css/analytics_recut.css?v=5a68acbbcf">
-<link rel="stylesheet" href="css/analytics_grid.css?v=5a68acbbcf">
+<link rel="stylesheet" href="css/analytics.css?v=b92308e039">
+<link rel="stylesheet" href="css/analytics_recut.css?v=b92308e039">
+<link rel="stylesheet" href="css/analytics_grid.css?v=b92308e039">
 <!-- D209 part (2): the depth-chart card block (public/js/panel.js's cardBodyHtml, drawn at the top of every
      player page) is styled by the depth-chart app's own two stylesheets: styles.css for the shared :root
      tokens and badge colours the card's classes read, panel.css for the ".panel-*" component rules
@@ -21,12 +21,12 @@
      ".badge-q"/"-d"/"-out"/"-susp" etc., is already a DELIBERATE copy (analytics_recut.css's own comment:
      "copies the depth chart's look and colours"), so loading both is redundant, not conflicting. zoom.css,
      matchup.css, phone.css and guide.css style other depth-chart pages and are left out. -->
-<link rel="stylesheet" href="../css/styles.css?v=5a68acbbcf">
-<link rel="stylesheet" href="../css/panel.css?v=5a68acbbcf">
+<link rel="stylesheet" href="../css/styles.css?v=b92308e039">
+<link rel="stylesheet" href="../css/panel.css?v=b92308e039">
 <!-- D224 increment C: the week's games strip on the This-week page (views/week.js) is the depth-chart pages' own
      strip (public/js/gamesbar.js), styled by its own rules in matchup.css; every selector there is matchup-, games- or
      game- prefixed, none of which this app's an-* CSS uses. -->
-<link rel="stylesheet" href="../css/matchup.css?v=5a68acbbcf">
+<link rel="stylesheet" href="../css/matchup.css?v=b92308e039">
 </head>
 <body>
 <!-- D209 part (1): the shared site strip (../js/sitebar.js), painted into #sitebar by js/main.js's side-effect
@@ -41,6 +41,6 @@
   <span id="an-asof" class="an-asof" hidden></span>
 </header>
 <main id="app" class="an-main" aria-live="polite"></main>
-<script type="module" src="js/main.js?v=5a68acbbcf"></script>
+<script type="module" src="js/main.js?v=b92308e039"></script>
 </body>
 </html>

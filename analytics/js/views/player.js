@@ -12,25 +12,25 @@
 // Interactivity (D177): a weekly bar (the fantasy chart's too) sets the window to that week and back; a zone cell
 // lists the plays behind it; the header has a Back button (router.js backLink: the page he came from, else his
 // position's section, D188) and links to his depth-chart card (new tab) and his team page.
-import { fromQuery, toQuery, seasonsOf, weekLabel, splitKey, gamesInWindow, rankHref, defaultState } from "../filters.js?v=5a68acbbcf";
-import { backLink } from "../router.js?v=5a68acbbcf";
-import { loadFor, loadTeams, displayName, loadStatusFeed, loadTeamView, findCardByGsis, loadPlayerStats, loadPlayerHistory, loadPlayerGameLog, clubCards } from "../data.js?v=5a68acbbcf";
-import { isStatic } from "../../../js/api.js?v=5a68acbbcf";
-import { playerView, maddenBlocking, maddenSeasonLabel, pageState, lastTeam, trendFigures } from "../agg_player.js?v=5a68acbbcf";
-import { weekState, seasonBlocks, weekAllowedCells, clubTargetCounts, weekStrip, VS_USUAL_TEXT } from "../agg_week.js?v=5a68acbbcf";
-import { teammateSplits } from "../agg_absence.js?v=5a68acbbcf";
-import { aggregateUsage, usageReference, clubGames, colIndex, REF_POS, poolSnapShare, snapMethodNote, SNAP_SHARE_DEF } from "../agg.js?v=5a68acbbcf";
-import { renderFilterBar } from "../filterbar.js?v=5a68acbbcf";
-import { tierOf } from "../table.js?v=5a68acbbcf";
-import { tierNote } from "../agg.js?v=5a68acbbcf";
-import { rushTier, RUSH_MIN_CAR } from "../agg_rush.js?v=5a68acbbcf";
-import { weeklyStrips } from "../charts/bars.js?v=5a68acbbcf";
-import { zoneField, zoneLegend, ZONE_MODES, zoneName } from "../charts/zonefield.js?v=5a68acbbcf";
-import { ratingBars, routeList } from "../charts/hbars.js?v=5a68acbbcf";
-import { headlineRow, fantasyBand, phaseBlock, varianceStrip, maddenFoot, playerHead, currentStatus, latestWeekIn, trendStrip, thisWeekStrip } from "./kit.js?v=5a68acbbcf";
+import { fromQuery, toQuery, seasonsOf, weekLabel, splitKey, gamesInWindow, rankHref, defaultState } from "../filters.js?v=b92308e039";
+import { backLink } from "../router.js?v=b92308e039";
+import { loadFor, loadTeams, displayName, loadStatusFeed, loadTeamView, findCardByGsis, loadPlayerStats, loadPlayerHistory, loadPlayerGameLog, clubCards } from "../data.js?v=b92308e039";
+import { isStatic } from "../../../js/api.js?v=b92308e039";
+import { playerView, maddenBlocking, maddenSeasonLabel, pageState, lastTeam, trendFigures } from "../agg_player.js?v=b92308e039";
+import { weekState, seasonBlocks, weekAllowedCells, clubTargetCounts, weekStrip, VS_USUAL_TEXT } from "../agg_week.js?v=b92308e039";
+import { teammateSplits } from "../agg_absence.js?v=b92308e039";
+import { aggregateUsage, usageReference, clubGames, colIndex, REF_POS, poolSnapShare, snapMethodNote, SNAP_SHARE_DEF } from "../agg.js?v=b92308e039";
+import { renderFilterBar } from "../filterbar.js?v=b92308e039";
+import { tierOf } from "../table.js?v=b92308e039";
+import { tierNote } from "../agg.js?v=b92308e039";
+import { rushTier, RUSH_MIN_CAR } from "../agg_rush.js?v=b92308e039";
+import { weeklyStrips } from "../charts/bars.js?v=b92308e039";
+import { zoneField, zoneLegend, ZONE_MODES, zoneName } from "../charts/zonefield.js?v=b92308e039";
+import { ratingBars, routeList } from "../charts/hbars.js?v=b92308e039";
+import { headlineRow, fantasyBand, phaseBlock, varianceStrip, maddenFoot, playerHead, currentStatus, latestWeekIn, trendStrip, thisWeekStrip } from "./kit.js?v=b92308e039";
 // D209 part (2): the depth-chart card block that opens every player page, drawn by the SAME code the
 // depth-chart panel uses (public/js/panel.js) — never a copy. See cardBlockHtml/loadCard below.
-import { cardBodyHtml, mountCardData } from "../../../js/panel.js?v=5a68acbbcf";
+import { cardBodyHtml, mountCardData } from "../../../js/panel.js?v=b92308e039";
 
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const NA = `<span class="an-na">–</span>`;

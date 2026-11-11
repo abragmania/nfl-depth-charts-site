@@ -17,12 +17,12 @@
 // reusing the SAME class names cards.js/styles.css already define (card, tier-elite/strong/avg/weak/flat,
 // card-banner, banner-out, banner-active, badge*, rating-pill, tray-label/tray-chip)
 // rather than inventing parallel styles.
-import { getTeams, getTeam, invalidateTeam } from "./api.js?v=5a68acbbcf";
-import { esc, BAND_DISPLAY, headshotHtml, wireDepthToggles, isFullyOut, isScratch, psBadge, slotBadge, snapHistoryHtml, withClubRole, gameEndNote } from "./cards.js?v=5a68acbbcf";
-import { headerHtml, mountTeamField, teamBodyHtml } from "./team.js?v=5a68acbbcf";
-import { SIDE_CARD_W, SIDE_MAX_DEPTH_ROWS } from "./field.js?v=5a68acbbcf";
-import { fitToViewport, disposeCurrentView, SIDE_MIN_READABLE_SCALE } from "./viewfit.js?v=5a68acbbcf";
-import { navStripHtml, wireNav } from "./nav.js?v=5a68acbbcf";
+import { getTeams, getTeam, invalidateTeam } from "./api.js?v=b92308e039";
+import { esc, BAND_DISPLAY, SIGNAL_TITLE, headshotHtml, wireDepthToggles, isFullyOut, isScratch, psBadge, slotBadge, snapHistoryHtml, withClubRole, gameEndNote } from "./cards.js?v=b92308e039";
+import { headerHtml, mountTeamField, teamBodyHtml } from "./team.js?v=b92308e039";
+import { SIDE_CARD_W, SIDE_MAX_DEPTH_ROWS } from "./field.js?v=b92308e039";
+import { fitToViewport, disposeCurrentView, SIDE_MIN_READABLE_SCALE } from "./viewfit.js?v=b92308e039";
+import { navStripHtml, wireNav } from "./nav.js?v=b92308e039";
 
 // Which unit a #/team/X/group/BAND route belongs to, and what each band is called in prose. D72 retired
 // this file's own level tables (OFF_BAND_LEVEL / DEF_LEVEL_SEQUENCE and friends): a side page's levels,
@@ -151,9 +151,9 @@ function tooltipFor(p) {
 // card.signals = subset of ["STAR_OUT","PROMOTED","NEW_ARRIVAL"] (D167 retired the fourth, LOW_SNAPS).
 const HEAT_LEVEL_CLASS = { low: "heat-low", high: "heat-high", critical: "heat-critical" };
 const SIGNAL_META = {
-  STAR_OUT: { cls: "sig-star", glyph: "★", title: "A starter here is out" },
-  PROMOTED: { cls: "sig-ps", glyph: "PS", title: "Promoted starter" },
-  NEW_ARRIVAL: { cls: "sig-new", glyph: "new", title: "New arrival" },
+  STAR_OUT: { cls: "sig-star", glyph: "★", title: SIGNAL_TITLE.STAR_OUT },
+  PROMOTED: { cls: "sig-ps", glyph: "PS", title: SIGNAL_TITLE.PROMOTED },
+  NEW_ARRIVAL: { cls: "sig-new", glyph: "new", title: SIGNAL_TITLE.NEW_ARRIVAL },
 };
 
 function heatDropText(injury) {

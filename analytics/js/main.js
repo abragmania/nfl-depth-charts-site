@@ -7,21 +7,21 @@
 // into one Rankings page (an Offense | Defense switch on top, views/rankings.js) and renamed the picker's tab
 // Clubs, so TEAMS now reads Grid, Rankings, Clubs. The old links (#/usage, #/rushing, #/teams, #/team, #/offense,
 // #/defense) keep working as aliases so nothing already bookmarked breaks.
-import * as router from "./router.js?v=5a68acbbcf";
-import "../../js/sitebar.js?v=5a68acbbcf"; // side effect only: paints the shared site strip into #sitebar (D209 part 1)
-import { renderNav, sectionForPos } from "./nav.js?v=5a68acbbcf";
-import { renderUsage } from "./views/usage.js?v=5a68acbbcf";
-import { renderPlayer } from "./views/player.js?v=5a68acbbcf";
-import { renderQb } from "./views/qb.js?v=5a68acbbcf";
-import { renderQbPlayer } from "./views/qbplayer.js?v=5a68acbbcf";
-import { renderRushing } from "./views/rushing.js?v=5a68acbbcf";
-import { renderTeams, renderTeam } from "./views/team.js?v=5a68acbbcf";
-import { renderTeamDefense } from "./views/team_def.js?v=5a68acbbcf";
-import { renderGrid } from "./views/grid.js?v=5a68acbbcf";
-import { renderRankings, legacyHash } from "./views/rankings.js?v=5a68acbbcf";
-import { renderWeek } from "./views/week.js?v=5a68acbbcf";
-import { loadSeason, loadSeasons } from "./data.js?v=5a68acbbcf";
-import { fromQuery, seasonsOf, weekKey, weekLabel, currentSeason, setKnownSeasons, seasonsInTime, SEASONS_WAIT_MS } from "./filters.js?v=5a68acbbcf";
+import * as router from "./router.js?v=b92308e039";
+import "../../js/sitebar.js?v=b92308e039"; // side effect only: paints the shared site strip into #sitebar (D209 part 1)
+import { renderNav, sectionForPos } from "./nav.js?v=b92308e039";
+import { renderUsage } from "./views/usage.js?v=b92308e039";
+import { renderPlayer } from "./views/player.js?v=b92308e039";
+import { renderQb } from "./views/qb.js?v=b92308e039";
+import { renderQbPlayer } from "./views/qbplayer.js?v=b92308e039";
+import { renderRushing } from "./views/rushing.js?v=b92308e039";
+import { renderTeams, renderTeam } from "./views/team.js?v=b92308e039";
+import { renderTeamDefense } from "./views/team_def.js?v=b92308e039";
+import { renderGrid } from "./views/grid.js?v=b92308e039";
+import { renderRankings, legacyHash } from "./views/rankings.js?v=b92308e039";
+import { renderWeek } from "./views/week.js?v=b92308e039";
+import { loadSeason, loadSeasons } from "./data.js?v=b92308e039";
+import { fromQuery, seasonsOf, weekKey, weekLabel, currentSeason, setKnownSeasons, seasonsInTime, SEASONS_WAIT_MS } from "./filters.js?v=b92308e039";
 
 const root = document.getElementById("app");
 const nav = document.getElementById("an-nav");

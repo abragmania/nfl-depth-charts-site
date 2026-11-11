@@ -8,16 +8,16 @@
 //
 // Route #/matchup/:a/:b renders A-offense-over-B-defense; #/matchup/:a alone resolves B from A's
 // header.nextOpponent (this week's schedule) and redirects, or shows a picker on a bye week.
-import { getTeams, getTeam } from "./api.js?v=5a68acbbcf";
-import { esc, renderColumn, renderTray, fitNames, wireDepthToggles, espnSchemeOf, unitTagsHtml, assetUrl } from "./cards.js?v=5a68acbbcf";
-import { computeLayout, renderFieldSvg, renderLevelLabels, FIELD_VARIANT } from "./field.js?v=5a68acbbcf";
-import { mountScaledField, disposeCurrentView, MIN_READABLE_SCALE } from "./viewfit.js?v=5a68acbbcf";
-import { navStripHtml, wireNav } from "./nav.js?v=5a68acbbcf";
-import { isLightWash } from "./landing.js?v=5a68acbbcf";
+import { getTeams, getTeam } from "./api.js?v=b92308e039";
+import { esc, renderColumn, renderTray, fitNames, wireDepthToggles, espnSchemeOf, unitTagsHtml, assetUrl } from "./cards.js?v=b92308e039";
+import { computeLayout, renderFieldSvg, renderLevelLabels } from "./field.js?v=b92308e039";
+import { mountScaledField, disposeCurrentView, MIN_READABLE_SCALE } from "./viewfit.js?v=b92308e039";
+import { navStripHtml, wireNav } from "./nav.js?v=b92308e039";
+import { isLightWash } from "./landing.js?v=b92308e039";
 // D173: this week's games strip (shared with the landing page) and the game line for the game being viewed.
-import { gamesBarHtml, gameLineHtml, findGame, wireGamesToggle } from "./gamesbar.js?v=5a68acbbcf";
+import { gamesBarHtml, gameLineHtml, findGame, wireGamesToggle } from "./gamesbar.js?v=b92308e039";
 // D111: one legend, drawn on both pages (see matchupLegendHtml). D134: one reduced-depth option object too.
-import { legendHtml, REDUCED_DEPTH_OPTS, sampleChipHtml } from "./team.js?v=5a68acbbcf";
+import { legendHtml, wireLegend, REDUCED_DEPTH_OPTS, sampleChipHtml } from "./team.js?v=b92308e039";
 
 const dash = "\u2014";
 const record = (r) => (r ? `${r.wins}-${r.losses}${r.ties ? "-" + r.ties : ""}` : dash);
@@ -120,7 +120,7 @@ function fieldHtml(viewA, viewB, teamA, teamB, spread, depthOpts = null, ownHeig
   const losPct = ((layout.losY / layout.layoutHeight) * 100).toFixed(2);
   return {
     layout,
-    html: `<div class="field-outer matchup-field" data-field-variant="${FIELD_VARIANT}" style="${colour(teamB)};--team-a-primary:${teamA.colourPrimary};--team-a-secondary:${teamA.colourSecondary};--los-pct:${losPct}%">
+    html: `<div class="field-outer matchup-field" style="${colour(teamB)};--team-a-primary:${teamA.colourPrimary};--team-a-secondary:${teamA.colourSecondary};--los-pct:${losPct}%">
       <div class="field-scale" style="width:${layout.layoutWidth}px;height:${layout.layoutHeight}px">
         ${watermarkHtml}
         ${renderFieldSvg(layout.layoutHeight, layout.losY, layout.layoutWidth)}
@@ -358,12 +358,13 @@ export async function renderMatchup(root, search, aAbbr, bAbbr) {
       <div class="team-body">
         <div class="matchup-field-wrap">
           ${halfBannerHtml(teamB, "DEFENSE", "top")}
-          <div class="field-outer matchup-field" data-field-variant="${FIELD_VARIANT}"></div>
+          <div class="field-outer matchup-field"></div>
           ${halfBannerHtml(teamA, "OFFENSE", "bottom")}
         </div>
       </div>
     </div>`;
   wireNav(root); // D59: switcher routes to the newly picked team’s matchup
+  wireLegend(root);
   wireOpponentPicker(root, A); // D100: header opponent dropdown routes to #/matchup/A/B
   mountMatchupField(root, viewA, viewB, teamA, teamB);
 }

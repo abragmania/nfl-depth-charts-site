@@ -51,9 +51,9 @@
 //                  play-by-play carries stay canonical (D178).
 //   dk, dkG, dkTdShare = agg_fantasy.js (DraftKings, D194), dkG over this row's g.
 // Weekly-table figures (the PFR two, snap %) and DK go blank under a down or quarter filter.
-import { colIndex, clubGames, aggregateUsage, inPool, tierCuts, tierFromCuts, referenceText, rushEvent, pooledRatio, plainMean, snapGame, poolSnapShare } from "./agg.js?v=5a68acbbcf";
-import { gamesInWindow, playPredicate, posAllowed, POSITIONS, isSituational } from "./filters.js?v=5a68acbbcf";
-import { fantasyByPlayer, dkFields } from "./agg_fantasy.js?v=5a68acbbcf";
+import { colIndex, clubGames, aggregateUsage, inPool, tierCuts, tierFromCuts, referenceText, rushEvent, pooledRatio, plainMean, snapGame, poolSnapShare } from "./agg.js?v=b92308e039";
+import { gamesInWindow, playPredicate, posAllowed, POSITIONS, isSituational } from "./filters.js?v=b92308e039";
+import { fantasyByPlayer, dkFields } from "./agg_fantasy.js?v=b92308e039";
 
 const num = (v) => (v === null || v === undefined || v === "" || !Number.isFinite(+v) ? null : +v);
 const truthy = (v) => v === true || v === 1 || v === "1" || v === "true";

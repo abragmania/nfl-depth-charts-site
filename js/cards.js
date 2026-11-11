@@ -9,7 +9,7 @@
 // rating-tier surface colours all survive the shrink. The SIDE, GROUP and MATCHUP views keep their big
 // headshot cards and their own renderers (zoom.js's fullCard, matchup.js's matchupCard) — they come
 // through renderSlotBody below, which is deliberately untouched by this ruling.
-import { lineOneCount, lineOneHeight, visibleDepthRows, displayOrder, outFillInDemotion, OUT_STATUS_CODES, isFullyOut, isScratch, fillingIn, depthVisibilityRank, slotRateOf } from "./field.js?v=5a68acbbcf";
+import { lineOneCount, lineOneHeight, visibleDepthRows, displayOrder, outFillInDemotion, OUT_STATUS_CODES, isFullyOut, isScratch, fillingIn, depthVisibilityRank, slotRateOf } from "./field.js?v=b92308e039";
 // Re-exported so zoom.js and matchup.js share this single definition rather than keeping their own
 // copies. D60's isScratch rides the same route.
 export { OUT_STATUS_CODES, isFullyOut, isScratch };
@@ -295,9 +295,10 @@ function tooltipFor(p, disagrees) {
 // HEY WE'RE HIGHLIGHTING THIS" — quiet glyphs, not badges/chips; the real detail lives in the tooltip
 // (and the panel). Guarded: a card with no `signals` array renders nothing extra.
 const SIGNAL_GLYPH = { STAR_OUT: "★", PROMOTED: "▲", NEW_ARRIVAL: "●" };
-const SIGNAL_TITLE = {
-  STAR_OUT: "A notably higher-rated player at this spot is out",
-  PROMOTED: "Promoted on the depth chart",
+// D50: each mark is about the man it sits on (heat.js). One wording for every view that draws the marks (zoom.js too).
+export const SIGNAL_TITLE = {
+  STAR_OUT: "A star who is out: rated 85+ now or in one of his last three seasons",
+  PROMOTED: "Up from the practice squad this season",
   NEW_ARRIVAL: "New arrival on this roster",
 };
 const signalTitle = (s) => SIGNAL_TITLE[s] || s;
