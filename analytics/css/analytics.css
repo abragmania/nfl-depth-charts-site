@@ -155,6 +155,19 @@ a { color:inherit; }
 .an-teampill { display:inline-block; padding:1px 6px; border-radius:var(--r-chip); font-size:11px; font-weight:800; letter-spacing:.03em;
   background:var(--team-bg, #2a323b); color:var(--team-ink, var(--muted)); text-decoration:none; }
 .an-teampill:hover { filter:brightness(1.12); text-decoration:underline; }
+/* Club logo in place of the chip: same line height as the chip, the abbreviation kept as hidden text for sort, search and copy. */
+.an-teampill.an-logo { background:none; padding:0; width:20px; height:18px; position:relative; display:inline-flex; align-items:center; justify-content:center; flex:none; }
+.an-teampill.an-logo:hover { text-decoration:none; }
+.an-teampill.an-logo img { width:20px; height:20px; object-fit:contain; display:block; margin:-1px 0; }
+.an-teampill.an-logo .an-pilltxt { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap; }
+.an-teampill.an-logo.an-tm-pill { width:28px; height:24px; min-width:0; }
+.an-teampill.an-logo.an-tm-pill img { width:26px; height:26px; }
+.an-teampill.an-logo.an-tm-headpill { width:34px; height:30px; padding:0; }
+.an-teampill.an-logo.an-tm-headpill img { width:34px; height:34px; }
+.an-clubabbr { color:var(--muted); font-size:11px; font-weight:600; letter-spacing:.03em; }
+/* A light circle behind the crests that read faintly on the dark page, in a player's name cell only. */
+.an-teampill.an-logo.an-nameclub[data-club="CAR"], .an-teampill.an-logo.an-nameclub[data-club="NYJ"], .an-teampill.an-logo.an-nameclub[data-club="BAL"] { background:#e9edf1; border-radius:50%; width:20px; height:20px; }
+.an-teampill.an-logo.an-nameclub[data-club="CAR"] img, .an-teampill.an-logo.an-nameclub[data-club="NYJ"] img, .an-teampill.an-logo.an-nameclub[data-club="BAL"] img { width:16px; height:16px; margin:0; }
 .an-dc { color:var(--dim); font-size:11px; text-decoration:none; opacity:0; transition:opacity .12s; }
 .an-row:hover .an-dc, .an-row.open .an-dc, .an-dc:focus { opacity:1; }
 .an-dc:hover { color:var(--accent); }

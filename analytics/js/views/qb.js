@@ -10,6 +10,7 @@ import { loadFor, loadTeams, loadStatusFeed, displayName } from "../data.js";
 import { clubGames } from "../agg.js";
 import { aggregateQb, qbReference, qbTier, qbZones, sortQbRows, QB_MIN_DB } from "../agg_qb.js";
 import { renderFilterBar } from "../filterbar.js";
+import { clubChip, clubAbbr } from "../clublogo.js";
 import { statusChip, statusNameClass, statusApplies, hlOf, withHl, scrollToHl, viewFrom, withView, columnsFor, pickView, viewCell, wantsDeciding, withViewSort, defaultSortFor, l3Title, withGroups, groupCells, WK_COLS, L3_NOTE, wireView } from "../table.js";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -20,15 +21,7 @@ export const fix = (v, d) => (isNum(v) ? (+v).toFixed(d) : NA);
 export const signed = (v, d) => (isNum(v) ? (v > 0 ? "+" : v < 0 ? "−" : "") + Math.abs(v).toFixed(d) : NA);
 export const int = (v) => (isNum(v) ? String(Math.round(v)) : NA);
 
-// Team pill in the club's colours: the same rule as table.js's teamPill (copied, as player.js does: that one is private).
-function luminance(hex) {
-  const raw = String(hex || "").trim().replace(/^#/, "");
-  const full = raw.length === 3 ? raw.split("").map((c) => c + c).join("") : raw;
-  if (!/^[0-9a-f]{6}$/i.test(full)) return null;
-  const n = parseInt(full, 16);
-  const lin = (c) => { const v = c / 255; return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };
-  return 0.2126 * lin((n >> 16) & 255) + 0.7152 * lin((n >> 8) & 255) + 0.0722 * lin(n & 255);
-}
+// Club chip: the club's logo (clublogo.js, the one copy), falling back to the chip in the club's colours.
 // `page` ("team", the default, or "defense"): which page the pill opens. The Grid page's own club pill and every
 // other caller keep the team (offense) page; allowed_table.js's "What each defense allows, by position" table
 // passes "defense" so its pills open that club's own defense page (#/team/<ABBR>/defense, D198 - it used to open
@@ -36,7 +29,6 @@ function luminance(hex) {
 // same as the Defense page's own "Offense →" link builds its query).
 export function teamPill(abbr, teams, q, cls = "", page = "team") {
   const t = teams?.get(abbr);
-  const style = t ? ` style="--team-bg:${esc(t.colourPrimary)};--team-ink:${(luminance(t.colourPrimary) ?? 0) > 0.40 ? "#14181d" : "#fff"}"` : "";
   let href, title;
   if (page === "defense") {
     href = `#/team/${abbr}/defense${q ? "?" + q : ""}`;
@@ -45,7 +37,7 @@ export function teamPill(abbr, teams, q, cls = "", page = "team") {
     href = `#/team/${abbr}${q ? "?" + q : ""}`;
     title = "Team page";
   }
-  return `<a class="an-teampill${cls ? " " + cls : ""}" href="${esc(href)}"${style} title="${title}">${esc(abbr)}</a>`;
+  return clubChip(abbr, t, href, { cls, title });
 }
 
 // ---- weekly strips with a zero line ---------------------------------------------------------------------
@@ -303,7 +295,7 @@ export function qbTableHtml(allRows, st, query, view = {}, status = {}) {
     const chip = statusChip(ps, { season: view.statusSeason }), nameCls = statusNameClass(ps);
     return `<tr class="an-row${open ? " open" : ""}${view.hl && r.gsis === view.hl ? " is-hl" : ""}" data-id="${esc(r.gsis)}" tabindex="0" aria-expanded="${open}">
       <td class="c-rank">${i + 1}</td>
-      <td class="c-name"><a class="an-pname${nameCls ? " " + nameCls : ""}" href="#/player/${encodeURIComponent(r.gsis)}${q ? "?" + q : ""}">${esc(r.name)}</a>${teamPill(r.team, view.teams, q)}${chip}<a class="an-dc" href="${depth}" title="Open his depth-chart card" aria-label="Depth chart">→</a></td>
+      <td class="c-name">${teamPill(r.team, view.teams, q, "an-nameclub")}<a class="an-pname${nameCls ? " " + nameCls : ""}" href="#/player/${encodeURIComponent(r.gsis)}${q ? "?" + q : ""}">${esc(r.name)}</a>${clubAbbr(r.team)}<span class="an-pospill" data-band="QB">QB</span>${chip}<a class="an-dc" href="${depth}" title="Open his depth-chart card" aria-label="Depth chart">→</a></td>
       <td class="num">${r.g}</td>
       ${cols.map((c) => cell(c, r)).join("")}
       <td class="c-spark">${epaSpark(r.series, st)}</td></tr>`

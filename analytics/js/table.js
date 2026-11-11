@@ -17,6 +17,7 @@ import { rzI5Shares } from "./agg_player.js";
 // pages, rather than keeping a second parallel implementation.
 import { statusChip, statusNameClass } from "./views/kit.js";
 import { involvementSignals, signalHtml } from "./agg_signal.js";
+import { clubChip, clubAbbr } from "./clublogo.js";
 export { statusChip, statusNameClass };
 
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -30,26 +31,10 @@ export function statusApplies(st, feedSeason) {
   return feedSeason != null && seasonsOf(st).includes(feedSeason);
 }
 
-// Copied two-line rule from public/js/landing.js's isLightWash (relative luminance of the team's primary
-// colour decides light or dark ink for the team pill below): keep the two in step if that threshold ever
-// changes, same as analytics.css already does for its copied colour tokens.
-function luminance(hex) {
-  const raw = String(hex || "").trim().replace(/^#/, "");
-  const full = raw.length === 3 ? raw.split("").map((c) => c + c).join("") : raw;
-  if (!/^[0-9a-f]{6}$/i.test(full)) return null;
-  const n = parseInt(full, 16);
-  const lin = (c) => { const v = c / 255; return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };
-  return 0.2126 * lin((n >> 16) & 255) + 0.7152 * lin((n >> 8) & 255) + 0.0722 * lin(n & 255);
-}
-const isLightWash = (primary) => (luminance(primary) ?? 0) > 0.40;
-
-// The team abbreviation as a small pill in the team's own colours (primary background, readable ink).
-// `teams` is the Map<abbr, {colourPrimary, colourSecondary}> from public/js/api.js's getTeams(), or empty
-// if that load failed; an unknown abbr falls back to the neutral colours set on .an-teampill itself.
-function teamPill(abbr, teams, q) {
-  const t = teams?.get(abbr);
-  const style = t ? ` style="--team-bg:${esc(t.colourPrimary)};--team-ink:${isLightWash(t.colourPrimary) ? "#14181d" : "#fff"}"` : "";
-  return `<a class="an-teampill" href="#/team/${esc(abbr)}${q ? "?" + q : ""}"${style}>${esc(abbr)}</a>`;
+// The club as its logo, falling back to the coloured abbreviation chip (clublogo.js, the one copy).
+// `teams` is the Map<abbr, club> from public/js/api.js's getTeams(), or empty if that load failed.
+function teamPill(abbr, teams, q, cls = "") {
+  return clubChip(abbr, teams?.get(abbr), `#/team/${abbr}${q ? "?" + q : ""}`, { cls });
 }
 const pct = (v, d = 1) => (v === null || v === undefined ? DASH : (v * 100).toFixed(d));
 const fix = (v, d) => (v === null || v === undefined ? DASH : (+v).toFixed(d));
@@ -535,7 +520,7 @@ export function tableHtml(allRows, st, query, view = {}, status = {}) {
     const mark = sig ? signalHtml("rec", sig, r.gsis) : "";
     return `<tr class="an-row${open ? " open" : ""}${view.hl && r.gsis === view.hl ? " is-hl" : ""}" data-id="${esc(r.gsis)}" tabindex="0" aria-expanded="${open}">
       <td class="c-rank an-stick">${i + 1}</td>
-      <td class="c-name an-stick"><a class="an-pname${nameCls ? " " + nameCls : ""}" href="#/player/${encodeURIComponent(r.gsis)}${q ? "?" + q : ""}" title="${esc(r.name)}">${esc(r.name)}</a>${mark}${teamPill(r.team, teams, q)}<span class="an-pospill" data-band="${BAND(r.pos)}">${esc(r.pos)}</span>${chip}<a class="an-dc" href="${depth}" title="Open his depth-chart card" aria-label="Depth chart">→</a></td>
+      <td class="c-name an-stick">${teamPill(r.team, teams, q, "an-nameclub")}<a class="an-pname${nameCls ? " " + nameCls : ""}" href="#/player/${encodeURIComponent(r.gsis)}${q ? "?" + q : ""}" title="${esc(r.name)}">${esc(r.name)}</a>${mark}${clubAbbr(r.team)}<span class="an-pospill" data-band="${BAND(r.pos)}">${esc(r.pos)}</span>${chip}<a class="an-dc" href="${depth}" title="Open his depth-chart card" aria-label="Depth chart">→</a></td>
       <td class="num">${r.g}</td>
       ${cols.map((c) => cell(c, r)).join("")}
       <td class="c-spark">${sparkline(r.series, st)}</td></tr>`
