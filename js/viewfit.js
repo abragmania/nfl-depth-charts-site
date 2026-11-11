@@ -224,13 +224,10 @@ export function headerFoldsAt(width, foldWidth = HEADER_FOLD_WIDTH, folded = fal
 // (the full canvas is width-bound), by FIT_STEP_MARGIN to turn on and by anything at all to stay on. Both numbers
 // come from the measured box and the two canvases, never from what is on screen, so the answer cannot feed back on
 // itself, and where the two canvases draw the same (a height-bound page) full names always win. A closed card never asks.
-// THE SWITCH (D233's undo): false restores today's behaviour exactly — the card narrows the field and the names
-// shrink — and nothing else in this file or field.js changes. tests/viewfit.test.mjs pins both states: the trigger test asserts the rule answers the switch's own value, and the tests that need short names skip while it is off.
-export const SHORT_NAMES_WITH_CARD = true;
 //   kFull   the scale the full-name canvas draws at in this box (the smaller of its width fit and the height fit)
 //   kShort  the same for the narrowest short-name canvas this club has
 export function shortNamesRule({ panelOpen, kFull, kShort, on = false }) {
-  if (!SHORT_NAMES_WITH_CARD || !panelOpen || !(kFull > 0)) return false;
+  if (!panelOpen || !(kFull > 0)) return false;
   return kShort > kFull * (on ? 1 : FIT_STEP_MARGIN);
 }
 // The request field.js is handed to learn how narrow THIS club's canvas can go (a fraction of the full 1800 units).
@@ -304,11 +301,9 @@ export function decideViewMode(width = window.innerWidth, height = window.innerH
   return currentViewMode;
 }
 
-// D140 (lead, 2026-09-17) — THE SWITCH THE OWN-HEIGHT RULING SITS BEHIND. `true`: in the SCROLLING state
-// only, the canvas is the club's own natural height (field.js's `ownHeight` option) while the scale stays
-// pinned to the floor, so every club still draws at one size and only the page length differs. `false`
-// restores D107's one constant canvas in every state, and nothing else in this file or field.js changes.
-export const SCROLL_STATE_OWN_HEIGHT = true;
+// D140 (lead, 2026-09-17): in the SCROLLING state only, the canvas is the club's own natural height
+// (field.js's `ownHeight` option) while the scale stays pinned to the floor, so every club still draws at
+// one size and only the page length differs.
 // How much bigger a step has to make the field before it is worth taking. K_EPSILON is what this file
 // already calls "too small to see", so a step that buys less than that buys nothing.
 const STEP_GAIN = K_EPSILON;
@@ -369,7 +364,7 @@ export function chooseFitStep({ width, height, headerGain = 0, full, reduced = n
   // D140: here — and only here — the canvas may be the club's OWN natural height instead of the constant
   // every club shares, so a short chart stops scrolling past empty field. The scale is then pinned to the
   // floor rather than to that shorter canvas's own height fit, which is what keeps every club one size.
-  const ownProbe = SCROLL_STATE_OWN_HEIGHT && own ? (deepest === "depth" ? own.reduced : own.full) || null : null;
+  const ownProbe = own ?(deepest === "depth" ? own.reduced : own.full) || null : null;
   const probe = ownProbe || (deepest === "depth" ? reduced : full);
   const scale = capToWidthFit(width / probe.layoutWidth, ownProbe ? floor : Math.max(h / probe.layoutHeight, floor));
   const out = { step: "scroll", scale, scrolls: probe.layoutHeight * scale > h + 0.5 };
@@ -703,7 +698,7 @@ export function mountScaledField({ root, probe, build, onDraw, onText, panel = n
     const kH = heightFitOf(steps.header && step !== "none" ? expandedHeight + headerGain : expandedHeight, p);
     shortOn = shortNamesRule({
       panelOpen, kFull: Math.min(box.width / p.layoutWidth, kH),
-      kShort: panelOpen && SHORT_NAMES_WITH_CARD ? Math.min(box.width / (p.layoutWidth * shortMinSpread(box.width, closedWidth, p)), kH) : 0,
+      kShort: panelOpen ?Math.min(box.width / (p.layoutWidth * shortMinSpread(box.width, closedWidth, p)), kH) : 0,
       on: !memoryless && shortOn,
     });
     const outcome = stepOutcome({ was, step, wasScrolling, scrolls, depthBefore, depthAfter: depthOn, ownBefore, ownAfter: ownOn });
@@ -787,7 +782,7 @@ export function mountScaledField({ root, probe, build, onDraw, onText, panel = n
       step = "none"; // force applyStep to run the transition rather than short-circuit on an equal step
       applyStep("scroll");
       scrolls = true;
-      ownOn = SCROLL_STATE_OWN_HEIGHT && !!cascade?.own; // D140: the scrolling state, so the club's own height
+      ownOn = !!cascade?.own; // D140: the scrolling state, so the club's own height
 
       spread = idealSpread(el);
       draw();

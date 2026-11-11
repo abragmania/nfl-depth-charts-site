@@ -1077,7 +1077,7 @@ export function computeLayout(teamView, opts = {}) {
     const offMin = naturalSpanHeight(offRowsTopDown);
     // D140 (small screens only): `opts.ownHeight` drops the constant and gives the canvas THIS club's own
     // natural rows, so D134's scrolling page ends where the club's chart ends instead of at empty field. The
-    // scale stays pinned to the floor (viewfit.js's SCROLL_STATE_OWN_HEIGHT). D152: the own height is now
+    // scale stays pinned to the floor. D152: the own height is now
     // defMin + offMin — each side exactly its own rows — rather than twice the taller side, so the page ends
     // where the chart ends on a club with one tall half too, and the line sits where the two meet.
     // D146 (4): SPEND SPARE HEIGHT WHEN THE WIDTH IS WHAT BINDS. With the player panel open the box is
