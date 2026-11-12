@@ -18,12 +18,12 @@
 //       D or Q (name and status only). "Top by targets" counts the club's targets in the current season and keeps
 //       only men on the club's current depth chart (a traded or released man drops out).
 // Everything here is free of page state so the This-week matchup page (increment C) reuses it.
-import { colIndex, clubGames } from "./agg.js?v=b92308e039";
-import { gamesInWindow, splitKey } from "./filters.js?v=b92308e039";
-import { allowedByPosition, allowedVsUsual, ALLOWED_FIGURES, posGroup } from "./agg_allowed.js?v=b92308e039";
-import { isMissing } from "./agg_absence.js?v=b92308e039";
-import { posCells } from "./views/allowed_table.js?v=b92308e039";
-import { fmtKickoffShort } from "../../js/gamesbar.js?v=b92308e039";
+import { colIndex, clubGames } from "./agg.js?v=25b394fd6c";
+import { gamesInWindow, splitKey } from "./filters.js?v=25b394fd6c";
+import { allowedByPosition, allowedVsUsual, ALLOWED_FIGURES, posGroup } from "./agg_allowed.js?v=25b394fd6c";
+import { isMissing } from "./agg_absence.js?v=25b394fd6c";
+import { posCells } from "./views/allowed_table.js?v=25b394fd6c";
+import { fmtKickoffShort } from "../../js/gamesbar.js?v=25b394fd6c";
 
 const truthy = (v) => v === true || v === 1 || v === "1" || v === "true";
 const isNum = (v) => v !== null && v !== undefined && Number.isFinite(+v);
@@ -54,9 +54,13 @@ export const weekState = (st) => ({ ...st, with2025: false, window: "season", fr
 
 // (1) The next game from a /api/teams entry. currentWeek: the payload's currentWeek. Returns
 // { kind: "bye", week } | { kind: "game", opp, home, kickoff, kickText, week, otherWeek } | null (nothing scheduled).
-// kickText is "" once the kickoff is more than STALE_KICK_MS in the past (the teams file has not moved on yet: the
-// opponent alone); otherWeek is true when that game is not in the league's current week (the strip adds "Wk N").
+// kickText is "" once the game is over and the teams file has not moved on yet (the opponent alone): over is the
+// entry's own status (nextOpponent.completed, ESPN's scoreboard, D26). A "not final" is trusted only within
+// LIVE_TRUST_MS of kickoff (no game runs that long; past it the snapshot is old); otherwise, or when the status is
+// unknown (null or absent), a kickoff more than STALE_KICK_MS in the past stands in for it. otherWeek is true when
+// that game is not in the league's current week (the strip adds "Wk N").
 export const STALE_KICK_MS = 5 * 3600 * 1000;
+export const LIVE_TRUST_MS = 12 * 3600 * 1000;
 export function nextGame(teamEntry, currentWeek, now = Date.now()) {
   if (!teamEntry) return null;
   const bye = teamEntry.byeWeek;
@@ -64,7 +68,8 @@ export function nextGame(teamEntry, currentWeek, now = Date.now()) {
   const o = teamEntry.nextOpponent;
   if (!o?.abbr) return null;
   const t = Date.parse(o.kickoff ?? "");
-  const stale = Number.isFinite(t) && now - t > STALE_KICK_MS;
+  const liveTrusted = o.completed === false && !(Number.isFinite(t) && now - t > LIVE_TRUST_MS);
+  const stale = o.completed === true || (!liveTrusted && Number.isFinite(t) && now - t > STALE_KICK_MS);
   const week = isNum(o.week) ? +o.week : null;
   return { kind: "game", opp: o.abbr, home: !!o.home, kickoff: o.kickoff ?? null, kickText: stale ? "" : fmtKickoffShort(o.kickoff) || "", week,
     otherWeek: week !== null && isNum(currentWeek) && week !== +currentWeek };

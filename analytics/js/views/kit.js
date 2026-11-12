@@ -24,8 +24,8 @@
 // single caller would be more invasive than just drawing the (much simpler, single-row) chart this band needs.
 // charts/bars.js is untouched by this file as of this draft.
 
-import { displayed } from "../agg_grid.js?v=b92308e039";
-import { snapMethodNote } from "../agg.js?v=b92308e039";
+import { displayed } from "../agg_grid.js?v=25b394fd6c";
+import { snapMethodNote } from "../agg.js?v=25b394fd6c";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 

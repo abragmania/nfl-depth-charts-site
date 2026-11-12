@@ -12,25 +12,24 @@
 // Interactivity (D177): a weekly bar (the fantasy chart's too) sets the window to that week and back; a zone cell
 // lists the plays behind it; the header has a Back button (router.js backLink: the page he came from, else his
 // position's section, D188) and links to his depth-chart card (new tab) and his team page.
-import { fromQuery, toQuery, seasonsOf, weekLabel, splitKey, gamesInWindow, rankHref, defaultState } from "../filters.js?v=b92308e039";
-import { backLink } from "../router.js?v=b92308e039";
-import { loadFor, loadTeams, displayName, loadStatusFeed, loadTeamView, findCardByGsis, loadPlayerStats, loadPlayerHistory, loadPlayerGameLog, clubCards } from "../data.js?v=b92308e039";
-import { isStatic } from "../../../js/api.js?v=b92308e039";
-import { playerView, maddenBlocking, maddenSeasonLabel, pageState, lastTeam, trendFigures } from "../agg_player.js?v=b92308e039";
-import { weekState, seasonBlocks, weekAllowedCells, clubTargetCounts, weekStrip, VS_USUAL_TEXT } from "../agg_week.js?v=b92308e039";
-import { teammateSplits } from "../agg_absence.js?v=b92308e039";
-import { aggregateUsage, usageReference, clubGames, colIndex, REF_POS, poolSnapShare, snapMethodNote, SNAP_SHARE_DEF } from "../agg.js?v=b92308e039";
-import { renderFilterBar } from "../filterbar.js?v=b92308e039";
-import { tierOf } from "../table.js?v=b92308e039";
-import { tierNote } from "../agg.js?v=b92308e039";
-import { rushTier, RUSH_MIN_CAR } from "../agg_rush.js?v=b92308e039";
-import { weeklyStrips } from "../charts/bars.js?v=b92308e039";
-import { zoneField, zoneLegend, ZONE_MODES, zoneName } from "../charts/zonefield.js?v=b92308e039";
-import { ratingBars, routeList } from "../charts/hbars.js?v=b92308e039";
-import { headlineRow, fantasyBand, phaseBlock, varianceStrip, maddenFoot, playerHead, currentStatus, latestWeekIn, trendStrip, thisWeekStrip } from "./kit.js?v=b92308e039";
+import { fromQuery, toQuery, seasonsOf, weekLabel, splitKey, gamesInWindow, rankHref, defaultState } from "../filters.js?v=25b394fd6c";
+import { backLink } from "../router.js?v=25b394fd6c";
+import { loadFor, loadTeams, displayName, loadStatusFeed, loadTeamView, findCardByGsis, loadPlayerStats, loadPlayerHistory, loadPlayerGameLog, clubCards, loadMadden } from "../data.js?v=25b394fd6c";
+import { playerView, maddenBlocking, maddenSeasonLabel, pageState, lastTeam, trendFigures } from "../agg_player.js?v=25b394fd6c";
+import { weekState, seasonBlocks, weekAllowedCells, clubTargetCounts, weekStrip, VS_USUAL_TEXT } from "../agg_week.js?v=25b394fd6c";
+import { teammateSplits } from "../agg_absence.js?v=25b394fd6c";
+import { aggregateUsage, usageReference, clubGames, colIndex, REF_POS, poolSnapShare, snapMethodNote, SNAP_SHARE_DEF, countsAsClubAttempt } from "../agg.js?v=25b394fd6c";
+import { renderFilterBar } from "../filterbar.js?v=25b394fd6c";
+import { tierOf } from "../table.js?v=25b394fd6c";
+import { tierNote } from "../agg.js?v=25b394fd6c";
+import { rushTier, RUSH_MIN_CAR } from "../agg_rush.js?v=25b394fd6c";
+import { weeklyStrips } from "../charts/bars.js?v=25b394fd6c";
+import { zoneField, zoneLegend, ZONE_MODES, zoneName } from "../charts/zonefield.js?v=25b394fd6c";
+import { ratingBars, routeList } from "../charts/hbars.js?v=25b394fd6c";
+import { headlineRow, fantasyBand, phaseBlock, varianceStrip, maddenFoot, playerHead, currentStatus, latestWeekIn, trendStrip, thisWeekStrip } from "./kit.js?v=25b394fd6c";
 // D209 part (2): the depth-chart card block that opens every player page, drawn by the SAME code the
 // depth-chart panel uses (public/js/panel.js) — never a copy. See cardBlockHtml/loadCard below.
-import { cardBodyHtml, mountCardData } from "../../../js/panel.js?v=b92308e039";
+import { cardBodyHtml, mountCardData } from "../../../js/panel.js?v=25b394fd6c";
 
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const NA = `<span class="an-na">–</span>`;
@@ -59,18 +58,6 @@ export function playerHash(gsis, st, ww = null) {
   return `#/player/${encodeURIComponent(gsis)}${all ? "?" + all : ""}`;
 }
 
-// Madden ratings for a season (D182), from the data builder's madden.json. Never fails: absent or unreadable
-// resolves to null and the blocking block says so.
-const maddenCache = new Map();
-function loadMadden(season) {
-  if (!maddenCache.has(season)) {
-    const url = isStatic() ? `../api/analytics/${season}/madden.json` : `/api/analytics/${season}/madden`;
-    maddenCache.set(season, fetch(url, { headers: { accept: "application/json" } })
-      .then((r) => (r.ok ? r.json() : null)).catch(() => null)
-      .then((j) => { if (!j) maddenCache.delete(season); return j; }));
-  }
-  return maddenCache.get(season);
-}
 
 // D209 part (2): his depth-chart card — the same TeamView-derived PlayerCard the depth-chart app's own
 // panel.js draws (cardBodyHtml/mountCardData below), for his current club. `teams` is the Map renderPlayer
@@ -120,12 +107,20 @@ export function chartSlotLine(slot) {
 // the team page with no panel. The link's team segment is the club the card actually came from (info.teamMeta
 // / info.teamView, which loadCard resolves from his CURRENT club per item 2) rather than v.team, so the two
 // halves of the link always name the same club.
+// The one depth-chart address for a player page (the card block's slot line and the header's "Depth chart" link): his
+// card's own playerKey on the club the card came from; with no card, that club's chart (or v.team's) with no panel;
+// null when no club is known at all.
+export function depthChartHref(info, v) {
+  const abbr = info?.teamMeta?.abbr || info?.teamView?.abbr || v?.team || "";
+  if (!abbr) return null;
+  const base = `../#/team/${encodeURIComponent(abbr)}`;
+  return info?.card?.playerKey ? `${base}/player/${encodeURIComponent(info.card.playerKey)}` : base;
+}
 export function cardBlockHtml(info, v) {
   if (!info.card) return `<div class="an-note an-pl-cardnote">${esc(info.note || "No depth-chart card on file for him.")}</div>`;
   const slot = clubCards(info.teamView)[v.gsis]?.slot ?? null;
   const line = chartSlotLine(slot);
-  const abbr = info.teamMeta?.abbr || info.teamView?.abbr || v.team;
-  const depth = `../#/team/${encodeURIComponent(abbr)}/player/${encodeURIComponent(info.card.playerKey)}`;
+  const depth = depthChartHref(info, v);
   return `<div class="panel-inner an-pl-card" style="--team-primary:${esc(info.teamMeta?.colourPrimary || "#333")};--team-secondary:${esc(info.teamMeta?.colourSecondary || "#777")}">
     ${line ? `<a class="an-pl-cardslot" href="${esc(depth)}">${esc(line)}</a>` : ""}
     ${cardBodyHtml(info.card, info.teamView?.season, info.teamMeta, info.teamView)}
@@ -401,7 +396,7 @@ export function clubTargets(blocks, players, st, gsis, team, { n = 6 } = {}) {
     if (!inWin.has(gk)) continue;
     for (const r of b.plays || []) {
       if (r[C.posteam] !== team || r[C.type] !== "pass" || !truthy(r[C.redzone])) continue;
-      if (truthy(r[C.pi]) && (base.pi === false || !r[C.target])) continue;
+      if (!countsAsClubAttempt(r, C, base)) continue; // D178
       rzAtt.set(gk, (rzAtt.get(gk) || 0) + 1);
     }
   }
@@ -435,7 +430,7 @@ export function clubTargetsHtml(ct, { qs = "", wn = "" } = {}) {
   const body = ct.rows.map((r) => {
     const cells = cols.map(([k, label, lk, def]) => {
       const v = r[k], lg = lk ? r[lk] : null;
-      const extra = k === "tgtShare" ? `; ${r.tgt} targets in ${r.g} games` : k === "rzShare" ? `; ${r.rz} of ${r.rzAtt}` : "";
+      const extra = k === "tgtShare" ? `; ${r.tgt} targets in ${r.g} games` : k === "rzShare" ? `; ${r.rz} of ${r.rzAtt} club red-zone attempts` : "";
       const tip = `${label}: ${def}${isNum(v) ? ` = ${tPct(v, 1)}${extra}` : ": no figure"}${isNum(lg) ? `. League (${r.pos} reference pool): ${tPct(lg, 1)}` : ""}`;
       return `<td title="${esc(tip)}"><span class="an-rc-cbar">${isNum(v) ? `<i class="an-rc-cfill" style="width:${w(v, S[k])}%"></i>` : ""}${isNum(lg) ? `<i class="an-rc-ctick" style="left:${w(lg, S[k])}%"></i>` : ""}</span><b>${isNum(v) ? Math.round(v * 100) + "%" : DASH}</b></td>`;
     }).join("");
@@ -479,7 +474,7 @@ export function withWithoutHtml(split, { pick = null, back = false, qs = "", nam
   const plural = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
   const rows = [
     ["Games", (x) => String(x.games), (x) => `${plural(x.games, "game")} he played for ${split.team}: ${games(x)}`],
-    ["Target share", (x) => pct(x.tgtShare), (x) => `His ${x.tgt} targets / the club's ${x.att} pass attempts in those games (nflverse play-by-play)`],
+    ["Target share", (x) => pct(x.tgtShare), (x) => `His ${x.tgt} targets / the club's ${x.att} pass attempts in those games, pass-interference targets included on both sides while PI targets is on (nflverse play-by-play)`],
     ["Route %", (x) => pct(x.routePct), (x) => (x.routeGames ? `His ${x.routes} routes / the club dropbacks each charted week implies, ${plural(x.routeGames, "charted game")} (heatradar.app)` : noRoutes)],
     ...(back ? [["Carry share", (x) => pct(x.carShare), (x) => `His ${x.des} designed runs / the club's ${x.runs} designed runs in those games (nflverse play-by-play)`]] : []),
     ["DK / g", (x) => tFix(x.dkG, 1), (x) => `${tFix(x.dk, 1)} DraftKings points over ${plural(x.games, "game")} (D194 scoring)`],
@@ -528,12 +523,12 @@ export async function renderPlayer(ctx, params, query) {
   const name = displayName(gsis, data.players);
   document.title = `${name} · NFL Analytics`;
   const block = maddenBlocking(madden, gsis, v.pos, st.season);
-  const head = headerHtml(v, name, teams, qs, { status: currentStatus(feed, gsis, seasonsOf(st)), statusSeason: feed?.season ?? null, latestWeek: latestWeekIn(data.keys, feed?.season) });
   // D209 part (2): his depth-chart card opens every player page, catcher or not — only the analytics
   // sections below it differ by kind (the no-jumble rule: the card is the one shared thing besides the
   // header strip, everything else stays each app's own).
   const cardInfo = await loadCard(v, teams, currentTeamOf(gsis, data.players[gsis], feed));
   if (!isCurrent()) return;
+  const head = headerHtml(v, name, teams, qs, { status: currentStatus(feed, gsis, seasonsOf(st)), statusSeason: feed?.season ?? null, latestWeek: latestWeekIn(data.keys, feed?.season) }, cardInfo);
   const cardHtml = cardBlockHtml(cardInfo, v);
   const teamsPayload = await loadTeams().catch(() => null);
   if (!isCurrent()) return;
@@ -592,7 +587,7 @@ export async function renderPlayer(ctx, params, query) {
     ${reuse ? `<div data-cardslot></div>` : cardHtml}
     ${weekHtml}
     <div class="an-pl-bar"><div class="an-filters"></div>
-      <label class="an-switch" title="A defensive pass interference is a no-play in the play-by-play; on, it counts as a target for the receiver (never a pass attempt, catch or yards)"><input type="checkbox" data-pi${st.pi === false ? "" : " checked"}><span>${st.pi === false ? "excl. PI targets" : "PI targets"}</span></label></div>
+      <label class="an-switch" title="A defensive pass interference is a no-play in the play-by-play; on, it counts as a target for the receiver and as a club attempt beside it, so a share cannot pass 100% (never a catch or yards)"><input type="checkbox" data-pi${st.pi === false ? "" : " checked"}><span>${st.pi === false ? "excl. PI targets" : "PI targets"}</span></label></div>
     <div class="an-sub an-pl-sub">${esc(sub)}</div>
     ${data.missing.length ? `<div class="an-warn">${esc(data.missing.join(", "))} files are not built yet.</div>` : ""}
     ${bodyHtml}
@@ -718,7 +713,7 @@ export function pageBody(v, st, { wn = windowName(st, v.weeks || []), activeKey 
     i5Share: (() => {
       const x = R.i5 || { i5Des: 0, i5Runs: 0, i5Share: null };
       const def = "Inside-the-5 carry share: his designed runs from the opponent's 5 or closer / his clubs' designed runs there in his games (every club he played for in the window; scrambles on neither side); the league figure is his position's pool pooled the same way (its designed runs inside the 5 / its clubs' in their games, not a mean of percentages); nflverse play-by-play";
-      const t = ot("i5Share", "I5 carry %", tPct(x.i5Share), tPct(R.i5Lg), isNum(x.i5Share) ? def : `${def}. His clubs ran no such run in his games`, { plain: true, sub: `${x.i5Des} of ${x.i5Runs}` });
+      const t = ot("i5Share", "I5 carry %", tPct(x.i5Share), tPct(R.i5Lg), isNum(x.i5Share) ? def : `${def}. His clubs ran no such run in his games`, { plain: true, sub: `${x.i5Des} of ${x.i5Runs} club runs` });
       return t;
     })(),
     snapPct: ot("snapPct", "Snap %", tPct(O.snapPct, 0), tPct(OL.snapPct, 0), tip(`Snap %: ${SNAP_SHARE_DEF} (nflverse snap counts); route % under it: routes / club dropbacks (heatradar.app)`, snapNote), { share: true, sub: `route % ${tPct(O.routePct, 0)}`, subLg: tPct(OL.routePct, 0) }),
@@ -753,10 +748,12 @@ export function pageBody(v, st, { wn = windowName(st, v.weeks || []), activeKey 
   const clubHtml = clubTargetsHtml(club, { qs: clubQs, wn });
   const zones = `<div class="an-pl-rczones"${zoneMin ? ` style="min-width:min(100%, ${zoneMin}px)"` : ""}><div class="an-dh">Target zones <span class="an-dsub">${v.zoned} targets with a depth and direction · ${esc(wn)}</span></div><div data-zones>${zoneHtml(v, st, wn)}</div>${clubUnder ? clubHtml : ""}</div>`;
   const routesHtml = v.routes && v.routes.length ? `<div class="an-pl-rcroutes" data-band="${BAND(pos)}"><div class="an-dh">Routes · ${esc((v.routeSeasons || []).join(" + "))} <span class="an-dsub">${v.routes.reduce((s, x) => s + x.n, 0)} targets with a route label (nflverse participation)</span></div>${routeList(v.routes)}</div>` : "";
-  // D39: the routes list covers whichever seasons in the window carry route labels (agg_player.js routeSeasons); it
-  // rides in the same row, so it sits beside the zones when they fit.
-  // D196: the club's pass catchers beside the zone field (the row wraps them under the strips when it must).
-  const recBody = `<div class="an-pl-row">${weekly}${zones}${clubUnder ? "" : clubHtml}${routesHtml}</div>`;
+  // D39: the routes list covers whichever seasons in the window carry route labels (agg_player.js routeSeasons).
+  // D196: the club's pass catchers beside the zone field (the row wraps them under the strips when it must). The
+  // routes list goes under Club targets in that side column, so neither leaves an empty block beside the other; with
+  // Club targets under the zone grid (clubUnder) or absent, the routes list sits beside the zones on its own.
+  const side = !clubUnder && clubHtml && routesHtml ? `<div class="an-pl-rcside">${clubHtml}${routesHtml}</div>` : `${clubUnder ? "" : clubHtml}${routesHtml}`;
+  const recBody = `<div class="an-pl-row">${weekly}${zones}${side}</div>`;
   const usageNote = (k, val) => note(k, val, v.cuts);
   const recItems = {
     rec: { label: "Receptions", value: tInt(r.rec), title: "Catches (nflverse play-by-play)" },
@@ -838,7 +835,9 @@ export function pageBody(v, st, { wn = windowName(st, v.weeks || []), activeKey 
     in10TdRate: ["TD rate, carries inside 10", (x) => tPct(x, 1), "Rushing touchdowns / carries inside the opponent's 10"],
     yds20Share: ["Rush yds from 20+ runs", (x) => tPct(x, 1), "Share of his rushing yards gained on carries of 20+ yards"],
     ybcCar: ["Yds before contact / car", (x) => tFix(x, 2), "Yards before contact per carry, Pro Football Reference charting (weeks PFR lists him)"],
-    flRate: ["Fumbles lost", (x) => tPct(x, 0), "Fumbles lost / fumbles (his as the ball carrier; return fumbles are not in the play rows)"],
+    // Adam 2026-11-11: the game log keeps nflverse's weekly total (a lost return fumble included); this count is the
+    // play rows', so it says so.
+    flRate: ["Fumbles lost, from play-by-play", (x) => tPct(x, 0), "Fumbles lost / fumbles, counted from the play-by-play rows (his as the ball carrier; a fumble lost on a kick or punt return is not in them, so the card's game log, which uses nflverse's weekly total, can read one more)"],
     dkTdShare: ["TD share of DK points", (x) => tPct(x, 0), "Touchdown points (6 per rushing or receiving TD) / his DraftKings points; the league figure is the pool's plain mean"],
     tdTgt: ["TD rate per target", (x) => tPct(x, 1), "Receiving touchdowns / targets"],
     rzTdRate: ["TD rate, red-zone targets", (x) => tPct(x, 1), "Receiving touchdowns / red-zone targets"],
@@ -935,19 +934,21 @@ function measureLayout(root, v, bandW) {
     bandW, logW: w(".an-rc-fanband .an-rc-gl", "offsetWidth"), chartWeeks: band ? band.querySelectorAll(".an-rc-fanchart .an-wb-hit").length : 0,
     recBodyW: w(".an-rc-phase-pass .an-rc-phasebody"), zoneW: w(".an-pl-rczones .an-pl-zbody > :first-child", "offsetWidth"),
     rushBodyW: v.recut?.kind === "back" ? w(".an-rc-phase-rush .an-rc-phasebody") : 0, weeks: (v.series || []).length,
-    clubW: w(".an-pl-rcclub", "offsetWidth"),
+    // The side column (Club targets with the routes list under it) when drawn, else Club targets alone.
+    clubW: w(".an-pl-rcside", "offsetWidth") || w(".an-pl-rcclub", "offsetWidth"),
   });
 }
 
 // D217: the header is Back, the man's name (with his status badge) and the links; his headshot, team and position chips
 // and OVR pill are the depth-chart card block's job right below it (D209), so they are not repeated here. The club
-// wash and rule stay. Exported for the test.
-export function headerHtml(v, name, teams, qs, stat = {}) {
-  const depth = `../#/team/${encodeURIComponent(v.team)}/player/${encodeURIComponent(v.gsis)}`;
+// wash and rule stay. The "Depth chart" link is depthChartHref (his card's playerKey and club; cardInfo: loadCard's
+// result). Exported for the test.
+export function headerHtml(v, name, teams, qs, stat = {}, cardInfo = null) {
+  const depth = depthChartHref(cardInfo, v);
   const fb = backFallback(v.pos);
   return playerHead({
     lead: backLink(`${fb.href}${qs ? "?" + qs : ""}`, fb.name), name, shot: false, colour: teams.get(v.team)?.colourPrimary,
-    links: `<div class="an-pl-links"><a href="${depth}">Depth chart →</a>${v.team ? `<a href="#/team/${esc(v.team)}${qs ? "?" + qs : ""}">Team page →</a>` : ""}</div>`,
+    links: `<div class="an-pl-links">${depth ? `<a href="${esc(depth)}">Depth chart →</a>` : ""}${v.team ? `<a href="#/team/${esc(v.team)}${qs ? "?" + qs : ""}">Team page →</a>` : ""}</div>`,
     // D196: his injury badge, red name and status line (already gated to the season on screen).
     status: stat.status || null, statusSeason: stat.statusSeason ?? null, latestWeek: stat.latestWeek ?? null,
   });

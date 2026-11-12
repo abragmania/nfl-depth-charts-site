@@ -1,12 +1,12 @@
 // Receivers (#/receivers; the old Usage page, D193): the pass-catchers' leaderboard (D177's first priority, with fantasy
 // in mind), WRs and TEs by default, backs on their chip; every filter, the sort, the minimum and the open row live in
 // the hash. The table itself (column order Production, Opportunity, Efficiency, then the ancillary group) is table.js.
-import { fromQuery, toQuery, seasonsOf, weekLabel, POSITIONS } from "../filters.js?v=b92308e039";
-import { loadFor, loadTeams, loadStatusFeed } from "../data.js?v=b92308e039";
-import { aggregateUsage, clubGames, usageReference, REF_POS, POOL_PER_GAME, POOL_FLOOR } from "../agg.js?v=b92308e039";
-import { renderFilterBar } from "../filterbar.js?v=b92308e039";
-import { renderTable, anchor, withRzFigures, viewFrom, withView, statusApplies, hlOf, withHl, scrollToHl, receiversWantsDeciding, withViewSort } from "../table.js?v=b92308e039";
-import { decorateDeciding } from "../deciding.js?v=b92308e039";
+import { fromQuery, toQuery, seasonsOf, weekLabel, POSITIONS } from "../filters.js?v=25b394fd6c";
+import { loadFor, loadTeams, loadStatusFeed } from "../data.js?v=25b394fd6c";
+import { aggregateUsage, clubGames, usageReference, REF_POS, POOL_PER_GAME, POOL_FLOOR } from "../agg.js?v=25b394fd6c";
+import { renderFilterBar } from "../filterbar.js?v=25b394fd6c";
+import { renderTable, anchor, withRzFigures, viewFrom, withView, statusApplies, hlOf, withHl, scrollToHl, receiversWantsDeciding, withViewSort } from "../table.js?v=25b394fd6c";
+import { decorateDeciding } from "../deciding.js?v=25b394fd6c";
 
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 // The column set (D224 F: view=deciding|standard|all; a legacy more=1 reads as All) rides beside the shared filters (table.js withView).

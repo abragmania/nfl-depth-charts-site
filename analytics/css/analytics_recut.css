@@ -248,6 +248,8 @@
 .an-usage .an-tscroll.an-over th.an-stick, .an-rush .an-tscroll.an-over th.an-stick { z-index:4; background:var(--panel); }
 .an-usage .an-tscroll.an-over td.an-stick, .an-rush .an-tscroll.an-over td.an-stick { z-index:3; background:var(--panel2); }
 .an-usage .an-tscroll.an-over .c-name.an-stick, .an-rush .an-tscroll.an-over .c-name.an-stick { left:34px; }
+/* The name sticks 34px in, so the rank column is held at 34px; narrower, the name covered the G column. */
+.an-usage .an-tscroll.an-over .c-rank.an-stick, .an-rush .an-tscroll.an-over .c-rank.an-stick { min-width:34px; }
 .an-table .an-anc.gs { border-left-color:#2a323b; }
 
 /* ---- D196: injury status on the player pages (kit.js statusChip / statusNameClass / statusLine) ---- */
@@ -287,6 +289,8 @@
 /* About six 22px rows; his own row in the accent colour and bold. Bars: a thin track, the man's fill in a quiet ink,
    a light league tick on target share and air-yards share. Never stretches: it keeps its own width beside the zones. */
 .an-pl-rc .an-pl-rcclub { flex:0 0 auto; }
+/* Club targets with the routes list under it, one column beside the zones (player.js pageBody). */
+.an-pl-rc .an-pl-rcside { flex:0 0 auto; display:flex; flex-direction:column; gap:18px; }
 .an-rc-club { border-collapse:collapse; font-size:12px; font-variant-numeric:tabular-nums; margin-top:6px; }
 .an-rc-club th { color:var(--dim); font-size:10px; font-weight:700; text-align:left; padding:0 8px 3px 0; white-space:nowrap; }
 .an-rc-club td { height:22px; padding:0 10px 0 0; white-space:nowrap; border-bottom:1px solid #1a1f25; cursor:default; }

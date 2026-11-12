@@ -3,8 +3,8 @@
 // /api/analytics routes; static mode (the published site, <meta name="nfl-static" content="1">) reads the
 // flat files the publish step writes, through the same staticPathFor() the depth charts use (public/js/api.js).
 // This app is served one folder down (/analytics/), so every static path gets a "../" in front.
-import { isStatic, staticPathFor, getPlayer, getHistory, getGameLog } from "../../js/api.js?v=b92308e039";
-import { weekKey, splitKey, weekInScope } from "./filters.js?v=b92308e039";
+import { isStatic, staticPathFor, getPlayer, getHistory, getGameLog } from "../../js/api.js?v=25b394fd6c";
+import { weekKey, splitKey, weekInScope } from "./filters.js?v=25b394fd6c";
 
 // Mirrors the analytics contract's static layout, used only if api.js's staticPathFor() does not (yet) map
 // an analytics URL: /api/analytics/{s}/manifest -> api/analytics/{s}/manifest.json, .../players -> players.json,
@@ -40,7 +40,8 @@ async function getJson(url, bust) {
 
 const seasons = new Map(); // season -> Promise<{ manifest, players }>
 const weekFiles = new Map(); // "season-week" -> Promise<week file>
-let teamsPromise = null; // the team registry (colours, names): same for every season, fetched once
+let teamsPromise = null; // the team registry (colours, names) and this week's games: fetched once per NFL week
+let teamsEndsAt = null; // ms when the cached payload's week ends (its weekEndsAt), or null
 let identityPromise = null; // D183: {builtAt, players: {[gsis]: {name, onChart}}}, or null when it cannot be had
 let statusPromise = null; // D196: the injury-status players map ({} when it cannot be had)
 let seasonsPromise = null; // D184: the sorted [year,...] every season the API has data for, or null when it cannot be had
@@ -222,9 +223,36 @@ export function loadSeasons() {
 // public/js/api.js's own getTeams(), because that module's relative static path assumes it is called from
 // a page at the site root; this app is served one folder down (/analytics/) and needs the "../" prefix
 // resolveAnalyticsUrl already knows how to add.
-export function loadTeams() {
-  if (!teamsPromise) teamsPromise = getJson("/api/teams").catch((e) => { teamsPromise = null; throw e; });
+// D159: a cached payload whose week has ended (its weekEndsAt has passed) is fetched again, so a tab left open across
+// the Tuesday flip moves on to the new week's games; a payload with no weekEndsAt is kept for the tab's life.
+export function loadTeams(now = Date.now()) {
+  if (teamsPromise && teamsEndsAt !== null && now >= teamsEndsAt) teamsPromise = null;
+  if (!teamsPromise) {
+    teamsEndsAt = null;
+    teamsPromise = getJson("/api/teams")
+      // An instant already past (a static file published before the flip) is no end at all: kept, not refetched in a loop.
+      .then((body) => { const t = Date.parse(body?.weekEndsAt ?? ""); teamsEndsAt = Number.isFinite(t) && t > now ? t : null; return body; })
+      .catch((e) => { teamsPromise = null; throw e; });
+  }
   return teamsPromise;
+}
+
+// D182: whether a season's madden.json is worth asking for: not when its manifest says hasMadden false (only the
+// current season has EA data); a manifest from before the flag (format 1) is asked, as before. PURE.
+export const maddenOnFile = (manifest) => manifest?.hasMadden !== false;
+
+// D182: a season's Madden ratings (madden.json), for the pass-catcher and quarterback pages. Never fails: absent or
+// unreadable resolves to null and the page's block says so; not cached then, so a later render asks again. A season
+// whose manifest says it has none is not asked (maddenOnFile); a manifest that cannot be read leaves the request.
+const maddenCache = new Map();
+export function loadMadden(season) {
+  if (!maddenCache.has(season)) {
+    const url = isStatic() ? `../api/analytics/${season}/madden.json` : `/api/analytics/${season}/madden`;
+    const ask = () => fetch(url, { headers: { accept: "application/json" } }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+    maddenCache.set(season, loadSeason(season).then((s) => (maddenOnFile(s?.manifest) ? ask() : null), ask)
+      .then((j) => { if (!j) maddenCache.delete(season); return j; }));
+  }
+  return maddenCache.get(season);
 }
 
 export function loadSeason(season) {

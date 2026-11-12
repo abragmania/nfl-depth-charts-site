@@ -32,7 +32,7 @@
 //   Opp/g        = Opp / games.
 //   Opp %        = (designed runs + targets) / (the club's designed runs + the club's pass attempts) in his games. A
 //                  scramble is a called pass but not a pass attempt, so it sits on neither side (as in rush share); a
-//                  pass-interference target is never a club pass attempt (agg.js).
+//                  pass-interference target the switch counts is a club pass attempt too (agg.js, D178).
 //   Yds/opp      = (rushing yards + receiving yards) / Opp.  EPA/opp = (EPA summed over his carries + EPA summed over
 //                  his targets, agg.js's EPA/Tgt numerator) / Opp.  TD/opp = (rushing + receiving touchdowns) / Opp.
 // REFERENCE POOL (Adam, 2026-09-24; agg.js's rule with carries): players AT HIS POSITION averaging 2+ carries per
@@ -51,9 +51,9 @@
 //                  play-by-play carries stay canonical (D178).
 //   dk, dkG, dkTdShare = agg_fantasy.js (DraftKings, D194), dkG over this row's g.
 // Weekly-table figures (the PFR two, snap %) and DK go blank under a down or quarter filter.
-import { colIndex, clubGames, aggregateUsage, inPool, tierCuts, tierFromCuts, referenceText, rushEvent, pooledRatio, plainMean, snapGame, poolSnapShare } from "./agg.js?v=b92308e039";
-import { gamesInWindow, playPredicate, posAllowed, POSITIONS, isSituational } from "./filters.js?v=b92308e039";
-import { fantasyByPlayer, dkFields } from "./agg_fantasy.js?v=b92308e039";
+import { colIndex, clubGames, aggregateUsage, inPool, tierCuts, tierFromCuts, referenceText, rushEvent, pooledRatio, plainMean, snapGame, poolSnapShare, countsAsClubAttempt } from "./agg.js?v=25b394fd6c";
+import { gamesInWindow, playPredicate, posAllowed, POSITIONS, isSituational } from "./filters.js?v=25b394fd6c";
+import { fantasyByPlayer, dkFields } from "./agg_fantasy.js?v=25b394fd6c";
 
 const num = (v) => (v === null || v === undefined || v === "" || !Number.isFinite(+v) ? null : +v);
 const truthy = (v) => v === true || v === 1 || v === "1" || v === "true";
@@ -68,7 +68,7 @@ export const BIN_LABELS = ["0 or less", "1–3", "4–9", "10+"];
 const binOf = (y) => (y <= 0 ? 0 : y <= 3 ? 1 : y <= 9 ? 2 : 3);
 
 // Colour tiers by position. Eff is cut on the negated value (lower is better).
-export const RUSH_TIER_KEYS = ["opp", "oppG", "oppShare", "carG", "rushShare", "ypc", "succPct", "epaCar", "ryoeAtt", "eff", "explPct", "snapPct", "tgtShare", "dkG", "i5Share"];
+export const RUSH_TIER_KEYS = ["opp", "oppG", "oppShare", "carG", "rushShare", "ypc", "succPct", "epaCar", "ryoeAtt", "eff", "explPct", "snapPct", "tgtShare", "dkG", "i5Share", "yprr", "epaTgt"];
 export const RUSH_LOWER_BETTER = new Set(["eff"]);
 export const RUSH_LG_KEYS = ["opp", "oppG", "oppShare", "ydsOpp", "epaOpp", "tdOpp", "car", "carG", "rushShare", "yds", "ypc", "succPct", "epaCar", "ryoeAtt", "eff", "rz", "gl", "td", "long", "explPct", "snapPct", "routes", "tgt", "tgtShare",
   // re-cut increment 3 (B2)
@@ -102,7 +102,7 @@ export function aggregateRush(blocks, players, st) {
   const acc = new Map();
   const A = (id) => { if (!acc.has(id)) acc.set(id, newAcc()); return acc.get(id); };
   const clubRuns = new Map(); // gk -> the club's designed runs
-  const clubAtt = new Map(); // gk -> the club's pass attempts (agg.js's rule: a pass-interference target is not one)
+  const clubAtt = new Map(); // gk -> the club's pass attempts (agg.js's rule: a pass-interference target the switch counts is one)
   const add = (m, k, v) => m.set(k, (m.get(k) || 0) + v);
   const fumOf = new Map(); // gsis -> { fum, fl }; apart from acc so a fumbler-only man never adds a row
   const snapG = new Map(); // gsis -> Map(gk -> snapGame) for the pooled snap % (D150); apart from acc likewise
@@ -119,7 +119,7 @@ export function aggregateRush(blocks, players, st) {
       const fid = C.fumbler === undefined ? null : r[C.fumbler];
       if (fid) { const f = fumOf.get(fid) || { fum: 0, fl: 0 }; f.fum++; if (truthy(r[C.fumLost])) f.fl++; fumOf.set(fid, f); }
       if (r[C.type] === "run") add(clubRuns, gk, 1);
-      if (r[C.type] === "pass" && !pi) add(clubAtt, gk, 1);
+      if (countsAsClubAttempt(r, C, st)) add(clubAtt, gk, 1); // D178
       const e = rushEvent(r, C);
       if (!e) continue;
       const a = A(e.id);

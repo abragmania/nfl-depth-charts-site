@@ -4,20 +4,20 @@
 // league line (D181 totals); the pass zone field compares each cell with every attempt in the league; the target and
 // carry distributions list the club's pass catchers and ball carriers, each a way into his player page (D177
 // interactivity). Every figure comes from agg_team.js (pure); this file draws and wires clicks.
-import { backLink } from "../router.js?v=b92308e039";
-import { fromQuery, toQuery, seasonsOf, weekLabel } from "../filters.js?v=b92308e039";
-import { loadFor, loadTeams, loadStatusFeed, loadClubCards, displayName } from "../data.js?v=b92308e039";
-import { aggregateTeams, teamReference, teamTier, teamRank, teamZones, teamTargets, teamCarries, OFF_TIER, DEF_TIER, SOFT_KEYS, RANK_LOW_FIRST } from "../agg_team.js?v=b92308e039";
-import { gridRows, GRID_CATEGORIES, displayed } from "../agg_grid.js?v=b92308e039";
-import { absences, isMissing } from "../agg_absence.js?v=b92308e039";
-import { renderFilterBar } from "../filterbar.js?v=b92308e039";
-import { esc, NA, isNum, pct, fix, signed, int, teamPill, qbStrips, qbZoneField, qbZoneName, QB_ZONE_MODES, pfrNote, seasonLabel } from "./qb.js?v=b92308e039";
-import { windowName } from "./qbplayer.js?v=b92308e039";
-import { lostCardHtml } from "./lost.js?v=b92308e039";
-import { lineBlock } from "./kit.js?v=b92308e039";
-import { depthBarHtml } from "../table.js?v=b92308e039";
-import { snapMethodNote } from "../agg.js?v=b92308e039";
-import { nameOf } from "../names.js?v=b92308e039";
+import { backLink } from "../router.js?v=25b394fd6c";
+import { fromQuery, toQuery, seasonsOf, weekLabel } from "../filters.js?v=25b394fd6c";
+import { loadFor, loadTeams, loadStatusFeed, loadClubCards, displayName } from "../data.js?v=25b394fd6c";
+import { aggregateTeams, teamReference, teamTier, teamRank, teamZones, teamTargets, teamCarries, OFF_TIER, DEF_TIER, SOFT_KEYS, RANK_LOW_FIRST } from "../agg_team.js?v=25b394fd6c";
+import { gridRows, GRID_CATEGORIES, displayed } from "../agg_grid.js?v=25b394fd6c";
+import { absences, isMissing } from "../agg_absence.js?v=25b394fd6c";
+import { renderFilterBar } from "../filterbar.js?v=25b394fd6c";
+import { esc, NA, isNum, pct, fix, signed, int, teamPill, qbStrips, qbZoneField, qbZoneName, QB_ZONE_MODES, pfrNote, seasonLabel } from "./qb.js?v=25b394fd6c";
+import { windowName } from "./qbplayer.js?v=25b394fd6c";
+import { lostCardHtml } from "./lost.js?v=25b394fd6c";
+import { lineBlock } from "./kit.js?v=25b394fd6c";
+import { depthBarHtml } from "../table.js?v=25b394fd6c";
+import { snapMethodNote } from "../agg.js?v=25b394fd6c";
+import { nameOf } from "../names.js?v=25b394fd6c";
 
 const P = (v, d = 1) => (isNum(v) ? pct(v, d) + "%" : NA);
 // A missing figure on a kit.js lineBlock tile. lineBlock escapes every value, so the NA placeholder (HTML markup, for
@@ -29,6 +29,13 @@ const ord = (n) => (n === 1 ? "1st" : n === 2 ? "2nd" : n === 3 ? "3rd" : n === 
 
 // The page ignores the position chips, team and opponent (one club; its reference is every club in the window).
 export const teamPageState = (st) => ({ ...st, team: "", opp: "", ha: "", downs: [], qtrs: [], pos: {} });
+// The Target Share and Carry Share lists: the n men with the most targets (carries), teamTargets' (teamCarries')
+// order, listed by the share the bar and number show (Adam 2026-11-11), a man with no share last; ties by the count,
+// then name. share/count: the row keys (tgtShare/tgt, rushShare/car).
+export function shownShareList(rows, { n = 12, share = "tgtShare", count = "tgt" } = {}) {
+  const s = (r) => (isNum(r[share]) ? +r[share] : -1);
+  return rows.slice(0, n).sort((a, b) => s(b) - s(a) || (b[count] || 0) - (a[count] || 0) || String(a.name).localeCompare(String(b.name)));
+}
 
 // D198: the header's Offense | Defense segment, shared by team.js's offense sub-page and team_def.js's defense
 // sub-page (replaces the old plain "Offense" side label and the "Defense →" link, which pointed at the Defense
@@ -484,8 +491,8 @@ export async function renderTeam(ctx, params, query) {
     <div class="an-pl-zbody">${clubZoneField(zones, ui.zoneMode, { selected: ui.zone })}<div class="an-pl-plays">${zonePlaysHtml(zones, ui.zone, st, data.players, qs)}</div></div>`;
 
   // Distributions.
-  const tgts = teamTargets(data.blocks, data.players, pst, abbr).slice(0, 12);
-  const cars = teamCarries(data.blocks, data.players, pst, abbr).slice(0, 8);
+  const tgts = shownShareList(teamTargets(data.blocks, data.players, pst, abbr), { n: 12, share: "tgtShare", count: "tgt" });
+  const cars = shownShareList(teamCarries(data.blocks, data.players, pst, abbr), { n: 8, share: "rushShare", count: "car" });
   // D219 figure 5 (columns since D225a): the last column of each row, red-zone target share (targets rows) or
   // inside-the-5 carry share (carries rows), with its own tooltip; no floor (D224, D219), "–" only when the club had no
   // such play in his games.
@@ -533,7 +540,7 @@ export async function renderTeam(ctx, params, query) {
       <div class="an-card an-tm-distc an-tm-distc-t"><div class="an-dh">Target Share <span class="an-dsub">his targets ÷ the club's pass attempts in his games</span></div>${distList(tgtItems, qs, { max: 0.3, cols: TGT_COLS })}</div>
       <div class="an-card an-tm-distc"><div class="an-dh">Carry Share <span class="an-dsub">his designed runs ÷ the club's in his games</span></div>${distList(carItems, qs, { max: 0.6, cols: CAR_COLS })}</div>
     </div>
-    <p class="an-foot">Plays, pass rate, EPA, success, aDOT, completions, sacks, explosive plays, zones, targets and carries: nflverse play-by-play (defensive pass interference no-plays are left out of every team figure). Play action: FTN charting. Pressure %: PFR advanced stats, the club's quarterbacks' rows (a week behind). Routes: heatradar.app (charted). Snaps: nflverse snap counts. League reference: the plain mean over every club in the window; colours are the clubs' tiers.</p>
+    <p class="an-foot">Plays, pass rate, EPA, success, aDOT, completions, sacks, explosive plays, zones, targets and carries: nflverse play-by-play (defensive pass interference no-plays are left out of every team figure${pst.pi === false ? " and out of the Target Share list" : "; the Target Share list counts a pass-interference target for the man and in the club's attempts alike, while PI targets is on"}). Play action: FTN charting. Pressure %: PFR advanced stats, the club's quarterbacks' rows (a week behind). Routes: heatradar.app (charted). Snaps: nflverse snap counts. League reference: the plain mean over every club in the window; colours are the clubs' tiers.</p>
   </section>`;
 
   renderFilterBar(root.querySelector(".an-filters"), st, { keys: data.keys, teams: [] }, go);

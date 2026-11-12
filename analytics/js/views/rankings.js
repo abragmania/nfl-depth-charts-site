@@ -11,8 +11,8 @@
 // offense.js and defense.js's own `go()` still write plain #/offense/#/defense links for every OTHER filter, sort
 // and row-open change, and those round-trip straight back through the same alias, so nothing else here needs to
 // know about them.
-import { renderOffense, offTableHtml } from "./offense.js?v=b92308e039";
-import { renderDefense, defTableHtml } from "./defense.js?v=b92308e039";
+import { renderOffense, offTableHtml } from "./offense.js?v=25b394fd6c";
+import { renderDefense, defTableHtml } from "./defense.js?v=25b394fd6c";
 
 const ABBR_RE = /^[A-Z]{2,3}$/;
 

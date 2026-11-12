@@ -50,8 +50,8 @@
 //
 // SHARES over a set of club-games G (each over the CLUB's totals in G, never over his own games only):
 //   attShare  = his pass attempts / the club's pass attempts in G (so a missing quarterback and his backup show)
-//   tgtShare  = his targets / the club's pass attempts in G (a PI target counts for him but is no pass attempt,
-//               agg.js's rule)
+//   tgtShare  = his targets / the club's pass attempts in G (a PI target the switch counts is one on both sides,
+//               agg.js's rule, D178; likewise for rzShare, ayShare and oppShare; attShare counts true attempts only)
 //   carShare  = his designed runs / the club's designed runs in G (agg_rush.js's rush share; the club's designed
 //               runs are every run row, agg.js's teamRuns, and a scramble sits on neither side). `car` counts every carry (rushEvent: designed runs and a passer's scrambles).
 //   rzShare   = his red-zone looks / the club's red-zone looks in G; a look is a target or a designed run on a play
@@ -69,9 +69,9 @@
 // the depth chart's fill-in (status.fillIn: a gsis, an object with one, or a name) first when he is in the list, then
 // by the largest of his rises. `fillIn` on the
 // missing man carries the fill-in's before/since shares whether or not he rose.
-import { clubGames, colIndex, rushEvent, frac, snapGame, poolSnapShare } from "./agg.js?v=b92308e039";
-import { gamesInWindow, splitKey, weekInScope } from "./filters.js?v=b92308e039";
-import { fantasyByPlayer } from "./agg_fantasy.js?v=b92308e039";
+import { clubGames, colIndex, rushEvent, frac, snapGame, poolSnapShare, countsAsClubAttempt } from "./agg.js?v=25b394fd6c";
+import { gamesInWindow, splitKey, weekInScope } from "./filters.js?v=25b394fd6c";
+import { fantasyByPlayer } from "./agg_fantasy.js?v=25b394fd6c";
 
 export const SKILL_POS = new Set(["QB", "RB", "FB", "WR", "TE"]);
 export const DEF_POS = new Set(["DE", "DT", "NT", "DL", "EDGE", "ED", "LB", "ILB", "OLB", "MLB", "CB", "NB", "DB", "S", "FS", "SS", "SAF"]);
@@ -94,7 +94,7 @@ function clubIndex(blocks, players, st, team) {
   const games = [...win].filter((gk) => gk.endsWith(`|${team}`)).map((gk) => gk.split("|")[0]).sort()
     .map((key) => ({ key, gk: `${key}|${team}`, season: splitKey(key).season }));
   const gset = new Set(games.map((g) => g.gk));
-  const per = new Map(games.map((g) => [g.gk, { att: 0, air: 0, runs: 0, rz: 0, men: new Map(), snaps: new Map() }]));
+  const per = new Map(games.map((g) => [g.gk, { att: 0, air: 0, runs: 0, rz: 0, piTgt: 0, piAir: 0, piRz: 0, men: new Map(), snaps: new Map() }]));
   const man = (G, id) => { if (!G.men.has(id)) G.men.set(id, { att: 0, tgt: 0, air: 0, des: 0, car: 0, rz: 0 }); return G.men.get(id); };
   for (const b of blocks) {
     const C = colIndex(b.cols);
@@ -117,6 +117,7 @@ function clubIndex(blocks, players, st, team) {
       if (r[C.type] !== "pass") continue;
       const air = num(r[C.air]) ?? 0;
       if (!pi) { G.att++; G.air += air; if (rz) G.rz++; if (r[C.passer]) man(G, r[C.passer]).att++; }
+      else if (countsAsClubAttempt(r, C, s)) { G.piTgt++; G.piAir += air; if (rz) G.piRz++; } // D178: the club side of a counted PI target
       const id = r[C.target];
       if (!id) continue;
       const m = man(G, id); m.tgt++; m.air += air; if (rz) m.rz++;
@@ -176,11 +177,11 @@ function windows(idx, id, side) {
 
 // One man's shares over a set of club-games (the header's definitions).
 function shares(idx, id, games, side = "off") {
-  let att = 0, air = 0, runs = 0, rz = 0, mAtt = 0, tgt = 0, mAir = 0, des = 0, car = 0, mRz = 0;
+  let att = 0, tAtt = 0, air = 0, runs = 0, rz = 0, mAtt = 0, tgt = 0, mAir = 0, des = 0, car = 0, mRz = 0;
   const snaps = [];
   for (const g of games) {
     const G = idx.per.get(g.gk);
-    att += G.att; air += G.air; runs += G.runs; rz += G.rz;
+    att += G.att; tAtt += G.att + G.piTgt; air += G.air + G.piAir; runs += G.runs; rz += G.rz + G.piRz;
     const m = G.men.get(id);
     if (m) { mAtt += m.att; tgt += m.tgt; mAir += m.air; des += m.des; car += m.car; mRz += m.rz; }
     const sg = G.snaps.get(id)?.game?.[side];
@@ -188,8 +189,8 @@ function shares(idx, id, games, side = "off") {
   }
   const sp = poolSnapShare(snaps);
   return {
-    games: games.length, att: mAtt, attShare: ratio(mAtt, att), tgt, tgtShare: ratio(tgt, att), car, des, carG: ratio(car, games.length), carShare: ratio(des, runs),
-    rz: mRz, rzShare: ratio(mRz, rz), air: mAir, ayShare: ratio(mAir, air), oppShare: ratio(tgt + des, att + runs),
+    games: games.length, att: mAtt, attShare: ratio(mAtt, att), tgt, tgtShare: ratio(tgt, tAtt), car, des, carG: ratio(car, games.length), carShare: ratio(des, runs),
+    rz: mRz, rzShare: ratio(mRz, rz), air: mAir, ayShare: ratio(mAir, air), oppShare: ratio(tgt + des, tAtt + runs),
     snapShare: sp ? sp.share : null, snapMethod: sp?.method ?? null,
   };
 }
@@ -344,7 +345,7 @@ export function withWithout(blocks, players, st, team, gsis, other) {
 // said on the page: a man signed mid-season with no earlier club that season has his weeks before arriving counted
 // as "without". A game neither man played counts for nothing.
 // FIGURES per side (the page's own share maths, over the side's games):
-//   tgtShare = his targets / the club's pass attempts in those games (a PI target counts for him, is no attempt)
+//   tgtShare = his targets / the club's pass attempts in those games (a PI target the switch counts is on both sides, D178)
 //   carShare = his designed runs / the club's designed runs (every run row) in those games
 //   routePct = his routes / the club dropbacks each charted week implies (routes / that week's route %), agg.js's rule
 //              over the weeks the routes table lists him; null when none is listed or a listed week has no route %
@@ -405,7 +406,7 @@ export function teammateSplits(blocks, players, st, gsis) {
     const x = shares(idx, gsis, games);
     let att = 0, runs = 0, routes = 0, dropbacks = 0, routeGames = 0, pctOk = true, dk = 0;
     for (const g of games) {
-      const G = idx.per.get(g.gk); att += G.att; runs += G.runs;
+      const G = idx.per.get(g.gk); att += G.att + G.piTgt; runs += G.runs; // tgtShare's denominator (D178)
       const r = routeBy.get(g.gk);
       if (r) { routeGames++; routes += r.n; if (r.pct) dropbacks += r.n / r.pct; else if (r.n > 0) pctOk = false; }
       dk += dkBy.get(g.gk) || 0;

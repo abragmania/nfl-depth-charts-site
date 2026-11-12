@@ -5,13 +5,13 @@
 // pocket passers sit quiet; the expanded row gives passing the dominant block and rushing its own block beside it.
 // Every figure comes from agg_qb.js (pure); this file draws, sorts and wires clicks. The chart helpers below
 // (signed weekly strips, the QB zone field, the team pill) are shared with the QB player page (qbplayer.js).
-import { fromQuery, toQuery, seasonsOf, weekLabel, splitKey, isSituational } from "../filters.js?v=b92308e039";
-import { loadFor, loadTeams, loadStatusFeed, displayName } from "../data.js?v=b92308e039";
-import { clubGames } from "../agg.js?v=b92308e039";
-import { aggregateQb, qbReference, qbTier, qbZones, sortQbRows, QB_MIN_DB } from "../agg_qb.js?v=b92308e039";
-import { renderFilterBar } from "../filterbar.js?v=b92308e039";
-import { clubChip, clubAbbr } from "../clublogo.js?v=b92308e039";
-import { statusChip, statusNameClass, statusApplies, hlOf, withHl, scrollToHl, viewFrom, withView, columnsFor, pickView, viewCell, wantsDeciding, withViewSort, defaultSortFor, l3Title, withGroups, groupCells, WK_COLS, L3_NOTE, wireView } from "../table.js?v=b92308e039";
+import { fromQuery, toQuery, seasonsOf, weekLabel, splitKey, isSituational } from "../filters.js?v=25b394fd6c";
+import { loadFor, loadTeams, loadStatusFeed, displayName } from "../data.js?v=25b394fd6c";
+import { clubGames } from "../agg.js?v=25b394fd6c";
+import { aggregateQb, qbReference, qbTier, qbZones, sortQbRows, QB_MIN_DB } from "../agg_qb.js?v=25b394fd6c";
+import { renderFilterBar } from "../filterbar.js?v=25b394fd6c";
+import { clubChip, clubAbbr } from "../clublogo.js?v=25b394fd6c";
+import { statusChip, statusNameClass, statusApplies, hlOf, withHl, scrollToHl, viewFrom, withView, columnsFor, pickView, viewCell, wantsDeciding, withViewSort, defaultSortFor, l3Title, withGroups, groupCells, WK_COLS, L3_NOTE, wireView } from "../table.js?v=25b394fd6c";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 export const NA = `<span class="an-na">–</span>`;
@@ -387,7 +387,7 @@ export async function renderQb(ctx, query) {
   const status = statusApplies(st, statusFeed.season) ? statusFeed.players : {};
   // D224 F: the Deciding set's last-3, this-week and status figures, only when that set is (or a sort needs it) on screen. Loaded on
   // demand: deciding.js reaches the allowed table, which imports this file, so a static import here would be a cycle.
-  if (qbWantsDeciding(st)) { try { (await import("../deciding.js?v=b92308e039")).decorateDeciding(agg.rows, "qb", { blocks: data.blocks, players: data.players, st, payload }); } catch (e) { console.warn("Deciding figures unavailable:", e); } }
+  if (qbWantsDeciding(st)) { try { (await import("../deciding.js?v=25b394fd6c")).decorateDeciding(agg.rows, "qb", { blocks: data.blocks, players: data.players, st, payload }); } catch (e) { console.warn("Deciding figures unavailable:", e); } }
   if (!isCurrent()) return;
   el.innerHTML = qbTableHtml(agg.rows, st, qs, { ref, windowName, teams: teamsByAbbr, lgZones: lgAgg.lgZones, minDb, statusSeason: statusFeed.season, hl }, status);
   wireView(el, (v) => go(pickView(COLS, DEC_COLS, { ...st, sort: knownSort(st.sort) ? st.sort : DEFAULT_SORT }, v === "standard" ? "all" : v, DEFAULT_SORT)));

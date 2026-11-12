@@ -1,13 +1,13 @@
-import * as router from "./router.js?v=b92308e039";
-import { renderLanding } from "./landing.js?v=b92308e039";
-import { renderTeam } from "./team.js?v=b92308e039";
-import { renderZoomSide, renderZoomGroup } from "./zoom.js?v=b92308e039";
-import { renderMatchup } from "./matchup.js?v=b92308e039";
-import { renderGuide } from "./guide.js?v=b92308e039";
-import { openPanel } from "./panel.js?v=b92308e039";
-import { esc } from "./cards.js?v=b92308e039";
-import { disposeCurrentView } from "./viewfit.js?v=b92308e039";
-import "./refresh.js?v=b92308e039"; // side effect only: defines window.NFLRefresh
+import * as router from "./router.js?v=25b394fd6c";
+import { renderLanding } from "./landing.js?v=25b394fd6c";
+import { renderTeam } from "./team.js?v=25b394fd6c";
+import { renderZoomSide, renderZoomGroup } from "./zoom.js?v=25b394fd6c";
+import { renderMatchup } from "./matchup.js?v=25b394fd6c";
+import { renderGuide } from "./guide.js?v=25b394fd6c";
+import { openPanel } from "./panel.js?v=25b394fd6c";
+import { esc } from "./cards.js?v=25b394fd6c";
+import { disposeCurrentView } from "./viewfit.js?v=25b394fd6c";
+import "./refresh.js?v=25b394fd6c"; // side effect only: defines window.NFLRefresh
 
 const root = document.getElementById("app");
 const search = document.getElementById("search");
@@ -35,15 +35,18 @@ const guard = (fn, { keepView = false } = {}) => (p) => {
 // Finds a player card anywhere in an already-loaded TeamView — the depth-chart columns, or the
 // "not on chart" trays — by playerKey. Used so a #/team/X/player/Y navigation can open the panel
 // without re-rendering whatever view (this build's full field, or zoom.js's side/group views) is
-// currently showing.
+// currently showing. A key no card carries is then tried as a gsis id, so the analytics tables' links (which know
+// only his gsis) open a card keyed espn:<id> too.
 function findCard(view, playerKey) {
-  for (const unit of ["OFF", "DEF"]) {
-    for (const slot of view.units?.[unit] || []) {
-      for (const p of slot.players || []) if (p.playerKey === playerKey) return p;
-    }
-    const byBand = view.unlisted?.[unit] || {};
-    for (const band of Object.keys(byBand)) {
-      for (const p of byBand[band] || []) if (p.playerKey === playerKey) return p;
+  for (const key of ["playerKey", "gsisId"]) {
+    for (const unit of ["OFF", "DEF"]) {
+      for (const slot of view.units?.[unit] || []) {
+        for (const p of slot.players || []) if (p[key] === playerKey) return p;
+      }
+      const byBand = view.unlisted?.[unit] || {};
+      for (const band of Object.keys(byBand)) {
+        for (const p of byBand[band] || []) if (p[key] === playerKey) return p;
+      }
     }
   }
   return null;

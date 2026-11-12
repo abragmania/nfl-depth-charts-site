@@ -1,7 +1,7 @@
 // The filter bar every analytics page carries. It only reads a state and hands back a new one (onChange);
 // the page turns that into the hash, so every filter combination is a link (filters.js).
-import { POSITIONS, cyclePos, weekLabel, defaultState, prevAvailable, splitKey, REG_SEASON_WEEKS } from "./filters.js?v=b92308e039";
-import { loadSeasons } from "./data.js?v=b92308e039";
+import { POSITIONS, cyclePos, weekLabel, defaultState, prevAvailable, splitKey, REG_SEASON_WEEKS, weekInScope } from "./filters.js?v=25b394fd6c";
+import { loadSeasons } from "./data.js?v=25b394fd6c";
 
 // D184: the seasons list for the picker, fetched once and cached. `ctx.seasons` can override it (tests, or a
 // caller that already has the list); otherwise the bar paints with what it has (falls back to the picked
@@ -28,13 +28,25 @@ const seg = (name, items, cur) => `<div class="an-seg" data-seg="${name}">${item
   `<button type="button" data-v="${esc(v)}" class="${String(v) === String(cur) ? "on" : ""}"${title ? ` title="${esc(title)}"` : ""}>${label}</button>`).join("")}</div>`;
 const group = (label, html, cls = "") => `<div class="an-fgroup ${cls}"><span class="an-flabel">${label}</span>${html}</div>`;
 
-// `ctx`: { keys (every week key loaded for the season set), teams (abbrs) }.
+// The page's default state: filters.js defaultState with the page's own overrides (ctx.defaults, e.g. the Running
+// backs page's RB + FB positions). PURE.
+export const pageDefaults = (seasons, defaults = null) => ({ ...defaultState(seasons), ...(defaults || {}) });
+// Reset shows only when a filter differs from the page's default: only the default state's keys are compared (a
+// page-only key such as the table view is not a filter), never the sort, the minimum or the open row; an object
+// (the position chips) compares by content, whatever its key order. PURE.
+const RESET_SKIP = new Set(["open", "sort", "dir", "minTgt"]);
+const canon = (v) => JSON.stringify(v && typeof v === "object" && !Array.isArray(v) ? Object.fromEntries(Object.entries(v).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) : v ?? null);
+export function isDefaultFilters(st, dflt) {
+  return Object.keys(dflt).filter((k) => !RESET_SKIP.has(k)).every((k) => canon(st[k]) === canon(dflt[k]));
+}
+
+// `ctx`: { keys (every week key loaded for the season set), teams (abbrs), defaults (the page's own defaults) }.
 export function renderFilterBar(el, st, ctx, onChange) {
   const allKeys = ctx.keys || [];
   // Playoffs chip (Adam, 2026-09-24): off by default, weeks 19+ dropped from the slider's own domain too, not just
   // the aggregation (filters.gamesInWindow does that half); shown only when the loaded weeks actually reach one.
   const hasPlayoffs = allKeys.some((k) => splitKey(k).week > REG_SEASON_WEEKS);
-  const keys = st.po ? allKeys : allKeys.filter((k) => splitKey(k).week <= REG_SEASON_WEEKS);
+  const keys = allKeys.filter((k) => weekInScope(k, st));
   const seasons = [...seasonsFor(el, st, ctx, onChange)].sort((a, b) => b - a); // newest first
   const showPrev = prevAvailable(st.season, seasons);
   // Week range: a two-handle slider (two range inputs over one track) with the chosen span printed beside it.
@@ -52,9 +64,8 @@ export function renderFilterBar(el, st, ctx, onChange) {
     const title = v === "in" ? `${p} included; click to exclude` : v === "out" ? `${p} excluded; click to clear` : `${p}: click to include`;
     return `<button type="button" class="an-pos ${v}" data-band="${p === "RB" || p === "FB" ? "BACKFIELD" : p}" data-pos="${p}" title="${title}">${v === "out" ? "−" : ""}${p}</button>`;
   };
-  // Reset shows only when a filter (not the sort, the minimum or the open row) differs from the default.
-  const filtersOnly = (s) => JSON.stringify({ ...s, open: "", sort: "", dir: "", minTgt: 0 });
-  const isDefault = filtersOnly(st) === filtersOnly(defaultState(seasons));
+  const dflt = pageDefaults(seasons, ctx.defaults);
+  const isDefault = isDefaultFilters(st, dflt);
 
   el.innerHTML = `<div class="an-fbar">
     ${group("Season", seg("season", seasons.map((s) => [s, String(s)]), st.season)
@@ -104,5 +115,5 @@ export function renderFilterBar(el, st, ctx, onChange) {
   }
   el.querySelector('input[data-k="with2025"]')?.addEventListener("change", (e) => fire((n) => { n.with2025 = e.target.checked; }));
   el.querySelector('input[data-k="po"]')?.addEventListener("change", (e) => fire((n) => { n.po = e.target.checked; }));
-  el.querySelector("[data-reset]")?.addEventListener("click", () => onChange({ ...defaultState(seasons), minTgt: st.minTgt, sort: st.sort, dir: st.dir }));
+  el.querySelector("[data-reset]")?.addEventListener("click", () => onChange({ ...dflt, minTgt: st.minTgt, sort: st.sort, dir: st.dir }));
 }

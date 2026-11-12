@@ -8,16 +8,16 @@
 //    beside it (a dashed "lg avg 18%" line on bars, "· lg 18.4" beside a stat), so good or bad reads at a glance.
 // 2. TOTALS: anything broken down by week also prints its window total. A share totals by weighting (his
 //    targets / the club attempts over the window), never as a mean of the weekly percentages.
-import { sortRows, tierFromCuts, tierNote, TIER_NAMES, USAGE_TIER_KEYS, MIN_POOL, snapMethodNote } from "./agg.js?v=b92308e039";
-import { weekLabel, POSITIONS, seasonsOf } from "./filters.js?v=b92308e039";
-import { rzI5Shares } from "./agg_player.js?v=b92308e039";
+import { sortRows, tierFromCuts, tierNote, TIER_NAMES, USAGE_TIER_KEYS, MIN_POOL, snapMethodNote } from "./agg.js?v=25b394fd6c";
+import { weekLabel, POSITIONS, seasonsOf } from "./filters.js?v=25b394fd6c";
+import { rzI5Shares } from "./agg_player.js?v=25b394fd6c";
 // D196: the injury badge and red-name rule, kit.js's own copy (built the same round by the player-page builder,
 // which owns kit.js/analytics_recut.css) - re-exported here so the Receivers/QB/Running backs tables draw the
 // exact same badge, in the exact same CSS (.an-stchip/.an-st-*, already in analytics_recut.css), as the player
 // pages, rather than keeping a second parallel implementation.
-import { statusChip, statusNameClass } from "./views/kit.js?v=b92308e039";
-import { involvementSignals, signalHtml } from "./agg_signal.js?v=b92308e039";
-import { clubChip, clubAbbr } from "./clublogo.js?v=b92308e039";
+import { statusChip, statusNameClass } from "./views/kit.js?v=25b394fd6c";
+import { involvementSignals, signalHtml } from "./agg_signal.js?v=25b394fd6c";
+import { clubChip, clubAbbr } from "./clublogo.js?v=25b394fd6c";
 export { statusChip, statusNameClass };
 
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -348,10 +348,13 @@ export const rbOnlyMode = (pos) => Boolean(pos?.RB === "in" && !POSITIONS.some((
 const baseCols = (st) => (rbOnlyMode(st.pos) ? COLS.filter((c) => !AY_ONLY_KEYS.has(c.k)) : COLS);
 
 // ---- inline SVG ----------------------------------------------------------------------------------------
-export function sparkline(series, st) {
+// avg: his position's league target share (the reference pool's lg.overall.tgtShare), drawn as the dashed line; no
+// line when it is unknown.
+export function sparkline(series, st, avg = null) {
   const W = 84, H = 22, pad = 3;
   const vals = series.map((s) => s.v);
-  const max = Math.max(0.35, ...vals.filter((v) => v !== null));
+  const hasAvg = avg !== null && avg !== undefined && Number.isFinite(+avg);
+  const max = Math.max(0.35, hasAvg ? +avg : 0, ...vals.filter((v) => v !== null));
   const n = series.length;
   const x = (i) => (n <= 1 ? W / 2 : pad + (i * (W - 2 * pad)) / (n - 1));
   const y = (v) => H - pad - (v / max) * (H - 2 * pad);
@@ -366,7 +369,7 @@ export function sparkline(series, st) {
     return `<g class="an-sp-pt"><rect x="${(x(i) - w / 2).toFixed(1)}" y="0" width="${w.toFixed(1)}" height="${H}" fill="transparent"><title>${esc(lab)}</title></rect>`
       + (s.v === null ? "" : `<circle cx="${x(i).toFixed(1)}" cy="${y(s.v).toFixed(1)}" r="${i === n - 1 ? 2.4 : 1.6}"/>`) + `</g>`;
   }).join("");
-  const ref = 0.2 <= max ? `<line class="an-sp-ref" x1="0" x2="${W}" y1="${y(0.2).toFixed(1)}" y2="${y(0.2).toFixed(1)}"/>` : "";
+  const ref = hasAvg ? `<line class="an-sp-ref" x1="0" x2="${W}" y1="${y(+avg).toFixed(1)}" y2="${y(+avg).toFixed(1)}"/>` : "";
   return `<svg class="an-spark" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="Weekly target share">${ref}<path d="${d}"/>${hit}</svg>`;
 }
 
@@ -490,7 +493,7 @@ export function tableHtml(allRows, st, query, view = {}, status = {}) {
   const colTitle = (c) => (c.k === "tgt" || c.k === "opp" ? `${c.t} (${st.pi === false ? "excludes" : "includes"} pass-interference targets)` : c.t);
   // an-stick on rank/name (header and body below): the lead's CSS pins these two columns to the left edge while
   // the frame scrolls (finding 1), matching the moreCell block above them.
-  const head = `<tr>${th("rank", "#", "Rank", "c-rank an-stick")}${th("name", "Player", "Player, team, position", "c-name an-stick")}${th("g", "G", "Games in the window")}${cols.map((c) => th(c.k, c.h, colTitle(c), c.cls)).join("")}<th class="c-spark" title="Weekly target share; hover a point for the week">Tgt % by week</th></tr>`;
+  const head = `<tr>${th("rank", "#", "Rank", "c-rank an-stick")}${th("name", "Player", "Player, team, position", "c-name an-stick")}${th("g", "G", "Games in the window")}${cols.map((c) => th(c.k, c.h, colTitle(c), c.cls)).join("")}<th class="c-spark" title="Weekly target share; dashed: his position's league average; hover a point for the week">Tgt % by week</th></tr>`;
   const cell = (c, r) => {
     // D182: a mixed table keeps the air-yards columns for perspective, but an RB's own numbers there are not
     // meaningful, so his cells show a dash instead of the real (but misleading) figure.
@@ -523,13 +526,13 @@ export function tableHtml(allRows, st, query, view = {}, status = {}) {
       <td class="c-name an-stick">${teamPill(r.team, teams, q, "an-nameclub")}<a class="an-pname${nameCls ? " " + nameCls : ""}" href="#/player/${encodeURIComponent(r.gsis)}${q ? "?" + q : ""}" title="${esc(r.name)}">${esc(r.name)}</a>${mark}${clubAbbr(r.team)}<span class="an-pospill" data-band="${BAND(r.pos)}">${esc(r.pos)}</span>${chip}<a class="an-dc" href="${depth}" title="Open his depth-chart card" aria-label="Depth chart">→</a></td>
       <td class="num">${r.g}</td>
       ${cols.map((c) => cell(c, r)).join("")}
-      <td class="c-spark">${sparkline(r.series, st)}</td></tr>`
+      <td class="c-spark">${sparkline(r.series, st, view.ref?.at(r.pos)?.lg?.overall?.tgtShare ?? null)}</td></tr>`
       + (open ? `<tr class="an-detail"><td colspan="${nCols}"><div class="an-detail-wrap">${detailHtml(r, st, q, view.ref?.at(r.pos), view.windowName || "Window")}</div></td></tr>` : "");
   }).join("");
 
   return `<div class="an-tbar">
       <label class="an-min">Min targets <input type="number" min="0" step="1" value="${st.minTgt}" data-min></label>
-      <label class="an-switch" title="A defensive pass interference is a no-play in the play-by-play; on, it counts as a target for the receiver (never a pass attempt, catch or yards)"><input type="checkbox" data-pi${st.pi === false ? "" : " checked"}><span>${st.pi === false ? "excl. PI targets" : "PI targets"}</span></label>
+      <label class="an-switch" title="A defensive pass interference is a no-play in the play-by-play; on, it counts as a target for the receiver and as a club attempt beside it, so a share cannot pass 100% (never a catch or yards)"><input type="checkbox" data-pi${st.pi === false ? "" : " checked"}><span>${st.pi === false ? "excl. PI targets" : "PI targets"}</span></label>
       <span class="an-count">${rows.length} player${rows.length === 1 ? "" : "s"}</span>
       <span class="an-legend" title="The depth charts' rating colours on the share and efficiency columns, by position: each value against his own position's reference pool in this window (elite at its 90th percentile or above, then the 70th, 40th and 15th; low below). A position with under ${MIN_POOL} men in the pool uses the league-wide cuts for that column (hover the cell).">
         ${TIER_NAMES.map((t) => `<i class="t-${t}"></i>`).join("")}<span>elite → low by position</span></span>

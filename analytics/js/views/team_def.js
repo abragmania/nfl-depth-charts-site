@@ -5,22 +5,24 @@
 // the win/full aggregation and the header are copied from team.js rather than shared beyond teamSideSeg/teamPageState/
 // distList/the zone helpers (team.js's own render loop is entangled with its "lost" module state and its offense-only
 // tiles, so pulling more of it out would cost more than the duplication it would save).
-import { backLink } from "../router.js?v=b92308e039";
-import { fromQuery, toQuery, seasonsOf, weekLabel } from "../filters.js?v=b92308e039";
-import { loadFor, loadTeams, loadStatusFeed, loadClubCards, displayName } from "../data.js?v=b92308e039";
-import { aggregateTeams, teamReference, teamTier, teamRank, teamZones, defTargets, defCarries, SOFT_KEYS } from "../agg_team.js?v=b92308e039";
-import { gridRows } from "../agg_grid.js?v=b92308e039";
-import { absences, isMissing } from "../agg_absence.js?v=b92308e039";
-import { renderFilterBar } from "../filterbar.js?v=b92308e039";
-import { esc, NA, isNum, pct, fix, signed, int, teamPill, qbStrips, pfrNote, seasonLabel } from "./qb.js?v=b92308e039";
-import { windowName } from "./qbplayer.js?v=b92308e039";
-import { lostCardHtml } from "./lost.js?v=b92308e039";
-import { lineBlock } from "./kit.js?v=b92308e039";
-import { nameOf } from "../names.js?v=b92308e039";
-import { snapMethodNote } from "../agg.js?v=b92308e039";
-import { teamPageState, teamSideSeg, clubZoneField, clubZoneLegend, zonePlaysHtml, TEAM_ZONE_MODES, distList, ordinal, clubGridRowHtml, TGT_COLS, CAR_COLS, RANKINGS_DEF_KEYS, rankingsHref, gridTileHref, lineStripHtml, lineStripSpec } from "./team.js?v=b92308e039";
+import { backLink } from "../router.js?v=25b394fd6c";
+import { fromQuery, toQuery, seasonsOf, weekLabel } from "../filters.js?v=25b394fd6c";
+import { loadFor, loadTeams, loadStatusFeed, loadClubCards, displayName } from "../data.js?v=25b394fd6c";
+import { aggregateTeams, teamReference, teamTier, teamRank, teamZones, defTargets, defCarries, SOFT_KEYS } from "../agg_team.js?v=25b394fd6c";
+import { gridRows } from "../agg_grid.js?v=25b394fd6c";
+import { absences, isMissing } from "../agg_absence.js?v=25b394fd6c";
+import { renderFilterBar } from "../filterbar.js?v=25b394fd6c";
+import { esc, NA, isNum, pct, fix, signed, int, teamPill, qbStrips, pfrNote, seasonLabel } from "./qb.js?v=25b394fd6c";
+import { windowName } from "./qbplayer.js?v=25b394fd6c";
+import { lostCardHtml } from "./lost.js?v=25b394fd6c";
+import { lineBlock } from "./kit.js?v=25b394fd6c";
+import { nameOf } from "../names.js?v=25b394fd6c";
+import { snapMethodNote } from "../agg.js?v=25b394fd6c";
+import { teamPageState, teamSideSeg, clubZoneField, clubZoneLegend, zonePlaysHtml, TEAM_ZONE_MODES, distList, ordinal, clubGridRowHtml, TGT_COLS, CAR_COLS, RANKINGS_DEF_KEYS, rankingsHref, gridTileHref, lineStripHtml, lineStripSpec } from "./team.js?v=25b394fd6c";
 
 const P = (v, d = 1) => (isNum(v) ? pct(v, d) + "%" : NA);
+// A missing figure on a kit.js lineBlock tile: lineBlock escapes every value, so the NA markup would print as text.
+const DASH = "–";
 
 // D198: the D-line block's proxy note. Unlike the O-line block's, the defense's pass-rush and run-stuff figures are
 // already team totals (every defender's pressures, hits, hurries and sacks are counted, not attributed to a QB or a
@@ -90,7 +92,7 @@ export function dlineBlockHtml({ D = {}, L = {}, rows = [], abbr = "", qs = "", 
     // D199 review: match the headline chips' "12th of 32" wording (no "clubs") rather than the tile's own "22nd of
     // 32 clubs". D206: linked to Rankings when the key has a column there, else to the Grid's own category column -
     // never a dead end.
-    return { label, value: isNum(v) ? fmt(v) : NA, lg: isNum(lgv) ? fmt(lgv) : null,
+    return { label, value: isNum(v) ? fmt(v) : DASH, lg: isNum(lgv) ? fmt(lgv) : null,
       rank: rk ? ordinal(rk.rank) : null, rankOf: rk ? String(rk.of) : null, sub, tier: tr,
       href: RANKINGS_DEF_KEYS.has(k) ? rankingsHref("def", k, abbr, qs) : DL_GRID_LINK[k] ? gridTileHref(DL_GRID_LINK[k], qs) : null };
   };

@@ -2,7 +2,7 @@
 // The crest is the dark-background variant (logoDark), loaded through cards.js's assetUrl so it resolves on the public
 // static site too. The abbreviation stays in the page as visually hidden text (sort, search, copy) and as the image's
 // alt and title; a crest that fails to load falls back to today's coloured chip (never a broken image or a blank).
-import { isPlated, crestSrc } from "../../js/clublogo.js?v=b92308e039";
+import { isPlated, crestSrc } from "../../js/clublogo.js?v=25b394fd6c";
 
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 

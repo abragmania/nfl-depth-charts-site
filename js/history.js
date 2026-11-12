@@ -5,10 +5,10 @@
 // Talks to GET /api/history/{abbr}/{playerKey} through api.js's getHistory() helper, so the published static
 // copy (D67) reads the pre-rendered file instead. This block's own styles live in this file, injected once
 // under the .hist- prefix; styles.css carries none of them.
-import { getHistory, getTeams } from "./api.js?v=b92308e039";
+import { getHistory, getTeams } from "./api.js?v=25b394fd6c";
 // D209 (2026-09-28): a crest path from /api/teams is bare and site-root-relative; clublogo.js (through cards.js's
 // assetUrl) anchors it to the site root, so the same call is right on the depth-chart app and on the analytics player page.
-import { isPlated, crestSrc } from "./clublogo.js?v=b92308e039";
+import { isPlated, crestSrc } from "./clublogo.js?v=25b394fd6c";
 
 const CSS = `
 .hist { margin-top: 14px; font-size: 13px; }
@@ -38,7 +38,7 @@ const CSS = `
 .hist-ovr.tier-elite { color:var(--tier-elite,#34d399); }
 .hist-ovr.tier-strong { color:var(--tier-strong,#22a06b); }
 .hist-ovr.tier-avg { color:var(--tier-avg,#c9d15a); }
-.hist-ovr.tier-weak { color:var(--tier-weak,#f2c14e); }
+.hist-ovr.tier-weak { color:var(--tier-weak,#e8792e); }
 .hist-ovr.tier-flat { color:var(--tier-flat,#e0524d); }
 .hist-ovr .hist-star { color:#6b7480; font-weight:400; font-size:11px; margin-left:1px; }
 /* D87: "launch → now" on the current season's row — the arrow stays muted so the two ratings, each in its own
@@ -61,7 +61,7 @@ const CSS = `
 .hist-strip-chip.tier-elite .hist-strip-ovr { color:var(--tier-elite,#34d399); }
 .hist-strip-chip.tier-strong .hist-strip-ovr { color:var(--tier-strong,#22a06b); }
 .hist-strip-chip.tier-avg .hist-strip-ovr { color:var(--tier-avg,#c9d15a); }
-.hist-strip-chip.tier-weak .hist-strip-ovr { color:var(--tier-weak,#f2c14e); }
+.hist-strip-chip.tier-weak .hist-strip-ovr { color:var(--tier-weak,#e8792e); }
 .hist-strip-chip.tier-flat .hist-strip-ovr { color:var(--tier-flat,#e0524d); }
 .hist-state { padding:10px 0; color:var(--muted,#8a94a0); font-size:13px; }
 .hist-state.error { color:#ff8a80; }

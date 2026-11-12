@@ -18,35 +18,21 @@
 // Interactivity (D177): a weekly column (strips or the fantasy chart) sets the window to that week and back; a zone
 // cell lists the plays behind it; the header has a Back button (router.js backLink: the page he came from, else
 // Quarterbacks) and links to his depth-chart card (new tab) and his team page.
-import { fromQuery, seasonsOf, weekLabel, splitKey, gamesInWindow, rankHref, isSituational } from "../filters.js?v=b92308e039";
-import { backLink } from "../router.js?v=b92308e039";
-import { loadFor, loadTeams, displayName, loadStatusFeed } from "../data.js?v=b92308e039";
-import { isStatic } from "../../../js/api.js?v=b92308e039";
-import { clubGames, snapMethodNote, SNAP_SHARE_DEF } from "../agg.js?v=b92308e039";
-import { qbTrend, aggregateQb, qbReference, qbTier, qbZones, qbSplits, SPLITS, QB_MADDEN_ATTRS, inQbPool, qbPoolStat, qbGameCuts, QB_MIN_DB } from "../agg_qb.js?v=b92308e039";
-import { fantasyByPlayer } from "../agg_fantasy.js?v=b92308e039";
-import { median, ratingTier, maddenSeasonLabel, iterationLabel } from "../agg_player.js?v=b92308e039";
-import { renderFilterBar } from "../filterbar.js?v=b92308e039";
-import { ratingBars } from "../charts/hbars.js?v=b92308e039";
-import { headlineRow, fantasyBand, phaseBlock, varianceStrip, maddenFoot, playerHead, currentStatus, latestWeekIn } from "./kit.js?v=b92308e039";
-import { esc, isNum, signed, qbStrips, qbZoneField, qbZoneLegend, qbZoneName, QB_ZONE_MODES, qbQuery, minDbOf, pfrNote } from "./qb.js?v=b92308e039";
+import { fromQuery, seasonsOf, weekLabel, splitKey, gamesInWindow, rankHref, isSituational } from "../filters.js?v=25b394fd6c";
+import { backLink } from "../router.js?v=25b394fd6c";
+import { loadFor, loadTeams, displayName, loadStatusFeed, loadMadden } from "../data.js?v=25b394fd6c";
+import { clubGames, snapMethodNote, SNAP_SHARE_DEF } from "../agg.js?v=25b394fd6c";
+import { qbTrend, aggregateQb, qbReference, qbTier, qbZones, qbSplits, SPLITS, QB_MADDEN_ATTRS, inQbPool, qbPoolStat, qbGameCuts, QB_MIN_DB } from "../agg_qb.js?v=25b394fd6c";
+import { fantasyByPlayer } from "../agg_fantasy.js?v=25b394fd6c";
+import { median, ratingTier, maddenSeasonLabel, iterationLabel } from "../agg_player.js?v=25b394fd6c";
+import { renderFilterBar } from "../filterbar.js?v=25b394fd6c";
+import { ratingBars } from "../charts/hbars.js?v=25b394fd6c";
+import { headlineRow, fantasyBand, phaseBlock, varianceStrip, maddenFoot, playerHead, currentStatus, latestWeekIn } from "./kit.js?v=25b394fd6c";
+import { esc, isNum, signed, qbStrips, qbZoneField, qbZoneLegend, qbZoneName, QB_ZONE_MODES, qbQuery, minDbOf, pfrNote } from "./qb.js?v=25b394fd6c";
 // D209 part (2): the depth-chart card block every player page opens with — shared with player.js (the same
 // pass-catcher file) rather than duplicated, since both live in this app and the card logic itself only
 // exists once, in public/js/panel.js.
-import { loadCard, cardBlockHtml, mountCard, reusesCard, currentTeamOf, weekStripHtml } from "./player.js?v=b92308e039";
-
-// Madden ratings for a season, from the data builder's madden.json (the same fetch as player.js's loadMadden, which
-// is private to that page). Never fails: absent or unreadable resolves to null and the block says so.
-const maddenCache = new Map();
-function loadMadden(season) {
-  if (!maddenCache.has(season)) {
-    const url = isStatic() ? `../api/analytics/${season}/madden.json` : `/api/analytics/${season}/madden`;
-    maddenCache.set(season, fetch(url, { headers: { accept: "application/json" } })
-      .then((r) => (r.ok ? r.json() : null)).catch(() => null)
-      .then((j) => { if (!j) maddenCache.delete(season); return j; }));
-  }
-  return maddenCache.get(season);
-}
+import { loadCard, cardBlockHtml, mountCard, reusesCard, currentTeamOf, weekStripHtml, depthChartHref } from "./player.js?v=25b394fd6c";
 
 // PURE: the passing attributes as rating bars against the QB median ({ status, title, ovr, bars, peers }).
 export function maddenQb(madden, gsis, season) {
@@ -97,10 +83,11 @@ export function ownWindow(series, winGames) {
 }
 // D217: the quarterback page's header is Back, his name (with his status badge) and the links; the headshot, team and
 // position chips and OVR pill are the depth-chart card right below it. Exported for the test.
-export function qbHeaderHtml({ gsis, team, name, teams, qs = "", status = null, statusSeason = null, latestWeek = null }) {
-  const depth = `../#/team/${encodeURIComponent(team)}/player/${encodeURIComponent(gsis)}`;
+// The "Depth chart" link is player.js depthChartHref (his card's playerKey and club; cardInfo: loadCard's result).
+export function qbHeaderHtml({ gsis, team, name, teams, qs = "", status = null, statusSeason = null, latestWeek = null, cardInfo = null }) {
+  const depth = depthChartHref(cardInfo, { team, gsis });
   return playerHead({ lead: backLink(`#/qb${qs ? "?" + qs : ""}`, "Quarterbacks"), name, shot: false, colour: teams.get(team)?.colourPrimary,
-    links: `<div class="an-pl-links"><a href="${depth}">Depth chart →</a>${team ? `<a href="#/team/${esc(team)}${qs ? "?" + qs : ""}">Team page →</a>` : ""}</div>`,
+    links: `<div class="an-pl-links">${depth ? `<a href="${esc(depth)}">Depth chart →</a>` : ""}${team ? `<a href="#/team/${esc(team)}${qs ? "?" + qs : ""}">Team page →</a>` : ""}</div>`,
     status, statusSeason, latestWeek });
 }
 
@@ -254,7 +241,7 @@ export function qbVarianceItems(R, ref) {
     { key: "tdPct", label: "TD %", me: tPct(R.tdPct), lg: tPct(P.tdPct), dir: dirOf(R.tdPct, P.tdPct), title: "Passing touchdowns / attempts, beside every pool QB's touchdowns over their attempts. Source: nflverse play-by-play" },
     { key: "intPct", label: "INT %", me: tPct(R.intPct), lg: tPct(P.intPct), dir: dirOf(R.intPct, P.intPct), title: "Interceptions / attempts, beside every pool QB's interceptions over their attempts. Source: nflverse play-by-play" },
     { key: "dropPer100", label: "Drops / 100 att", me: tFix(R.dropPer100, 1), lg: tFix(P.dropPer100, 1), dir: dirOf(R.dropPer100, P.dropPer100), title: "Passes his receivers dropped per 100 of his attempts, over the weeks PFR lists him (PFR runs about a week behind). Source: PFR advanced stats (drops), nflverse play-by-play (attempts)" },
-    { key: "flRate", label: "Fumbles lost", me: `${fl} of ${fum}${fum ? ` (${tPct(R.flRate, 0)})` : ""}`, lg: tPct(P.flRate, 0), dir: dirOf(R.flRate, P.flRate), title: "His fumbles the defence recovered, out of his fumbles (any play; return fumbles are not in the rows), beside the pool's share lost. Source: nflverse play-by-play" },
+    { key: "flRate", label: "Fumbles lost, from play-by-play", me: `${fl} of ${fum}${fum ? ` (${tPct(R.flRate, 0)})` : ""}`, lg: tPct(P.flRate, 0), dir: dirOf(R.flRate, P.flRate), title: "His fumbles the defence recovered, out of his fumbles (any play; return fumbles are not in the rows), beside the pool's share lost. Source: nflverse play-by-play" },
     { key: "dkTdShare", label: "DK points from TDs", me: tPct(R.dkTdShare, 0), lg: tPct(P.dkTdShare, 0), dir: dirOf(R.dkTdShare, P.dkTdShare), title: "Share of his DraftKings points that came from touchdowns (4 per passing TD, 6 per rushing TD), beside the pool QBs' mean share. Source: nflverse play-by-play" },
   ];
 }
@@ -478,7 +465,7 @@ export async function renderQbPlayer(ctx, params, query) {
     const reuse = reusesCard({ gsis: ui.cardGsis, el: ui.cardEl }, gsis) ? ui.cardEl : null;
     if (reuse?.parentNode) reuse.remove();
     root.innerHTML = `<section class="an-pl an-qbp">
-    ${qbHeaderHtml({ gsis, team, name, teams, qs, status: currentStatus(feed, gsis, seasonsOf(st)), statusSeason: feed?.season ?? null, latestWeek: latestWeekIn(data.keys, feed?.season) })}
+    ${qbHeaderHtml({ gsis, team, name, teams, qs, status: currentStatus(feed, gsis, seasonsOf(st)), statusSeason: feed?.season ?? null, latestWeek: latestWeekIn(data.keys, feed?.season), cardInfo })}
     ${reuse ? `<div data-cardslot></div>` : cardHtml}
     ${weekHtml}
     <div class="an-pl-bar"><div class="an-filters"></div></div>

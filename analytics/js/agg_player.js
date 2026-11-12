@@ -12,10 +12,10 @@
 // of weekly percentages (the window row from aggregateUsage already is).
 // The weekly chart always spans every loaded week (the whole timeline, both seasons when Include 2025 is on) so a
 // one-week window can be seen in context; the window's weeks are flagged `inWin` and drawn bright.
-import { aggregateUsage, clubGames, colIndex, usageReference, inPool, tierCuts, referenceText, snapGame, poolSnapShare, frac } from "./agg.js?v=b92308e039";
-import { gamesInWindow, splitKey, isSituational } from "./filters.js?v=b92308e039";
-import { aggregateRush, rushReference, rushPooled } from "./agg_rush.js?v=b92308e039";
-import { fantasyByPlayer } from "./agg_fantasy.js?v=b92308e039";
+import { aggregateUsage, clubGames, colIndex, usageReference, inPool, tierCuts, referenceText, snapGame, poolSnapShare, frac, countsAsClubAttempt } from "./agg.js?v=25b394fd6c";
+import { gamesInWindow, splitKey, isSituational } from "./filters.js?v=25b394fd6c";
+import { aggregateRush, rushReference, rushPooled } from "./agg_rush.js?v=25b394fd6c";
+import { fantasyByPlayer } from "./agg_fantasy.js?v=25b394fd6c";
 
 const num = (v) => (v === null || v === undefined || v === "" || !Number.isFinite(+v) ? null : +v);
 const truthy = (v) => v === true || v === 1 || v === "1" || v === "true";
@@ -118,7 +118,7 @@ export function playerView(blocks, players, stIn, gsis) {
   const lgRoute = new Map(), myRoute = new Map();
   let lgZoned = 0, lgRouted = 0;
   const clubRuns = new Map(); // gk -> designed runs
-  const clubAtt = new Map(); // gk -> pass attempts (agg.js's rule: a pass-interference target is not one)
+  const clubAtt = new Map(); // gk -> pass attempts (agg.js's rule: a pass-interference target the switch counts is one)
   const clubAir = new Map(); // gk -> air yards on those attempts (agg.js's teamAir rule)
   const myWeek = new Map(); // key -> { car, ryds, gk }
   const myRoutes = new Map(); // key -> his charted routes that week
@@ -135,7 +135,8 @@ export function playerView(blocks, players, stIn, gsis) {
       const inW = winSet.has(gk);
       const type = r[C.type];
       if (type === "run") clubRuns.set(gk, (clubRuns.get(gk) || 0) + 1);
-      if (type === "pass" && !truthy(r[C.pi])) { clubAtt.set(gk, (clubAtt.get(gk) || 0) + 1); clubAir.set(gk, (clubAir.get(gk) || 0) + (num(r[C.air]) ?? 0)); }
+      // D178 (agg.js teamAtt): a PI row with a target counts as a club attempt whenever the switch counts it for him.
+      if (countsAsClubAttempt(r, C, st)) { clubAtt.set(gk, (clubAtt.get(gk) || 0) + 1); clubAir.set(gk, (clubAir.get(gk) || 0) + (num(r[C.air]) ?? 0)); }
       // A pass-interference target with "excl. PI targets" is as if the ledger had dropped it: not even a game played.
       const piOff = truthy(r[C.pi]) && st.pi === false;
       if (!piOff) for (const col of ["passer", "target", "rusher"]) { const id = r[C[col]]; if (inW && tracked(id)) G(id).games.add(gk); }
@@ -297,11 +298,11 @@ export function playerView(blocks, players, stIn, gsis) {
       // (named oppN: a series entry's "opp" is the opponent).
       oppN: played ? s.oppN ?? (s.tgt || 0) + (w?.car || 0) : null,
       // Increment 7a (the game log and the back's opportunity-share line): his charted routes that week (null when
-      // not charted), and his club's pass attempts (a PI target is not one) and designed runs in that game (null
-      // when his club had no game that week).
+      // not charted), and his club's pass attempts (pass-interference targets included while the PI-targets switch is
+      // on, D178) and designed runs in that game (null when his club had no game that week).
       routes: myRoutes.has(s.key) ? myRoutes.get(s.key) : null,
       att: g ? clubAtt.get(`${s.key}|${team}`) || 0 : null, runs: g ? runs : null,
-      // and his club's air yards that game (non-PI attempts), so a season's AY % totals as air over air (D181).
+      // and his club's air yards that game on those same attempts, so a season's AY % totals as air over air (D181).
       clubAy: g ? clubAir.get(`${s.key}|${team}`) || 0 : null,
       // Whether HIS club's game that week is inside the window (null on a bye). `inWin` is the league's window
       // weeks, which under Last 3 are the union of every club's last three, so another club's bye can put a week
@@ -434,10 +435,9 @@ const meanOf = (rows, k) => mean(rows.map((r) => (r[k] === null || r[k] === unde
 //   rzShare     = (red-zone targets + red-zone designed runs) / (club red-zone pass attempts + club red-zone
 //                 designed runs)                                                                    (back)
 //   rzTgtShare  = red-zone targets / club red-zone pass attempts; no floor (D224), null only with none   (receiver)
-// A pass-interference target is his target but never a club attempt (agg.js), except in the two red-zone shares
-// (rzShare, rzTgtShare), where a red-zone PI target counts on the club's side too, so both sides count the same plays
-// and the share never passes 100% (rzI5Shares below); with "excl. PI targets" the row is skipped outright on both
-// sides. Snap and route shares are null under a down or quarter filter, as on the row.
+// A pass-interference target is his target and a club attempt (agg.js, D178), in every share here and in the two
+// red-zone shares (rzShare, rzTgtShare, rzI5Shares below), so both sides count the same plays and no share passes
+// 100%; with "excl. PI targets" the row is skipped outright on both sides. Snap and route shares are null under a down or quarter filter, as on the row.
 // Shape (frozen): { kind: "back" | "receiver", keys, games, last3Games, short, last3Weeks: [week keys],
 //   figures: { [key]: { last3, season, pts (last3 - season, in percentage points), n3, n } } } where n3 and n are the
 //   games that fed the figure (fewer than the games counted when snaps or routes are missing that week).
@@ -465,9 +465,9 @@ export function trendFigures(blocks, players, st, gsis, back) {
       if (!club.has(gk)) club.set(gk, C0());
       const c = club.get(gk);
       if (type === "run") { c.runs++; if (rz) c.rzRuns++; }
-      if (type === "pass" && !pi) { c.att++; c.air += num(r[C.air]) ?? 0; }
+      if (countsAsClubAttempt(r, C, st)) { c.att++; c.air += num(r[C.air]) ?? 0; } // D178
       // Red zone: a PI target is a club red-zone play too, as it is his (rzI5Shares' rule).
-      if (type === "pass" && rz && (!pi || r[C.target])) c.rzAtt++;
+      if (rz && countsAsClubAttempt(r, C, st)) c.rzAtt++;
       if (![C.passer, C.target, C.rusher].some((i) => i !== undefined && r[i] === gsis)) continue;
       const m = M(gk);
       if (type === "pass" && r[C.target] === gsis) { m.tgt++; m.air += num(r[C.air]) ?? 0; if (rz) m.rzTgt++; }
@@ -560,7 +560,7 @@ export function rzI5Shares(blocks, players, st, team = "") {
       const i5 = yl !== null && yl <= INSIDE5;
       if (!club.has(gk)) club.set(gk, { rz: 0, i5: 0 });
       const c = club.get(gk);
-      if (type === "pass" && rz && (!pi || r[C.target])) c.rz++; // a PI target is a club red-zone play, as it is his
+      if (rz && countsAsClubAttempt(r, C, st)) c.rz++; // a PI target is a club red-zone play, as it is his
       if (type === "run" && i5) c.i5++;
       for (const col of ["passer", "target", "rusher"]) if (C[col] !== undefined && r[C[col]]) H(r[C[col]], gk);
       if (type === "pass" && rz && r[C.target]) H(r[C.target], gk).rz++;

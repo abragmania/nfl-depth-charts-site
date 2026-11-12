@@ -4,7 +4,7 @@
 // current page lit. One module, one markup, one wiring function, so a route can never drift from another
 // route's idea of "how do I get to Offense from here" — team.js, zoom.js and matchup.js all call this
 // instead of each carrying its own copy of the switcher/pills/breadcrumb (which is what D59 replaces).
-import { esc } from "./cards.js?v=b92308e039";
+import { esc } from "./cards.js?v=25b394fd6c";
 
 function switcherOptionsHtml(teams, abbr) {
   return teams.slice().sort((a, b) => a.abbr.localeCompare(b.abbr))

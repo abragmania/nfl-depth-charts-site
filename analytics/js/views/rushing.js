@@ -4,16 +4,16 @@
 // direction was dropped by Adam. The columns read Production, Opportunity, Efficiency, then the ancillary groups (the
 // COLS note below). Every figure comes from agg_rush.js (pure); this file draws, sorts and wires clicks.
 // The weekly strips and the team pill are qb.js's, shared.
-import { fromQuery, toQuery, seasonsOf, weekLabel, POSITIONS, DEFAULT_POS } from "../filters.js?v=b92308e039";
-import { loadFor, loadTeams, loadStatusFeed, displayName } from "../data.js?v=b92308e039";
-import { clubAbbr } from "../clublogo.js?v=b92308e039";
-import { clubGames, tierNote, TIER_NAMES, MIN_POOL, POOL_PER_GAME, POOL_FLOOR, snapMethodNote } from "../agg.js?v=b92308e039";
-import { aggregateRush, rushReference, rushTier, sortRushRows, rushOpts, rushQueryFrom, samePos, RUSH_DEFAULT_POS, RUSH_MIN_CAR, RUSH_TIER_KEYS, BIN_LABELS, GOAL_LINE } from "../agg_rush.js?v=b92308e039";
-import { renderFilterBar } from "../filterbar.js?v=b92308e039";
-import { decorateDeciding } from "../deciding.js?v=b92308e039";
-import { involvementSignals, signalHtml } from "../agg_signal.js?v=b92308e039";
-import { esc, NA, isNum, pct, fix, signed, int, teamPill, qbStrips, seasonLabel } from "./qb.js?v=b92308e039";
-import { DK_TIPS, CATCH_TIP, withGroups, RZ_TIPS, withRzFigures, shareSample, shareCountHtml, groupCells, viewFrom, withView, columnsFor, pickView, viewCell, wantsDeciding, withViewSort, defaultSortFor, l3Title, WK_COLS, DEC_GROUPS, L3_NOTE, fitOpen, wireView, statusChip, statusNameClass, statusApplies, hlOf, withHl, scrollToHl } from "../table.js?v=b92308e039";
+import { fromQuery, toQuery, seasonsOf, weekLabel, POSITIONS } from "../filters.js?v=25b394fd6c";
+import { loadFor, loadTeams, loadStatusFeed, displayName } from "../data.js?v=25b394fd6c";
+import { clubAbbr } from "../clublogo.js?v=25b394fd6c";
+import { clubGames, tierNote, TIER_NAMES, MIN_POOL, POOL_PER_GAME, POOL_FLOOR, snapMethodNote } from "../agg.js?v=25b394fd6c";
+import { aggregateRush, rushReference, rushTier, sortRushRows, rushOpts, rushQueryFrom, RUSH_DEFAULT_POS, RUSH_MIN_CAR, RUSH_TIER_KEYS, BIN_LABELS, GOAL_LINE } from "../agg_rush.js?v=25b394fd6c";
+import { renderFilterBar } from "../filterbar.js?v=25b394fd6c";
+import { decorateDeciding } from "../deciding.js?v=25b394fd6c";
+import { involvementSignals, signalHtml } from "../agg_signal.js?v=25b394fd6c";
+import { esc, NA, isNum, pct, fix, signed, int, teamPill, qbStrips, seasonLabel } from "./qb.js?v=25b394fd6c";
+import { DK_TIPS, CATCH_TIP, withGroups, RZ_TIPS, withRzFigures, shareSample, shareCountHtml, groupCells, viewFrom, withView, columnsFor, pickView, viewCell, wantsDeciding, withViewSort, defaultSortFor, l3Title, WK_COLS, DEC_GROUPS, L3_NOTE, fitOpen, wireView, statusChip, statusNameClass, statusApplies, hlOf, withHl, scrollToHl } from "../table.js?v=25b394fd6c";
 
 // 👁 fix round, finding 4: qb.js's fix()/int() print JS's native ASCII hyphen for a negative value ("-2", "-0.12"),
 // while epaCar/epaTgt/epaOpp/ryoeAtt on this same table already use signed() and print the true minus ("−0.90").
@@ -251,10 +251,6 @@ export async function renderRushing(ctx, query) {
   document.title = "Running backs · NFL Analytics";
   const go = (n, mc = minCar) => {
     n = { ...n, view: n.view || st.view }; // Reset and the filter bar send no view: keep the one on screen
-    // The filter bar's Reset returns Usage's default positions (WR/TE/RB); a chip click changes one position, so a
-    // jump to exactly that set that changes more than one is the Reset: send it to the rushing default instead.
-    const diff = POSITIONS.filter((p) => (n.pos[p] || "") !== (st.pos[p] || "")).length;
-    if (diff > 1 && samePos(n.pos, DEFAULT_POS)) n = { ...n, pos: { ...RUSH_DEFAULT_POS } };
     const q = withHl(rushQuery(n, mc), hl); location.hash = `#/rbs${q ? "?" + q : ""}`;
   };
   if (!root.querySelector(".an-rush")) root.innerHTML = `<div class="an-msg">Loading running backs…</div>`;
@@ -301,7 +297,7 @@ export async function renderRushing(ctx, query) {
     <div class="an-tablewrap"></div>
     <p class="an-foot">Carries, yards, TD, EPA, success, red-zone and goal-line carries, long and explosive runs, rush share, targets and target share: nflverse play-by-play (a quarterback's carries include scrambles; rush share counts designed runs only). Rush yards over expected and efficiency: Next Gen Stats. Snaps: nflverse snap counts. Routes, YPRR, TPRR: heatradar.app (charted). Receptions, receiving yards and TDs, EPA per target and catch %: nflverse play-by-play, the Receivers page's figures. Fumbles lost are counted from the play rows (a fumble lost on a kick or punt return is not in them). DK: DraftKings Classic points from the same play rows, a lost fumble included (no 2-point conversions or return touchdowns).</p>
   </section>`;
-  renderFilterBar(root.querySelector(".an-filters"), st, { keys: data.keys, teams: clubTeams }, (n) => go(n));
+  renderFilterBar(root.querySelector(".an-filters"), st, { keys: data.keys, teams: clubTeams, defaults: { pos: { ...RUSH_DEFAULT_POS } } }, (n) => go(n));
   const el = root.querySelector(".an-tablewrap");
   // D196: badges are current-season only - statusApplies gates on the feed's own season against the window shown.
   const status = statusApplies(st, statusFeed.season) ? statusFeed.players : {};

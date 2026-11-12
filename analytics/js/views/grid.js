@@ -7,15 +7,15 @@
 // Under the grid, D196's "What each defense allows, by position" (views/allowed_table.js; Adam, 2026-09-25: on this
 // page, not the Defense page), on the same filters and window; its own sort (psort, pdir) and vs-usual switch (vs=1)
 // ride in the same hash. The Rating / Rank switch is the grid's only.
-import { fromQuery, toQuery, seasonsOf, weekLabel, defaultState } from "../filters.js?v=b92308e039";
-import { loadFor, loadTeams } from "../data.js?v=b92308e039";
-import { aggregateTeams } from "../agg_team.js?v=b92308e039";
-import { allowedByPosition, allowedVsUsual } from "../agg_allowed.js?v=b92308e039";
-import { gridRows, GRID_CATEGORIES, displayed } from "../agg_grid.js?v=b92308e039";
-import { renderFilterBar } from "../filterbar.js?v=b92308e039";
-import { esc, teamPill, pfrNote, seasonLabel } from "./qb.js?v=b92308e039";
-import { teamPageState, ordinal } from "./team.js?v=b92308e039";
-import { allowedState, allowedQuery, posCells, allowedSectionHtml, posBestDir } from "./allowed_table.js?v=b92308e039";
+import { fromQuery, toQuery, seasonsOf, weekLabel, defaultState } from "../filters.js?v=25b394fd6c";
+import { loadFor, loadTeams } from "../data.js?v=25b394fd6c";
+import { aggregateTeams } from "../agg_team.js?v=25b394fd6c";
+import { allowedByPosition, allowedVsUsual } from "../agg_allowed.js?v=25b394fd6c";
+import { gridRows, GRID_CATEGORIES, displayed } from "../agg_grid.js?v=25b394fd6c";
+import { renderFilterBar } from "../filterbar.js?v=25b394fd6c";
+import { esc, teamPill, seasonLabel } from "./qb.js?v=25b394fd6c";
+import { teamPageState, ordinal } from "./team.js?v=25b394fd6c";
+import { allowedState, allowedQuery, posCells, allowedSectionHtml, posBestDir } from "./allowed_table.js?v=25b394fd6c";
 
 const SIDES = [["off", "Offense"], ["def", "Defense"]];
 const PFR = /PFR/;
@@ -156,13 +156,36 @@ export function gridTableHtml(rows, view) {
   return `<div class="an-tscroll"><table class="an-table an-grid-table${mode === "rank" ? " rank" : ""}"><thead>${band}${head}</thead><tbody>${body || `<tr><td colspan="${GRID_COLUMNS.length + 1}" class="an-empty">No games in this window.</td></tr>`}</tbody></table></div>`;
 }
 
-// PURE: the Rating / Rank switch and the legend line under the header. pnote = pfrNote()'s text or "".
-export function gridBarHtml(mode, pnote) {
+// PURE: the Rating / Rank switch and the legend line under the header.
+export function gridBarHtml(mode) {
   const seg = `<div class="an-seg" data-gmode>${[["rating", "Rating"], ["rank", "Rank"]].map(([v, l]) => `<button type="button" data-v="${v}" class="${mode === v ? "on" : ""}" aria-pressed="${mode === v}">${l}</button>`).join("")}</div>`;
   const legend = mode === "rank"
     ? `<span class="gl-ramp rank"><i></i></span><span>Rank among the clubs in this window, 1st brightest; small: the figure and the rating (50 is the league average)</span>`
     : `<span class="gl-ramp"><i></i></span><span>50 is the league average, 15 points per standard deviation among the clubs in this window; colour runs poor to elite. Small: the figure and its rank</span>`;
-  return `<div class="an-tbar an-gbar">${seg}<span class="an-glegend">${legend}</span>${pnote ? `<span class="an-gpfr">${esc(pnote)}</span>` : ""}</div>`;
+  return `<div class="an-tbar an-gbar">${seg}<span class="an-glegend">${legend}</span></div>`;
+}
+
+// PURE: the latest window week whose blocks carry any PFR rushing row (yards before contact), or null.
+export function pfrRushThrough(blocks, weeks) {
+  const inWin = new Set(weeks || []);
+  return (blocks || []).filter((b) => inWin.has(b.key) && Object.keys(b.pfr?.rush || {}).length).map((b) => b.key).sort().pop() ?? null;
+}
+// PURE: the Grid's PFR lag sentence, over every PFR figure it shows: pressure, hits and coverage (PFR's passing and
+// defense files, passDef = aggregateTeams' pfrThrough) and yards before contact (its rushing file, rush =
+// pfrRushThrough). "" when both reach the window's latest week; each file behind or not yet published is named.
+const PFR_PASSDEF = "pressure, hits and coverage", PFR_RUSHFIG = "yards before contact";
+export function gridPfrNote({ passDef, rush }, latestKey, season) {
+  if (!latestKey) return "";
+  const state = (k) => (!k ? "not yet published for this window" : k < latestKey ? `through ${weekLabel(k, season)}` : "");
+  const a = state(passDef), b = state(rush);
+  if (!a && !b) return "";
+  if (a === b) return `PFR's pressure, hits, coverage and ${PFR_RUSHFIG}: ${a} (PFR runs about a week behind).`;
+  return `PFR's ${[a && `${PFR_PASSDEF} ${a}`, b && `${PFR_RUSHFIG} ${b}`].filter(Boolean).join("; ")} (PFR runs about a week behind).`;
+}
+// PURE: the page foot: every source, then the PFR lag sentence (gridPfrNote) when there is one (G64: notes at the
+// page bottom).
+export function gridFootHtml(pnote) {
+  return `<p class="an-foot">Every figure is the one the Offense and Defense pages show. EPA, rushing, stuffed runs, sacks and explosive plays: nflverse play-by-play. Pressure, hits, yards before contact and coverage: PFR advanced stats, about a week behind the games; a club PFR has not charted yet reads "not yet" and is left out of the ratings.${pnote ? ` <span class="an-gpfr">${esc(pnote)}</span>` : ""} Hover a cell for every figure behind it and its source.</p>`;
 }
 
 // Does any PFR-sourced figure carry a value on the page? (The lag note shows only then.)
@@ -196,7 +219,7 @@ export async function renderGrid(ctx, query) {
   // The by-position table on the grid's own club-level state, so both tables cover the same games.
   const allowed = allowedByPosition(data.blocks, data.players, pst);
   const usual = al.vs ? allowedVsUsual(data.blocks, data.players, pst) : null;
-  const pnote = hasPfrFigure(rows) ? pfrNote(agg.pfrThrough, agg.latestKey, st.season) : "";
+  const pnote = hasPfrFigure(rows) ? gridPfrNote({ passDef: agg.pfrThrough, rush: pfrRushThrough(data.blocks, agg.weeks) }, agg.latestKey, st.season) : "";
   // The club links carry the filters, not the grid's sort (the team page has its own).
   const d0 = defaultState();
   const linkQ = toQuery({ ...st, open: "", sort: d0.sort, dir: d0.dir });
@@ -208,9 +231,9 @@ export async function renderGrid(ctx, query) {
       ${data.missing.length ? `<div class="an-warn">${esc(data.missing.join(", "))} files are not built yet.</div>` : ""}
     </div>
     <div class="an-filters"></div>
-    ${gridBarHtml(mode, pnote)}
+    ${gridBarHtml(mode)}
     <div class="an-tablewrap">${gridTableHtml(rows, { teams, q: linkQ, sort, dir, mode })}</div>
-    <p class="an-foot">Every figure is the one the Offense and Defense pages show. EPA, rushing, stuffed runs, sacks and explosive plays: nflverse play-by-play. Pressure, hits, yards before contact and coverage: PFR advanced stats, about a week behind the games; a club PFR has not charted yet reads "not yet" and is left out of the ratings. Hover a cell for every figure behind it and its source.</p>
+    ${gridFootHtml(pnote)}
   </section>
   ${allowedSectionHtml(posCells(allowed, usual, al.vs), { teams, q: linkQ, sort: al.sort, dir: al.dir, vs: al.vs, audit: allowed })}`;
   renderFilterBar(root.querySelector(".an-filters"), { ...st, sort, dir }, { keys: data.keys, teams: [] }, (n) => go(n));

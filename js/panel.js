@@ -1,12 +1,10 @@
 // Renders the 440px player detail panel into the <aside class="player-panel"> that team.js already creates
 // as a hidden sibling of the field (D21: everything besides name/number/position/rating/status/headshot
-// lives here, behind the click). Two exports: openPanel(asideEl, card, teamView, teamMeta) fills and shows
-// the aside for one player; closePanel(asideEl) hides and clears it.
-//
-// Both functions are pure, idempotent DOM operations on the aside element the caller passes in. This
-// module never touches the field/columns/trays and never re-renders anything outside the aside — opening
-// or closing the panel must not trigger a field re-render. team.js calls these two functions directly on a
-// route change between a team's player sub-route and its team-only route, never re-running renderTeam().
+// lives here, behind the click). openPanel(asideEl, card, teamView, teamMeta) fills and shows the aside for
+// one player. It is an idempotent DOM operation on the aside element the caller passes in: this module never
+// touches the field/columns/trays and never re-renders anything outside the aside, so opening the panel does
+// not trigger a field re-render. Closing is a navigation: the close button leaves the player sub-route
+// (navigateAwayFromPlayer below) and the team route draws the page without the panel.
 //
 // Finding 1: the route (`#/team/ABBR/player/{playerKey}`) carries the depth-chart playerKey (usually the
 // gsis id), never the ESPN id — resolving that key to a card is team.js's job (it already has the in-memory
@@ -18,10 +16,10 @@
 // Finding 6: rating, status, and roster designation are already computed on the compiled card and are
 // NEVER refetched here — only bio (draft round, full season/college stats) comes from the network, via
 // GET /api/player/{espnId} (server/api/player.js).
-import { esc, snapHistoryHtml, espnPlacement, espnSchemeOf, gameEndNote } from "./cards.js?v=b92308e039";
-import { renderHistory, historyRequest } from "./history.js?v=b92308e039";
-import { getPlayer, getHistory, getGameLog, getJson } from "./api.js?v=b92308e039";
-import { dkGamePoints } from "../analytics/js/agg_fantasy.js?v=b92308e039";
+import { esc, snapHistoryHtml, espnPlacement, espnSchemeOf, gameEndNote } from "./cards.js?v=25b394fd6c";
+import { renderHistory, historyRequest } from "./history.js?v=25b394fd6c";
+import { getPlayer, getHistory, getGameLog, getJson } from "./api.js?v=25b394fd6c";
+import { dkGamePoints } from "../analytics/js/agg_fantasy.js?v=25b394fd6c";
 
 const dash = "—";
 const STATUS_CLASS = {
@@ -815,11 +813,3 @@ export function openPanel(asideEl, card, teamView, teamMeta) {
   mountCardData(asideEl, card, teamView, teamMeta);
 }
 
-// closePanel(asideEl): hides and clears the aside. Purely a DOM operation — never navigates, never touches
-// the field. Safe to call on an already-closed aside.
-export function closePanel(asideEl) {
-  if (!asideEl) return;
-  asideEl._panelGen = (asideEl._panelGen || 0) + 1; // cancel any in-flight fetch's effect
-  asideEl.hidden = true;
-  asideEl.innerHTML = "";
-}

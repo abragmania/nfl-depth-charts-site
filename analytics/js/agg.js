@@ -25,9 +25,10 @@
 //   zones           = his targets by depth band (D179: B behind the line, S 1-9, I 10-19, D 20+) and direction
 // PASS-INTERFERENCE TARGETS (D178 open decision 1, Adam 2026-09-24): a row with pi=1 is a defensive pass
 // interference no-play the ledger kept. It counts as a target for the receiver (targets, target share's numerator,
-// red-zone targets, EPA per target, TPRR) but it is NOT a pass attempt, so the club's pass attempts (target share's
-// denominator) and club air yards leave it out; it is never a completion and adds no yards. With st.pi false
-// ("excl. PI targets") pi rows are skipped entirely, as if the ledger had dropped them.
+// red-zone targets, EPA per target, TPRR) and, so a share cannot pass 100 percent, on the club's side of the same
+// shares too: its club attempts (target share's and Opp %'s denominator) and club air yards count a PI row that has
+// a target; it is never a completion and adds no yards. With st.pi false ("excl. PI targets") pi rows are skipped
+// entirely, as if the ledger had dropped them.
 // OPPORTUNITIES (D191, Adam 2026-09-24: raw opportunities matter more than yards per opportunity):
 //   carry           = rushEvent below, the Rushing page's rule to the play: a designed run (he is the rusher) or, for
 //                     a passer, a scramble. So a receiver's jet sweep or end-around is a carry.
@@ -54,8 +55,8 @@
 //                  (pfrDrops, pfrTgt carry the two sums); null when PFR lists him in none (its file may be empty).
 //   dk, dkG, dkTdShare = agg_fantasy.js (DraftKings, D194), dkG over this row's g.
 // PFR is a weekly table, so dropPer100 goes blank under a down or quarter filter, as routes do.
-import { gamesInWindow, playPredicate, posAllowed, isSituational } from "./filters.js?v=b92308e039";
-import { fantasyByPlayer, dkFields } from "./agg_fantasy.js?v=b92308e039";
+import { gamesInWindow, playPredicate, posAllowed, isSituational } from "./filters.js?v=25b394fd6c";
+import { fantasyByPlayer, dkFields } from "./agg_fantasy.js?v=25b394fd6c";
 
 export const colIndex = (cols) => Object.fromEntries((cols || []).map((c, i) => [c, i]));
 
@@ -71,6 +72,15 @@ export function rushEvent(r, C) {
 const num = (v) => (v === null || v === undefined || v === "" || !Number.isFinite(+v) ? null : +v);
 const truthy = (v) => v === true || v === 1 || v === "1" || v === "true";
 const ratio = (a, b) => (b > 0 ? a / b : null);
+
+// D178: is this play row one of the club's pass attempts on a share's denominator? A pass that is not a
+// pass-interference no-play, or a PI row with a target while the PI-targets switch counts it (st.pi not false): the
+// club side follows the switch exactly as the man's targets do, so no share passes 100 percent. The one copy of the
+// rule (target share, air-yards share, Opp %, the red-zone shares and the with/without splits all use it).
+export function countsAsClubAttempt(r, C, st) {
+  if (r[C.type] !== "pass") return false;
+  return !truthy(r[C.pi]) || (!!r[C.target] && st?.pi !== false);
+}
 // heatradar-style tables may give route % as 0-1 or 0-100; normalise to a fraction.
 export const frac = (p) => { const x = num(p); if (x === null || x <= 0) return null; return x > 1.5 ? x / 100 : x; };
 
@@ -188,8 +198,8 @@ export function aggregateUsage(blocks, players, st) {
       }
       if (r[C.type] !== "pass") continue;
       const air = num(r[C.air]);
-      // A pass-interference target is not a pass attempt: the club's attempts and air yards leave it out.
-      if (!pi) { add(teamAtt, gk, 1); add(teamAir, gk, air ?? 0); }
+      // D178: a counted pass-interference target is a club attempt too, its air yards the club's.
+      if (countsAsClubAttempt(r, C, st)) { add(teamAtt, gk, 1); add(teamAir, gk, air ?? 0); }
       const id = r[C.target];
       if (!id) continue;
       const p = P(id);

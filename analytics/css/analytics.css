@@ -6,16 +6,17 @@
   --tier-elite:#2fbd8c; --tier-elite-ink:#052015;
   --tier-strong:#1f9760; --tier-strong-ink:#eafff5;
   --tier-avg:#b8a24f; --tier-avg-ink:#211c08;
-  --tier-weak:#d99a3d; --tier-weak-ink:#271902;
+  --tier-weak:#e8792e; --tier-weak-ink:#271902;
   --tier-flat:#c04944; --tier-flat-ink:#fff;
   --r-chip:6px; --r-row:8px; --r-card:12px;
-  --band-QB:#8b6dd1; --band-BACKFIELD:#caa053; --band-WR:#5ea8d8; --band-TE:#4fada0;
+  --band-QB:#8b6dd1; --band-BACKFIELD:#caa053; --band-WR:#5ea8d8; --band-TE:#4fada0; --band-OL:#6b7fb0;
   --accent:#ffd54a; --bar-h:51px; /* the sticky app bar's height: the table header sticks just under it */
 }
 [data-band="QB"] { --band-color: var(--band-QB); }
 [data-band="BACKFIELD"] { --band-color: var(--band-BACKFIELD); }
 [data-band="WR"] { --band-color: var(--band-WR); }
 [data-band="TE"] { --band-color: var(--band-TE); }
+[data-band="OL"], [data-band="C"], [data-band="G"], [data-band="T"], [data-band="OG"], [data-band="OT"] { --band-color: var(--band-OL); }
 * { box-sizing:border-box; }
 html,body { margin:0; background:var(--bg); color:var(--ink); font:14px/1.4 "Segoe UI", system-ui, sans-serif; }
 a { color:inherit; }
@@ -171,7 +172,7 @@ a { color:inherit; }
 .an-dc { color:var(--dim); font-size:11px; text-decoration:none; opacity:0; transition:opacity .12s; }
 .an-row:hover .an-dc, .an-row.open .an-dc, .an-dc:focus { opacity:1; }
 .an-dc:hover { color:var(--accent); }
-.an-pospill { display:inline-block; min-width:30px; padding:1px 6px; border-radius:var(--r-chip); font-size:11px; font-weight:800; color:var(--band-color); background:color-mix(in srgb, var(--band-color) 16%, transparent); text-align:center; }
+.an-pospill { display:inline-block; min-width:30px; padding:1px 6px; border-radius:var(--r-chip); font-size:11px; font-weight:800; color:var(--band-color, var(--muted)); background:color-mix(in srgb, var(--band-color, var(--muted)) 16%, transparent); text-align:center; } /* a position with no band hue reads muted, never bare */
 .an-na { color:var(--dim); }
 /* Tier colour on the number; share columns also get a faint magnitude bar in the same colour. */
 td[class*=" t-"] > span { color:var(--t); font-weight:700; }

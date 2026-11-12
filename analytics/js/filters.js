@@ -7,7 +7,7 @@
 // string and is what the week-range filter stores. Labels: the default season's weeks read "W3"; any other
 // season's weeks carry the season's last two digits, "25·W14" (D177's Include-2025 union).
 
-import { seasonFromDate } from "../../js/season_rule.js?v=b92308e039";
+import { seasonFromDate } from "../../js/season_rule.js?v=25b394fd6c";
 
 // D39: the current season is never a literal. It is the newest season the seasons endpoint lists (main.js records
 // that list through setKnownSeasons when it arrives before the first page draws); with no list (not loaded in time,

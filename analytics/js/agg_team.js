@@ -104,11 +104,11 @@
 // fewer on a week with byes), and colour tiers at the clubs' 90/70/40/15th percentiles (agg.js; under 8 clubs,
 // uncoloured). Lower-is-better keys are cut on the negated value; neutral keys (pass rate, aDOT, blitz %) are not
 // coloured. Zone references are POOLED over every attempt in the window.
-import { colIndex, clubGames, percentileCuts, tierFromCuts, MIN_POOL, aggregateUsage, usageReference, rushEvent } from "./agg.js?v=b92308e039";
-import { gamesInWindow } from "./filters.js?v=b92308e039";
-import { ZONE_KEYS, qbZones } from "./agg_qb.js?v=b92308e039";
-import { aggregateRush, rushReference, rushTier } from "./agg_rush.js?v=b92308e039";
-import { rzI5Shares } from "./agg_player.js?v=b92308e039";
+import { colIndex, clubGames, percentileCuts, tierFromCuts, MIN_POOL, aggregateUsage, usageReference, rushEvent } from "./agg.js?v=25b394fd6c";
+import { gamesInWindow } from "./filters.js?v=25b394fd6c";
+import { ZONE_KEYS, qbZones } from "./agg_qb.js?v=25b394fd6c";
+import { aggregateRush, rushReference, rushTier } from "./agg_rush.js?v=25b394fd6c";
+import { rzI5Shares } from "./agg_player.js?v=25b394fd6c";
 
 const num = (v) => (v === null || v === undefined || v === "" || !Number.isFinite(+v) ? null : +v);
 const truthy = (v) => v === true || v === 1 || v === "1" || v === "true";
@@ -546,13 +546,24 @@ export const teamZones = (side, lgZones) => qbZones(side?.zones, lgZones);
 // target share at his position (agg.js's reference pool and cuts over the whole league, the same window) and his
 // share of the club's targets in the window (`clubShare`: targets / every target the club threw, pi included when
 // the switch counts them). Sorted by targets.
+// The league-wide reference (every club, team ""), built once per (kind, blocks, players, state) and shared by the
+// club and defense distributions: a club, defense or week page asks for it several times per render. kind "usage"
+// is agg.js's usageReference, "rush" agg_rush.js's rushReference. Callers only read it.
+const refMemo = { usage: null, rush: null };
+export function leagueReference(kind, blocks, players, base) {
+  const st = { ...base, team: "" }, sig = JSON.stringify(st), m = refMemo[kind];
+  if (m && m.sig === sig && m.players === players && m.blocks.length === blocks.length && m.blocks.every((b, i) => b === blocks[i])) return m.ref;
+  const ref = kind === "rush" ? rushReference(aggregateRush(blocks, players, st).rows) : usageReference(aggregateUsage(blocks, players, st).rows);
+  refMemo[kind] = { sig, players, blocks: [...blocks], ref };
+  return ref;
+}
 const rzPick = (x, kind) => (kind === "rz"
   ? { rzTgtN: x?.rzTgtN ?? 0, rzAttN: x?.rzAttN ?? 0, rzTgtShare: x?.rzTgtShare ?? null }
   : { i5Des: x?.i5Des ?? 0, i5Runs: x?.i5Runs ?? 0, i5Share: x?.i5Share ?? null });
 export function teamTargets(blocks, players, st, team) {
   const base = { ...st, opp: "", ha: "", downs: [], qtrs: [], pos: {} };
   const rows = aggregateUsage(blocks, players, { ...base, team }).rows.filter((r) => r.tgt > 0);
-  const ref = usageReference(aggregateUsage(blocks, players, { ...base, team: "" }).rows);
+  const ref = leagueReference("usage", blocks, players, base);
   const total = rows.reduce((s, r) => s + r.tgt, 0);
   // D219 figure 5: rzTgtN, rzAttN, rzTgtShare over his games for this club; no floor (D224), the share null only when
   // the club threw no red-zone pass in his games.
@@ -565,7 +576,7 @@ export function teamTargets(blocks, players, st, team) {
 export function teamCarries(blocks, players, st, team) {
   const base = { ...st, opp: "", ha: "", downs: [], qtrs: [], pos: {} };
   const rows = aggregateRush(blocks, players, { ...base, team }).rows.filter((r) => r.car > 0);
-  const ref = rushReference(aggregateRush(blocks, players, { ...base, team: "" }).rows);
+  const ref = leagueReference("rush", blocks, players, base);
   const total = rows.reduce((s, r) => s + r.car, 0);
   // D219 figure 5: i5Des, i5Runs, i5Share over his games for this club; no floor (D219), the share null only when the
   // club ran no designed run inside the 5 in his games.
@@ -628,7 +639,7 @@ export function defTargets(blocks, players, st, team) {
   const base = { ...st, opp: "", ha: "", downs: [], qtrs: [], pos: {} };
   const ws = defWindowState(blocks, base, team);
   const rows = ws ? aggregateUsage(blocks, players, { ...ws, team: "", opp: team }).rows.filter((r) => r.tgt > 0) : [];
-  const ref = usageReference(aggregateUsage(blocks, players, { ...base, team: "" }).rows);
+  const ref = leagueReference("usage", blocks, players, base);
   const total = rows.reduce((s, r) => s + r.tgt, 0);
   const out = rows.map((r) => ({ ...r, clubShare: ratio(r.tgt, total), tier: tierFromCuts(r.tgtShare, ref.at(r.pos).cuts?.tgtShare?.cuts), lgShare: ref.at(r.pos).lg?.overall?.tgtShare ?? null }))
     .sort((a, b) => b.tgt - a.tgt || String(a.name).localeCompare(String(b.name)));
@@ -638,7 +649,7 @@ export function defCarries(blocks, players, st, team) {
   const base = { ...st, opp: "", ha: "", downs: [], qtrs: [], pos: {} };
   const ws = defWindowState(blocks, base, team);
   const rows = ws ? aggregateRush(blocks, players, { ...ws, team: "", opp: team }).rows.filter((r) => r.car > 0) : [];
-  const ref = rushReference(aggregateRush(blocks, players, { ...base, team: "" }).rows);
+  const ref = leagueReference("rush", blocks, players, base);
   const total = rows.reduce((s, r) => s + r.car, 0);
   const out = rows.map((r) => { const P = ref.at(r.pos); return { ...r, clubShare: ratio(r.car, total), tier: rushTier("rushShare", r.rushShare, P.cuts), epaTier: rushTier("epaCar", r.epaCar, P.cuts), lgShare: P.lg?.rushShare ?? null }; })
     .sort((a, b) => b.car - a.car || String(a.name).localeCompare(String(b.name)));
