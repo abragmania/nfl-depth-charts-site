@@ -1,6 +1,6 @@
 {
  "season": 2023,
- "format": 1,
+ "format": 2,
  "cols": [
   "game_id",
   "posteam",
@@ -83,9 +83,9 @@
   },
   {
    "week": 5,
-   "hash": "85602045e6295e37",
+   "hash": "13b157dedc98c9b7",
    "plays": 1753,
-   "builtAt": "2026-10-15T18:37:27.384Z"
+   "builtAt": "2026-11-12T19:00:44.650Z"
   },
   {
    "week": 6,
@@ -95,81 +95,81 @@
   },
   {
    "week": 7,
-   "hash": "830fb27e34adc7bf",
+   "hash": "3292ccb76e08a4e0",
    "plays": 1619,
-   "builtAt": "2026-10-15T18:37:27.384Z"
+   "builtAt": "2026-11-12T19:00:44.650Z"
   },
   {
    "week": 8,
-   "hash": "df21f852250d7012",
+   "hash": "d9eeea0d3fc6e4b2",
    "plays": 2029,
-   "builtAt": "2026-10-15T18:37:27.384Z"
+   "builtAt": "2026-11-12T19:00:44.650Z"
   },
   {
    "week": 9,
-   "hash": "6320edc87798e14a",
+   "hash": "483e38b3b6c44831",
    "plays": 1751,
-   "builtAt": "2026-10-15T18:37:27.384Z"
+   "builtAt": "2026-11-12T19:00:44.650Z"
   },
   {
    "week": 10,
-   "hash": "a71d4e5876b5d0e5",
+   "hash": "3bf13d82c5099cab",
    "plays": 1762,
-   "builtAt": "2026-10-15T18:37:27.384Z"
+   "builtAt": "2026-11-12T19:00:44.650Z"
   },
   {
    "week": 11,
-   "hash": "f1a78a29bb264b67",
+   "hash": "0c8d2f5a9affeb03",
    "plays": 1742,
-   "builtAt": "2026-10-15T18:37:27.384Z"
+   "builtAt": "2026-11-12T19:00:44.650Z"
   },
   {
    "week": 12,
-   "hash": "2ef2e9d220c697fe",
+   "hash": "c018dbf4a19a16b9",
    "plays": 1994,
-   "builtAt": "2026-10-15T18:37:27.384Z"
+   "builtAt": "2026-11-12T19:00:44.650Z"
   },
   {
    "week": 13,
-   "hash": "096691763e4aef49",
+   "hash": "fc9e4967ccb127d4",
    "plays": 1668,
-   "builtAt": "2026-10-15T18:37:27.384Z"
+   "builtAt": "2026-11-12T19:00:44.650Z"
   },
   {
    "week": 14,
-   "hash": "b38d0bcd539ab1aa",
+   "hash": "1814229eb0e46135",
    "plays": 1921,
-   "builtAt": "2026-10-15T18:37:27.384Z"
+   "builtAt": "2026-11-12T19:00:44.650Z"
   },
   {
    "week": 15,
-   "hash": "ccce39ec10611d54",
+   "hash": "5fa79561b16f21c5",
    "plays": 1978,
-   "builtAt": "2026-10-15T18:37:27.384Z"
+   "builtAt": "2026-11-12T19:00:44.650Z"
   },
   {
    "week": 16,
-   "hash": "0ffc7c1e34d80b36",
+   "hash": "e9ca4ee4dc000ede",
    "plays": 2043,
-   "builtAt": "2026-10-15T18:37:27.384Z"
+   "builtAt": "2026-11-12T19:00:44.650Z"
   },
   {
    "week": 17,
-   "hash": "cf0edfb7a6c5275c",
+   "hash": "27062efe18cfbb56",
    "plays": 1938,
-   "builtAt": "2026-10-15T18:37:27.384Z"
+   "builtAt": "2026-11-12T19:00:44.650Z"
   },
   {
    "week": 18,
-   "hash": "e740154867536f91",
+   "hash": "b6b287b062bbae18",
    "plays": 1932,
-   "builtAt": "2026-10-15T18:37:27.384Z"
+   "builtAt": "2026-11-12T19:00:44.650Z"
   },
   {
    "week": 19,
-   "hash": "fc792c84b0bf5336",
+   "hash": "1d54e449d8e2dc80",
    "plays": 747,
-   "builtAt": "2026-10-15T18:37:27.384Z"
+   "builtAt": "2026-11-12T19:00:44.650Z"
   },
   {
    "week": 20,
@@ -190,6 +190,7 @@
    "builtAt": "2026-10-15T18:37:27.384Z"
   }
  ],
+ "hasMadden": false,
  "pfrUncharted": "825b96078087be40",
  "sources": {
   "pbp": {

@@ -1,6 +1,6 @@
 {
  "season": 2025,
- "format": 1,
+ "format": 2,
  "cols": [
   "game_id",
   "posteam",
@@ -190,6 +190,7 @@
    "builtAt": "2026-10-15T18:37:36.714Z"
   }
  ],
+ "hasMadden": false,
  "pfrUncharted": "e435e4a2f1ef0bd0",
  "sources": {
   "pbp": {

@@ -1,6 +1,6 @@
 {
  "season": 2026,
- "format": 1,
+ "format": 2,
  "cols": [
   "game_id",
   "posteam",
@@ -115,6 +115,7 @@
  "throughWeek": 9,
  "currentWeek": 10,
  "heldUntil": "2026-11-17T10:00:00.000Z",
+ "hasMadden": true,
  "snapPatches": "15cdecc72eec8fb7",
  "sources": {
   "pbp": {

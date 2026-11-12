@@ -1,6 +1,6 @@
 {
  "season": 2024,
- "format": 1,
+ "format": 2,
  "cols": [
   "game_id",
   "posteam",
@@ -71,39 +71,39 @@
   },
   {
    "week": 3,
-   "hash": "85c099c9f923f0f7",
+   "hash": "a62bf1add85cf1da",
    "plays": 1950,
-   "builtAt": "2026-10-15T18:37:32.060Z"
+   "builtAt": "2026-11-12T19:00:50.859Z"
   },
   {
    "week": 4,
-   "hash": "c7c80e9d790b3458",
+   "hash": "3ee5f63f061c3c46",
    "plays": 1952,
-   "builtAt": "2026-10-15T18:37:32.060Z"
+   "builtAt": "2026-11-12T19:00:50.859Z"
   },
   {
    "week": 5,
-   "hash": "8b3f576384ed9520",
+   "hash": "9c26e1b5acec39d9",
    "plays": 1801,
-   "builtAt": "2026-10-15T18:37:32.060Z"
+   "builtAt": "2026-11-12T19:00:50.859Z"
   },
   {
    "week": 6,
-   "hash": "01a2f6ca8e94a4fb",
+   "hash": "bf38430f75ffeb3a",
    "plays": 1746,
-   "builtAt": "2026-10-15T18:37:32.060Z"
+   "builtAt": "2026-11-12T19:00:50.859Z"
   },
   {
    "week": 7,
-   "hash": "cbf684525463f266",
+   "hash": "07b8adcbe6fb30e5",
    "plays": 1806,
-   "builtAt": "2026-10-15T18:37:32.060Z"
+   "builtAt": "2026-11-12T19:00:50.859Z"
   },
   {
    "week": 8,
-   "hash": "049687ca287b37d9",
+   "hash": "42189d4570b925ef",
    "plays": 1984,
-   "builtAt": "2026-10-15T18:37:32.060Z"
+   "builtAt": "2026-11-12T19:00:50.859Z"
   },
   {
    "week": 9,
@@ -149,21 +149,21 @@
   },
   {
    "week": 16,
-   "hash": "34a54c6e23bbb83b",
+   "hash": "2575731ab4ee8aff",
    "plays": 1968,
-   "builtAt": "2026-10-15T18:37:32.060Z"
+   "builtAt": "2026-11-12T19:00:50.859Z"
   },
   {
    "week": 17,
-   "hash": "34be60ca7941fad4",
+   "hash": "b15667c16ed23a1c",
    "plays": 2000,
-   "builtAt": "2026-10-15T18:37:32.060Z"
+   "builtAt": "2026-11-12T19:00:50.859Z"
   },
   {
    "week": 18,
-   "hash": "1415d8470b8cac63",
+   "hash": "8101dbec65dfdf9c",
    "plays": 2002,
-   "builtAt": "2026-10-15T18:37:32.060Z"
+   "builtAt": "2026-11-12T19:00:50.859Z"
   },
   {
    "week": 19,
@@ -190,6 +190,7 @@
    "builtAt": "2026-10-15T18:37:32.060Z"
   }
  ],
+ "hasMadden": false,
  "pfrUncharted": "0db53e964bef1dc5",
  "sources": {
   "pbp": {
