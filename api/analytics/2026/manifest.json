@@ -59,57 +59,57 @@
  "weeks": [
   {
    "week": 1,
-   "hash": "58ee06c46047fc62",
+   "hash": "06888cfdc47bd2d9",
    "plays": 1924,
-   "builtAt": "2026-11-13T12:02:15.471Z"
+   "builtAt": "2026-11-14T14:15:25.525Z"
   },
   {
    "week": 2,
-   "hash": "a0cfbeb8aad85f92",
+   "hash": "d7082914cd6cda5f",
    "plays": 1936,
-   "builtAt": "2026-11-13T12:02:15.471Z"
+   "builtAt": "2026-11-14T14:15:25.525Z"
   },
   {
    "week": 3,
-   "hash": "dfc3da3566b5c2c7",
+   "hash": "3270834d86332cec",
    "plays": 2000,
-   "builtAt": "2026-11-13T12:02:15.471Z"
+   "builtAt": "2026-11-14T14:15:25.525Z"
   },
   {
    "week": 4,
-   "hash": "259e75f333273edb",
+   "hash": "05e871f560d653d3",
    "plays": 1990,
-   "builtAt": "2026-11-13T12:02:15.471Z"
+   "builtAt": "2026-11-14T14:15:25.525Z"
   },
   {
    "week": 5,
-   "hash": "2cd7659cf299106a",
+   "hash": "7e93efcc52729c50",
    "plays": 1891,
-   "builtAt": "2026-11-13T12:02:15.471Z"
+   "builtAt": "2026-11-14T14:15:25.525Z"
   },
   {
    "week": 6,
-   "hash": "10de5f013f2d744f",
+   "hash": "a27a1eec5ff89b38",
    "plays": 1804,
-   "builtAt": "2026-11-13T12:02:15.471Z"
+   "builtAt": "2026-11-14T14:15:25.525Z"
   },
   {
    "week": 7,
-   "hash": "f38faaf23c1c8b60",
+   "hash": "9b111cfcc651e64e",
    "plays": 1709,
-   "builtAt": "2026-11-13T12:02:15.471Z"
+   "builtAt": "2026-11-14T14:15:25.525Z"
   },
   {
    "week": 8,
-   "hash": "fa85b95368c31295",
+   "hash": "f08874bfefb393d6",
    "plays": 1731,
-   "builtAt": "2026-11-13T12:02:15.471Z"
+   "builtAt": "2026-11-14T14:15:25.525Z"
   },
   {
    "week": 9,
-   "hash": "b30e66449b33db02",
+   "hash": "0818596513d053b9",
    "plays": 1842,
-   "builtAt": "2026-11-13T12:02:15.471Z"
+   "builtAt": "2026-11-14T14:15:25.525Z"
   }
  ],
  "throughWeek": 9,
@@ -119,16 +119,16 @@
  "snapPatches": "15cdecc72eec8fb7",
  "sources": {
   "pbp": {
-   "fetchedAt": "2026-11-13T12:01:46.364Z",
+   "fetchedAt": "2026-11-14T14:15:07.279Z",
    "sha": "5ed5124d0b297b8f4aa9df609d2b55b379533759c3155cdad488ff791681f2c1"
   },
   "ftn": {
-   "fetchedAt": "2026-11-13T12:01:46.785Z",
-   "sha": "8c377a0af1a932a8d19b091683d91fbfb3cd812cda45a5f50cfbba810b9ab769"
+   "fetchedAt": "2026-11-14T14:15:07.723Z",
+   "sha": "8b867fea7bbe4a57138e3fdb4c4518576ad55ae3299782cdd9287c6ee3458fc2"
   },
   "ngs": {
-   "fetchedAt": "2026-11-13T12:01:47.456Z",
-   "sha": "fe99a79bfdd5ccab"
+   "fetchedAt": "2026-11-14T14:15:08.389Z",
+   "sha": "d88d0ef52d18a003"
   },
   "pfr": {
    "fetchedAt": "2026-11-13T12:01:47.941Z",
