@@ -4,20 +4,20 @@
 // league line (D181 totals); the pass zone field compares each cell with every attempt in the league; the target and
 // carry distributions list the club's pass catchers and ball carriers, each a way into his player page (D177
 // interactivity). Every figure comes from agg_team.js (pure); this file draws and wires clicks.
-import { backLink } from "../router.js?v=25b394fd6c";
-import { fromQuery, toQuery, seasonsOf, weekLabel } from "../filters.js?v=25b394fd6c";
-import { loadFor, loadTeams, loadStatusFeed, loadClubCards, displayName } from "../data.js?v=25b394fd6c";
-import { aggregateTeams, teamReference, teamTier, teamRank, teamZones, teamTargets, teamCarries, OFF_TIER, DEF_TIER, SOFT_KEYS, RANK_LOW_FIRST } from "../agg_team.js?v=25b394fd6c";
-import { gridRows, GRID_CATEGORIES, displayed } from "../agg_grid.js?v=25b394fd6c";
-import { absences, isMissing } from "../agg_absence.js?v=25b394fd6c";
-import { renderFilterBar } from "../filterbar.js?v=25b394fd6c";
-import { esc, NA, isNum, pct, fix, signed, int, teamPill, qbStrips, qbZoneField, qbZoneName, QB_ZONE_MODES, pfrNote, seasonLabel } from "./qb.js?v=25b394fd6c";
-import { windowName } from "./qbplayer.js?v=25b394fd6c";
-import { lostCardHtml } from "./lost.js?v=25b394fd6c";
-import { lineBlock } from "./kit.js?v=25b394fd6c";
-import { depthBarHtml } from "../table.js?v=25b394fd6c";
-import { snapMethodNote } from "../agg.js?v=25b394fd6c";
-import { nameOf } from "../names.js?v=25b394fd6c";
+import { backLink } from "../router.js?v=aef8e3bd70";
+import { fromQuery, toQuery, seasonsOf, weekLabel } from "../filters.js?v=aef8e3bd70";
+import { loadFor, loadTeams, loadStatusFeed, loadClubCards, displayName } from "../data.js?v=aef8e3bd70";
+import { aggregateTeams, teamReference, teamTier, teamRank, teamZones, teamTargets, teamCarries, OFF_TIER, DEF_TIER, SOFT_KEYS, RANK_LOW_FIRST } from "../agg_team.js?v=aef8e3bd70";
+import { gridRows, GRID_CATEGORIES, displayed } from "../agg_grid.js?v=aef8e3bd70";
+import { absences, isMissing } from "../agg_absence.js?v=aef8e3bd70";
+import { renderFilterBar } from "../filterbar.js?v=aef8e3bd70";
+import { esc, NA, isNum, pct, fix, signed, int, teamPill, qbStrips, qbZoneField, qbZoneName, QB_ZONE_MODES, pfrNote, seasonLabel } from "./qb.js?v=aef8e3bd70";
+import { windowName } from "./qbplayer.js?v=aef8e3bd70";
+import { lostCardHtml } from "./lost.js?v=aef8e3bd70";
+import { lineBlock } from "./kit.js?v=aef8e3bd70";
+import { depthBarHtml } from "../table.js?v=aef8e3bd70";
+import { snapMethodNote } from "../agg.js?v=aef8e3bd70";
+import { nameOf } from "../names.js?v=aef8e3bd70";
 
 const P = (v, d = 1) => (isNum(v) ? pct(v, d) + "%" : NA);
 // A missing figure on a kit.js lineBlock tile. lineBlock escapes every value, so the NA placeholder (HTML markup, for
