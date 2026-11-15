@@ -1,5 +1,5 @@
-import { getTeams } from "./api.js?v=aef8e3bd70";
-import { gamesRowHtml, wireGamesToggle } from "./gamesbar.js?v=aef8e3bd70";
+import { getTeams } from "./api.js?v=25b394fd6c";
+import { gamesRowHtml, wireGamesToggle } from "./gamesbar.js?v=25b394fd6c";
 
 export const DIVISION_ORDER = ["AFC East", "AFC North", "AFC South", "AFC West", "NFC East", "NFC North", "NFC South", "NFC West"];
 const ESC = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
