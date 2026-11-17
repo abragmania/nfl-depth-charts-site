@@ -1,11 +1,11 @@
-import { getTeams, getTeam, invalidateTeam } from "./api.js?v=aef8e3bd70";
-import { computeLayout, renderFieldSvg, renderLevelLabels, REDUCED_DEPTH_ROWS } from "./field.js?v=aef8e3bd70";
-import { renderColumn, renderTray, esc, fitNames, wireDepthToggles, espnSchemeOf, unitTagsHtml, assetUrl } from "./cards.js?v=aef8e3bd70";
-import { mountScaledField, disposeCurrentView, MIN_READABLE_SCALE, decideViewMode, HEADER_FOLD_WIDTH } from "./viewfit.js?v=aef8e3bd70";
-import { navStripHtml, wireNav } from "./nav.js?v=aef8e3bd70";
-import { renderPhoneList } from "./phonelist.js?v=aef8e3bd70";
-import { isPlated, crestSrc } from "./clublogo.js?v=aef8e3bd70";
-import { fmtKickoffET } from "./gamesbar.js?v=aef8e3bd70";
+import { getTeams, getTeam, invalidateTeam } from "./api.js?v=25b394fd6c";
+import { computeLayout, renderFieldSvg, renderLevelLabels, REDUCED_DEPTH_ROWS } from "./field.js?v=25b394fd6c";
+import { renderColumn, renderTray, esc, fitNames, wireDepthToggles, espnSchemeOf, unitTagsHtml, assetUrl } from "./cards.js?v=25b394fd6c";
+import { mountScaledField, disposeCurrentView, MIN_READABLE_SCALE, decideViewMode, HEADER_FOLD_WIDTH } from "./viewfit.js?v=25b394fd6c";
+import { navStripHtml, wireNav } from "./nav.js?v=25b394fd6c";
+import { renderPhoneList } from "./phonelist.js?v=25b394fd6c";
+import { isPlated, crestSrc } from "./clublogo.js?v=25b394fd6c";
+import { fmtKickoffET } from "./gamesbar.js?v=25b394fd6c";
 
 const dash = "—";
 const STALE_HOURS = 36;
