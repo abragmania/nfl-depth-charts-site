@@ -61,61 +61,61 @@
    "week": 1,
    "hash": "d4486ed932a59f3b",
    "plays": 1924,
-   "builtAt": "2026-11-17T12:25:41.190Z"
+   "builtAt": "2026-11-17T12:05:58.906Z"
   },
   {
    "week": 2,
    "hash": "304396c969c1cbb4",
    "plays": 1936,
-   "builtAt": "2026-11-17T12:25:41.190Z"
+   "builtAt": "2026-11-17T12:05:58.906Z"
   },
   {
    "week": 3,
    "hash": "3716c52d57b3b497",
    "plays": 2000,
-   "builtAt": "2026-11-17T12:25:41.190Z"
+   "builtAt": "2026-11-17T12:05:58.906Z"
   },
   {
    "week": 4,
    "hash": "b10819942aca9f5e",
    "plays": 1990,
-   "builtAt": "2026-11-17T12:25:41.190Z"
+   "builtAt": "2026-11-17T12:05:58.906Z"
   },
   {
    "week": 5,
    "hash": "a919def00d710534",
    "plays": 1891,
-   "builtAt": "2026-11-17T12:25:41.190Z"
+   "builtAt": "2026-11-17T12:05:58.906Z"
   },
   {
    "week": 6,
    "hash": "dfc5acc8c7c9662b",
    "plays": 1804,
-   "builtAt": "2026-11-17T12:25:41.190Z"
+   "builtAt": "2026-11-17T12:05:58.906Z"
   },
   {
    "week": 7,
    "hash": "ab83797b9366e8b6",
    "plays": 1709,
-   "builtAt": "2026-11-17T12:25:41.190Z"
+   "builtAt": "2026-11-17T12:05:58.906Z"
   },
   {
    "week": 8,
    "hash": "436fa2e81457878d",
    "plays": 1731,
-   "builtAt": "2026-11-17T12:25:41.190Z"
+   "builtAt": "2026-11-17T12:05:58.906Z"
   },
   {
    "week": 9,
    "hash": "8a42f1508edf50ae",
    "plays": 1842,
-   "builtAt": "2026-11-17T12:25:41.190Z"
+   "builtAt": "2026-11-17T12:05:58.906Z"
   },
   {
    "week": 10,
-   "hash": "716a41814cd8fc74",
+   "hash": "910efb3e44a9cfb2",
    "plays": 1719,
-   "builtAt": "2026-11-17T12:25:41.190Z"
+   "builtAt": "2026-11-17T12:05:58.906Z"
   }
  ],
  "throughWeek": 10,
@@ -125,37 +125,37 @@
  "snapPatches": "15cdecc72eec8fb7",
  "sources": {
   "pbp": {
-   "fetchedAt": "2026-11-17T12:24:49.674Z",
+   "fetchedAt": "2026-11-17T12:05:29.108Z",
    "sha": "eff892d2c3254c5d8d029997156ec3a9424b64323b5a6d8fee73a500a1d1b1bd"
   },
   "ftn": {
-   "fetchedAt": "2026-11-17T12:24:51.419Z",
+   "fetchedAt": "2026-11-17T12:05:30.028Z",
    "sha": "236f7394ece0d71a3312a3a8be1b87aeb0fdd8c11e3d3bcb9637abd8f91efc09"
   },
   "ngs": {
-   "fetchedAt": "2026-11-17T12:24:52.488Z",
+   "fetchedAt": "2026-11-17T12:05:30.813Z",
    "sha": "b1a2e6f639a52583"
   },
   "pfr": {
-   "fetchedAt": "2026-11-17T12:24:52.901Z",
+   "fetchedAt": "2026-11-17T12:05:31.149Z",
    "sha": "f31c4ea6b1f084f2"
   },
   "pfrRush": {
-   "fetchedAt": "2026-11-17T12:24:53.140Z",
+   "fetchedAt": "2026-11-17T12:05:31.471Z",
    "sha": "98c90cb56bb94f6b2db43d59901336bb4f5015f2472803d83a6ee8dc080cc586"
   },
   "pfrRec": {
-   "fetchedAt": "2026-11-17T12:24:53.381Z",
+   "fetchedAt": "2026-11-17T12:05:31.725Z",
    "sha": "80caec51123f0627eebaafe5de36428b3b17bc59055bea32e633b8bb0f8f202a"
   },
   "routes": {
-   "fetchedAt": "2026-11-17T12:24:53.678Z",
+   "fetchedAt": "2026-11-17T12:05:31.991Z",
    "sha": "1fb93b5f25a5ec8e233dfd7e5e73c1eb156c0711e562a78ecef2ec6ec4afb6fd"
   },
   "participation": null,
   "snaps": {
-   "fetchedAt": "2026-11-17T12:20:43.220Z",
-   "sha": "f8fa8e23e3c12ef29dacbfaf55d0ac3b6fe63ad3c1fd4557baa5e0765fc93d57"
+   "fetchedAt": "2026-11-17T12:00:34.409Z",
+   "sha": "055e7815543fef31584f9b0967c13782d5a8af5840380a5983de9080f3eea639"
   }
  }
 }
