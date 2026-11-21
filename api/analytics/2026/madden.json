@@ -1,7 +1,7 @@
 {
  "season": 2026,
  "iteration": "madden-ratings-week-10",
- "builtAt": "2026-11-21T05:00:48.630Z",
+ "builtAt": "2026-11-21T17:01:19.899Z",
  "players": {
   "00-0023459": {
    "eaId": "26668",
@@ -18021,59 +18021,6 @@
     "pursuit": 84,
     "tackle": 83,
     "playRecognition": 68
-   }
-  },
-  "00-0035710": {
-   "eaId": "20427",
-   "ovr": 71,
-   "pos": "QB",
-   "attrs": {
-    "runBlock": 15,
-    "runBlockPower": 17,
-    "runBlockFinesse": 12,
-    "passBlock": 15,
-    "passBlockPower": 18,
-    "passBlockFinesse": 15,
-    "impactBlocking": 24,
-    "leadBlock": 23,
-    "catching": 38,
-    "catchInTraffic": 26,
-    "spectacularCatch": 41,
-    "shortRouteRunning": 14,
-    "mediumRouteRunning": 13,
-    "deepRouteRunning": 12,
-    "release": 11,
-    "carrying": 56,
-    "breakTackle": 71,
-    "trucking": 55,
-    "jukeMove": 71,
-    "spinMove": 54,
-    "stiffArm": 46,
-    "changeOfDirection": 74,
-    "bCVision": 88,
-    "speed": 87,
-    "acceleration": 87,
-    "agility": 82,
-    "strength": 67,
-    "awareness": 59,
-    "throwPower": 87,
-    "throwAccuracyShort": 89,
-    "throwAccuracyMid": 82,
-    "throwAccuracyDeep": 81,
-    "throwOnTheRun": 82,
-    "throwUnderPressure": 88,
-    "playAction": 85,
-    "injury": 82,
-    "toughness": 95,
-    "manCoverage": 13,
-    "zoneCoverage": 18,
-    "press": 10,
-    "powerMoves": 10,
-    "finesseMoves": 10,
-    "blockShedding": 22,
-    "pursuit": 31,
-    "tackle": 24,
-    "playRecognition": 19
    }
   },
   "00-0035713": {
@@ -85388,7 +85335,7 @@
   },
   "00-0041076": {
    "eaId": "16220",
-   "ovr": 72,
+   "ovr": 75,
    "pos": "FS",
    "attrs": {
     "runBlock": 35,
@@ -85418,7 +85365,7 @@
     "acceleration": 86,
     "agility": 84,
     "strength": 64,
-    "awareness": 75,
+    "awareness": 77,
     "throwPower": 27,
     "throwAccuracyShort": 6,
     "throwAccuracyMid": 6,
@@ -85428,15 +85375,15 @@
     "playAction": 6,
     "injury": 88,
     "toughness": 90,
-    "manCoverage": 73,
-    "zoneCoverage": 74,
+    "manCoverage": 75,
+    "zoneCoverage": 76,
     "press": 66,
     "powerMoves": 38,
     "finesseMoves": 45,
     "blockShedding": 56,
-    "pursuit": 75,
-    "tackle": 65,
-    "playRecognition": 72
+    "pursuit": 76,
+    "tackle": 73,
+    "playRecognition": 74
    }
   },
   "00-0041077": {
