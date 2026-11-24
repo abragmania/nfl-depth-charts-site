@@ -4,16 +4,16 @@
 // direction was dropped by Adam. The columns read Production, Opportunity, Efficiency, then the ancillary groups (the
 // COLS note below). Every figure comes from agg_rush.js (pure); this file draws, sorts and wires clicks.
 // The weekly strips and the team pill are qb.js's, shared.
-import { fromQuery, toQuery, seasonsOf, weekLabel, POSITIONS } from "../filters.js?v=25b394fd6c";
-import { loadFor, loadTeams, loadStatusFeed, displayName } from "../data.js?v=25b394fd6c";
-import { clubAbbr } from "../clublogo.js?v=25b394fd6c";
-import { clubGames, tierNote, TIER_NAMES, MIN_POOL, POOL_PER_GAME, POOL_FLOOR, snapMethodNote } from "../agg.js?v=25b394fd6c";
-import { aggregateRush, rushReference, rushTier, sortRushRows, rushOpts, rushQueryFrom, RUSH_DEFAULT_POS, RUSH_MIN_CAR, RUSH_TIER_KEYS, BIN_LABELS, GOAL_LINE } from "../agg_rush.js?v=25b394fd6c";
-import { renderFilterBar } from "../filterbar.js?v=25b394fd6c";
-import { decorateDeciding } from "../deciding.js?v=25b394fd6c";
-import { involvementSignals, signalHtml } from "../agg_signal.js?v=25b394fd6c";
-import { esc, NA, isNum, pct, fix, signed, int, teamPill, qbStrips, seasonLabel } from "./qb.js?v=25b394fd6c";
-import { DK_TIPS, CATCH_TIP, withGroups, RZ_TIPS, withRzFigures, shareSample, shareCountHtml, groupCells, viewFrom, withView, columnsFor, pickView, viewCell, wantsDeciding, withViewSort, defaultSortFor, l3Title, WK_COLS, DEC_GROUPS, L3_NOTE, fitOpen, wireView, statusChip, statusNameClass, statusApplies, hlOf, withHl, scrollToHl } from "../table.js?v=25b394fd6c";
+import { fromQuery, toQuery, seasonsOf, weekLabel, POSITIONS } from "../filters.js?v=aef8e3bd70";
+import { loadFor, loadTeams, loadStatusFeed, displayName } from "../data.js?v=aef8e3bd70";
+import { clubAbbr } from "../clublogo.js?v=aef8e3bd70";
+import { clubGames, tierNote, TIER_NAMES, MIN_POOL, POOL_PER_GAME, POOL_FLOOR, snapMethodNote } from "../agg.js?v=aef8e3bd70";
+import { aggregateRush, rushReference, rushTier, sortRushRows, rushOpts, rushQueryFrom, RUSH_DEFAULT_POS, RUSH_MIN_CAR, RUSH_TIER_KEYS, BIN_LABELS, GOAL_LINE } from "../agg_rush.js?v=aef8e3bd70";
+import { renderFilterBar } from "../filterbar.js?v=aef8e3bd70";
+import { decorateDeciding } from "../deciding.js?v=aef8e3bd70";
+import { involvementSignals, signalHtml } from "../agg_signal.js?v=aef8e3bd70";
+import { esc, NA, isNum, pct, fix, signed, int, teamPill, qbStrips, seasonLabel } from "./qb.js?v=aef8e3bd70";
+import { DK_TIPS, CATCH_TIP, withGroups, RZ_TIPS, withRzFigures, shareSample, shareCountHtml, groupCells, viewFrom, withView, columnsFor, pickView, viewCell, wantsDeciding, withViewSort, defaultSortFor, l3Title, WK_COLS, DEC_GROUPS, L3_NOTE, fitOpen, wireView, statusChip, statusNameClass, statusApplies, hlOf, withHl, scrollToHl } from "../table.js?v=aef8e3bd70";
 
 // 👁 fix round, finding 4: qb.js's fix()/int() print JS's native ASCII hyphen for a negative value ("-2", "-0.12"),
 // while epaCar/epaTgt/epaOpp/ryoeAtt on this same table already use signed() and print the true minus ("−0.90").
