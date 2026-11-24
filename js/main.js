@@ -1,13 +1,13 @@
-import * as router from "./router.js?v=25b394fd6c";
-import { renderLanding } from "./landing.js?v=25b394fd6c";
-import { renderTeam } from "./team.js?v=25b394fd6c";
-import { renderZoomSide, renderZoomGroup } from "./zoom.js?v=25b394fd6c";
-import { renderMatchup } from "./matchup.js?v=25b394fd6c";
-import { renderGuide } from "./guide.js?v=25b394fd6c";
-import { openPanel } from "./panel.js?v=25b394fd6c";
-import { esc } from "./cards.js?v=25b394fd6c";
-import { disposeCurrentView } from "./viewfit.js?v=25b394fd6c";
-import "./refresh.js?v=25b394fd6c"; // side effect only: defines window.NFLRefresh
+import * as router from "./router.js?v=aef8e3bd70";
+import { renderLanding } from "./landing.js?v=aef8e3bd70";
+import { renderTeam } from "./team.js?v=aef8e3bd70";
+import { renderZoomSide, renderZoomGroup } from "./zoom.js?v=aef8e3bd70";
+import { renderMatchup } from "./matchup.js?v=aef8e3bd70";
+import { renderGuide } from "./guide.js?v=aef8e3bd70";
+import { openPanel } from "./panel.js?v=aef8e3bd70";
+import { esc } from "./cards.js?v=aef8e3bd70";
+import { disposeCurrentView } from "./viewfit.js?v=aef8e3bd70";
+import "./refresh.js?v=aef8e3bd70"; // side effect only: defines window.NFLRefresh
 
 const root = document.getElementById("app");
 const search = document.getElementById("search");

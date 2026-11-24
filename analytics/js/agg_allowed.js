@@ -48,10 +48,10 @@
 // FANTASY ARGUMENT: optional. When given it must be fantasyByPlayer(blocks, players, allowedFantasyState(st)) (the
 // whole scope of the blocks, no team, opponent, down or quarter filter); omitted, that is computed (memoized there).
 // Results are frozen all the way down.
-import { colIndex, clubGames, rushEvent } from "./agg.js?v=25b394fd6c";
-import { fantasyByPlayer } from "./agg_fantasy.js?v=25b394fd6c";
-import { gamesInWindow } from "./filters.js?v=25b394fd6c";
-import { rankWithTies } from "./agg_grid.js?v=25b394fd6c";
+import { colIndex, clubGames, rushEvent } from "./agg.js?v=aef8e3bd70";
+import { fantasyByPlayer } from "./agg_fantasy.js?v=aef8e3bd70";
+import { gamesInWindow } from "./filters.js?v=aef8e3bd70";
+import { rankWithTies } from "./agg_grid.js?v=aef8e3bd70";
 
 export const POS_GROUPS = Object.freeze(["QB", "RB", "WR", "TE"]);
 const GROUP_OF = Object.freeze({ QB: "QB", RB: "RB", FB: "RB", HB: "RB", WR: "WR", TE: "TE" });
