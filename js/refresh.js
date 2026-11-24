@@ -7,7 +7,7 @@
 // was published instead of how old the data is. isStatic() is api.js's single source of truth for the mode
 // (the <meta name="nfl-static"> flag publish.mjs injects); resolveUrl() maps /api/refresh/status onto the
 // published api/refresh/status.json.
-import { isStatic, resolveUrl } from "./api.js?v=25b394fd6c";
+import { isStatic, resolveUrl } from "./api.js?v=aef8e3bd70";
 
 const POLL_MS = 5000;
 const STALE_HOURS = 36; // matches server/api/refresh.js's isStale()
