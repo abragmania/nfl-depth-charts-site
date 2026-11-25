@@ -7,16 +7,16 @@
 //
 // The root <section> carries "an-def an-pl an-off": an-pl for the page spacing every analytics page shares, an-off
 // so a rule can address this page alone.
-import { fromQuery, toQuery, seasonsOf, weekLabel } from "../filters.js?v=aef8e3bd70";
-import { loadFor, loadTeams } from "../data.js?v=aef8e3bd70";
-import { aggregateTeams, teamReference, teamTier, teamZones, sortTeamRows, OFF_TIER, SOFT_KEYS, RANK_LOW_FIRST } from "../agg_team.js?v=aef8e3bd70";
-import { TIER_NAMES } from "../agg.js?v=aef8e3bd70";
-import { renderFilterBar } from "../filterbar.js?v=aef8e3bd70";
-import { esc, NA, isNum, pct, fix, signed, teamPill, qbStrips, pfrNote, seasonLabel } from "./qb.js?v=aef8e3bd70";
-import { windowName } from "./qbplayer.js?v=aef8e3bd70";
-import { moreFrom, visibleCols, allOpen, toggleMore, moreCell, fitOpen, wireMore } from "../table.js?v=aef8e3bd70";
-import { nameOf, headerOf } from "../names.js?v=aef8e3bd70";
-import { teamPageState, clubZoneField, clubZoneLegend, zonePlaysHtml, TEAM_ZONE_MODES } from "./team.js?v=aef8e3bd70";
+import { fromQuery, toQuery, seasonsOf, weekLabel } from "../filters.js?v=25b394fd6c";
+import { loadFor, loadTeams } from "../data.js?v=25b394fd6c";
+import { aggregateTeams, teamReference, teamTier, teamZones, sortTeamRows, OFF_TIER, SOFT_KEYS, RANK_LOW_FIRST } from "../agg_team.js?v=25b394fd6c";
+import { TIER_NAMES } from "../agg.js?v=25b394fd6c";
+import { renderFilterBar } from "../filterbar.js?v=25b394fd6c";
+import { esc, NA, isNum, pct, fix, signed, teamPill, qbStrips, pfrNote, seasonLabel } from "./qb.js?v=25b394fd6c";
+import { windowName } from "./qbplayer.js?v=25b394fd6c";
+import { moreFrom, visibleCols, allOpen, toggleMore, moreCell, fitOpen, wireMore } from "../table.js?v=25b394fd6c";
+import { nameOf, headerOf } from "../names.js?v=25b394fd6c";
+import { teamPageState, clubZoneField, clubZoneLegend, zonePlaysHtml, TEAM_ZONE_MODES } from "./team.js?v=25b394fd6c";
 
 const P = (v, d = 1) => (isNum(v) ? pct(v, d) : NA);
 // The headline "how good are they" measure, EPA/play, leads the table with a bar (signed, centred on zero); the

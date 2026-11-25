@@ -18,21 +18,21 @@
 // Interactivity (D177): a weekly column (strips or the fantasy chart) sets the window to that week and back; a zone
 // cell lists the plays behind it; the header has a Back button (router.js backLink: the page he came from, else
 // Quarterbacks) and links to his depth-chart card (new tab) and his team page.
-import { fromQuery, seasonsOf, weekLabel, splitKey, gamesInWindow, rankHref, isSituational } from "../filters.js?v=aef8e3bd70";
-import { backLink } from "../router.js?v=aef8e3bd70";
-import { loadFor, loadTeams, displayName, loadStatusFeed, loadMadden } from "../data.js?v=aef8e3bd70";
-import { clubGames, snapMethodNote, SNAP_SHARE_DEF } from "../agg.js?v=aef8e3bd70";
-import { qbTrend, aggregateQb, qbReference, qbTier, qbZones, qbSplits, SPLITS, QB_MADDEN_ATTRS, inQbPool, qbPoolStat, qbGameCuts, QB_MIN_DB } from "../agg_qb.js?v=aef8e3bd70";
-import { fantasyByPlayer } from "../agg_fantasy.js?v=aef8e3bd70";
-import { median, ratingTier, maddenSeasonLabel, iterationLabel } from "../agg_player.js?v=aef8e3bd70";
-import { renderFilterBar } from "../filterbar.js?v=aef8e3bd70";
-import { ratingBars } from "../charts/hbars.js?v=aef8e3bd70";
-import { headlineRow, fantasyBand, phaseBlock, varianceStrip, maddenFoot, playerHead, currentStatus, latestWeekIn } from "./kit.js?v=aef8e3bd70";
-import { esc, isNum, signed, qbStrips, qbZoneField, qbZoneLegend, qbZoneName, QB_ZONE_MODES, qbQuery, minDbOf, pfrNote } from "./qb.js?v=aef8e3bd70";
+import { fromQuery, seasonsOf, weekLabel, splitKey, gamesInWindow, rankHref, isSituational } from "../filters.js?v=25b394fd6c";
+import { backLink } from "../router.js?v=25b394fd6c";
+import { loadFor, loadTeams, displayName, loadStatusFeed, loadMadden } from "../data.js?v=25b394fd6c";
+import { clubGames, snapMethodNote, SNAP_SHARE_DEF } from "../agg.js?v=25b394fd6c";
+import { qbTrend, aggregateQb, qbReference, qbTier, qbZones, qbSplits, SPLITS, QB_MADDEN_ATTRS, inQbPool, qbPoolStat, qbGameCuts, QB_MIN_DB } from "../agg_qb.js?v=25b394fd6c";
+import { fantasyByPlayer } from "../agg_fantasy.js?v=25b394fd6c";
+import { median, ratingTier, maddenSeasonLabel, iterationLabel } from "../agg_player.js?v=25b394fd6c";
+import { renderFilterBar } from "../filterbar.js?v=25b394fd6c";
+import { ratingBars } from "../charts/hbars.js?v=25b394fd6c";
+import { headlineRow, fantasyBand, phaseBlock, varianceStrip, maddenFoot, playerHead, currentStatus, latestWeekIn } from "./kit.js?v=25b394fd6c";
+import { esc, isNum, signed, qbStrips, qbZoneField, qbZoneLegend, qbZoneName, QB_ZONE_MODES, qbQuery, minDbOf, pfrNote } from "./qb.js?v=25b394fd6c";
 // D209 part (2): the depth-chart card block every player page opens with — shared with player.js (the same
 // pass-catcher file) rather than duplicated, since both live in this app and the card logic itself only
 // exists once, in public/js/panel.js.
-import { loadCard, cardBlockHtml, mountCard, reusesCard, currentTeamOf, weekStripHtml, depthChartHref } from "./player.js?v=aef8e3bd70";
+import { loadCard, cardBlockHtml, mountCard, reusesCard, currentTeamOf, weekStripHtml, depthChartHref } from "./player.js?v=25b394fd6c";
 
 // PURE: the passing attributes as rating bars against the QB median ({ status, title, ovr, bars, peers }).
 export function maddenQb(madden, gsis, season) {
