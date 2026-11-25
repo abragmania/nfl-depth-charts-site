@@ -17,12 +17,12 @@
 // reusing the SAME class names cards.js/styles.css already define (card, tier-elite/strong/avg/weak/flat,
 // card-banner, banner-out, banner-active, badge*, rating-pill, tray-label/tray-chip)
 // rather than inventing parallel styles.
-import { getTeams, getTeam, invalidateTeam } from "./api.js?v=25b394fd6c";
-import { esc, BAND_DISPLAY, SIGNAL_TITLE, headshotHtml, wireDepthToggles, isFullyOut, isScratch, psBadge, slotBadge, snapHistoryHtml, withClubRole, gameEndNote } from "./cards.js?v=25b394fd6c";
-import { headerHtml, mountTeamField, teamBodyHtml } from "./team.js?v=25b394fd6c";
-import { SIDE_CARD_W, SIDE_MAX_DEPTH_ROWS } from "./field.js?v=25b394fd6c";
-import { fitToViewport, disposeCurrentView, SIDE_MIN_READABLE_SCALE } from "./viewfit.js?v=25b394fd6c";
-import { navStripHtml, wireNav } from "./nav.js?v=25b394fd6c";
+import { getTeams, getTeam, invalidateTeam } from "./api.js?v=aef8e3bd70";
+import { esc, BAND_DISPLAY, SIGNAL_TITLE, headshotHtml, wireDepthToggles, isFullyOut, isScratch, psBadge, slotBadge, snapHistoryHtml, withClubRole, gameEndNote } from "./cards.js?v=aef8e3bd70";
+import { headerHtml, mountTeamField, teamBodyHtml } from "./team.js?v=aef8e3bd70";
+import { SIDE_CARD_W, SIDE_MAX_DEPTH_ROWS } from "./field.js?v=aef8e3bd70";
+import { fitToViewport, disposeCurrentView, SIDE_MIN_READABLE_SCALE } from "./viewfit.js?v=aef8e3bd70";
+import { navStripHtml, wireNav } from "./nav.js?v=aef8e3bd70";
 
 // Which unit a #/team/X/group/BAND route belongs to, and what each band is called in prose. D72 retired
 // this file's own level tables (OFF_BAND_LEVEL / DEF_LEVEL_SEQUENCE and friends): a side page's levels,
