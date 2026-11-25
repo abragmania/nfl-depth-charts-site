@@ -17,7 +17,7 @@
 
 // D138: the list mode's second threshold is "too narrow to draw the field at the floor", which is the
 // design canvas times that floor — read from field.js rather than written down twice.
-import { LAYOUT_WIDTH } from "./field.js?v=25b394fd6c";
+import { LAYOUT_WIDTH } from "./field.js?v=aef8e3bd70";
 
 // ---- view registry ----------------------------------------------------------------------------
 
