@@ -4,15 +4,15 @@
 // allowed = better where that applies (agg_team.js DEF_TIER). Every figure comes from agg_team.js (pure).
 // D196's by-position table (what each defense allows to QBs, RBs, WRs and TEs) lives under the Team grid
 // (views/allowed_table.js, Adam's placement); this page is the one Overall table, and an old view=pos link shows it.
-import { fromQuery, toQuery, seasonsOf, weekLabel } from "../filters.js?v=aef8e3bd70";
-import { loadFor, loadTeams } from "../data.js?v=aef8e3bd70";
-import { aggregateTeams, teamReference, teamTier, teamZones, sortTeamRows, DEF_TIER, SOFT_KEYS } from "../agg_team.js?v=aef8e3bd70";
-import { TIER_NAMES } from "../agg.js?v=aef8e3bd70";
-import { renderFilterBar } from "../filterbar.js?v=aef8e3bd70";
-import { esc, NA, isNum, pct, fix, signed, teamPill, qbStrips, pfrNote, seasonLabel } from "./qb.js?v=aef8e3bd70";
-import { windowName } from "./qbplayer.js?v=aef8e3bd70";
-import { nameOf, headerOf } from "../names.js?v=aef8e3bd70";
-import { teamPageState, clubZoneField, clubZoneLegend, zonePlaysHtml, TEAM_ZONE_MODES } from "./team.js?v=aef8e3bd70";
+import { fromQuery, toQuery, seasonsOf, weekLabel } from "../filters.js?v=25b394fd6c";
+import { loadFor, loadTeams } from "../data.js?v=25b394fd6c";
+import { aggregateTeams, teamReference, teamTier, teamZones, sortTeamRows, DEF_TIER, SOFT_KEYS } from "../agg_team.js?v=25b394fd6c";
+import { TIER_NAMES } from "../agg.js?v=25b394fd6c";
+import { renderFilterBar } from "../filterbar.js?v=25b394fd6c";
+import { esc, NA, isNum, pct, fix, signed, teamPill, qbStrips, pfrNote, seasonLabel } from "./qb.js?v=25b394fd6c";
+import { windowName } from "./qbplayer.js?v=25b394fd6c";
+import { nameOf, headerOf } from "../names.js?v=25b394fd6c";
+import { teamPageState, clubZoneField, clubZoneLegend, zonePlaysHtml, TEAM_ZONE_MODES } from "./team.js?v=25b394fd6c";
 
 const P = (v, d = 1) => (isNum(v) ? pct(v, d) : NA);
 // D192 (Adam, 2026-09-24): the headline "how good are they" measure, EPA/play allowed, leads the table with a bar
