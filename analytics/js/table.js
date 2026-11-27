@@ -8,16 +8,16 @@
 //    beside it (a dashed "lg avg 18%" line on bars, "· lg 18.4" beside a stat), so good or bad reads at a glance.
 // 2. TOTALS: anything broken down by week also prints its window total. A share totals by weighting (his
 //    targets / the club attempts over the window), never as a mean of the weekly percentages.
-import { sortRows, tierFromCuts, tierNote, TIER_NAMES, USAGE_TIER_KEYS, MIN_POOL, snapMethodNote } from "./agg.js?v=25b394fd6c";
-import { weekLabel, POSITIONS, seasonsOf } from "./filters.js?v=25b394fd6c";
-import { rzI5Shares } from "./agg_player.js?v=25b394fd6c";
+import { sortRows, tierFromCuts, tierNote, TIER_NAMES, USAGE_TIER_KEYS, MIN_POOL, snapMethodNote } from "./agg.js?v=aef8e3bd70";
+import { weekLabel, POSITIONS, seasonsOf } from "./filters.js?v=aef8e3bd70";
+import { rzI5Shares } from "./agg_player.js?v=aef8e3bd70";
 // D196: the injury badge and red-name rule, kit.js's own copy (built the same round by the player-page builder,
 // which owns kit.js/analytics_recut.css) - re-exported here so the Receivers/QB/Running backs tables draw the
 // exact same badge, in the exact same CSS (.an-stchip/.an-st-*, already in analytics_recut.css), as the player
 // pages, rather than keeping a second parallel implementation.
-import { statusChip, statusNameClass } from "./views/kit.js?v=25b394fd6c";
-import { involvementSignals, signalHtml } from "./agg_signal.js?v=25b394fd6c";
-import { clubChip, clubAbbr } from "./clublogo.js?v=25b394fd6c";
+import { statusChip, statusNameClass } from "./views/kit.js?v=aef8e3bd70";
+import { involvementSignals, signalHtml } from "./agg_signal.js?v=aef8e3bd70";
+import { clubChip, clubAbbr } from "./clublogo.js?v=aef8e3bd70";
 export { statusChip, statusNameClass };
 
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
