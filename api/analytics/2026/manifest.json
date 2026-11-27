@@ -59,69 +59,69 @@
  "weeks": [
   {
    "week": 1,
-   "hash": "60230fa7c640b894",
+   "hash": "c3633c19f3a0cda0",
    "plays": 1924,
-   "builtAt": "2026-11-26T13:01:18.073Z"
+   "builtAt": "2026-11-27T12:03:34.133Z"
   },
   {
    "week": 2,
-   "hash": "d1efa61eaa8fd680",
+   "hash": "d8a2a91b9adefadc",
    "plays": 1936,
-   "builtAt": "2026-11-26T13:01:18.073Z"
+   "builtAt": "2026-11-27T12:03:34.133Z"
   },
   {
    "week": 3,
-   "hash": "8b9c46ac32a61e5e",
+   "hash": "4224790f13ac64ed",
    "plays": 2000,
-   "builtAt": "2026-11-26T13:01:18.073Z"
+   "builtAt": "2026-11-27T12:03:34.133Z"
   },
   {
    "week": 4,
-   "hash": "067f07d1d803bbaa",
+   "hash": "6e3cc38a739e4238",
    "plays": 1990,
-   "builtAt": "2026-11-26T13:01:18.073Z"
+   "builtAt": "2026-11-27T12:03:34.133Z"
   },
   {
    "week": 5,
-   "hash": "62504f4904cdaa61",
+   "hash": "4c695d5fe63c2f86",
    "plays": 1891,
-   "builtAt": "2026-11-26T13:01:18.073Z"
+   "builtAt": "2026-11-27T12:03:34.133Z"
   },
   {
    "week": 6,
-   "hash": "d407a01e5293f5a3",
+   "hash": "5afbf44a3492ed1d",
    "plays": 1804,
-   "builtAt": "2026-11-26T13:01:18.073Z"
+   "builtAt": "2026-11-27T12:03:34.133Z"
   },
   {
    "week": 7,
-   "hash": "61e19ef52a6ccdde",
+   "hash": "e1345b09e4adaecf",
    "plays": 1709,
-   "builtAt": "2026-11-26T13:01:18.073Z"
+   "builtAt": "2026-11-27T12:03:34.133Z"
   },
   {
    "week": 8,
-   "hash": "ce85b63ba196c6c6",
+   "hash": "90d4341b62f9763b",
    "plays": 1731,
-   "builtAt": "2026-11-26T13:01:18.073Z"
+   "builtAt": "2026-11-27T12:03:34.133Z"
   },
   {
    "week": 9,
-   "hash": "aa5248843c988df6",
+   "hash": "65c047d2b243561e",
    "plays": 1842,
-   "builtAt": "2026-11-26T13:01:18.073Z"
+   "builtAt": "2026-11-27T12:03:34.133Z"
   },
   {
    "week": 10,
-   "hash": "a7cbe3cea94833c8",
+   "hash": "425d809a29d82da6",
    "plays": 1719,
-   "builtAt": "2026-11-26T13:01:18.073Z"
+   "builtAt": "2026-11-27T12:03:34.133Z"
   },
   {
    "week": 11,
-   "hash": "1fa953c7260e2cb5",
+   "hash": "dbf074e134adbab1",
    "plays": 1601,
-   "builtAt": "2026-11-26T13:01:18.073Z"
+   "builtAt": "2026-11-27T12:03:34.133Z"
   }
  ],
  "throughWeek": 11,
@@ -131,37 +131,37 @@
  "snapPatches": "15cdecc72eec8fb7",
  "sources": {
   "pbp": {
-   "fetchedAt": "2026-11-26T13:00:45.722Z",
-   "sha": "02312a63a53310379bef8a2a50005778277ca118e63f322e220ea73a3116f266"
+   "fetchedAt": "2026-11-27T12:03:00.814Z",
+   "sha": "901339626c98f6537ec4f5f3f48cac0d756a7b3783471f2533183010510e0398"
   },
   "ftn": {
-   "fetchedAt": "2026-11-26T13:00:47.358Z",
+   "fetchedAt": "2026-11-27T12:03:02.768Z",
    "sha": "f729b15b65b72742368c4107b1b6b5c49e68704288b42cba64953a1308dabb22"
   },
   "ngs": {
-   "fetchedAt": "2026-11-26T13:00:48.011Z",
-   "sha": "4b3265440aac8750"
+   "fetchedAt": "2026-11-27T12:03:03.520Z",
+   "sha": "1368278c16b19468"
   },
   "pfr": {
-   "fetchedAt": "2026-11-25T11:03:59.763Z",
-   "sha": "c921dbbe3877aa35"
+   "fetchedAt": "2026-11-27T12:03:03.921Z",
+   "sha": "8c6c8adeda0320bc"
   },
   "pfrRush": {
-   "fetchedAt": "2026-11-25T11:03:59.941Z",
-   "sha": "88181490a42142486b80275c9428c86bc91f1efaeb3f6a88c84079f4f8d9882c"
+   "fetchedAt": "2026-11-27T12:03:04.188Z",
+   "sha": "1d7d84964ea50b2402ad65d6701f3f2f814d480ff047514569e5f4096bc9b8ee"
   },
   "pfrRec": {
-   "fetchedAt": "2026-11-25T11:04:00.210Z",
-   "sha": "a3a7baa8b7d93c32830988eb32c793472cedc702329cb60c67411ab4e9dc5e29"
+   "fetchedAt": "2026-11-27T12:03:04.432Z",
+   "sha": "46b08f20aeef6570b25c41eeb606ca124234cc9174542372a613dfbc8ef37c39"
   },
   "routes": {
-   "fetchedAt": "2026-11-25T11:04:00.487Z",
-   "sha": "bd2f9705e24d775ae2a96a892d48860d642ac8c551729f0c1d27ed0adbf81fc8"
+   "fetchedAt": "2026-11-27T12:03:04.712Z",
+   "sha": "0ec051946b10aa4623471f75ec4aa216b44da72d67e05a8cce34996d749d1827"
   },
   "participation": null,
   "snaps": {
-   "fetchedAt": "2026-11-25T11:00:41.894Z",
-   "sha": "f12498d4c46203ff6a8a357287a7ac95381ee0d6a84f6e02e1dfe0a71a336655"
+   "fetchedAt": "2026-11-27T12:00:40.820Z",
+   "sha": "044fc8e7bc067b682a8ce05b4bd66cfddc1c2e03af19fe17b15c701b69b5f191"
   }
  }
 }
