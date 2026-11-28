@@ -59,69 +59,69 @@
  "weeks": [
   {
    "week": 1,
-   "hash": "c3633c19f3a0cda0",
+   "hash": "107fd2f736f681d9",
    "plays": 1924,
-   "builtAt": "2026-11-27T12:03:34.133Z"
+   "builtAt": "2026-11-28T13:01:14.106Z"
   },
   {
    "week": 2,
-   "hash": "d8a2a91b9adefadc",
+   "hash": "b0550883c0d2f56f",
    "plays": 1936,
-   "builtAt": "2026-11-27T12:03:34.133Z"
+   "builtAt": "2026-11-28T13:01:14.106Z"
   },
   {
    "week": 3,
-   "hash": "4224790f13ac64ed",
+   "hash": "43d04adfe38497cb",
    "plays": 2000,
-   "builtAt": "2026-11-27T12:03:34.133Z"
+   "builtAt": "2026-11-28T13:01:14.106Z"
   },
   {
    "week": 4,
-   "hash": "6e3cc38a739e4238",
+   "hash": "470aca502749b33e",
    "plays": 1990,
-   "builtAt": "2026-11-27T12:03:34.133Z"
+   "builtAt": "2026-11-28T13:01:14.106Z"
   },
   {
    "week": 5,
-   "hash": "4c695d5fe63c2f86",
+   "hash": "2cc26cb4b033e457",
    "plays": 1891,
-   "builtAt": "2026-11-27T12:03:34.133Z"
+   "builtAt": "2026-11-28T13:01:14.106Z"
   },
   {
    "week": 6,
-   "hash": "5afbf44a3492ed1d",
+   "hash": "0dd123025521701d",
    "plays": 1804,
-   "builtAt": "2026-11-27T12:03:34.133Z"
+   "builtAt": "2026-11-28T13:01:14.106Z"
   },
   {
    "week": 7,
-   "hash": "e1345b09e4adaecf",
+   "hash": "4a173be379bf7ca0",
    "plays": 1709,
-   "builtAt": "2026-11-27T12:03:34.133Z"
+   "builtAt": "2026-11-28T13:01:14.106Z"
   },
   {
    "week": 8,
-   "hash": "90d4341b62f9763b",
+   "hash": "d8d726322ea3c7c4",
    "plays": 1731,
-   "builtAt": "2026-11-27T12:03:34.133Z"
+   "builtAt": "2026-11-28T13:01:14.106Z"
   },
   {
    "week": 9,
-   "hash": "65c047d2b243561e",
+   "hash": "a5114b1b30dcd4fd",
    "plays": 1842,
-   "builtAt": "2026-11-27T12:03:34.133Z"
+   "builtAt": "2026-11-28T13:01:14.106Z"
   },
   {
    "week": 10,
-   "hash": "425d809a29d82da6",
+   "hash": "dd88cb7f57f667ec",
    "plays": 1719,
-   "builtAt": "2026-11-27T12:03:34.133Z"
+   "builtAt": "2026-11-28T13:01:14.106Z"
   },
   {
    "week": 11,
-   "hash": "dbf074e134adbab1",
+   "hash": "ebf873f9c3b979a4",
    "plays": 1601,
-   "builtAt": "2026-11-27T12:03:34.133Z"
+   "builtAt": "2026-11-28T13:01:14.106Z"
   }
  ],
  "throughWeek": 11,
@@ -131,16 +131,16 @@
  "snapPatches": "15cdecc72eec8fb7",
  "sources": {
   "pbp": {
-   "fetchedAt": "2026-11-27T12:03:00.814Z",
-   "sha": "901339626c98f6537ec4f5f3f48cac0d756a7b3783471f2533183010510e0398"
+   "fetchedAt": "2026-11-28T13:00:39.217Z",
+   "sha": "d4243fd306acebb8134892f13a39c562884685fe8234e32fa040e2c4cb974910"
   },
   "ftn": {
-   "fetchedAt": "2026-11-27T12:03:02.768Z",
+   "fetchedAt": "2026-11-28T13:00:40.366Z",
    "sha": "f729b15b65b72742368c4107b1b6b5c49e68704288b42cba64953a1308dabb22"
   },
   "ngs": {
-   "fetchedAt": "2026-11-27T12:03:03.520Z",
-   "sha": "1368278c16b19468"
+   "fetchedAt": "2026-11-28T13:00:41.066Z",
+   "sha": "d95b30b9f6c7d10c"
   },
   "pfr": {
    "fetchedAt": "2026-11-27T12:03:03.921Z",
